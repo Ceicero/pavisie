@@ -73,7 +73,7 @@ export default async function PluginDetailPage({ params }: PageProps) {
 
         <Glass className="mt-8 p-6 sm:p-8">
           <h3 className="text-lg font-semibold text-grey-7">{copy.headline}</h3>
-          <h3 className="mt-6 text-sm font-semibold uppercase tracking-wider text-grey-2">
+          <h3 className="mt-6 text-sm font-semibold uppercase tracking-wider text-grey-3">
             Why gaming communities love it
           </h3>
           <ul className="mt-3 space-y-2">
@@ -88,7 +88,7 @@ export default async function PluginDetailPage({ params }: PageProps) {
           </ul>
         </Glass>
 
-        <h3 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-wider text-grey-2">
+        <h3 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-wider text-grey-3">
           Full command reference
         </h3>
         <CommandTable commands={plugin.commands} />

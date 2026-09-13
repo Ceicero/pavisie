@@ -34,7 +34,7 @@ export function Footer() {
           </div>
           {COLUMNS.map((col) => (
             <div key={col.title}>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-grey-2">{col.title}</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-grey-3">{col.title}</h3>
               <ul className="mt-3 space-y-2">
                 {col.links.map((link) => (
                   <li key={link.href}>
@@ -47,7 +47,7 @@ export function Footer() {
             </div>
           ))}
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-grey-2">Community</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-grey-3">Community</h3>
             <ul className="mt-3 space-y-2">
               {support && (
                 <li>
@@ -74,7 +74,7 @@ export function Footer() {
             </ul>
           </div>
         </div>
-        <div className="mt-10 border-t border-white/10 pt-6 text-xs text-grey-2">
+        <div className="mt-10 border-t border-white/10 pt-6 text-xs text-grey-3">
           © {year} Pavisie. All rights reserved.
         </div>
       </div>

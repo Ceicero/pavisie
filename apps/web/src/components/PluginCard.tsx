@@ -29,7 +29,7 @@ export function PluginCard({ plugin, copy }: PluginCardProps) {
           <Badge key={h}>{h}</Badge>
         ))}
       </div>
-      <div className="mt-auto flex items-center justify-between pt-3 text-xs text-grey-2">
+      <div className="mt-auto flex items-center justify-between pt-3 text-xs text-grey-3">
         <span>
           {commandCount} command{commandCount === 1 ? '' : 's'}
         </span>

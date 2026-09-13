@@ -33,7 +33,7 @@ export default function StaffRolesPage() {
                 <p className="mb-6 text-sm leading-relaxed text-grey-3">{tier.description}</p>
 
                 <div className="mb-6 flex-1">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-grey-2">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-grey-3">
                     Can run
                   </p>
                   <ul className="space-y-2">
@@ -46,7 +46,7 @@ export default function StaffRolesPage() {
                 </div>
 
                 {tier.detail && (
-                  <p className="border-t border-white/10 pt-4 text-sm italic leading-relaxed text-grey-2">
+                  <p className="border-t border-white/10 pt-4 text-sm italic leading-relaxed text-grey-3">
                     {tier.detail}
                   </p>
                 )}

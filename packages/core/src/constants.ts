@@ -3,7 +3,7 @@ export const BRAND = {
   name: 'Pavisie',
   color: 0xc7933d, // gold-5 — the primary accent on the dark theme (docs/ARCHITECTURE.md §20)
   tagline: 'The modular, compliance-first Discord bot',
-  docsUrl: 'https://github.com/',
+  docsUrl: 'https://github.com/Ceicero/pavisie',
   siteUrl: 'https://pavisie.com',
 } as const;
 

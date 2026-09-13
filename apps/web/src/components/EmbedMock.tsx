@@ -34,7 +34,7 @@ export function EmbedMock({ author, title, description, fields, footer }: EmbedM
             ))}
           </dl>
         )}
-        {footer && <p className="mt-3 text-xs text-grey-2">{footer}</p>}
+        {footer && <p className="mt-3 text-xs text-grey-3">{footer}</p>}
       </div>
     </div>
   );

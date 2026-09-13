@@ -55,7 +55,7 @@ export default function FeaturesPage() {
                   </div>
                 </div>
 
-                <h3 className="mt-8 text-sm font-semibold uppercase tracking-wider text-grey-2">
+                <h3 className="mt-8 text-sm font-semibold uppercase tracking-wider text-grey-3">
                   Why gaming communities love it
                 </h3>
                 <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -69,7 +69,7 @@ export default function FeaturesPage() {
                   ))}
                 </ul>
 
-                <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-grey-2">
+                <h3 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-grey-3">
                   Commands
                 </h3>
                 <CommandTable commands={plugin.commands} />

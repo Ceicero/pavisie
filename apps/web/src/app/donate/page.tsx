@@ -50,7 +50,7 @@ export default async function DonatePage() {
               </p>
             </>
           )}
-          <p className="mt-4 text-xs leading-relaxed text-grey-2">
+          <p className="mt-4 text-xs leading-relaxed text-grey-3">
             Donations are one-time, non-refundable, grant no perks or in-game advantages, and are not
             tax-deductible unless stated otherwise.
           </p>
