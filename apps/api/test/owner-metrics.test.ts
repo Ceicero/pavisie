@@ -150,6 +150,7 @@ const OWNER_METRICS_PATHS = [
   '/owner/metrics/guilds',
   '/owner/metrics/errors',
   '/owner/metrics/growth',
+  '/owner/metrics/usage',
 ];
 
 describe('owner-metrics gate', () => {
@@ -630,5 +631,77 @@ describe('GET /owner/metrics/growth', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().points).toHaveLength(365);
     await app.close();
+  });
+});
+
+
+describe('GET /owner/metrics/usage', () => {
+  it('sums the per-guild daily rollup across the whole fleet, zero-filling quiet days', async () => {
+    const since = new Date(
+      Date.UTC(daysAgo(4).getUTCFullYear(), daysAgo(4).getUTCMonth(), daysAgo(4).getUTCDate()),
+    );
+    const day = (n: number) => new Date(since.getTime() + n * DAY_MS);
+
+    // Two guilds reporting on day 0, one on day 2, nothing on days 1/3/4 — the route groups in
+    // the DB, so the fixture returns what `groupBy` would: one row per day, already summed.
+    const grouped = [
+      {
+        date: day(0),
+        _sum: { messages: 30, moderationActions: 4, automodTriggers: 2, ticketsOpened: 1, joins: 3, leaves: 1 },
+      },
+      {
+        date: day(2),
+        _sum: { messages: 12, moderationActions: 0, automodTriggers: 1, ticketsOpened: 0, joins: 0, leaves: 2 },
+      },
+    ];
+
+    const { app, cookieHeader } = await ownerContext({
+      guildAnalyticsDaily: {
+        groupBy: async () => grouped,
+        findMany: async () => [{ guildId: 'g1' }, { guildId: 'g2' }],
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/owner/metrics/usage?days=5',
+      headers: { cookie: cookieHeader },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+
+    expect(body.points).toHaveLength(5);
+    expect(body.points[0]).toMatchObject({ date: toUtcDateString(day(0)), messages: 30, joins: 3, leaves: 1 });
+    // A day with no rows must still appear, at zero, so the client can plot a continuous series.
+    expect(body.points[1]).toMatchObject({ date: toUtcDateString(day(1)), messages: 0, moderationActions: 0 });
+    expect(body.points[2]).toMatchObject({ date: toUtcDateString(day(2)), messages: 12, leaves: 2 });
+
+    expect(body.totals).toMatchObject({
+      messages: 42,
+      moderationActions: 4,
+      automodTriggers: 3,
+      ticketsOpened: 1,
+      joins: 3,
+      leaves: 3,
+      activeGuilds: 2,
+    });
+  });
+
+  it('clamps an out-of-range days value instead of rejecting it', async () => {
+    const { app, cookieHeader } = await ownerContext({
+      guildAnalyticsDaily: { groupBy: async () => [], findMany: async () => [] },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/owner/metrics/usage?days=0',
+      headers: { cookie: cookieHeader },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().points).toHaveLength(1);
   });
 });

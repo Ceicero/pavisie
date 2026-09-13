@@ -83,3 +83,39 @@ export interface OwnerMetricsGrowthPointDto {
 export interface OwnerMetricsGrowthDto {
   points: OwnerMetricsGrowthPointDto[];
 }
+
+/**
+ * One day of `GET /owner/metrics/usage` — fleet-wide feature usage, summed across every guild.
+ * Zero-filled for days with no recorded activity.
+ *
+ * These are aggregate counts only. Nothing here identifies a user or carries message content —
+ * it is the same privacy-safe daily rollup the per-guild analytics already keep (SPEC.md's
+ * data-collection rules), just totalled across the whole fleet rather than one server.
+ */
+export interface OwnerMetricsUsagePointDto {
+  /** `YYYY-MM-DD`, UTC. */
+  date: string;
+  messages: number;
+  moderationActions: number;
+  automodTriggers: number;
+  ticketsOpened: number;
+  joins: number;
+  leaves: number;
+}
+
+/** Window totals for `GET /owner/metrics/usage`, so the client doesn't have to re-sum the points. */
+export interface OwnerMetricsUsageTotalsDto {
+  messages: number;
+  moderationActions: number;
+  automodTriggers: number;
+  ticketsOpened: number;
+  joins: number;
+  leaves: number;
+  /** How many distinct guilds reported any activity in the window. */
+  activeGuilds: number;
+}
+
+export interface OwnerMetricsUsageDto {
+  points: OwnerMetricsUsagePointDto[];
+  totals: OwnerMetricsUsageTotalsDto;
+}

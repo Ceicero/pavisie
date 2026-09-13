@@ -5,6 +5,8 @@ import type {
   OwnerMetricsGrowthPointDto,
   OwnerMetricsGuildDto,
   OwnerMetricsOverviewDto,
+  OwnerMetricsUsageDto,
+  OwnerMetricsUsagePointDto,
   Paginated,
 } from '@pavisie/types';
 import { requireBotOwner } from '../lib/bot-owner';
@@ -21,6 +23,7 @@ import {
   ownerMetricsErrorsQuerySchema,
   ownerMetricsGrowthQuerySchema,
   ownerMetricsGuildsQuerySchema,
+  ownerMetricsUsageQuerySchema,
 } from '../lib/owner-metrics/schemas';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -294,6 +297,83 @@ export default async function ownerMetricsRoutes(app: ZodFastifyInstance): Promi
       }
 
       return { points };
+    },
+  );
+
+  /**
+   * Fleet-wide feature usage: the per-guild daily analytics rollup, summed across every guild.
+   *
+   * Aggregate counts only — no user ids, no message content. This reads the same
+   * `GuildAnalyticsDaily` rows the per-guild dashboard already shows, so it exposes nothing that
+   * wasn't already being collected; it just answers "how much is the whole fleet using this?"
+   * rather than "what happened in one server?".
+   *
+   * `date` is a DATE column (already truncated to a UTC day), so unlike /metrics/growth this can
+   * group in the database rather than bucketing timestamps in memory.
+   */
+  app.get(
+    '/metrics/usage',
+    { schema: { querystring: ownerMetricsUsageQuerySchema }, preHandler: requireBotOwner() },
+    async (request): Promise<OwnerMetricsUsageDto> => {
+      const days = Math.min(Math.max(request.query.days ?? GROWTH_DAYS_DEFAULT, GROWTH_DAYS_MIN), GROWTH_DAYS_MAX);
+      const since = startOfUtcDay(new Date(Date.now() - (days - 1) * DAY_MS));
+
+      const [grouped, activeGuilds] = await Promise.all([
+        app.prisma.guildAnalyticsDaily.groupBy({
+          by: ['date'],
+          where: { date: { gte: since } },
+          _sum: {
+            messages: true,
+            moderationActions: true,
+            automodTriggers: true,
+            ticketsOpened: true,
+            joins: true,
+            leaves: true,
+          },
+        }),
+        app.prisma.guildAnalyticsDaily.findMany({
+          where: { date: { gte: since } },
+          distinct: ['guildId'],
+          select: { guildId: true },
+        }),
+      ]);
+
+      const byDay = new Map(grouped.map((row) => [toUtcDateString(row.date), row._sum]));
+
+      const points: OwnerMetricsUsagePointDto[] = [];
+      const totals = {
+        messages: 0,
+        moderationActions: 0,
+        automodTriggers: 0,
+        ticketsOpened: 0,
+        joins: 0,
+        leaves: 0,
+        activeGuilds: activeGuilds.length,
+      };
+
+      // Zero-fill every day in the window so the client can plot a continuous series.
+      for (let i = 0; i < days; i++) {
+        const date = toUtcDateString(new Date(since.getTime() + i * DAY_MS));
+        const sums = byDay.get(date);
+        const point: OwnerMetricsUsagePointDto = {
+          date,
+          messages: sums?.messages ?? 0,
+          moderationActions: sums?.moderationActions ?? 0,
+          automodTriggers: sums?.automodTriggers ?? 0,
+          ticketsOpened: sums?.ticketsOpened ?? 0,
+          joins: sums?.joins ?? 0,
+          leaves: sums?.leaves ?? 0,
+        };
+        totals.messages += point.messages;
+        totals.moderationActions += point.moderationActions;
+        totals.automodTriggers += point.automodTriggers;
+        totals.ticketsOpened += point.ticketsOpened;
+        totals.joins += point.joins;
+        totals.leaves += point.leaves;
+        points.push(point);
+      }
+
+      return { points, totals };
     },
   );
 }

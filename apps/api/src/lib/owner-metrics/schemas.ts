@@ -29,3 +29,8 @@ export const ownerMetricsErrorsQuerySchema = paginationQuerySchema.extend({
 export const ownerMetricsGrowthQuerySchema = z.object({
   days: z.coerce.number().int().optional(),
 });
+
+/** `GET /owner/metrics/usage` query. Same clamp-don't-reject contract as the growth schema above. */
+export const ownerMetricsUsageQuerySchema = z.object({
+  days: z.coerce.number().int().optional(),
+});
