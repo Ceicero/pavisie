@@ -1,20 +1,28 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
 import { Skeleton } from '@pavisie/ui';
 import { useSession } from '@/lib/dashboard/session';
+import { API_BASE_URL } from '@/lib/dashboard/api';
 
-/** Auth gate for the entire `/dashboard` tree: redirects unauthenticated visitors to the landing page. */
+/**
+ * Auth gate for the entire `/dashboard` tree. Unauthenticated visitors go straight into the Discord
+ * OAuth flow, whose callback returns them to `/dashboard`.
+ *
+ * They are deliberately NOT sent to `/`: there is no sign-in control anywhere on the site, so
+ * bouncing them to the homepage left "Open dashboard" as a dead end with no way to log in. The
+ * middleware does the same check at the edge; this one is authoritative, because a present `sid`
+ * cookie does not prove the session is still valid server-side.
+ */
 export default function DashboardRootLayout({ children }: { children: React.ReactNode }) {
   const { status } = useSession();
-  const router = useRouter();
 
   React.useEffect(() => {
     if (status === 'unauthenticated') {
-      router.replace('/');
+      // Full page navigation, not router.replace — this leaves the app for the API's OAuth origin.
+      window.location.href = `${API_BASE_URL}/auth/discord/login`;
     }
-  }, [status, router]);
+  }, [status]);
 
   if (status === 'loading') {
     return (

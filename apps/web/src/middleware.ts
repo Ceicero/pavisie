@@ -7,10 +7,15 @@ import { NextResponse, type NextRequest } from 'next/server';
  * optimization layered in front of it, ported from the old `apps/dashboard/src/middleware.ts` as
  * part of the dashboard→web merge.
  *
- * Deliberately NOT ported: the old middleware's other half, which sent signed-out visitors to `/`
- * straight to Discord login. That made sense when `/` was exclusively the dashboard's login gate;
+ * Signed-out visitors to `/dashboard/*` are sent to Discord login, NOT to `/`. Bouncing them to
+ * the marketing homepage left them with no way in at all: there is no sign-in control anywhere on
+ * the site, so "Open dashboard" silently returned you to the page you started on. That stayed
+ * invisible only while sessions happened to remain valid.
+ *
+ * Still deliberately NOT ported: the old middleware's other half, which redirected signed-out
+ * visitors to `/` itself. That made sense when `/` was exclusively the dashboard's login gate;
  * here `/` is the marketing homepage, so redirecting anonymous visitors away from it would be a
- * regression, not a fast-path.
+ * regression. Only `/dashboard/*` redirects.
  *
  * Conservative by design, same as the old middleware: only acts when `COOKIE_DOMAIN` is
  * configured, which is the only case where the `sid` cookie is guaranteed visible on this origin
@@ -29,6 +34,13 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (!hasSession && pathname.startsWith('/dashboard')) {
+    // Straight into the OAuth flow; the API's callback lands the user back on /dashboard.
+    // Fall back to the homepage only if the API URL isn't configured, so a misconfiguration
+    // degrades to the old behaviour rather than redirecting to a broken URL.
+    const apiBase = process.env.NEXT_PUBLIC_API_URL;
+    if (apiBase) {
+      return NextResponse.redirect(`${apiBase}/auth/discord/login`);
+    }
     const url = request.nextUrl.clone();
     url.pathname = '/';
     url.search = '';
