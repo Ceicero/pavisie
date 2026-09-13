@@ -90,8 +90,8 @@ export const SidebarNavItem = React.forwardRef<HTMLAnchorElement, SidebarNavItem
         className={cn(
           'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0',
           active
-            ? 'bg-secondary text-secondary-foreground'
-            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+            ? 'border-l-2 border-gold-5 bg-gold-5/10 text-gold-5'
+            : 'border-l-2 border-transparent text-muted-foreground hover:border-gold-5/40 hover:text-foreground',
           className,
         )}
         {...props}
