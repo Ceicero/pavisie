@@ -48,7 +48,19 @@ export function inviteUrl(): string | null {
   return `https://discord.com/oauth2/authorize?${params.toString()}`;
 }
 
-export const SITE_URL = 'https://pavisie.com';
+/**
+ * Canonical origin for this deployment. Drives `metadataBase`, Open Graph URLs, robots.txt and
+ * sitemap.xml — so it MUST match the domain actually being served, not the brand's eventual
+ * home. During the Entrophy -> Pavisie rename those differ: the brand is Pavisie, but
+ * pavisie.com is not registered yet and the site is still served from entrophybot.com.
+ * Emitting pavisie.com canonicals now would point search engines at a domain that does not
+ * resolve, which is worse than not shipping at all.
+ *
+ * Set `NEXT_PUBLIC_SITE_URL` (or `WEB_URL`) at build time to control this. The literal below is
+ * only a safety net for when neither is set; flip it to pavisie.com at cutover.
+ */
+export const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? process.env.WEB_URL ?? 'https://entrophybot.com';
 
 /** Public source repository (AGPL-3.0). Pavisie is open source — linked from the footer. */
 export const GITHUB_URL = 'https://github.com/Ceicero/pavisie';

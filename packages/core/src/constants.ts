@@ -8,6 +8,19 @@ export const BRAND = {
 } as const;
 
 /**
+ * The public site URL to show users. Reads `env.WEB_URL` first so the value always matches the
+ * domain actually being served, and only falls back to `BRAND.siteUrl` when it is unset.
+ *
+ * This matters during the Entrophy -> Pavisie rename: the brand is Pavisie, but until
+ * pavisie.com is registered the live deployment is still served from the old domain. Linking
+ * users at `BRAND.siteUrl` unconditionally would hand them a dead link, so the deployed
+ * WEB_URL always wins.
+ */
+export function brandSiteUrl(env: { WEB_URL?: string }): string {
+  return env.WEB_URL ?? BRAND.siteUrl;
+}
+
+/**
  * Builds the public URL of the brand logo (skull) for use as an embed author/footer icon,
  * or `undefined` when `env.WEB_URL` is not set (embeds then omit the icon rather than link
  * to a URL that may not exist). See docs/ARCHITECTURE.md §22.

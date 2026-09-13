@@ -5,6 +5,7 @@ import {
   StringSelectMenuOptionBuilder,
   type EmbedBuilder,
 } from 'discord.js';
+import { brandSiteUrl, env } from '@pavisie/core';
 import {
   brandEmbed,
   buildCustomId,
@@ -83,6 +84,11 @@ export const command: PluginCommand = {
 
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 
+    // Always link the domain actually being served (env.WEB_URL), not the brand's eventual
+    // home — during the rename those are different and the brand one does not resolve yet.
+    const siteUrl = brandSiteUrl(env);
+    const siteHost = siteUrl.replace(/^https?:\/\//, '');
+
     const embed = helpEmbed(c.t('help.title'))
       .addFields({
         name: 'Try it',
@@ -96,7 +102,7 @@ export const command: PluginCommand = {
         name: 'Getting started',
         value:
           `${c.t('help.intro')}\n\n` +
-          '[pavisie.com](https://pavisie.com) · [Open the dashboard](https://pavisie.com/dashboard)',
+          `[${siteHost}](${siteUrl}) · [Open the dashboard](${siteUrl}/dashboard)`,
       });
 
     await c.interaction.reply({ embeds: [embed], components: [row] });

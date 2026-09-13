@@ -3,7 +3,14 @@
 // not a substitute for one an operator has actually reviewed for their deployment and jurisdiction.
 
 export const DEFAULT_OPERATOR = 'Pavisie';
-export const DEFAULT_CONTACT_EMAIL = 'contact@pavisie.com';
+/**
+ * Published contact address in the privacy policy, terms and security page. `contact@pavisie.com`
+ * is the intended destination, but it cannot receive mail until pavisie.com is registered and
+ * its MX records exist — and a privacy policy listing an address that bounces is worse than an
+ * off-brand one that works. So this stays on the monitored inbox until then, overridable by env.
+ */
+export const DEFAULT_CONTACT_EMAIL =
+  process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? 'entrophybot@gmail.com';
 
 export interface LegalSection {
   title: string;
