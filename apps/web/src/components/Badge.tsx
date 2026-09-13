@@ -7,7 +7,8 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   className?: string;
 }
 
-/** Grey badge/chip — never a colour, per the monochrome brand (SPEC.md §O). */
+/** Grey badge/chip. Not restyled with the gold brand accent here — that's a separate design pass
+ * (SPEC.md §O has the current gold-and-black brand rules). */
 export function Badge({ children, tone = 'default', className, ...rest }: BadgeProps) {
   const toneClasses =
     tone === 'solid'

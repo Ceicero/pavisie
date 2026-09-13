@@ -32,7 +32,7 @@ const CASE_TYPE_COLOR: Partial<Record<ModerationCase['type'], number>> = {
   UNBAN: 0x22c55e,
   SOFTBAN: 0xef4444,
   // PURGE intentionally has no entry: it's neutral housekeeping, not destructive/success/warning,
-  // so it falls through to the brand color below (BRAND.color) rather than an off-palette grey.
+  // so it falls through to the brand color below (BRAND.color) rather than an off-palette color.
 };
 
 export function caseTypeLabel(type: ModerationCase['type']): string {

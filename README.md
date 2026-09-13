@@ -37,11 +37,11 @@
 Pavisie is a production-ready, modular "all-in-one" Discord bot platform: moderation, automod,
 logging, tickets, roles and onboarding, leveling and community features, integrations, an optional
 AI assistant, and a full admin dashboard, all built as independently enable/disable-able plugins per
-server. The brand is deliberately **monochrome** — black, grey, and white, everywhere from the bot's
-avatar (a pixel-art skull) to the dashboard to the public marketing site — because Pavisie's pitch
-isn't a flashy feature list, it's trust: every action the bot takes is logged, every permission it
-asks for is least-privilege and explained, and nothing about how it moderates your server is hidden
-from you.
+server. The brand is **gold and black** — a gold laurel-wreath medallion with a skull as the bot's
+avatar, carried through the dashboard and the public marketing site as a black/grey/white base with a
+gold accent — because Pavisie's pitch isn't a flashy feature list, it's trust: every action the bot
+takes is logged, every permission it asks for is least-privilege and explained, and nothing about how
+it moderates your server is hidden from you.
 
 The headline feature is the **Admin Enforcer**: a policy-driven, hands-off moderation workflow where
 moderators never DM or confront a suspect directly. A server admin defines plain-language policies;
@@ -316,9 +316,9 @@ advice): **`docs/PRIVACY_POLICY_TEMPLATE.md`**.
 ## Website & donations
 
 `apps/web` (`@pavisie/web`) is the public marketing site at `pavisie.com` — separate from the
-admin dashboard, monochrome "smoky UI" theme, and its command documentation is generated from the
-real plugin registry so it can never hand-drift from what the bot registers (see
-[Development](#development)).
+admin dashboard, black/grey/white "smoky UI" theme with a gold brand accent, and its command
+documentation is generated from the real plugin registry so it can never hand-drift from what the bot
+registers (see [Development](#development)).
 
 Donations are handled entirely by **Ko-fi** (a third-party donation platform) — Pavisie no longer processes
 payments at all. The Donate page links to the operator's Ko-fi page when configured, or shows a "not set up"

@@ -207,7 +207,7 @@ PUBLIC_WEBHOOK_BASE_URL=      # public https base for inbound webhooks (EventSub
 | `utils/ids.ts`             | `newId()` (crypto.randomUUID), `shortId()`                                                                                                                                                                                                                                                        |                                                                                                                                                                                                            |
 | `utils/pagination.ts`      | `paginate(params)`                                                                                                                                                                                                                                                                                |                                                                                                                                                                                                            |
 | `events.ts`                | `PlatformEvents` (typed EventEmitter over `PlatformEventMap`), `createPlatformEvents()`                                                                                                                                                                                                           |                                                                                                                                                                                                            |
-| `constants.ts`             | `BRAND = { name: 'Pavisie', color: 0xe5e5e5, ... }`, `brandIconUrl(env)`, `EMBED_LIMITS`                                                                                                                                                                                                         | monochrome per §20                                                                                                                                                                                         |
+| `constants.ts`             | `BRAND = { name: 'Pavisie', color: 0xc7933d, ... }`, `brandIconUrl(env)`, `EMBED_LIMITS`                                                                                                                                                                                                         | gold-5 per §20                                                                                                                                                                                             |
 
 ## 7. Plugin SDK (`@pavisie/plugins`, folder `packages/plugins/src/sdk/`)
 
@@ -668,14 +668,16 @@ README (top-level): overview, features, prerequisites, Discord Developer Portal 
   per-guild config dashboard now (§11) at `/dashboard/**`, merged in from the formerly-separate
   `apps/dashboard` app. Depends on `@pavisie/types` (still not `core`) and, since that merge, also
   `@pavisie/ui`/`@tanstack/react-query`/`next-themes` (the dashboard half's dependencies) — but
-  marketing pages still use only the website's own monochrome component set under
+  marketing pages still use only the website's own black/grey/white-plus-gold component set under
   `src/components/`, not `@pavisie/ui`; the two component systems coexist (§11's Tailwind preset
   note) without either being forced on the other's pages.
 - Palette tokens (CSS variables in `src/app/globals.css`): `--ink-0:#050505 --ink-1:#0a0a0a --ink-2:#111111
 --ink-3:#171717 --ink-4:#1f1f1f --ink-5:#262626 --ink-6:#333333 --ink-7:#404040 --grey-1:#525252 --grey-2:#737373
---grey-3:#8a8a8a --grey-4:#a3a3a3 --grey-5:#bdbdbd --grey-6:#d4d4d4 --grey-7:#e5e5e5 --paper:#fafafa`.
-  Nothing else. Fonts: system stack (`ui-sans-serif, -apple-system, "Segoe UI", Inter, Roboto, sans-serif`) — no
-  network font loading (offline builds must work).
+--grey-3:#8a8a8a --grey-4:#a3a3a3 --grey-5:#bdbdbd --grey-6:#d4d4d4 --grey-7:#e5e5e5 --paper:#fafafa`, plus the
+  gold accent ramp `--gold-1:#2a1806 --gold-2:#42270c --gold-3:#603b12 --gold-4:#8f5e20 --gold-5:#c7933d
+--gold-6:#eec66a --gold-7:#f9db7e` (§20 has the contrast figures and role assignments). Fonts: system stack
+  (`ui-sans-serif, -apple-system, "Segoe UI", Inter, Roboto, sans-serif`) — no network font loading (offline
+  builds must work).
 - Smoke: `src/components/Smoke.tsx` renders 4–6 absolutely-positioned blurred radial-gradient blobs (`filter: blur(80px)`,
   `mix-blend-mode: screen`, opacity 0.08–0.18) animated with slow translate/scale keyframes (60–120s), disabled under
   `prefers-reduced-motion`; `Grain.tsx` overlays an SVG `feTurbulence` noise data-URI at ~4% opacity; `Glass` card =
@@ -1025,11 +1027,33 @@ same "declare it, degrade honestly" pattern as `media`'s `MEDIA_PROVIDER` gate. 
   (`apps/bot/src/host/data-requests.ts`) and deleted with the guild's data (cascade), same as every other
   guild-scoped model.
 
-## 20. Monochrome tokens
+## 20. Brand tokens: gold-and-black
 
-- `packages/ui/src/styles.css`: surfaces black→grey scale; `--primary` = `#fafafa` on dark / `#0a0a0a` on light;
-  `--ring` grey; keep `--success/--warning/--destructive` semantic tokens (dashboard only). `BRAND.color = 0xe5e5e5`
-  in core constants (embeds). Dashboard charts use greyscale series with dashed/dotted differentiation.
+The brand is gold-and-black (not monochrome — see §O): black/grey/white surfaces and structure, with a gold
+accent ramp for the primary action/brand colour. `packages/ui/src/styles.css`: surfaces black→grey scale;
+`--primary` = `#fafafa` on dark / `#0a0a0a` on light; `--ring` grey; keep `--success/--warning/--destructive`
+semantic tokens (dashboard only). Dashboard charts use greyscale series with dashed/dotted differentiation
+(a legibility choice, not a brand claim).
+
+**Gold accent ramp** (sampled from the logo, hue 30-45°, darkest to lightest), defined as `--gold-1`..`--gold-7`
+in `apps/web/src/app/globals.css` (hex) and `packages/ui/src/styles.css` (HSL triple), and wired to
+`text-gold-N`/`bg-gold-N`/`border-gold-N` Tailwind classes in `apps/web/tailwind.config.ts` the same way
+`ink`/`grey`/`paper` are:
+
+| Token      | Hex       | HSL                 | Verified contrast                       | Role                                                    |
+| ---------- | --------- | ------------------- | ---------------------------------------- | -------------------------------------------------------- |
+| `--gold-1` | `#2a1806` | `30 75% 9.4%`       | —                                        | Dark/decorative only (borders, subtle fills on black)   |
+| `--gold-2` | `#42270c` | `30 69.2% 15.3%`    | —                                        | Dark/decorative only                                    |
+| `--gold-3` | `#603b12` | `32 68.4% 22.4%`    | —                                        | Dark/decorative only                                    |
+| `--gold-4` | `#8f5e20` | `34 63.4% 34.3%`    | 5.31:1 on `--paper` (`#fafafa`) — AA     | **Primary accent, light theme**                         |
+| `--gold-5` | `#c7933d` | `37 55.2% 51%`      | 7.44:1 on `--ink-0` (`#050505`) — AAA    | **Primary accent, dark theme**                          |
+| `--gold-6` | `#eec66a` | `42 79.5% 67.5%`    | —                                        | Bright emphasis on black only                           |
+| `--gold-7` | `#f9db7e` | `45 91.1% 73.5%`    | —                                        | Bright emphasis on black only                           |
+
+Role assignments are fixed: never use gold-5/6/7 as text on the light theme, or gold-1/2/3 as text on the dark
+theme — both fail contrast. `BRAND.color = 0xc7933d` (gold-5) in core constants (embeds); success/error embeds
+keep green/red. Defining these tokens does not, by itself, restyle any component — applying gold to buttons,
+links, badges, or backgrounds is a separate design pass.
 
 ## 21. Cloud hosting (production target)
 
@@ -1085,8 +1109,8 @@ same origin (`https://pavisie.com`) post-merge, so this allowlist has one effect
 
 ## 22. Brand assets (logo = bot avatar)
 
-The Pavisie logo and bot avatar is a pixel-art skull (brighter/cleaner grey pixels on pure black, square,
-1254×1254), used everywhere: website, dashboard, bot embed icon, and Discord avatar. Canonical file:
+The Pavisie logo and bot avatar is a gold laurel-wreath medallion with a skull, on pure black, square,
+1024×1024, used everywhere: website, dashboard, bot embed icon, and Discord avatar. Canonical file:
 `assets/brand/pavisie-skull.png` (present in the repo, lossless PNG; takes precedence over the `.jpg` when both
 exist). `assets/brand/pavisie-skull.jpg` is the same art re-encoded as JPEG, kept only so any URL or cached
 reference that still names the `.jpg` file keeps serving the current art instead of 404ing or showing stale art. The

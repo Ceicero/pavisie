@@ -256,10 +256,11 @@ Pavisie ships a public marketing website (separate from the admin dashboard).
 
 Requirements:
 
-- **Theme: black, grey and white only.** No colour accents anywhere on the website — status/hover states are expressed
-  through luminance, borders and blur. "Smoky UI": layered soft radial-gradient smoke that drifts slowly (CSS only,
-  respects `prefers-reduced-motion`), frosted-glass cards (`backdrop-blur`, hairline white/10 borders), a faint grain
-  overlay, generous whitespace, thin clean type. Sleek and clean; no clutter.
+- **Theme: gold and black.** A black/grey/white base (see §O) with a gold accent ramp for the brand colour;
+  status/hover states are still expressed primarily through luminance, borders and blur, not arbitrary hues.
+  "Smoky UI": layered soft radial-gradient smoke that drifts slowly (CSS only, respects `prefers-reduced-motion`),
+  frosted-glass cards (`backdrop-blur`, hairline white/10 borders), a faint grain overlay, generous whitespace, thin
+  clean type. Sleek and clean; no clutter.
 - Pages: Home (hero, "Add to Discord", "Open dashboard", feature overview, why-gaming-communities section, trust &
   compliance section, donation CTA, footer), **Features & Commands** (every plugin: what it does, _why it's great for
   gaming communities_, and a table of every command/subcommand with description, who can use it and an example),
@@ -273,8 +274,8 @@ Requirements:
   instead of failing.
 - Command documentation on the website is **generated from the real plugin registry** (never hand-maintained lists) so it
   cannot drift from the bot.
-- Responsive, accessible (WCAG AA contrast within the monochrome palette), dark-by-default (the palette is dark; a light
-  variant is optional and also monochrome).
+- Responsive, accessible (WCAG AA contrast within the gold-and-black palette — see §O for the verified figures),
+  dark-by-default (the palette is dark; a light variant is optional and stays within the same palette).
 
 ### N. ADMIN ENFORCER (POLICY-DRIVEN, HANDS-OFF MODERATION)
 
@@ -312,11 +313,16 @@ Requirements:
   `/plugin status`, the dashboard, and the plugin README; captureContext can be turned off (then only jump links).
 - Dashboard: policies editor, flag queue with the same decisions, ledger table with search/filter/export, settings.
 
-### O. MONOCHROME BRAND
+### O. GOLD-AND-BLACK BRAND
 
-The product brand is monochrome (black/grey/white). The dashboard uses the same monochrome tokens for surfaces and
-primary actions; semantic status colours (success/warning/destructive) remain for usability in the admin dashboard
-only. Discord embeds use a light-grey brand colour bar; success/error embeds keep green/red.
+The product brand is gold and black: black/grey/white surfaces and structure, with a gold accent ramp
+(`--gold-1`..`--gold-7`, docs/ARCHITECTURE.md §20 has the full ramp, verified contrast figures, and role
+assignments) reserved for the primary action/brand colour. gold-5 is the primary accent on the dark theme (AAA
+contrast on the darkest ink); gold-4 is the primary accent on the light theme (AA contrast on paper); the
+remaining stops are decorative/emphasis only, never used as text at the wrong end of the palette. The dashboard
+uses the same tokens for surfaces and primary actions; semantic status colours (success/warning/destructive)
+remain for usability in the admin dashboard only. Discord embeds use the gold-5 brand colour bar; success/error
+embeds keep green/red.
 
 ### P. GAME STATS PLUGIN (STEAM LEADERBOARDS)
 

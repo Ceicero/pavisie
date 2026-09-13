@@ -3,11 +3,11 @@
 The public Pavisie marketing website **and, since the dashboard→web merge, the per-guild config
 dashboard** (`/dashboard/**` — formerly its own app, `@pavisie/dashboard`; that app is now a
 legacy-link redirector, see `apps/dashboard/README.md`). Next.js 15 App Router, Tailwind 3. Marketing
-pages use a monochrome (black/grey/white) "smoky UI" theme; dashboard pages use `@pavisie/ui`'s
+pages use a black/grey/white "smoky UI" theme with a gold brand accent; dashboard pages use `@pavisie/ui`'s
 shadcn-style tokens. See `docs/ARCHITECTURE.md` §17 (site) and §11 (dashboard) for the full design,
 and `docs/SPEC.md` §M for requirements.
 
-Marketing pages depend only on `@pavisie/types` and the site's own small monochrome component set
+Marketing pages depend only on `@pavisie/types` and the site's own small black/grey/white-plus-gold component set
 under `src/components/` (not `@pavisie/ui`, not `@pavisie/core`) — they call the public API
 directly over `fetch`. The dashboard routes under `src/app/dashboard/**` (and their components/lib
 under `src/components/dashboard/**`, `src/lib/dashboard/**`) additionally depend on `@pavisie/ui`,
@@ -78,18 +78,21 @@ site — headlines, "why gaming communities love it" bullets, the Enforcer FAQ, 
 
 ## Design system
 
-- **Palette**: CSS variables in `src/app/globals.css` (`--ink-0`…`--ink-7`, `--grey-1`…`--grey-7`, `--paper`).
-  Nothing else — no colour accents anywhere. Verify with
+- **Palette**: CSS variables in `src/app/globals.css` (`--ink-0`…`--ink-7`, `--grey-1`…`--grey-7`, `--paper`,
+  `--gold-1`…`--gold-7`). Black/grey/white plus one gold accent ramp — no other colour accents. Verify with
   `grep -rniE "#[0-9a-f]{3,8}\b" src --include=*.tsx --include=*.ts` (should only turn up the token
-  definitions and monochrome SVG strokes referencing `var(--grey-*)`) and by checking no `text-red-*` /
-  `bg-blue-*` / etc. Tailwind default-palette classes are used anywhere in `src/`.
+  definitions, the hardcoded hex the `opengraph-image.tsx` satori renderer needs (it can't read CSS
+  variables), and monochrome SVG strokes referencing `var(--grey-*)`) and by checking no `text-red-*` /
+  `bg-blue-*` / etc. Tailwind default-palette classes are used anywhere in `src/`. Applying `gold-*` classes
+  to a component is a separate design decision — defining the tokens doesn't imply every page uses them.
 - **Smoky UI**: `Smoke.tsx` (drifting blurred blobs), `Grain.tsx` (SVG noise overlay), `.glass` utility class
   (frosted-glass cards). All pure CSS; the global `prefers-reduced-motion` rule in `globals.css` disables the
   drift animation.
 - **Fonts**: system stack only (`ui-sans-serif, -apple-system, "Segoe UI", Inter, Roboto, sans-serif`) — no
   network font loading, so the build works fully offline.
 - **Accessibility**: semantic landmarks (`header`/`main`/`footer`/`nav`), a skip-to-content link, visible focus
-  rings on every interactive element, and AA contrast within the monochrome palette.
+  rings on every interactive element, and AA contrast within the gold-and-black palette (docs/ARCHITECTURE.md
+  §20 has the verified figures for the two gold accent roles).
 
 ## Testing & build
 

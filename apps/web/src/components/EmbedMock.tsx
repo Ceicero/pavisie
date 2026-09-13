@@ -12,8 +12,10 @@ interface EmbedMockProps {
   footer?: string;
 }
 
-/** Discord-style embed mock, rendered greyscale (ARCHITECTURE.md §20 — brand embed colour bar is light grey, not
- * a hue) for illustrating the Enforcer ledger without a live Discord connection. */
+/** Discord-style embed mock, rendered greyscale, for illustrating the Enforcer ledger without a live Discord
+ * connection. The real bot embed colour bar is gold (`BRAND.color`, ARCHITECTURE.md §20) as of the gold-and-black
+ * rebrand; this mock intentionally still renders in the site's plain grey tones pending the visual design pass
+ * that applies the new accent to components. */
 export function EmbedMock({ author, title, description, fields, footer }: EmbedMockProps) {
   return (
     <div className="flex overflow-hidden rounded-md bg-ink-3 font-sans text-sm shadow-lg">

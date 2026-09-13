@@ -1,7 +1,7 @@
 /** Product branding constants used across embeds, dashboard, and README generation. */
 export const BRAND = {
   name: 'Pavisie',
-  color: 0xe5e5e5,
+  color: 0xc7933d, // gold-5 — the primary accent on the dark theme (docs/ARCHITECTURE.md §20)
   tagline: 'The modular, compliance-first Discord bot',
   docsUrl: 'https://github.com/',
   siteUrl: 'https://pavisie.com',

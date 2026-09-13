@@ -135,8 +135,8 @@ If you add a plugin, change what a plugin stores, or connect a new integration, 
 
 1. This file (`docs/PRIVACY_POLICY_TEMPLATE.md`) — the detailed, model-mapped version.
 2. `apps/web/src/content/legal.ts`'s `privacyPolicy()` — the shorter version end users actually see
-   on `/privacy`. Keep it monochrome (it inherits the website's plain black/grey/white design tokens
-   from `docs/ARCHITECTURE.md` §17 — don't add color or restyle the page itself); just make sure the
+   on `/privacy`. Keep it plain (it inherits the website's black/grey/white-plus-gold design tokens
+   from `docs/ARCHITECTURE.md` §17/§20 — don't add extra color or restyle the page itself); just make sure the
    data categories mentioned there still match this file's §2 table.
 
 Both currently describe the same categories: bot-side per-feature storage with message content off

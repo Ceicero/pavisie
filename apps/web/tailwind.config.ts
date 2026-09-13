@@ -4,8 +4,8 @@ import { preset } from '@pavisie/ui/tailwind.preset';
 // The dashboard (formerly apps/dashboard, now apps/web/src/app/dashboard/**) brought its
 // `@pavisie/ui` component library and shadcn-style tokens (`bg-background`, `text-foreground`,
 // `border-border`, ...) with it — this preset supplies those, scanning `packages/ui/src` below.
-// Marketing pages are untouched: they keep using the monochrome `ink`/`grey`/`paper` tokens
-// defined below and in `src/app/globals.css` (ARCHITECTURE.md §17 / §O), which the preset's
+// Marketing pages are untouched: they keep using the site's own `ink`/`grey`/`paper`/`gold` tokens
+// defined below and in `src/app/globals.css` (ARCHITECTURE.md §17 / §20), which the preset's
 // tokens don't overlap with (different color keys entirely), so both systems coexist without
 // either one clobbering the other. `darkMode: 'class'` matches the preset (dashboard theme
 // toggle uses `next-themes` `attribute="class"`); the marketing look is dark-by-default via plain
@@ -38,6 +38,15 @@ const config: Config = {
           7: 'var(--grey-7)',
         },
         paper: 'var(--paper)',
+        gold: {
+          1: 'var(--gold-1)',
+          2: 'var(--gold-2)',
+          3: 'var(--gold-3)',
+          4: 'var(--gold-4)',
+          5: 'var(--gold-5)',
+          6: 'var(--gold-6)',
+          7: 'var(--gold-7)',
+        },
       },
       fontFamily: {
         sans: ['ui-sans-serif', '-apple-system', '"Segoe UI"', 'Inter', 'Roboto', 'sans-serif'],
