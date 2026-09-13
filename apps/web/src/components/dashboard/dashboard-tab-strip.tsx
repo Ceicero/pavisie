@@ -58,8 +58,8 @@ export function DashboardTabStrip({ guildId }: DashboardTabStripProps) {
               aria-current={active ? 'page' : undefined}
               className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0 ${
                 active
-                  ? 'bg-secondary text-secondary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  ? 'border border-gold-5 bg-gold-5/10 text-gold-5'
+                  : 'border border-transparent text-muted-foreground hover:border-gold-5/40 hover:text-foreground'
               }`}
             >
               <item.icon />

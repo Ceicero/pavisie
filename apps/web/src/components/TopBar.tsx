@@ -82,7 +82,7 @@ export function TopBar() {
             <Link
               key={link.href}
               href={link.href}
-              className="rounded text-sm text-grey-3 transition-colors hover:text-grey-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-grey-5"
+              className="rounded text-sm text-grey-3 transition-colors hover:text-gold-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-5"
             >
               {link.label}
             </Link>

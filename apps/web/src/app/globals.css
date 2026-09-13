@@ -42,7 +42,8 @@
 }
 
 /* Dark-by-default (ARCHITECTURE.md §O): the palette itself is dark, so bare :root above already IS the default
-   look. An explicit light choice (`data-theme="light"`) swaps to the paper/ink-on-light pairing. */
+   look. Light is opt-in only via the top-bar toggle — Providers.tsx sets defaultTheme="dark" with
+   enableSystem disabled, so a light OS preference never forces it on. next-themes writes `class="light"`. */
 body {
   background: var(--ink-0);
   color: var(--grey-7);
@@ -55,9 +56,30 @@ body {
     sans-serif;
 }
 
-html[data-theme='light'] body {
-  background: var(--paper);
-  color: var(--ink-2);
+/* Light theme: invert the ramps rather than restyling components.
+   Every marketing page hardcodes ink/grey/paper utility classes (~130 uses across 23 files), so
+   flipping the token values here makes all of them — text AND borders — invert role-for-role, and
+   keeps each stop contrast-matched with its dark counterpart (ARCHITECTURE.md §20):
+   primary text 16.18:1 dark / 18.09:1 light, secondary text 5.90:1 dark / 5.93:1 light.
+   The gold accent steps down to gold-4, which is the AA-safe stop on a light ground. */
+html.light {
+  --ink-0: #fafafa;
+  --ink-1: #f5f5f5;
+  --ink-2: #ededed;
+  --ink-3: #e5e5e5;
+  --ink-4: #dcdcdc;
+  --ink-5: #d4d4d4;
+  --ink-6: #c4c4c4;
+  --ink-7: #b0b0b0;
+  --grey-1: #9a9a9a;
+  --grey-2: #7d7d7d;
+  --grey-3: #616161;
+  --grey-4: #4a4a4a;
+  --grey-5: #333333;
+  --grey-6: #1f1f1f;
+  --grey-7: #111111;
+  --paper: #050505;
+  --gold-5: #8f5e20;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -89,7 +111,7 @@ html[data-theme='light'] body {
   will-change: transform;
 }
 
-html[data-theme='light'] .smoke-blob {
+html.light .smoke-blob {
   background: radial-gradient(circle at 50% 50%, rgba(10, 10, 10, 0.35), rgba(10, 10, 10, 0) 70%);
 }
 
@@ -141,7 +163,7 @@ html[data-theme='light'] .smoke-blob {
   border-radius: 1rem;
 }
 
-html[data-theme='light'] .glass {
+html.light .glass {
   background-color: rgba(10, 10, 10, 0.03);
   border-color: rgba(10, 10, 10, 0.1);
 }

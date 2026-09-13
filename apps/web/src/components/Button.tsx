@@ -5,11 +5,14 @@ import { clsx } from 'clsx';
 type Variant = 'primary' | 'secondary' | 'ghost' | 'outline';
 type Size = 'md' | 'lg';
 
+// Gold usage rule (docs/ARCHITECTURE.md §20): gold FILL is reserved for the emphasis CTA
+// (`primary`); every other variant uses gold only as a border/edgeline on hover, so the accent
+// signals "this is the action" or "this is where you are" rather than colouring everything.
 const VARIANT_CLASSES: Record<Variant, string> = {
   primary: 'bg-gold-5 text-ink-0 hover:bg-gold-6 border border-transparent',
-  secondary: 'bg-ink-4 text-grey-7 hover:bg-ink-3 border border-ink-6',
-  outline: 'bg-transparent text-grey-7 hover:bg-white/[0.06] border border-white/15',
-  ghost: 'bg-transparent text-grey-4 hover:text-grey-7 hover:bg-white/[0.04] border border-transparent',
+  secondary: 'bg-ink-4 text-grey-7 hover:bg-ink-3 border border-ink-6 hover:border-gold-5',
+  outline: 'bg-transparent text-grey-7 hover:bg-white/[0.06] border border-white/15 hover:border-gold-5',
+  ghost: 'bg-transparent text-grey-4 hover:text-gold-5 hover:bg-white/[0.04] border border-transparent',
 };
 
 const SIZE_CLASSES: Record<Size, string> = {

@@ -1052,8 +1052,19 @@ in `apps/web/src/app/globals.css` (hex) and `packages/ui/src/styles.css` (HSL tr
 
 Role assignments are fixed: never use gold-5/6/7 as text on the light theme, or gold-1/2/3 as text on the dark
 theme — both fail contrast. `BRAND.color = 0xc7933d` (gold-5) in core constants (embeds); success/error embeds
-keep green/red. Defining these tokens does not, by itself, restyle any component — applying gold to buttons,
-links, badges, or backgrounds is a separate design pass.
+keep green/red.
+
+**Where gold is allowed (the fill-vs-edgeline rule).** Gold *fill* is reserved for the single emphasis action on
+a view — the `primary` button variant (`bg-gold-5`, `text-ink-0`, brightening to gold-6 on hover). Everywhere
+else gold appears only as an *edgeline or text accent*, to mark "you are here" or "this is hoverable": the
+dashboard tab strip's selected tab (`border-gold-5` + `bg-gold-5/10` + `text-gold-5`, hover hint at
+`border-gold-5/40`), the `secondary`/`outline` button borders on hover, marketing nav links on hover, and focus
+rings. The point is that the accent stays scarce enough to actually direct attention; if everything is gold,
+nothing is. Surfaces, body copy and chrome stay black/grey/white.
+
+Because `html.light` overrides `--gold-5` to the gold-4 value, a component written as `text-gold-5` or
+`border-gold-5` automatically steps down to the AA-safe stop on the light theme — so components never need a
+light-mode gold variant of their own.
 
 ## 21. Cloud hosting (production target)
 
