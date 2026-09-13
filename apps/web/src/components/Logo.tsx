@@ -38,7 +38,7 @@ export function Logo({ className, imageSize = 28, withWordmark = true, href = '/
           className="flex items-center justify-center rounded-md border border-grey-1 font-bold text-grey-7"
           style={{ width: imageSize, height: imageSize, fontSize: imageSize * 0.5 }}
         >
-          E
+          P
         </span>
       )}
       {withWordmark && <span className="text-base font-semibold tracking-tight text-grey-7">Pavisie</span>}
