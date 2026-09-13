@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { defineManifest } from '../sdk';
 
 export const configSchema = z.object({
-  currencyName: z.string().trim().min(1).max(32).default('Coins'),
-  currencySymbol: z.string().trim().min(1).max(8).default('🪙'),
+  currencyName: z.string().trim().min(1).max(32).default('Agis'),
+  currencySymbol: z.string().trim().min(1).max(8).default('♦️'),
   dailyMinAmount: z.number().int().min(0).max(1_000_000).default(50),
   dailyMaxAmount: z.number().int().min(0).max(1_000_000).default(150),
   streakBonusPerDay: z.number().int().min(0).max(10_000).default(10),

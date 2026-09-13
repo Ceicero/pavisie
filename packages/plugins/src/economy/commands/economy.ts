@@ -56,14 +56,14 @@ const data = new SlashCommandBuilder()
       .addStringOption((opt) =>
         opt
           .setName('currency-name')
-          .setDescription('Currency name, e.g. "Coins"')
+          .setDescription('Currency name, e.g. "Agis"')
           .setRequired(false)
           .setMaxLength(32),
       )
       .addStringOption((opt) =>
         opt
           .setName('currency-symbol')
-          .setDescription('Currency symbol/emoji, e.g. "🪙"')
+          .setDescription('Currency symbol/emoji, e.g. "♦️"')
           .setRequired(false)
           .setMaxLength(8),
       )

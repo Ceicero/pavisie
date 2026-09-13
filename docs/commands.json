@@ -4087,13 +4087,13 @@
               "options": [
                 {
                   "name": "currency-name",
-                  "description": "Currency name, e.g. \"Coins\"",
+                  "description": "Currency name, e.g. \"Agis\"",
                   "required": false,
                   "type": "String"
                 },
                 {
                   "name": "currency-symbol",
-                  "description": "Currency symbol/emoji, e.g. \"🪙\"",
+                  "description": "Currency symbol/emoji, e.g. \"♦️\"",
                   "required": false,
                   "type": "String"
                 },

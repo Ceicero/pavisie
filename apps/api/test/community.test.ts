@@ -285,7 +285,7 @@ describe('economy settings', () => {
       headers: { cookie: cookieHeader },
     });
     expect(before.statusCode).toBe(200);
-    expect(before.json().currencyName).toBe('Coins');
+    expect(before.json().currencyName).toBe('Agis');
     expect(before.json().dailyMinAmount).toBe(50);
 
     const put = await app.inject({

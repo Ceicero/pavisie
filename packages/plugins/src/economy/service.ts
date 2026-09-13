@@ -99,7 +99,7 @@ export function validateGive(input: ValidateGiveInput): GiveValidationResult {
   return { ok: true };
 }
 
-/** Formats a balance with the guild's configured currency name/symbol, e.g. `"1,234 🪙 Coins"`. */
+/** Formats a balance with the guild's configured currency name/symbol, e.g. `"1,234 ♦️ Agis"`. */
 export function formatCurrency(amount: bigint, symbol: string): string {
   return `${amount.toLocaleString('en-US')} ${symbol}`;
 }

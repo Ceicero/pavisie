@@ -21,8 +21,8 @@ Stripe or any payment processor, and no feature converts the currency to or from
 ## Config keys (`configSchema`)
 
 ```
-currencyName        string   Display name, e.g. "Coins" (default: "Coins")
-currencySymbol       string   Display symbol/emoji, e.g. "🪙" (default: "🪙")
+currencyName        string   Display name, e.g. "Agis" (default: "Agis")
+currencySymbol       string   Display symbol/emoji, e.g. "♦️" (default: "♦️")
 dailyMinAmount        number  Minimum daily reward (default: 50)
 dailyMaxAmount        number  Maximum daily reward (default: 150)
 streakBonusPerDay     number  Bonus added per consecutive daily streak day (default: 10)
