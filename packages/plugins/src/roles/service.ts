@@ -2,7 +2,7 @@
 // welcome/goodbye messages and post panels. Business logic only — discord.js/Prisma objects are fetched here,
 // but the decisions (is this role safe to assign? what should the message say?) come from engine.ts.
 import type { Guild, GuildMember, Role, TextBasedChannel } from 'discord.js';
-import { NotFoundError, truncate } from '@entrophy/core';
+import { AppError, NotFoundError, truncate } from '@entrophy/core';
 import type {
   RolesService,
   VerificationDecisionInput as SdkVerificationDecisionInput,
@@ -526,20 +526,30 @@ export function createRolesService(ctx: PluginContext): RolesService {
   }
 
   async function verificationDecisionCore(input: SdkVerificationDecisionInput): Promise<void> {
+    // First check that the request exists; if not, fail immediately.
     const request = await ctx.prisma.verificationRequest.findFirst({
       where: { id: input.requestId, guildId: input.guildId },
     });
     if (!request) throw new NotFoundError('Verification request not found.');
-    if (request.status !== 'PENDING') return; // Already decided; two moderators cannot act on the same request twice.
 
-    await ctx.prisma.verificationRequest.update({
-      where: { id: request.id },
+    // Atomically update only if the status is still PENDING (prevents concurrent decisions from both succeeding).
+    // `updateMany` returns the count of affected rows, so we can detect if the status changed since the read.
+    const updated = await ctx.prisma.verificationRequest.updateMany({
+      where: { id: input.requestId, status: 'PENDING' },
       data: {
         status: input.approve ? 'APPROVED' : 'DENIED',
         reviewedBy: input.reviewerId,
         reviewedAt: new Date(),
       },
     });
+
+    if (updated.count === 0) {
+      // Another moderator already decided this request (or it was manually updated).
+      throw new AppError('already_decided', 'This verification request was already decided by another moderator.', {
+        status: 409,
+        expose: true,
+      });
+    }
 
     if (input.approve) {
       await verifyMemberCore({ guildId: input.guildId, userId: request.userId, method: 'modal' });

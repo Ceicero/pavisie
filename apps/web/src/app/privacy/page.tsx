@@ -12,7 +12,7 @@ export default function PrivacyPage() {
   const sections = privacyPolicy(DEFAULT_OPERATOR, DEFAULT_CONTACT_EMAIL);
 
   return (
-    <Section eyebrow="Legal" title="Privacy policy">
+    <Section headingLevel={1} eyebrow="Legal" title="Privacy policy">
       <Glass className="mb-8 p-5 text-sm leading-relaxed text-grey-3">
         <strong className="text-grey-6">This is a template.</strong> It describes Entrophy&apos;s default data
         handling accurately, but the operator running this deployment (currently shown as &ldquo;

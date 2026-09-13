@@ -18,6 +18,7 @@ export default async function DonatePage() {
 
   return (
     <Section
+      headingLevel={1}
       eyebrow="Donate"
       title="Help keep Entrophy running"
       subtitle="Entrophy is community-run. Donations fund hosting and development — one-time, non-refundable, and they grant no perks or in-game advantages."

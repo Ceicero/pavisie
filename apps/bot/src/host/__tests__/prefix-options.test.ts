@@ -77,16 +77,16 @@ function fakeCachedMessage(overrides: Partial<Message<true>> = {}): Message<true
 }
 
 describe('resolvePrefixOptions', () => {
-  it('resolves a command with no options', () => {
-    const result = resolvePrefixOptions({ options: [] }, [], fakeCachedMessage());
+  it('resolves a command with no options', async () => {
+    const result = await resolvePrefixOptions({ options: [] }, [], fakeCachedMessage());
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.resolved.values.size).toBe(0);
     }
   });
 
-  it('resolves positional string arguments', () => {
-    const result = resolvePrefixOptions(
+  it('resolves positional string arguments', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 3, name: 'text', required: true, description: '' },
@@ -101,8 +101,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('resolves named arguments (key:value)', () => {
-    const result = resolvePrefixOptions(
+  it('resolves named arguments (key:value)', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 3, name: 'reason', required: true, description: '' },
@@ -119,8 +119,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('greedy last string option consumes remaining positional args', () => {
-    const result = resolvePrefixOptions(
+  it('greedy last string option consumes remaining positional args', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 3, name: 'user', required: true, description: '' },
@@ -137,8 +137,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('returns error when required option is missing', () => {
-    const result = resolvePrefixOptions(
+  it('returns error when required option is missing', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 3, name: 'user', required: true, description: '' },
@@ -154,8 +154,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('resolves integer options with min/max validation', () => {
-    const result = resolvePrefixOptions(
+  it('resolves integer options with min/max validation', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 4, name: 'days', required: false, min_value: 1, max_value: 28, description: '' },
@@ -170,8 +170,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('rejects integer outside min/max range', () => {
-    const result = resolvePrefixOptions(
+  it('rejects integer outside min/max range', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 4, name: 'days', required: true, min_value: 1, max_value: 28, description: '' },
@@ -186,7 +186,7 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('resolves boolean options with various formats', () => {
+  it('resolves boolean options with various formats', async () => {
     const tests = [
       { tokens: ['yes'], expected: true },
       { tokens: ['no'], expected: false },
@@ -199,7 +199,7 @@ describe('resolvePrefixOptions', () => {
     ];
 
     for (const test of tests) {
-      const result = resolvePrefixOptions(
+      const result = await resolvePrefixOptions(
         {
           options: [
             { type: 5, name: 'flag', required: true, description: '' },
@@ -215,8 +215,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('rejects invalid boolean values', () => {
-    const result = resolvePrefixOptions(
+  it('rejects invalid boolean values', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 5, name: 'flag', required: true, description: '' },
@@ -231,8 +231,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('resolves user option from mention', () => {
-    const result = resolvePrefixOptions(
+  it('resolves user option from mention', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 6, name: 'user', required: true, description: '' },
@@ -249,8 +249,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('resolves role option from mention', () => {
-    const result = resolvePrefixOptions(
+  it('resolves role option from mention', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 8, name: 'role', required: true, description: '' },
@@ -270,8 +270,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('validates string choices case-insensitively', () => {
-    const result = resolvePrefixOptions(
+  it('validates string choices case-insensitively', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           {
@@ -295,8 +295,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('rejects invalid choice', () => {
-    const result = resolvePrefixOptions(
+  it('rejects invalid choice', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           {
@@ -320,8 +320,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('resolves subcommand', () => {
-    const result = resolvePrefixOptions(
+  it('resolves subcommand', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           {
@@ -352,8 +352,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('resolves subcommand group and subcommand', () => {
-    const result = resolvePrefixOptions(
+  it('resolves subcommand group and subcommand', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           {
@@ -384,8 +384,8 @@ describe('resolvePrefixOptions', () => {
     }
   });
 
-  it('builds usage string with required/optional brackets', () => {
-    const result = resolvePrefixOptions(
+  it('builds usage string with required/optional brackets', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 6, name: 'user', required: true, description: '' },
@@ -403,8 +403,8 @@ describe('resolvePrefixOptions', () => {
   });
 
   // DEFECT 1: Real object resolution
-  it('resolves users to real GuildMember objects (DEFECT 1)', () => {
-    const result = resolvePrefixOptions(
+  it('resolves users to real GuildMember objects (DEFECT 1)', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 6, name: 'user', required: true, description: '' },
@@ -423,8 +423,8 @@ describe('resolvePrefixOptions', () => {
   });
 
   // DEFECT 3: URL positional argument should not be misparsed
-  it('keeps URL as positional argument, not named argument (DEFECT 3)', () => {
-    const result = resolvePrefixOptions(
+  it('keeps URL as positional argument, not named argument (DEFECT 3)', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 3, name: 'url', required: true, description: '' },
@@ -441,8 +441,8 @@ describe('resolvePrefixOptions', () => {
   });
 
   // DEFECT 4: Choices should match by name OR value
-  it('matches choices by display name (DEFECT 4)', () => {
-    const result = resolvePrefixOptions(
+  it('matches choices by display name (DEFECT 4)', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           {
@@ -468,7 +468,7 @@ describe('resolvePrefixOptions', () => {
   });
 
   // DEFECT 2: Attachment auto-binding
-  it('auto-binds attachments in order (DEFECT 2)', () => {
+  it('auto-binds attachments in order (DEFECT 2)', async () => {
     const attachment1 = {
       id: 'attach-001',
       name: 'test.txt',
@@ -485,7 +485,7 @@ describe('resolvePrefixOptions', () => {
       ['attach-002', attachment2],
     ]);
 
-    const result = resolvePrefixOptions(
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 11, name: 'file1', required: true, description: '' },
@@ -508,11 +508,11 @@ describe('resolvePrefixOptions', () => {
   });
 
   // DEFECT 2: Required attachment with no corresponding attachment
-  it('fails with clear error when required attachment is missing (DEFECT 2)', () => {
+  it('fails with clear error when required attachment is missing (DEFECT 2)', async () => {
     const msg = fakeCachedMessage();
     (msg as any).attachments = new Map();
 
-    const result = resolvePrefixOptions(
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 11, name: 'file', required: true, description: '' },
@@ -529,8 +529,8 @@ describe('resolvePrefixOptions', () => {
   });
 
   // DEFECT 5: Command name in usage string
-  it('includes command name in usage string (DEFECT 5)', () => {
-    const result = resolvePrefixOptions(
+  it('includes command name in usage string (DEFECT 5)', async () => {
+    const result = await resolvePrefixOptions(
       {
         options: [
           { type: 6, name: 'user', required: true, description: '' },

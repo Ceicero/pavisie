@@ -15,7 +15,7 @@ export default function StaffRolesPage() {
 
   return (
     <>
-      <Section eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.intro} />
+      <Section headingLevel={1} eyebrow={copy.eyebrow} title={copy.title} subtitle={copy.intro} />
 
       <Section eyebrow="Permission tiers" title="What each tier can actually do">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

@@ -20,8 +20,8 @@ const levelCommand = {
 const message = { guild: { members: { cache: new Map() } }, attachments: new Map() } as never;
 
 describe('a command needing a subcommand explains itself instead of throwing', () => {
-  it('lists the available subcommands when none was given', () => {
-    const result = resolvePrefixOptions(levelCommand, [], message, 'level');
+  it('lists the available subcommands when none was given', async () => {
+    const result = await resolvePrefixOptions(levelCommand, [], message, 'level');
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -31,8 +31,8 @@ describe('a command needing a subcommand explains itself instead of throwing', (
     expect(result.usage).toContain('level');
   });
 
-  it('names the offending token when the subcommand is not recognised', () => {
-    const result = resolvePrefixOptions(levelCommand, ['bogus'], message, 'level');
+  it('names the offending token when the subcommand is not recognised', async () => {
+    const result = await resolvePrefixOptions(levelCommand, ['bogus'], message, 'level');
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -40,18 +40,18 @@ describe('a command needing a subcommand explains itself instead of throwing', (
     expect(result.error).toContain('rank');
   });
 
-  it('still resolves normally once a real subcommand is supplied', () => {
-    const result = resolvePrefixOptions(levelCommand, ['rank'], message, 'level');
+  it('still resolves normally once a real subcommand is supplied', async () => {
+    const result = await resolvePrefixOptions(levelCommand, ['rank'], message, 'level');
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.resolved.subcommand).toBe('rank');
   });
 
-  it('leaves commands without subcommands alone', () => {
+  it('leaves commands without subcommands alone', async () => {
     const simple = { options: [{ type: 3, name: 'query', description: 'A string.', required: false }] };
 
-    const result = resolvePrefixOptions(simple, [], message, 'ask');
+    const result = await resolvePrefixOptions(simple, [], message, 'ask');
 
     expect(result.ok).toBe(true);
   });
@@ -62,24 +62,24 @@ describe('a command with exactly one subcommand selects it automatically', () =>
   // single subcommand and had been working. There is nothing to choose, so choosing is the bot's job.
   const permissions = { options: [{ type: 1, name: 'audit', description: 'Audit permissions.' }] };
 
-  it('runs without the user naming the only subcommand', () => {
-    const result = resolvePrefixOptions(permissions, [], message, 'permissions');
+  it('runs without the user naming the only subcommand', async () => {
+    const result = await resolvePrefixOptions(permissions, [], message, 'permissions');
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.resolved.subcommand).toBe('audit');
   });
 
-  it('still works when the user does name it', () => {
-    const result = resolvePrefixOptions(permissions, ['audit'], message, 'permissions');
+  it('still works when the user does name it', async () => {
+    const result = await resolvePrefixOptions(permissions, ['audit'], message, 'permissions');
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.resolved.subcommand).toBe('audit');
   });
 
-  it('does not auto-select when there is more than one choice', () => {
-    const result = resolvePrefixOptions(levelCommand, [], message, 'level');
+  it('does not auto-select when there is more than one choice', async () => {
+    const result = await resolvePrefixOptions(levelCommand, [], message, 'level');
 
     expect(result.ok).toBe(false);
   });

@@ -1,7 +1,7 @@
 import { ChannelType, type Guild, type TextChannel } from 'discord.js';
 import { AppError, NotFoundError, PermissionError, ValidationError, redisKey } from '@entrophy/core';
 import { nextEnforcerRecordNumber } from '@entrophy/database/guild';
-import { Prisma, type EnforcerRecord, type PrismaClient } from '@entrophy/database';
+import { Prisma, type EnforcerRecord, type ModerationCase, type PrismaClient } from '@entrophy/database';
 import { fetchMemberSafe, hierarchyGuard, resolveTextChannel, safeDm, type PluginContext } from '../sdk';
 import type {
   EnforcerDecideInput,
@@ -28,11 +28,25 @@ export async function withNextRecordNumber<T>(
   guildId: string,
   create: (recordNumber: number) => Promise<T>,
 ): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < RECORD_NUMBER_MAX_ATTEMPTS; attempt++) {
+  return withRecordNumberRetry(async () => {
     const recordNumber = await nextEnforcerRecordNumber(prisma, guildId);
+    return create(recordNumber);
+  });
+}
+
+/**
+ * Re-runs `attempt` when it fails on the `[guildId, recordNumber]` unique constraint.
+ *
+ * The retry restarts the whole attempt rather than just re-issuing the failed `create`. That matters inside an
+ * interactive transaction: Postgres aborts a transaction as soon as one statement violates a constraint, so a
+ * second `create` on the same `tx` would fail with "current transaction is aborted" instead of taking the next
+ * free number. Restarting means `decide()` opens a fresh transaction and re-reads the number.
+ */
+async function withRecordNumberRetry<T>(attempt: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < RECORD_NUMBER_MAX_ATTEMPTS; i++) {
     try {
-      return await create(recordNumber);
+      return await attempt();
     } catch (err) {
       lastError = err;
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') continue;
@@ -40,6 +54,16 @@ export async function withNextRecordNumber<T>(
     }
   }
   throw lastError;
+}
+
+/**
+ * The next free record number, read through an interactive transaction's client. `nextEnforcerRecordNumber`
+ * opens its own transaction, which `Prisma.TransactionClient` cannot do (nested transactions are unsupported),
+ * so the aggregate is issued directly on `tx` instead.
+ */
+async function nextRecordNumberWithin(tx: Prisma.TransactionClient, guildId: string): Promise<number> {
+  const max = await tx.enforcerRecord.aggregate({ where: { guildId }, _max: { recordNumber: true } });
+  return (max._max.recordNumber ?? 0) + 1;
 }
 
 function rowToPolicy(row: {
@@ -428,6 +452,89 @@ async function editFlagQueueMessage(
   });
 }
 
+/**
+ * Duck-typed mirror of moderation/service.ts's `EscalationOutcome` — kept local rather than imported, since
+ * plugins talk to each other only through `ctx.services` (see `ServiceMap.moderation` in sdk/services.ts), not
+ * direct cross-plugin imports. `moderation.warn()`'s declared return type is still plain `ModerationCase`; at
+ * runtime it may carry this extra `escalation` field, which is why callers below read it via an explicit
+ * `ModerationCase & { escalation?: WarnEscalationOutcome }` variable type rather than a cast.
+ */
+interface WarnEscalationOutcome {
+  rule: { warnings: number; action: 'timeout' | 'kick' | 'ban'; durationMs?: number };
+  case: ModerationCase;
+}
+
+/**
+ * An Enforcer WARN decision runs the moderator's action through `moderation.warn()`, which can itself
+ * auto-fire the guild's warning-escalation ladder and create a second `ModerationCase` (timeout/kick/ban) with
+ * no Enforcer involvement — no `EnforcerRecord`, no ledger post, so a moderator reading the ledger sees the
+ * warn but not what followed it (README: "every flag and every decision is written to a read-only ledger
+ * channel and to the database"). When `escalation` is present this writes a second DECISION record — linked to
+ * the same flag via `parentRecordId` and to the escalated case via `caseId`, reusing the existing
+ * DECISION/ACTIONED/AUTO enum values (no schema change) — and posts a matching ledger-channel entry.
+ * Best-effort only: by the time this runs, the warn itself (case + primary decision record) has already
+ * succeeded, so a failure here is logged, never thrown back at the moderator.
+ */
+async function recordEscalatedAction(
+  ctx: PluginContext,
+  guild: Guild,
+  config: EnforcerConfig,
+  flagRecordId: string,
+  moderatorId: string,
+  escalation: WarnEscalationOutcome,
+): Promise<void> {
+  const decision = escalation.rule.action.toUpperCase() as 'TIMEOUT' | 'KICK' | 'BAN';
+  const durationMs = escalation.rule.durationMs ?? null;
+  const decisionReason =
+    `Automatic escalation from a Warn decision: reached ${escalation.rule.warnings} active warning(s).`;
+
+  try {
+    const escalationRecord = await withNextRecordNumber(ctx.prisma, escalation.case.guildId, (recordNumber) =>
+      ctx.prisma.enforcerRecord.create({
+        data: {
+          guildId: escalation.case.guildId,
+          recordNumber,
+          kind: 'DECISION',
+          status: 'ACTIONED',
+          userId: escalation.case.targetId,
+          decision,
+          decidedBy: moderatorId,
+          decidedAt: new Date(),
+          decisionReason,
+          durationMs,
+          caseId: escalation.case.id,
+          parentRecordId: flagRecordId,
+          source: 'AUTO',
+        },
+      }),
+    );
+
+    const ledgerChannel = await fetchManagedTextChannel(guild, config.ledgerChannelId);
+    if (!ledgerChannel) return;
+    const embed = buildLedgerEmbed({
+      recordNumber: escalationRecord.recordNumber,
+      kind: 'DECISION',
+      userId: escalation.case.targetId,
+      createdAt: escalationRecord.createdAt,
+      action: `${decisionActionLabel(decision, durationMs)} — automatic escalation`,
+      decidedBy: moderatorId,
+      caseNumber: escalation.case.caseNumber,
+      source: 'AUTO',
+    });
+    await ledgerChannel.send({ embeds: [embed], allowedMentions: { parse: [] } }).catch((err) => {
+      ctx.logger.warn(
+        { err, guildId: escalation.case.guildId, caseId: escalation.case.id },
+        'enforcer: failed to post escalation ledger entry',
+      );
+    });
+  } catch (err) {
+    ctx.logger.error(
+      { err: String(err), guildId: escalation.case.guildId, flagRecordId, caseId: escalation.case.id },
+      'enforcer: failed to record an automatic warn-escalation in the ledger',
+    );
+  }
+}
+
 /** Builds the `EnforcerService` implementation registered in `onLoad` (ARCHITECTURE.md §19). */
 export function createEnforcerService(ctx: PluginContext): EnforcerService {
   return {
@@ -524,6 +631,7 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
         let caseId: string | undefined;
         let caseNumber: number | undefined;
         let durationMs = input.durationMs;
+        let escalationOutcome: WarnEscalationOutcome | null = null;
 
         const targetMember = await fetchMemberSafe(guild, record.userId);
         const actorMember = await fetchMemberSafe(guild, input.moderatorId);
@@ -544,7 +652,10 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
         switch (input.decision) {
           case 'WARN': {
             guardTarget();
-            const created = await moderation.warn({
+            // `moderation.warn()`'s declared return type is plain `ModerationCase` — this widened variable
+            // type is how the (possibly-present) `escalation` field the implementation actually attaches gets
+            // read back out; see `WarnEscalationOutcome`'s doc comment above.
+            const created: ModerationCase & { escalation?: WarnEscalationOutcome } = await moderation.warn({
               guildId: input.guildId,
               targetId: record.userId,
               moderatorId: input.moderatorId,
@@ -554,6 +665,7 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
             });
             caseId = created.id;
             caseNumber = created.caseNumber;
+            escalationOutcome = created.escalation ?? null;
             break;
           }
           case 'TIMEOUT': {
@@ -689,45 +801,78 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
           );
         }
 
-        const decisionRow = await withNextRecordNumber(ctx.prisma, input.guildId, (recordNumber) =>
-          ctx.prisma.enforcerRecord.create({
-            data: {
-              guildId: input.guildId,
-              recordNumber,
-              kind: 'DECISION',
-              status: input.decision === 'DISMISS' ? 'DISMISSED' : 'ACTIONED',
-              userId: record.userId,
-              channelId: record.channelId,
-              messageId: record.messageId,
-              messageJumpUrl: record.messageJumpUrl,
-              policyId: record.policyId,
-              policyName: record.policyName,
-              decision: input.decision,
-              decidedBy: input.moderatorId,
-              decidedAt: new Date(),
-              decisionReason: input.reason ?? null,
-              durationMs: durationMs ?? null,
-              caseId: caseId ?? null,
-              parentRecordId: record.id,
-              // The DECISION row's source describes how the *decision* was made (a human clicking buttons in
-              // Discord vs. the dashboard) — distinct from the FLAG row's source (how the flag was raised).
-              source: input.source === 'dashboard' ? 'DASHBOARD' : 'MANUAL',
-            },
-          }),
-        );
+        // BUG FIX: the Discord moderation action above already happened and cannot be rolled back — from here
+        // on, a database failure must never leave the DECISION record without the matching FLAG-row update (or
+        // vice versa), which is exactly what let a moderator's retry double-apply WARN/TIMEOUT/BAN after a
+        // transient write failure. Both writes now happen inside one interactive transaction, so the database
+        // can only ever end up fully updated or fully unchanged.
+        let decisionRow: EnforcerRecord;
+        try {
+          // The retry wraps the whole transaction: a record-number collision aborts it, so the next attempt has
+          // to start a fresh one and re-read the number.
+          decisionRow = await withRecordNumberRetry(() =>
+            ctx.prisma.$transaction(async (tx) => {
+              const recordNumber = await nextRecordNumberWithin(tx, input.guildId);
+              const created = await tx.enforcerRecord.create({
+                data: {
+                  guildId: input.guildId,
+                  recordNumber,
+                  kind: 'DECISION',
+                  status: input.decision === 'DISMISS' ? 'DISMISSED' : 'ACTIONED',
+                  userId: record.userId,
+                  channelId: record.channelId,
+                  messageId: record.messageId,
+                  messageJumpUrl: record.messageJumpUrl,
+                  policyId: record.policyId,
+                  policyName: record.policyName,
+                  decision: input.decision,
+                  decidedBy: input.moderatorId,
+                  decidedAt: new Date(),
+                  decisionReason: input.reason ?? null,
+                  durationMs: durationMs ?? null,
+                  caseId: caseId ?? null,
+                  parentRecordId: record.id,
+                  // The DECISION row's source describes how the *decision* was made (a human clicking buttons in
+                  // Discord vs. the dashboard) — distinct from the FLAG row's source (how the flag was raised).
+                  source: input.source === 'dashboard' ? 'DASHBOARD' : 'MANUAL',
+                },
+              });
 
-        await ctx.prisma.enforcerRecord.update({
-          where: { id: record.id },
-          data: {
-            status: input.decision === 'DISMISS' ? 'DISMISSED' : 'ACTIONED',
-            decision: input.decision,
-            decidedBy: input.moderatorId,
-            decidedAt: new Date(),
-            decisionReason: input.reason ?? null,
-            durationMs: durationMs ?? null,
-            caseId: caseId ?? null,
-          },
-        });
+              await tx.enforcerRecord.update({
+                where: { id: record.id },
+                data: {
+                  status: input.decision === 'DISMISS' ? 'DISMISSED' : 'ACTIONED',
+                  decision: input.decision,
+                  decidedBy: input.moderatorId,
+                  decidedAt: new Date(),
+                  decisionReason: input.reason ?? null,
+                  durationMs: durationMs ?? null,
+                  caseId: caseId ?? null,
+                },
+              });
+
+              return created;
+            }),
+          );
+        } catch (err) {
+          // The Discord action (and, for WARN/TIMEOUT/KICK/BAN/MUTE, the ModerationCase it created) already
+          // succeeded — this is NOT a "nothing happened, safe to retry" failure, so it must never surface as
+          // the generic error message (which is exactly what invited the double-apply in the first place).
+          ctx.logger.error(
+            {
+              err: String(err),
+              guildId: input.guildId,
+              recordId: record.id,
+              decision: input.decision,
+              caseId,
+            },
+            'enforcer: decision database write failed after the Discord action already succeeded',
+          );
+          throw new AppError('enforcer_action_not_recorded', ctx.t('decide.actionAppliedRecordingFailed'), {
+            status: 500,
+            expose: true,
+          });
+        }
 
         await editFlagQueueMessage(ctx, guild, config, record, input.moderatorId);
 
@@ -752,6 +897,12 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
               'enforcer: failed to post decision ledger entry',
             );
           });
+        }
+
+        // BUG FIX: a WARN that tripped the guild's warning-escalation ladder gets its own ledger entry too —
+        // see `recordEscalatedAction`'s doc comment. No-op when `moderation.warn()` didn't report an escalation.
+        if (escalationOutcome) {
+          await recordEscalatedAction(ctx, guild, config, record.id, input.moderatorId, escalationOutcome);
         }
 
         await ctx.audit({

@@ -49,6 +49,22 @@ import { filterMessagesForPurge, type PurgeCandidateMessage } from './purge';
 // just long enough to keep two overlapping `appeal-sync` ticks from racing on the same appeal.
 const APPEAL_SYNC_LOCK_TTL_MS = 30_000;
 
+// `warn()` serializes insert-then-count-then-escalate per (guildId, targetId) — see `acquireWarnEscalationLock`'s
+// doc comment. Unlike the enforcer decide lock (`enforcer/service.ts`), which rejects a second concurrent decider
+// outright, a second concurrent warn must still succeed — it just waits its turn — so this retries on contention
+// instead of failing on the first NX miss. TTL matches the enforcer decide lock's 30s (the locked span can
+// include a full escalated Discord action — timeout/kick/ban — plus its own case creation and DM, not just the
+// warning insert+count).
+const WARN_ESCALATION_LOCK_TTL_MS = 30_000;
+const WARN_ESCALATION_LOCK_RETRY_MS = 20;
+const WARN_ESCALATION_LOCK_MAX_ATTEMPTS = 50; // ~1s worst-case wait before degrading to unlocked.
+
+/** What `runEscalation` fired, surfaced from `warn()` so a caller (the Enforcer plugin) can bookkeep it too. */
+export interface EscalationOutcome {
+  rule: EscalationRule;
+  case: ModerationCase;
+}
+
 /** Minimal shape used to build a DM before a kick/ban/softban actually happens (see `sendCaseDmToUser` callers). */
 type PreDmCase = Pick<ModerationCase, 'type' | 'reason' | 'caseNumber'>;
 
@@ -382,7 +398,14 @@ export class ModerationServiceImpl implements ModerationService {
     return { ...row, dmSent };
   }
 
-  async warn(input: WarnInput): Promise<ModerationCase> {
+  /**
+   * The interface's declared return type stays plain `ModerationCase` (`ServiceMap.moderation.warn` in
+   * sdk/services.ts) — this widened return type is a covariant override: still fully assignable back to that
+   * interface, but lets the Enforcer plugin (which calls this through `ctx.services.get('moderation')`, typed
+   * as the interface) read the optional `escalation` field via its own local mirror of `EscalationOutcome`
+   * rather than a blind cast. See `enforcer/service.ts`'s `WarnEscalationOutcome`.
+   */
+  async warn(input: WarnInput): Promise<ModerationCase & { escalation?: EscalationOutcome }> {
     const row = await this.createCase({
       guildId: input.guildId,
       type: 'WARN',
@@ -393,49 +416,132 @@ export class ModerationServiceImpl implements ModerationService {
       dmUser: input.dmUser,
     });
 
-    await this.ctx.prisma.moderationWarning.create({
-      data: {
-        guildId: input.guildId,
-        userId: input.targetId,
-        caseId: row.id,
-        moderatorId: input.moderatorId,
-        reason: input.reason?.trim() || null,
-      },
-    });
-
-    await this.runEscalation(input.guildId, input.targetId, input.moderatorId, input.source);
-
-    return row;
+    const escalation = await this.insertWarningAndEscalate(input, row.id);
+    return escalation ? { ...row, escalation } : row;
   }
 
-  /** Checks the guild's escalation ladder after a new warning lands, and auto-executes the matching rule (if any). */
-  private async runEscalation(
-    guildId: string,
-    targetId: string,
-    moderatorId: string,
-    source: CreateModerationCaseInput['source'],
-  ): Promise<void> {
+  /**
+   * BUG FIX: inserting the warning row, counting active warnings, and evaluating the escalation ladder must
+   * happen as one serialized sequence per (guild, user) — otherwise two concurrent `/mod warn` calls can both
+   * insert before either counts, so both then see the same post-both total and a rung strictly between the
+   * old and new counts never fires at all (`evaluateEscalation` only matches an EXACT count). A short-lived Redis
+   * lock (`acquireWarnEscalationLock`, same NX/PX + try/finally convention as the Enforcer's decide lock in
+   * `enforcer/service.ts`) makes the sequence atomic across concurrent callers; once serialized, the count
+   * advances one at a time and exact-match escalation is correct again.
+   */
+  private async insertWarningAndEscalate(
+    input: WarnInput,
+    caseId: string,
+  ): Promise<EscalationOutcome | null> {
+    const lockKey = await this.acquireWarnEscalationLock(input.guildId, input.targetId);
+    let rule: EscalationRule | null;
+    try {
+      await this.ctx.prisma.moderationWarning.create({
+        data: {
+          guildId: input.guildId,
+          userId: input.targetId,
+          caseId,
+          moderatorId: input.moderatorId,
+          reason: input.reason?.trim() || null,
+        },
+      });
+
+      rule = await this.selectEscalation(input.guildId, input.targetId);
+    } finally {
+      if (lockKey) await this.ctx.redis.del(lockKey).catch(() => undefined);
+    }
+
+    // Deliberately outside the lock: only choosing the rung has to be serialized. Carrying out the punishment
+    // means a Discord round trip plus a DM, which can take seconds — holding the lock across that would make
+    // every other warn for this member wait it out, and any that gave up waiting would count unserialized and
+    // reintroduce the skipped-rung bug this lock exists to prevent.
+    if (!rule) return null;
+    return this.executeEscalation(rule, input.guildId, input.targetId, input.moderatorId, input.source);
+  }
+
+  private warnEscalationLockKey(guildId: string, userId: string): string {
+    return redisKey('moderation', 'warn-escalation-lock', guildId, userId);
+  }
+
+  /**
+   * Acquires the per-(guild, user) warn-escalation lock, retrying on contention rather than failing on the
+   * first miss — unlike the enforcer decide lock, a second concurrent warn must still succeed, just after the
+   * first finishes its insert-count-escalate sequence. Returns `null` (degrading safely: the warning is still
+   * recorded, escalation just isn't guaranteed race-free for this call) if the lock can't be acquired within
+   * the retry budget — a genuine Redis error, or contention that outlasts it — rather than blocking the warn
+   * forever or dropping it.
+   */
+  private async acquireWarnEscalationLock(guildId: string, userId: string): Promise<string | null> {
+    const lockKey = this.warnEscalationLockKey(guildId, userId);
+    const holder = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    for (let attempt = 0; attempt < WARN_ESCALATION_LOCK_MAX_ATTEMPTS; attempt++) {
+      try {
+        const acquired = await this.ctx.redis.set(lockKey, holder, 'PX', WARN_ESCALATION_LOCK_TTL_MS, 'NX');
+        if (acquired === 'OK') return lockKey;
+      } catch (err) {
+        this.ctx.logger.warn(
+          { err: String(err), guildId, userId },
+          'moderation: warn-escalation lock acquisition errored — proceeding unlocked',
+        );
+        return null;
+      }
+      await new Promise((resolve) => setTimeout(resolve, WARN_ESCALATION_LOCK_RETRY_MS));
+    }
+    this.ctx.logger.warn(
+      { guildId, userId },
+      'moderation: warn-escalation lock contended past the retry budget — proceeding unlocked',
+    );
+    return null;
+  }
+
+  /** The rung this warning lands on, if any. Counting and evaluating must run under the warn-escalation lock. */
+  private async selectEscalation(guildId: string, targetId: string): Promise<EscalationRule | null> {
     const activeCount = await this.ctx.prisma.moderationWarning.count({
       where: { guildId, userId: targetId, active: true },
     });
     const config = await this.getModConfig(guildId);
-    const rule = evaluateEscalation(activeCount, config.escalations as EscalationRule[]);
-    if (!rule) return;
+    return evaluateEscalation(activeCount, config.escalations as EscalationRule[]);
+  }
 
+  /** Carries out an escalation rung. Runs unlocked; a failure is logged and never fails the warning itself. */
+  private async executeEscalation(
+    rule: EscalationRule,
+    guildId: string,
+    targetId: string,
+    moderatorId: string,
+    source: CreateModerationCaseInput['source'],
+  ): Promise<EscalationOutcome | null> {
     const reason = `Automatic escalation: reached ${rule.warnings} active warning(s).`;
     try {
+      let escalatedCase: ModerationCase | null = null;
       if (rule.action === 'timeout' && rule.durationMs) {
-        await this.timeout({ guildId, targetId, moderatorId, durationMs: rule.durationMs, reason, source });
+        escalatedCase = await this.timeout({
+          guildId,
+          targetId,
+          moderatorId,
+          durationMs: rule.durationMs,
+          reason,
+          source,
+        });
       } else if (rule.action === 'kick') {
-        await this.kick({ guildId, targetId, moderatorId, reason, source });
+        escalatedCase = await this.kick({ guildId, targetId, moderatorId, reason, source });
       } else if (rule.action === 'ban') {
-        await this.ban({ guildId, targetId, moderatorId, reason, source, durationMs: rule.durationMs });
+        escalatedCase = await this.ban({
+          guildId,
+          targetId,
+          moderatorId,
+          reason,
+          source,
+          durationMs: rule.durationMs,
+        });
       }
+      return escalatedCase ? { rule, case: escalatedCase } : null;
     } catch (err) {
       this.ctx.logger.error(
         { err: String(err), guildId, targetId, rule },
         'moderation: automatic escalation action failed',
       );
+      return null;
     }
   }
 

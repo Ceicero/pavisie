@@ -155,6 +155,7 @@ export function VerificationTab({ guildId }: { guildId: string }) {
                   <Button
                     variant="outline"
                     size="icon"
+                    aria-label="Remove question"
                     onClick={() =>
                       setDraft((p) => ({ ...p!, questions: p!.questions.filter((_, xi) => xi !== i) }))
                     }

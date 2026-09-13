@@ -173,6 +173,38 @@ describe('matchRewardActions — cooldown gate', () => {
     expect(matchRewardActions('channel-a', [row], makeEvent(), cooldowns, now + 1)).toHaveLength(1); // pruned, allowed again
     expect(matchRewardActions('channel-b', [row], makeEvent(), cooldowns, now + 1)).toHaveLength(0); // untouched, still on cooldown
   });
+
+  it('cooldown is only consumed when buildAction succeeds — a failed action (e.g., template resolves to whitespace) does not burn the cooldown', () => {
+    // Row with a cooldown that will resolve to an empty action
+    const row = makeRewardRow({
+      cooldownSeconds: 30,
+      action: 'CHAT',
+      chatTemplate: '{input}', // Will be empty/whitespace, failing the action build
+    });
+    const cooldowns = new RewardCooldowns();
+    const now = 1_000_000;
+
+    // First redemption: input resolves to only whitespace, action fails to build, cooldown NOT consumed
+    const first = matchRewardActions(
+      'channel-a',
+      [row],
+      makeEvent({ userInput: '   \n\t  ' }), // Just whitespace
+      cooldowns,
+      now,
+    );
+    expect(first).toHaveLength(0); // No action produced
+
+    // Second redemption immediately after: should succeed because cooldown was never consumed
+    const second = matchRewardActions(
+      'channel-a',
+      [row],
+      makeEvent({ userInput: 'hello world' }), // Valid input
+      cooldowns,
+      now + 1,
+    );
+    expect(second).toHaveLength(1); // Action produced this time
+    expect((second[0] as { text: string }).text).toBe('hello world');
+  });
 });
 
 describe('templating', () => {

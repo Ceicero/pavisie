@@ -32,6 +32,34 @@ export function parseTimeoutDuration(input: string): DurationParseResult {
   return { ok: true, ms };
 }
 
+const MIN_MUTE_MS = 5_000;
+
+/**
+ * Parses and range-checks the Enforcer decision modal's MUTE duration (`enforcer/components/decide.ts`). A
+ * MUTE is a role-add with a locally tracked expiry, not a Discord API timeout, so it has no 28-day cap — but an
+ * unbounded string is still a typo trap, so this borrows the same 5-second floor as a timeout and the same
+ * generous long-duration ceiling as a temp ban.
+ */
+export function parseMuteDuration(input: string): DurationParseResult {
+  const ms = parseDuration(input);
+  if (ms === null || ms <= 0) {
+    return {
+      ok: false,
+      error: `"${input}" isn't a valid duration. Use a combination like \`10m\`, \`2h\`, or \`1h30m\`.`,
+    };
+  }
+  if (ms < MIN_MUTE_MS) {
+    return { ok: false, error: 'Mute duration must be at least 5 seconds.' };
+  }
+  if (ms > MAX_TEMP_BAN_MS) {
+    return {
+      ok: false,
+      error: 'Mute duration cannot exceed 1 year. Leave the duration off for an indefinite mute.',
+    };
+  }
+  return { ok: true, ms };
+}
+
 /** Parses and range-checks an optional `/mod ban duration` (temp ban) string. */
 export function parseTempBanDuration(input: string): DurationParseResult {
   const ms = parseDuration(input);

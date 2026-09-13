@@ -41,6 +41,7 @@
     "locked": "Someone else is already deciding this flag.",
     "alreadyDecided": "This flag has already been decided.",
     "reasonRequired": "A reason is required for this decision.",
-    "disallowed": "That decision is disabled on this server."
+    "disallowed": "That decision is disabled on this server.",
+    "actionAppliedRecordingFailed": "The action was applied on Discord, but Entrophy could not save the record (a database error). Do NOT retry — that would apply it a second time. Check `/enforcer search` or the ledger channel, and record it manually if it's missing."
   }
 }

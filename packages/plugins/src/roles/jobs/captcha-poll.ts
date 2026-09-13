@@ -50,13 +50,13 @@ export const captchaPollJob: PluginJob = {
         ]);
         const tokenContext = parseTokenContext(pendingValue) ?? parseTokenContext(doneValue);
 
-        await ctx.redis.del(doneKey, pendingKey);
-
         if (!tokenContext) {
           ctx.logger.warn(
             { token },
             'roles: captcha-poll found a done token with no resolvable guild/user context',
           );
+          // Clean up malformed tokens immediately
+          await ctx.redis.del(doneKey, pendingKey);
           continue;
         }
 
@@ -66,6 +66,7 @@ export const captchaPollJob: PluginJob = {
             { token, guildId: tokenContext.guildId },
             'roles: captcha-poll could not grant the verified role — roles service unavailable',
           );
+          // Leave tokens in place for retry; they will expire naturally after 10 minutes
           continue;
         }
 
@@ -75,6 +76,8 @@ export const captchaPollJob: PluginJob = {
             userId: tokenContext.userId,
             method: 'captcha',
           });
+          // Only delete tokens after successful verification
+          await ctx.redis.del(doneKey, pendingKey);
         } catch (err) {
           ctx.logger.error(
             {
@@ -82,8 +85,9 @@ export const captchaPollJob: PluginJob = {
               guildId: tokenContext.guildId,
               userId: tokenContext.userId,
             },
-            'roles: captcha-poll failed to verify member',
+            'roles: captcha-poll failed to verify member; tokens retained for retry',
           );
+          // Leave tokens in place for retry (job runs every 15s; token TTL is 600s = ~40 retries max)
         }
       }
     } while (cursor !== '0');

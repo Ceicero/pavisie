@@ -110,6 +110,62 @@ describe('LoggingServiceImpl.log — storage', () => {
     const [args] = created.mock.calls[0] as [{ data: { payload: Record<string, unknown> } }];
     expect(args.data.payload.contentBefore).toBe('the original text');
   });
+
+  it('strips attachments when message-content logging is off (guild-wide setting)', async () => {
+    const created = vi.fn().mockResolvedValue({});
+    const { ctx, services } = createTestContext({
+      config: baseConfig({ captureContent: true }),
+      prismaOverrides: { logEvent: { create: created } },
+    });
+    services.register('host', {
+      getGuildConfig: async () => ({ logMessageContent: false }) as never,
+    } as never);
+    const service = new LoggingServiceImpl(ctx);
+
+    await service.log(GUILD_ID, 'message.delete', {
+      attachments: ['https://cdn.discordapp.com/file1.png', 'https://cdn.discordapp.com/file2.jpg'],
+    });
+
+    const [args] = created.mock.calls[0] as [{ data: { payload: Record<string, unknown> } }];
+    expect(args.data.payload.attachments).toBeUndefined();
+  });
+
+  it('includes attachments when both content flags are on', async () => {
+    const created = vi.fn().mockResolvedValue({});
+    const { ctx, services } = createTestContext({
+      config: baseConfig({ captureContent: true }),
+      prismaOverrides: { logEvent: { create: created } },
+    });
+    services.register('host', {
+      getGuildConfig: async () => ({ logMessageContent: true }) as never,
+    } as never);
+    const service = new LoggingServiceImpl(ctx);
+
+    const urls = ['https://cdn.discordapp.com/file1.png', 'https://cdn.discordapp.com/file2.jpg'];
+    await service.log(GUILD_ID, 'message.delete', { attachments: urls });
+
+    const [args] = created.mock.calls[0] as [{ data: { payload: Record<string, unknown> } }];
+    expect(args.data.payload.attachments).toEqual(urls);
+  });
+
+  it('strips attachments when plugin-level captureContent flag is off', async () => {
+    const created = vi.fn().mockResolvedValue({});
+    const { ctx, services } = createTestContext({
+      config: baseConfig({ captureContent: false }),
+      prismaOverrides: { logEvent: { create: created } },
+    });
+    services.register('host', {
+      getGuildConfig: async () => ({ logMessageContent: true }) as never,
+    } as never);
+    const service = new LoggingServiceImpl(ctx);
+
+    await service.log(GUILD_ID, 'message.delete', {
+      attachments: ['https://cdn.discordapp.com/file1.png'],
+    });
+
+    const [args] = created.mock.calls[0] as [{ data: { payload: Record<string, unknown> } }];
+    expect(args.data.payload.attachments).toBeUndefined();
+  });
 });
 
 describe('LoggingServiceImpl.purgeRetention', () => {

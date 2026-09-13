@@ -147,9 +147,10 @@ export function matchRewardActions(
   for (const row of rewards) {
     if (!row.enabled) continue;
     if (!matchesReward(row, event)) continue;
-    if (!cooldowns.take(channelId, row.id, row.cooldownSeconds, now)) continue;
     const action = buildAction(row, event);
-    if (action) actions.push(action);
+    if (!action) continue;
+    if (!cooldowns.take(channelId, row.id, row.cooldownSeconds, now)) continue;
+    actions.push(action);
   }
   return actions;
 }

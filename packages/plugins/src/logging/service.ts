@@ -25,6 +25,7 @@ function redactPayload(payload: LogPayload, customPatterns: string[], allowConte
       allowContent && payload.contentAfter !== undefined
         ? redactText(payload.contentAfter, customPatterns)
         : undefined,
+    attachments: allowContent && payload.attachments ? payload.attachments : undefined,
   };
   return pruneUndefined(redacted as unknown as Record<string, unknown>) as unknown as LogPayload;
 }

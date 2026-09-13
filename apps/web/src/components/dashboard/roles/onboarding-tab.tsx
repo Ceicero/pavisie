@@ -104,6 +104,7 @@ export function OnboardingTab({ guildId }: { guildId: string }) {
               <Button
                 variant="outline"
                 size="icon"
+                aria-label="Remove step"
                 onClick={() => setSteps((prev) => prev.filter((_, si) => si !== i))}
               >
                 <Trash2 className="h-3.5 w-3.5" />

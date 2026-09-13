@@ -29,6 +29,7 @@ interface DiscordOption {
   max_length?: number;
   min_value?: number;
   max_value?: number;
+  channel_types?: number[]; // Discord channel type numbers for channel options
   options?: DiscordOption[];
 }
 
@@ -37,12 +38,12 @@ interface DiscordOption {
  * Returns either a resolved set of options with any subcommand/subcommand-group details,
  * or an error with a usage string.
  */
-export function resolvePrefixOptions(
+export async function resolvePrefixOptions(
   commandJson: { options?: DiscordOption[] },
   tokens: string[],
   message: Message<true>,
   commandName: string = '',
-): { ok: true; resolved: ResolvedOptions } | { ok: false; usage: string; error: string } {
+): Promise<{ ok: true; resolved: ResolvedOptions } | { ok: false; usage: string; error: string }> {
   const options = commandJson.options ?? [];
   let remainingTokens = [...tokens];
   let subcommandGroup: string | null = null;
@@ -85,8 +86,24 @@ export function resolvePrefixOptions(
   // forces the choice in the slash picker, but a message command has no picker to force it.
   if (pendingSubcommands.length === 1 && pendingSubcommands[0].type === 1) {
     const only = pendingSubcommands[0];
-    subcommand = only.name;
-    leafOptions = only.options ?? [];
+    // Only auto-select if no remaining tokens, or the first token matches the subcommand name
+    if (remainingTokens.length === 0 || remainingTokens[0].toLowerCase() === only.name.toLowerCase()) {
+      subcommand = only.name;
+      leafOptions = only.options ?? [];
+      // Consume the token if it matched
+      if (remainingTokens.length > 0 && remainingTokens[0].toLowerCase() === only.name.toLowerCase()) {
+        remainingTokens = remainingTokens.slice(1);
+      }
+    } else {
+      // Token doesn't match the single subcommand, treat as unknown subcommand
+      const path = [commandName, subcommandGroup].filter(Boolean).join(' ');
+      const attempted = remainingTokens[0];
+      return {
+        ok: false,
+        usage: `${path} ${only.name}`,
+        error: `\`${attempted}\` is not a valid option for \`${path}\`. Did you mean \`${only.name}\`?`,
+      };
+    }
   } else if (pendingSubcommands.length > 0) {
     const path = [commandName, subcommandGroup, subcommand].filter(Boolean).join(' ');
     const names = pendingSubcommands.map((opt) => opt.name);
@@ -180,7 +197,7 @@ export function resolvePrefixOptions(
     }
 
     try {
-      const resolved = resolveOptionValue(rawValue, opt, message);
+      const resolved = await resolveOptionValue(rawValue, opt, message);
       values.set(name, resolved);
     } catch (err) {
       const usage = buildUsageString(commandName, leafOptions, subcommandGroup, subcommand);
@@ -204,7 +221,11 @@ export function resolvePrefixOptions(
  * Discord type numbers: 1 Subcommand, 2 SubcommandGroup, 3 String, 4 Integer,
  * 5 Boolean, 6 User, 7 Channel, 8 Role, 9 Mentionable, 10 Number, 11 Attachment.
  */
-function resolveOptionValue(rawValue: string, option: DiscordOption, message: Message<true>): ResolvedValue {
+async function resolveOptionValue(
+  rawValue: string,
+  option: DiscordOption,
+  message: Message<true>,
+): Promise<ResolvedValue> {
   const type = option.type;
   const name = option.name;
 
@@ -274,22 +295,22 @@ function resolveOptionValue(rawValue: string, option: DiscordOption, message: Me
 
     case 6:
       // User
-      return resolveUser(rawValue, message);
+      return await resolveUser(rawValue, message);
 
     case 7:
       // Channel
-      return resolveChannel(rawValue, message);
+      return await resolveChannel(rawValue, message, option);
 
     case 8:
       // Role
-      return resolveRole(rawValue, message);
+      return await resolveRole(rawValue, message);
 
     case 9: {
       // Mentionable
       try {
-        return resolveUser(rawValue, message);
+        return await resolveUser(rawValue, message);
       } catch {
-        return resolveRole(rawValue, message);
+        return await resolveRole(rawValue, message);
       }
     }
 
@@ -309,7 +330,7 @@ function resolveBooleanValue(value: string): boolean | null {
   return null;
 }
 
-function resolveUser(value: string, message: Message<true>): GuildMember {
+async function resolveUser(value: string, message: Message<true>): Promise<GuildMember> {
   // Try mention: <@123> or <@!123>
   const mentionMatch = value.match(/^<@!?(\d+)>$/);
   if (mentionMatch) {
@@ -318,7 +339,12 @@ function resolveUser(value: string, message: Message<true>): GuildMember {
     if (member) {
       return member;
     }
-    throw new Error(`User <@${userId}> not found in this server.`);
+    // Fall back to fetch for mention
+    try {
+      return await message.guild.members.fetch(userId);
+    } catch {
+      throw new Error(`User <@${userId}> not found in this server.`);
+    }
   }
 
   // Try raw snowflake
@@ -327,10 +353,15 @@ function resolveUser(value: string, message: Message<true>): GuildMember {
     if (member) {
       return member;
     }
-    throw new Error(`User with ID ${value} not found in this server.`);
+    // Fall back to fetch for raw ID
+    try {
+      return await message.guild.members.fetch(value);
+    } catch {
+      throw new Error(`User with ID ${value} not found in this server.`);
+    }
   }
 
-  // Try exact username or nickname
+  // Try exact username or nickname (cache-only; avoid unbounded member search)
   const member = message.guild.members.cache.find(
     (m) => m.user.username === value || m.displayName === value,
   );
@@ -341,37 +372,73 @@ function resolveUser(value: string, message: Message<true>): GuildMember {
   throw new Error(`User \`${value}\` not found. Use a mention, ID, or exact username.`);
 }
 
-function resolveChannel(value: string, message: Message<true>): GuildBasedChannel {
+/** Discord's numeric channel types, named for error messages. */
+const CHANNEL_TYPE_NAMES: Record<number, string> = {
+  0: 'text',
+  2: 'voice',
+  4: 'category',
+  5: 'announcement',
+  10: 'announcement thread',
+  11: 'public thread',
+  12: 'private thread',
+  13: 'stage',
+  15: 'forum',
+};
+
+function channelTypeName(type: number): string {
+  return CHANNEL_TYPE_NAMES[type] ?? `type ${type}`;
+}
+
+/**
+ * Enforces the option's `addChannelTypes` restriction. For a real slash command Discord's picker only offers
+ * channels of the right type, so command code trusts it; the prefix bridge takes a hand-typed mention and has
+ * to enforce it here instead.
+ */
+function assertChannelType(channel: GuildBasedChannel, allowed: number[] | undefined): GuildBasedChannel {
+  if (!allowed?.length || allowed.includes(channel.type)) return channel;
+  const wanted = allowed.map(channelTypeName).join(' or ');
+  throw new Error(
+    `\`#${channel.name}\` is a ${channelTypeName(channel.type)} channel; this option needs a ${wanted} channel.`,
+  );
+}
+
+async function resolveChannel(
+  value: string,
+  message: Message<true>,
+  option?: DiscordOption,
+): Promise<GuildBasedChannel> {
+  const allowed = option?.channel_types;
+
+  // The cache is whatever the gateway happens to hold, so fall back to a fetch by id before giving up — a real
+  // interaction would have carried Discord's own resolved channel and never missed.
+  const byId = async (id: string, notFound: string): Promise<GuildBasedChannel> => {
+    const cached = message.guild.channels.cache.get(id);
+    if (cached) return assertChannelType(cached, allowed);
+    const fetched = await message.guild.channels.fetch(id).catch(() => null);
+    if (fetched) return assertChannelType(fetched, allowed);
+    throw new Error(notFound);
+  };
+
   // Try mention: <#123>
   const mentionMatch = value.match(/^<#(\d+)>$/);
   if (mentionMatch) {
     const channelId = mentionMatch[1];
-    const channel = message.guild.channels.cache.get(channelId);
-    if (channel) {
-      return channel;
-    }
-    throw new Error(`Channel <#${channelId}> not found in this server.`);
+    return byId(channelId, `Channel <#${channelId}> not found in this server.`);
   }
 
   // Try raw snowflake
   if (/^\d{17,19}$/.test(value)) {
-    const channel = message.guild.channels.cache.get(value);
-    if (channel) {
-      return channel;
-    }
-    throw new Error(`Channel with ID ${value} not found in this server.`);
+    return byId(value, `Channel with ID ${value} not found in this server.`);
   }
 
-  // Try exact name
-  const channel = message.guild.channels.cache.find((c) => c.name === value);
-  if (channel) {
-    return channel;
-  }
+  // Try exact name (cache-only; a name lookup can't be resolved by a fetch)
+  const named = message.guild.channels.cache.find((c) => c.name === value);
+  if (named) return assertChannelType(named, allowed);
 
   throw new Error(`Channel \`${value}\` not found. Use a mention, ID, or exact name.`);
 }
 
-function resolveRole(value: string, message: Message<true>): Role {
+async function resolveRole(value: string, message: Message<true>): Promise<Role> {
   // Try mention: <@&123>
   const mentionMatch = value.match(/^<@&(\d+)>$/);
   if (mentionMatch) {
@@ -379,6 +446,13 @@ function resolveRole(value: string, message: Message<true>): Role {
     const role = message.guild.roles.cache.get(roleId);
     if (role) {
       return role;
+    }
+    // Fall back to fetch for mention
+    try {
+      const role = await message.guild.roles.fetch(roleId);
+      if (role) return role;
+    } catch {
+      // Fall through to error below
     }
     throw new Error(`Role <@&${roleId}> not found in this server.`);
   }
@@ -389,10 +463,17 @@ function resolveRole(value: string, message: Message<true>): Role {
     if (role) {
       return role;
     }
+    // Fall back to fetch for raw ID
+    try {
+      const role = await message.guild.roles.fetch(value);
+      if (role) return role;
+    } catch {
+      // Fall through to error below
+    }
     throw new Error(`Role with ID ${value} not found in this server.`);
   }
 
-  // Try exact name
+  // Try exact name (cache-only; avoid unbounded role search)
   const role = message.guild.roles.cache.find((r) => r.name === value);
   if (role) {
     return role;

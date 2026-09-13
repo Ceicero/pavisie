@@ -1,6 +1,6 @@
 import { AppError, Cooldowns, RateLimitError } from '@entrophy/core';
 import type { AiCompleteInput, AiCompleteResult, AiService, PluginContext } from '../sdk';
-import { checkBudget, recordUsage } from './budget';
+import { checkBudget, recordUsage, reconcileUsage, releaseReservation, reserveBudget } from './budget';
 import { AI_MAX_OUTPUT_TOKENS } from './manifest';
 import type { AiConfig } from './manifest';
 import { AI_SYSTEM_PROMPT } from './prompt';
@@ -98,34 +98,50 @@ export function createAiService(ctx: PluginContext): AiService {
       );
     }
 
-    const budgetResult = await checkBudget(
+    const effectiveMaxTokens = Math.max(1, Math.min(maxTokens ?? AI_MAX_OUTPUT_TOKENS, AI_MAX_OUTPUT_TOKENS));
+    // Conservatively estimate the maximum possible spend: assume the prompt is large and we use all output tokens.
+    const estimatedMaxTokens = Math.ceil(effectiveMaxTokens * 1.5); // 50% buffer for prompt tokens.
+
+    const reserveResult = await reserveBudget(
       ctx.redis,
       guildId,
       userId,
       config.dailyTokenBudget,
       config.perUserDailyTokenBudget,
+      estimatedMaxTokens,
     );
-    if (!budgetResult.ok) {
+    if (!reserveResult.ok) {
       throw new RateLimitError(
-        budgetResult.scope === 'guild'
+        reserveResult.scope === 'guild'
           ? "This server's daily AI token budget has been used up. It resets at midnight UTC."
           : 'You have used up your daily AI token allowance. It resets at midnight UTC.',
       );
     }
 
     const provider = resolveProvider({ config, apiKey: resolvedKey.apiKey });
-    const effectiveMaxTokens = Math.max(1, Math.min(maxTokens ?? AI_MAX_OUTPUT_TOKENS, AI_MAX_OUTPUT_TOKENS));
     const combinedSystem = system ? `${AI_SYSTEM_PROMPT}\n\n${system}` : AI_SYSTEM_PROMPT;
 
-    const result = await provider.complete({
-      system: combinedSystem,
-      messages: [{ role: 'user', content: redact(prompt) }],
-      maxTokens: effectiveMaxTokens,
-      temperature: 0.4,
-    });
+    let result;
+    try {
+      result = await provider.complete({
+        system: combinedSystem,
+        messages: [{ role: 'user', content: redact(prompt) }],
+        maxTokens: effectiveMaxTokens,
+        temperature: 0.4,
+      });
+    } catch (err) {
+      // Provider call failed — refund the reservation.
+      await releaseReservation(ctx.redis, guildId, userId, estimatedMaxTokens);
+      throw err;
+    }
 
     const totalTokens = result.promptTokens + result.completionTokens;
-    await recordUsage(ctx.redis, guildId, userId, totalTokens);
+    // Reconcile the reservation with actual usage: adjust by the difference.
+    const adjustment = totalTokens - estimatedMaxTokens;
+    if (adjustment !== 0) {
+      await reconcileUsage(ctx.redis, guildId, userId, adjustment);
+    }
+
     await ctx.prisma.aiUsage.create({
       data: {
         guildId,

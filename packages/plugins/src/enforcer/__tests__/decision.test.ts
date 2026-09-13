@@ -63,29 +63,35 @@ interface FakeRecord {
   createdAt: Date;
 }
 
+/**
+ * `decide()` now creates the DECISION record and updates the FLAG record inside one `ctx.prisma.$transaction`
+ * (BUG FIX: they used to be two independent sequential writes — a failure between them could leave a flag
+ * PENDING forever after the Discord action had already gone through). `enforcerRecord` here backs both the
+ * top-level `ctx.prisma.enforcerRecord.*` calls (the initial `findFirst`) AND the `tx.enforcerRecord.*` calls
+ * the transaction callback makes — same object, so a decision's `create`/`update` are visible either way.
+ */
 function makeFakePrisma(record: FakeRecord): PrismaClient {
   let recordNumberSeq = 1000;
-  return {
-    $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        enforcerRecord: { aggregate: () => Promise.resolve({ _max: { recordNumber: recordNumberSeq } }) },
-      }),
-    enforcerRecord: {
-      findFirst: () => Promise.resolve({ ...record }),
-      create: (args: { data: Record<string, unknown> }) => {
-        recordNumberSeq += 1;
-        return Promise.resolve({
-          id: `decision-${recordNumberSeq}`,
-          recordNumber: recordNumberSeq,
-          createdAt: new Date(),
-          ...args.data,
-        });
-      },
-      update: (args: { data: Partial<FakeRecord> }) => {
-        Object.assign(record, args.data);
-        return Promise.resolve({ ...record });
-      },
+  const enforcerRecord = {
+    findFirst: () => Promise.resolve({ ...record }),
+    aggregate: () => Promise.resolve({ _max: { recordNumber: recordNumberSeq } }),
+    create: (args: { data: Record<string, unknown> }) => {
+      recordNumberSeq += 1;
+      return Promise.resolve({
+        id: `decision-${recordNumberSeq}`,
+        recordNumber: recordNumberSeq,
+        createdAt: new Date(),
+        ...args.data,
+      });
     },
+    update: (args: { data: Partial<FakeRecord> }) => {
+      Object.assign(record, args.data);
+      return Promise.resolve({ ...record });
+    },
+  };
+  return {
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn({ enforcerRecord }),
+    enforcerRecord,
     // Read by the UNMUTE branch (marks the original timed-mute case expired) — not exercised by most tests.
     moderationCase: {
       updateMany: () => Promise.resolve({ count: 0 }),

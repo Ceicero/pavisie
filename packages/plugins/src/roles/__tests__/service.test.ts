@@ -51,8 +51,7 @@ describe('filterAssignableRoles', () => {
 });
 
 describe('createRolesService — verificationDecision', () => {
-  it('is a no-op when the request is already decided (double-decision guard)', async () => {
-    let updateCalled = false;
+  it('throws AppError when the request is already decided (atomic race guard)', async () => {
     const { ctx } = createTestContext({
       prismaOverrides: {
         verificationRequest: {
@@ -64,23 +63,23 @@ describe('createRolesService — verificationDecision', () => {
               status: 'APPROVED',
               staffMessageId: null,
             }),
-          update: () => {
-            updateCalled = true;
-            return Promise.resolve({});
-          },
+          updateMany: () =>
+            Promise.resolve({
+              count: 0, // No rows matched the PENDING status check
+            }),
         },
       },
     });
 
     const service = createRolesService(ctx);
-    await service.verificationDecision({
-      guildId: 'g1',
-      requestId: 'req1',
-      approve: true,
-      reviewerId: 'mod1',
-    });
-
-    expect(updateCalled).toBe(false);
+    await expect(
+      service.verificationDecision({
+        guildId: 'g1',
+        requestId: 'req1',
+        approve: true,
+        reviewerId: 'mod1',
+      }),
+    ).rejects.toThrow(/already decided/i);
   });
 
   it('throws NotFoundError when the request does not exist', async () => {

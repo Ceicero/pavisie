@@ -168,7 +168,7 @@ export async function handleMessageCommand(
     recordBarePrefix60sFiring(message.channelId);
 
     // Resolve options for help command (should have zero args usually)
-    const optionsResult = resolvePrefixOptions(helpCommandJson, [], message, 'help');
+    const optionsResult = await resolvePrefixOptions(helpCommandJson, [], message, 'help');
     if (!optionsResult.ok) {
       // Shouldn't happen for help with no args, but handle it gracefully
       try {
@@ -228,7 +228,7 @@ export async function handleMessageCommand(
   }
 
   // Resolve options (DEFECT 5: pass command name and prefix)
-  const optionsResult = resolvePrefixOptions(commandJson, parsed.tokens, message, parsed.name);
+  const optionsResult = await resolvePrefixOptions(commandJson, parsed.tokens, message, parsed.name);
   if (!optionsResult.ok) {
     // Bad arguments: reply with error and usage (DEFECT 5)
     try {

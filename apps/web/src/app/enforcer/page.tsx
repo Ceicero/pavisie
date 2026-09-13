@@ -16,6 +16,7 @@ export default function EnforcerPage() {
   return (
     <>
       <Section
+        headingLevel={1}
         eyebrow="Admin Enforcer"
         title="Moderators decide. The bot does the rest."
         subtitle="Enforcer is policy-driven, hands-off moderation: the bot flags possible violations, a moderator reviews the exact chat context and picks a decision, the bot performs it and talks to the player — and every step is bookkept in a read-only ledger and the database."

@@ -12,7 +12,7 @@ export default function TermsPage() {
   const sections = termsOfService(DEFAULT_OPERATOR, DEFAULT_CONTACT_EMAIL);
 
   return (
-    <Section eyebrow="Legal" title="Terms of service">
+    <Section headingLevel={1} eyebrow="Legal" title="Terms of service">
       <Glass className="mb-8 p-5 text-sm leading-relaxed text-grey-3">
         <strong className="text-grey-6">This is a template.</strong> It reflects Entrophy&apos;s default
         behavior (no wagering, non-refundable donations, etc.) but the operator running this deployment

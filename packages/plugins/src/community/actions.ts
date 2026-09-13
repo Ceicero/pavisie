@@ -395,7 +395,9 @@ export async function cancelEvent(ctx: PluginContext, eventId: string): Promise<
   return event;
 }
 
-/** Announces an upcoming event reminder in its channel (fired by the `event-reminder` job). */
+/** Announces an upcoming event reminder in its channel (fired by the `event-reminder` job). Splits mentions
+ * across multiple messages if needed to stay within Discord's limits (2000 char per message, 100 mentions per
+ * allowed-mentions list). Logs errors so failures are diagnosable. */
 export async function fireEventReminder(
   ctx: PluginContext,
   eventId: string,
@@ -411,11 +413,43 @@ export async function fireEventReminder(
   const channel = guild ? await resolveTextChannel(guild, event.channelId) : null;
   if (!channel) return;
 
-  const mentions = rsvps.map((r) => `<@${r.userId}>`).join(' ');
-  await channel
-    .send({
-      content: `📅 **${event.title}** starts in ${minutesBefore} minute${minutesBefore === 1 ? '' : 's'}! ${mentions}`,
-      allowedMentions: { users: rsvps.map((r) => r.userId) },
-    })
-    .catch(() => undefined);
+  const header = `📅 **${event.title}** starts in ${minutesBefore} minute${minutesBefore === 1 ? '' : 's'}!`;
+  const continued = `**${event.title}** (continued):`;
+
+  // Discord caps a message at 2000 characters and an allowed-mentions list at 100 users. A well-attended event
+  // blows through both, and the whole send is rejected — so ping across as many messages as it takes.
+  const MAX_MENTIONS_PER_MESSAGE = 100;
+  const MAX_CHARS_PER_MESSAGE = 2000;
+  const prefixBudget = Math.max(header.length, continued.length);
+
+  const batches: string[][] = [];
+  let batch: string[] = [];
+  let length = prefixBudget;
+  for (const { userId } of rsvps) {
+    const mentionLength = userId.length + 4; // `<@` + id + `>` plus the separating space
+    if (batch.length >= MAX_MENTIONS_PER_MESSAGE || (batch.length > 0 && length + mentionLength > MAX_CHARS_PER_MESSAGE)) {
+      batches.push(batch);
+      batch = [];
+      length = prefixBudget;
+    }
+    batch.push(userId);
+    length += mentionLength;
+  }
+  if (batch.length > 0) batches.push(batch);
+
+  for (const [index, userIds] of batches.entries()) {
+    const mentions = userIds.map((id) => `<@${id}>`).join(' ');
+    try {
+      await channel.send({
+        content: index === 0 ? `${header} ${mentions}` : `${continued} ${mentions}`,
+        allowedMentions: { users: userIds },
+      });
+    } catch (err) {
+      // Previously swallowed, which meant a reminder that never arrived left no trace anywhere.
+      ctx.logger.error(
+        { err, eventId, guildId: event.guildId, channelId: event.channelId, minutesBefore, batch: index },
+        'community: failed to send an event reminder message',
+      );
+    }
+  }
 }

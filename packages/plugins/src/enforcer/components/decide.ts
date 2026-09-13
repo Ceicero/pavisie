@@ -6,9 +6,13 @@ import {
   type ButtonInteraction,
   type ModalSubmitInteraction,
 } from 'discord.js';
-import { parseDuration } from '@entrophy/core';
 import { assertStaffLevel, buildCustomId, errorEmbed, successEmbed, type ComponentHandler } from '../../sdk';
 import type { EnforcerDecideInput } from '../../sdk/services';
+// The modal previously parsed duration with the raw `parseDuration` and used it as-is, skipping the floor/cap
+// validation `/mod timeout` applies via `parseTimeoutDuration` — reusing that (and a matching bounded parse for
+// MUTE, which has no Discord cap) closes that gap. Both are dependency-free pure functions; enforcer already
+// depends on moderation being enabled (`/enforcer setup` refuses otherwise), so this just formalizes that in code.
+import { parseMuteDuration, parseTimeoutDuration } from '../../moderation/duration';
 import type { EnforcerConfig } from '../manifest';
 
 type Decision = EnforcerDecideInput['decision'];
@@ -158,7 +162,17 @@ const decideModalHandler: ComponentHandler = {
     let durationMs: number | undefined;
     if (decision === 'TIMEOUT' || decision === 'MUTE') {
       const raw = interaction.fields.getTextInputValue('duration')?.trim();
-      if (raw) durationMs = parseDuration(raw) ?? undefined;
+      if (raw) {
+        // TIMEOUT is a real Discord timeout (28-day cap, `/mod timeout`'s own floor); MUTE is a role add with a
+        // locally tracked expiry and no Discord cap, so it gets a wider but still bounded parse (BUG FIX: this
+        // modal used to skip validation entirely and pass the raw parse straight through).
+        const parsed = decision === 'TIMEOUT' ? parseTimeoutDuration(raw) : parseMuteDuration(raw);
+        if (!parsed.ok) {
+          await interaction.reply({ embeds: [errorEmbed(parsed.error)], ephemeral: true });
+          return;
+        }
+        durationMs = parsed.ms;
+      }
     }
 
     let banDeleteMessageSeconds: number | undefined;

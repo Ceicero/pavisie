@@ -24,7 +24,7 @@ function jumpLink(guildId: string, channelId: string, messageId: string): string
 /**
  * Builds a compact, brand-colored log embed from a `LogPayload` (ARCHITECTURE.md §7.5's `LoggingService.log`
  * task: "title/description/fields/actor/target/channel/message jump link/timestamp"). Content fields
- * (`contentBefore`/`contentAfter`) are only included when the caller already redacted/gated them — this
+ * (`contentBefore`/`contentAfter`/`attachments`) are only included when the caller already redacted/gated them — this
  * function trusts whatever `payload` it's given, matching the plugin's own service which redacts and applies
  * the `logMessageContent` gate *before* calling this.
  */

@@ -50,6 +50,7 @@ export default async function PluginDetailPage({ params }: PageProps) {
       </div>
 
       <Section
+        headingLevel={1}
         eyebrow={plugin.category}
         title={plugin.name}
         subtitle={plugin.description}

@@ -31,6 +31,7 @@ export default function SupportPage() {
   return (
     <>
       <Section
+        headingLevel={1}
         eyebrow="Support"
         title="Get help from the community"
         subtitle="Entrophy is community-run, and the Discord server is the main place to get help — setup questions, bug reports, and feature requests all land there. It's a new server, so response times will vary."

@@ -234,7 +234,7 @@ export function createMessageCommandInteraction(params: {
         }
       }
 
-      if ((fakeInteraction as any).replied) {
+      if ((fakeInteraction as any).replied || (fakeInteraction as any).deferred) {
         throw new Error('Reply to this interaction has already been sent.');
       }
 

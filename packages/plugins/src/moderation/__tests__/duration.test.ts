@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_TEMP_BAN_MS, MAX_TIMEOUT_MS, parseTempBanDuration, parseTimeoutDuration } from '../duration';
+import {
+  MAX_TEMP_BAN_MS,
+  MAX_TIMEOUT_MS,
+  parseMuteDuration,
+  parseTempBanDuration,
+  parseTimeoutDuration,
+} from '../duration';
 
 describe('parseTimeoutDuration', () => {
   it('parses simple and combined durations', () => {
@@ -47,5 +53,29 @@ describe('parseTempBanDuration', () => {
 
   it('rejects garbage input', () => {
     expect(parseTempBanDuration('forever')).toMatchObject({ ok: false });
+  });
+});
+
+describe('parseMuteDuration', () => {
+  it('parses valid durations, sharing the timeout floor', () => {
+    expect(parseMuteDuration('10m')).toEqual({ ok: true, ms: 10 * 60_000 });
+    expect(parseMuteDuration('5s')).toEqual({ ok: true, ms: 5_000 });
+  });
+
+  it('rejects below the 5-second floor', () => {
+    expect(parseMuteDuration('4s')).toMatchObject({ ok: false });
+  });
+
+  it('accepts durations well past the 28-day timeout cap — MUTE has no such cap', () => {
+    expect(parseMuteDuration('60d')).toEqual({ ok: true, ms: 60 * 86_400_000 });
+  });
+
+  it('accepts exactly the 1-year ceiling and rejects past it', () => {
+    expect(parseMuteDuration('365d')).toEqual({ ok: true, ms: MAX_TEMP_BAN_MS });
+    expect(parseMuteDuration('400d')).toMatchObject({ ok: false });
+  });
+
+  it('rejects garbage input', () => {
+    expect(parseMuteDuration('forever')).toMatchObject({ ok: false });
   });
 });

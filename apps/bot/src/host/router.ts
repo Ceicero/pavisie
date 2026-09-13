@@ -182,27 +182,39 @@ async function checkPluginGate(params: {
   alwaysEnabled: boolean | undefined;
   guildId: string;
 }): Promise<boolean> {
-  const { interaction, host, logger, t, pluginId, pluginName, alwaysEnabled, guildId } = params;
+  const { interaction, logger, ...gate } = params;
+  const failure = await pluginGateFailure(gate);
+  if (!failure) return true;
+  await replyError(interaction, failure, logger);
+  return false;
+}
+
+/**
+ * The gate itself: is this plugin available (env/intents) and enabled for this guild? Returns the user-facing
+ * reason it may not run, or `null` when it may. Kept free of interaction side effects so autocomplete — which
+ * has no reply to make — can consult it too.
+ */
+async function pluginGateFailure(params: {
+  host: LoadedHost;
+  t: TFunction;
+  pluginId: PluginId;
+  pluginName: string;
+  alwaysEnabled: boolean | undefined;
+  guildId: string;
+}): Promise<string | null> {
+  const { host, t, pluginId, pluginName, alwaysEnabled, guildId } = params;
 
   const availability = host.availability.get(pluginId);
   if (!availability?.available) {
-    await replyError(
-      interaction,
-      t('errors.plugin_unavailable', { plugin: pluginName, reason: availability?.reason ?? 'unknown' }),
-      logger,
-    );
-    return false;
+    return t('errors.plugin_unavailable', { plugin: pluginName, reason: availability?.reason ?? 'unknown' });
   }
 
   if (!alwaysEnabled) {
     const enabled = await host.configStore.isEnabled(guildId, pluginId);
-    if (!enabled) {
-      await replyError(interaction, t('errors.plugin_disabled', { plugin: pluginName }), logger);
-      return false;
-    }
+    if (!enabled) return t('errors.plugin_disabled', { plugin: pluginName });
   }
 
-  return true;
+  return null;
 }
 
 /** Top-level `interactionCreate` dispatcher (ARCHITECTURE.md §9). */
@@ -446,6 +458,22 @@ async function handleAutocomplete(
     return;
   }
   const t = boundTFor(ctx, interaction.locale);
+
+  // Gate autocomplete the same way commands, context menus and components are gated: a disabled or unavailable
+  // plugin must not run its handler or reach the database. Autocomplete cannot carry an explanation, so an
+  // empty suggestion list is the whole response.
+  const gateFailure = await pluginGateFailure({
+    host,
+    t,
+    pluginId: plugin.manifest.id,
+    pluginName: plugin.manifest.name,
+    alwaysEnabled: plugin.manifest.alwaysEnabled,
+    guildId: interaction.guildId,
+  });
+  if (gateFailure) {
+    await respondEmpty();
+    return;
+  }
 
   const guildConfig = await host.configStore.getGuildConfig(interaction.guildId);
   const staffLevel = resolveInteractionStaffLevel({

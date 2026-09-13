@@ -19,6 +19,7 @@ export default function FeaturesPage() {
   return (
     <>
       <Section
+        headingLevel={1}
         eyebrow="Features & commands"
         title="Every plugin, every command, generated from the real registry"
         subtitle="This page can never drift from what the bot actually does — it's built directly from the same plugin registry the bot registers commands from."

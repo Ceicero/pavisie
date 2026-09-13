@@ -4,7 +4,7 @@
 // directly (they need panel-specific overrides and Discord interaction context the narrow service interface
 // doesn't carry).
 import { AttachmentBuilder, ChannelType, PermissionFlagsBits, type Guild } from 'discord.js';
-import { AppError, NotFoundError, ValidationError, sanitizeFilename } from '@entrophy/core';
+import { AppError, NotFoundError, ValidationError, redisKey, sanitizeFilename } from '@entrophy/core';
 import type { Prisma, Ticket, TicketPanel } from '@entrophy/database';
 import type { CreateTicketInput, PluginContext, TicketsService } from '../sdk';
 import { assertBotPermissions, fetchMemberSafe, resolveTextChannel, safeDm } from '../sdk';
@@ -28,6 +28,7 @@ import { buildHtmlTranscript, buildJsonTranscript, type TranscriptMessage } from
 const TICKETS_PLUGIN_ID = 'tickets';
 const MAX_TRANSCRIPT_MESSAGES = 1000;
 const MESSAGE_FETCH_PAGE = 100;
+const TICKET_OPEN_LOCK_TTL_MS = 30_000; // 30 seconds; enough time to count + create + update
 
 function intakeFormOf(panel: Pick<TicketPanel, 'intakeForm'> | null | undefined): TicketIntakeField[] {
   if (!panel?.intakeForm) return [];
@@ -90,167 +91,182 @@ export interface OpenTicketParams {
 
 /** Opens a ticket: allocates its number, creates the channel/thread with the right overwrites, and posts the opening embed. */
 export async function openTicket(ctx: PluginContext, params: OpenTicketParams): Promise<Ticket> {
-  const config = await ctx.getConfig<TicketsConfig>(params.guildId);
-
-  const openCount = await ctx.prisma.ticket.count({
-    where: { guildId: params.guildId, openerId: params.openerId, status: 'OPEN' },
-  });
-  if (openCount >= config.maxOpenPerUser) {
+  // Serialize concurrent ticket open attempts for this user in this guild using a short-lived Redis lock.
+  // This prevents race conditions where two rapid button clicks both pass the open-count check before either
+  // creates a ticket, resulting in duplicates even when the limit is 1.
+  const lockKey = redisKey('tickets', 'open-lock', params.guildId, params.openerId);
+  const acquired = await ctx.redis.set(lockKey, '1', 'PX', TICKET_OPEN_LOCK_TTL_MS, 'NX');
+  if (acquired !== 'OK') {
     throw new ValidationError(
-      config.maxOpenPerUser === 1
-        ? 'You already have an open ticket. Close it before opening another one.'
-        : `You already have ${openCount} open tickets (limit ${config.maxOpenPerUser}). Close one before opening another.`,
+      'You are already opening a ticket. Please wait a moment and try again.',
     );
   }
-
-  const intakeFields = intakeFormOf(params.panel);
-  if (intakeFields.length > 0 && params.intake) {
-    validateIntakeAnswers(intakeFields, params.intake);
-  }
-
-  const mode: Ticket['mode'] = params.panel
-    ? params.panel.mode
-    : config.mode === 'thread'
-      ? 'THREAD'
-      : 'CHANNEL';
-  const supportRoleIds = params.panel ? params.panel.supportRoleIds : config.supportRoleIds;
-  const categoryId = params.panel ? params.panel.categoryId : config.categoryId;
-  const slaMinutes = params.panel ? (params.panel.slaMinutes ?? config.slaMinutes) : config.slaMinutes;
-
-  const guild = await ctx.client.guilds.fetch(params.guildId);
-  const openerMember = await fetchMemberSafe(guild, params.openerId);
-  const openerUser = openerMember?.user ?? (await ctx.client.users.fetch(params.openerId));
-
-  const now = new Date();
-  const created = await withNextTicketNumber(ctx.prisma, params.guildId, (number) =>
-    ctx.prisma.ticket.create({
-      data: {
-        guildId: params.guildId,
-        number,
-        openerId: params.openerId,
-        mode,
-        status: 'OPEN',
-        subject: params.subject?.trim() || null,
-        intake: params.intake ? (params.intake as Prisma.InputJsonValue) : undefined,
-        panelId: params.panel?.id ?? null,
-        slaDueAt: computeSlaDueAt(now, slaMinutes),
-      },
-    }),
-  );
-
-  let channelId: string | null = null;
-  let threadId: string | null = null;
 
   try {
-    if (mode === 'CHANNEL') {
-      assertBotPermissions(
-        guild,
-        [PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles],
-        ctx.t,
+    const config = await ctx.getConfig<TicketsConfig>(params.guildId);
+
+    const openCount = await ctx.prisma.ticket.count({
+      where: { guildId: params.guildId, openerId: params.openerId, status: 'OPEN' },
+    });
+    if (openCount >= config.maxOpenPerUser) {
+      throw new ValidationError(
+        config.maxOpenPerUser === 1
+          ? 'You already have an open ticket. Close it before opening another one.'
+          : `You already have ${openCount} open tickets (limit ${config.maxOpenPerUser}). Close one before opening another.`,
       );
-      const name = ticketChannelName(created.number, openerUser.username);
-      const overwrites = buildTicketChannelOverwrites({
-        everyoneRoleId: guild.roles.everyone.id,
-        openerId: params.openerId,
-        supportRoleIds,
-        botId: ctx.client.user.id,
-      });
-      const channel = await guild.channels.create({
-        name,
-        type: ChannelType.GuildText,
-        parent: categoryId ?? undefined,
-        permissionOverwrites: overwrites.map((o) => ({ id: o.id, allow: o.allow, deny: o.deny })),
-        reason: `Ticket #${created.number} opened by ${openerUser.username} (${params.openerId})`,
-      });
-      channelId = channel.id;
-    } else {
-      const parentChannelId = params.panel ? params.panel.channelId : params.parentChannelId;
-      if (!parentChannelId) {
-        throw new ValidationError(
-          'Thread-mode tickets need a parent text channel. Run `/ticket open` in a text channel, or use a ticket panel.',
-        );
-      }
-      assertBotPermissions(
-        guild,
-        [PermissionFlagsBits.CreatePrivateThreads, PermissionFlagsBits.ManageThreads],
-        ctx.t,
-      );
-      const parent = await guild.channels.fetch(parentChannelId).catch(() => null);
-      // Private threads are a GUILD_TEXT-only feature (Discord does not support them in announcement channels),
-      // so the parent must be a plain text channel regardless of what channel types the panel-creation command
-      // let staff pick for its `channel` option.
-      if (!parent || parent.type !== ChannelType.GuildText) {
-        throw new AppError(
-          'ticket_thread_parent_invalid',
-          'The configured parent channel for thread-mode tickets is missing or is not a text channel.',
-          {
-            status: 422,
-            expose: true,
-          },
-        );
-      }
-      const thread = await parent.threads.create({
-        name: ticketChannelName(created.number, openerUser.username),
-        type: ChannelType.PrivateThread,
-        invitable: false,
-        reason: `Ticket #${created.number} opened by ${openerUser.username} (${params.openerId})`,
-      });
-      await thread.members.add(params.openerId).catch(() => undefined);
-      threadId = thread.id;
     }
-  } catch (err) {
-    await ctx.prisma.ticket.delete({ where: { id: created.id } }).catch(() => undefined);
-    throw err;
-  }
 
-  const updated = await ctx.prisma.ticket.update({
-    where: { id: created.id },
-    data: { channelId, threadId },
-  });
-  const targetChannel = channelId
-    ? await resolveTextChannel(guild, channelId)
-    : threadId
-      ? await guild.channels.fetch(threadId).catch(() => null)
-      : null;
+    const intakeFields = intakeFormOf(params.panel);
+    if (intakeFields.length > 0 && params.intake) {
+      validateIntakeAnswers(intakeFields, params.intake);
+    }
 
-  if (targetChannel && targetChannel.isTextBased()) {
-    const embed = buildOpeningEmbed(
-      updated,
-      updated.subject,
-      (params.intake as Record<string, string> | null) ?? null,
+    const mode: Ticket['mode'] = params.panel
+      ? params.panel.mode
+      : config.mode === 'thread'
+        ? 'THREAD'
+        : 'CHANNEL';
+    const supportRoleIds = params.panel ? params.panel.supportRoleIds : config.supportRoleIds;
+    const categoryId = params.panel ? params.panel.categoryId : config.categoryId;
+    const slaMinutes = params.panel ? (params.panel.slaMinutes ?? config.slaMinutes) : config.slaMinutes;
+
+    const guild = await ctx.client.guilds.fetch(params.guildId);
+    const openerMember = await fetchMemberSafe(guild, params.openerId);
+    const openerUser = openerMember?.user ?? (await ctx.client.users.fetch(params.openerId));
+
+    const now = new Date();
+    const created = await withNextTicketNumber(ctx.prisma, params.guildId, (number) =>
+      ctx.prisma.ticket.create({
+        data: {
+          guildId: params.guildId,
+          number,
+          openerId: params.openerId,
+          mode,
+          status: 'OPEN',
+          subject: params.subject?.trim() || null,
+          intake: params.intake ? (params.intake as Prisma.InputJsonValue) : undefined,
+          panelId: params.panel?.id ?? null,
+          slaDueAt: computeSlaDueAt(now, slaMinutes),
+        },
+      }),
     );
-    const row = buildOpeningButtons(updated.id);
-    const mentionRoleIds = mode === 'THREAD' ? supportRoleIds : [];
-    const mentionText = [`<@${params.openerId}>`, ...mentionRoleIds.map((id) => `<@&${id}>`)].join(' ');
-    await targetChannel
-      .send({
-        content: mentionText,
-        embeds: [embed],
-        components: [row],
-        allowedMentions: { users: [params.openerId], roles: mentionRoleIds },
-      })
-      .catch((err) =>
-        ctx.logger.warn({ err, ticketId: updated.id }, 'tickets: failed to post opening embed'),
+
+    let channelId: string | null = null;
+    let threadId: string | null = null;
+
+    try {
+      if (mode === 'CHANNEL') {
+        assertBotPermissions(
+          guild,
+          [PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles],
+          ctx.t,
+        );
+        const name = ticketChannelName(created.number, openerUser.username);
+        const overwrites = buildTicketChannelOverwrites({
+          everyoneRoleId: guild.roles.everyone.id,
+          openerId: params.openerId,
+          supportRoleIds,
+          botId: ctx.client.user.id,
+        });
+        const channel = await guild.channels.create({
+          name,
+          type: ChannelType.GuildText,
+          parent: categoryId ?? undefined,
+          permissionOverwrites: overwrites.map((o) => ({ id: o.id, allow: o.allow, deny: o.deny })),
+          reason: `Ticket #${created.number} opened by ${openerUser.username} (${params.openerId})`,
+        });
+        channelId = channel.id;
+      } else {
+        const parentChannelId = params.panel ? params.panel.channelId : params.parentChannelId;
+        if (!parentChannelId) {
+          throw new ValidationError(
+            'Thread-mode tickets need a parent text channel. Run `/ticket open` in a text channel, or use a ticket panel.',
+          );
+        }
+        assertBotPermissions(
+          guild,
+          [PermissionFlagsBits.CreatePrivateThreads, PermissionFlagsBits.ManageThreads],
+          ctx.t,
+        );
+        const parent = await guild.channels.fetch(parentChannelId).catch(() => null);
+        // Private threads are a GUILD_TEXT-only feature (Discord does not support them in announcement channels),
+        // so the parent must be a plain text channel regardless of what channel types the panel-creation command
+        // let staff pick for its `channel` option.
+        if (!parent || parent.type !== ChannelType.GuildText) {
+          throw new AppError(
+            'ticket_thread_parent_invalid',
+            'The configured parent channel for thread-mode tickets is missing or is not a text channel.',
+            {
+              status: 422,
+              expose: true,
+            },
+          );
+        }
+        const thread = await parent.threads.create({
+          name: ticketChannelName(created.number, openerUser.username),
+          type: ChannelType.PrivateThread,
+          invitable: false,
+          reason: `Ticket #${created.number} opened by ${openerUser.username} (${params.openerId})`,
+        });
+        await thread.members.add(params.openerId).catch(() => undefined);
+        threadId = thread.id;
+      }
+    } catch (err) {
+      await ctx.prisma.ticket.delete({ where: { id: created.id } }).catch(() => undefined);
+      throw err;
+    }
+
+    const updated = await ctx.prisma.ticket.update({
+      where: { id: created.id },
+      data: { channelId, threadId },
+    });
+    const targetChannel = channelId
+      ? await resolveTextChannel(guild, channelId)
+      : threadId
+        ? await guild.channels.fetch(threadId).catch(() => null)
+        : null;
+
+    if (targetChannel && targetChannel.isTextBased()) {
+      const embed = buildOpeningEmbed(
+        updated,
+        updated.subject,
+        (params.intake as Record<string, string> | null) ?? null,
       );
+      const row = buildOpeningButtons(updated.id);
+      const mentionRoleIds = mode === 'THREAD' ? supportRoleIds : [];
+      const mentionText = [`<@${params.openerId}>`, ...mentionRoleIds.map((id) => `<@&${id}>`)].join(' ');
+      await targetChannel
+        .send({
+          content: mentionText,
+          embeds: [embed],
+          components: [row],
+          allowedMentions: { users: [params.openerId], roles: mentionRoleIds },
+        })
+        .catch((err) =>
+          ctx.logger.warn({ err, ticketId: updated.id }, 'tickets: failed to post opening embed'),
+        );
+    }
+
+    await ctx.audit({
+      guildId: params.guildId,
+      actorId: params.openerId,
+      actorType: 'user',
+      action: 'ticket.open',
+      targetType: 'ticket',
+      targetId: updated.id,
+      after: { number: updated.number, mode: updated.mode, panelId: updated.panelId },
+      source: 'bot',
+    });
+    ctx.events.emit('ticket.opened', {
+      guildId: params.guildId,
+      ticketId: updated.id,
+      userId: params.openerId,
+    });
+
+    return updated;
+  } finally {
+    await ctx.redis.del(lockKey);
   }
-
-  await ctx.audit({
-    guildId: params.guildId,
-    actorId: params.openerId,
-    actorType: 'user',
-    action: 'ticket.open',
-    targetType: 'ticket',
-    targetId: updated.id,
-    after: { number: updated.number, mode: updated.mode, panelId: updated.panelId },
-    source: 'bot',
-  });
-  ctx.events.emit('ticket.opened', {
-    guildId: params.guildId,
-    ticketId: updated.id,
-    userId: params.openerId,
-  });
-
-  return updated;
 }
 
 export interface CloseTicketParams {

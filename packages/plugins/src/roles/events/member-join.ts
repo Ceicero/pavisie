@@ -45,25 +45,77 @@ export const memberJoinHandler: PluginEventHandler<'guildMemberAdd'> = {
         return;
       }
       if (action === 'quarantine') {
+        let roleApplied = false;
         const automod = ctx.services.get('automod');
         if (automod) {
-          await automod
-            .quarantine(member.guild.id, member.id, 'Account-age gate: account too new')
-            .catch(() => undefined);
+          try {
+            await automod.quarantine(member.guild.id, member.id, 'Account-age gate: account too new');
+            roleApplied = true;
+          } catch (err) {
+            // automod.quarantine threw (e.g., its own quarantine role is unconfigured); fall back to roles plugin's role
+            if (config.verification.quarantineRoleId) {
+              try {
+                await member.roles.add(
+                  config.verification.quarantineRoleId,
+                  'Account-age gate: account too new',
+                );
+                roleApplied = true;
+              } catch (roleErr) {
+                ctx.logger.warn(
+                  {
+                    err: roleErr instanceof Error ? roleErr.message : String(roleErr),
+                    guildId: member.guild.id,
+                    quarantineRoleId: config.verification.quarantineRoleId,
+                  },
+                  'roles: account-age gate quarantine role assignment failed',
+                );
+              }
+            } else {
+              ctx.logger.warn(
+                {
+                  err: err instanceof Error ? err.message : String(err),
+                  guildId: member.guild.id,
+                },
+                'roles: account-age gate quarantine failed (automod unavailable and no fallback role configured)',
+              );
+            }
+          }
         } else if (config.verification.quarantineRoleId) {
-          await member.roles
-            .add(config.verification.quarantineRoleId, 'Account-age gate: account too new')
-            .catch(() => undefined);
+          try {
+            await member.roles.add(
+              config.verification.quarantineRoleId,
+              'Account-age gate: account too new',
+            );
+            roleApplied = true;
+          } catch (err) {
+            ctx.logger.warn(
+              {
+                err: err instanceof Error ? err.message : String(err),
+                guildId: member.guild.id,
+                quarantineRoleId: config.verification.quarantineRoleId,
+              },
+              'roles: account-age gate quarantine role assignment failed',
+            );
+          }
+        } else {
+          ctx.logger.warn(
+            { guildId: member.guild.id },
+            'roles: account-age gate quarantine configured but no quarantine role is set',
+          );
         }
-        await ctx.audit({
-          guildId: member.guild.id,
-          actorId: member.id,
-          actorType: 'system',
-          action: 'roles.accountAgeGate.quarantine',
-          targetType: 'member',
-          targetId: member.id,
-          source: 'bot',
-        });
+
+        // Only write an audit entry if a role was actually applied
+        if (roleApplied) {
+          await ctx.audit({
+            guildId: member.guild.id,
+            actorId: member.id,
+            actorType: 'system',
+            action: 'roles.accountAgeGate.quarantine',
+            targetType: 'member',
+            targetId: member.id,
+            source: 'bot',
+          });
+        }
       }
     }
 

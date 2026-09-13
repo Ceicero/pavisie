@@ -1,4 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, type ButtonInteraction } from 'discord.js';
+import { AppError } from '@entrophy/core';
 import { errorEmbed, successEmbed, type ComponentHandler } from '../../sdk';
 import { canDecideVerification } from '../engine';
 
@@ -48,12 +49,23 @@ function buildDecisionHandler(approve: boolean): ComponentHandler {
         return;
       }
 
-      await roles.verificationDecision({
-        guildId: c.guildId,
-        requestId: request.id,
-        approve,
-        reviewerId: interaction.user.id,
-      });
+      try {
+        await roles.verificationDecision({
+          guildId: c.guildId,
+          requestId: request.id,
+          approve,
+          reviewerId: interaction.user.id,
+        });
+      } catch (err) {
+        // The service decides atomically, so the losing side of two near-simultaneous clicks lands here. Any
+        // other failure is a real fault: rethrow it so the router logs it rather than reporting a tidy message.
+        if (!(err instanceof AppError) || err.code !== 'already_decided') throw err;
+        await interaction.reply({
+          embeds: [errorEmbed('This request was already decided by another moderator.')],
+          ephemeral: true,
+        });
+        return;
+      }
 
       const disabled = disableAllButtons(interaction.message.components);
       await interaction.update({
