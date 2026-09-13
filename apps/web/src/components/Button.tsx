@@ -6,7 +6,7 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'outline';
 type Size = 'md' | 'lg';
 
 const VARIANT_CLASSES: Record<Variant, string> = {
-  primary: 'bg-paper text-ink-0 hover:bg-grey-7 border border-transparent',
+  primary: 'bg-gold-5 text-ink-0 hover:bg-gold-6 border border-transparent',
   secondary: 'bg-ink-4 text-grey-7 hover:bg-ink-3 border border-ink-6',
   outline: 'bg-transparent text-grey-7 hover:bg-white/[0.06] border border-white/15',
   ghost: 'bg-transparent text-grey-4 hover:text-grey-7 hover:bg-white/[0.04] border border-transparent',
@@ -18,7 +18,7 @@ const SIZE_CLASSES: Record<Size, string> = {
 };
 
 const BASE =
-  'inline-flex items-center justify-center gap-2 rounded-full font-medium tracking-tight transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-grey-5 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-0 disabled:opacity-40 disabled:pointer-events-none';
+  'inline-flex items-center justify-center gap-2 rounded-full font-medium tracking-tight transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-5 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-0 disabled:opacity-40 disabled:pointer-events-none';
 
 interface CommonProps {
   variant?: Variant;
