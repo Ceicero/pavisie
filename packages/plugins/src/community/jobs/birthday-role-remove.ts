@@ -20,7 +20,7 @@ export const birthdayRoleRemoveJob: PluginJob<BirthdayRoleRemoveJobData> = {
     const member = await fetchMemberSafe(guild, userId);
     if (!member || !member.roles.cache.has(roleId)) return;
     try {
-      await member.roles.remove(roleId, 'Entrophy community: birthday role expired');
+      await member.roles.remove(roleId, 'Pavisie community: birthday role expired');
     } catch (err) {
       ctx.logger.warn({ err, guildId, userId, roleId }, 'community: could not remove the birthday role');
     }

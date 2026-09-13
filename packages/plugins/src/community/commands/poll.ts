@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { hasStaffLevel, parseDuration } from '@entrophy/core';
+import { hasStaffLevel, parseDuration } from '@pavisie/core';
 import { errorEmbed, successEmbed, type CommandContext, type PluginCommand } from '../../sdk';
 import { closePoll } from '../actions';
 import type { CommunityConfig } from '../manifest';

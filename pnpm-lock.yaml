@@ -50,16 +50,16 @@ importers:
 
   apps/api:
     dependencies:
-      '@entrophy/core':
+      '@pavisie/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@entrophy/database':
+      '@pavisie/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@entrophy/plugins':
+      '@pavisie/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
-      '@entrophy/types':
+      '@pavisie/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@fastify/cookie':
@@ -120,16 +120,16 @@ importers:
 
   apps/bot:
     dependencies:
-      '@entrophy/core':
+      '@pavisie/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@entrophy/database':
+      '@pavisie/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@entrophy/plugins':
+      '@pavisie/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
-      '@entrophy/types':
+      '@pavisie/types':
         specifier: workspace:*
         version: link:../../packages/types
       bullmq:
@@ -166,10 +166,10 @@ importers:
 
   apps/dashboard:
     dependencies:
-      '@entrophy/types':
+      '@pavisie/types':
         specifier: workspace:*
         version: link:../../packages/types
-      '@entrophy/ui':
+      '@pavisie/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-query':
@@ -236,10 +236,10 @@ importers:
 
   apps/web:
     dependencies:
-      '@entrophy/types':
+      '@pavisie/types':
         specifier: workspace:*
         version: link:../../packages/types
-      '@entrophy/ui':
+      '@pavisie/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-query':
@@ -306,7 +306,7 @@ importers:
 
   packages/core:
     dependencies:
-      '@entrophy/types':
+      '@pavisie/types':
         specifier: workspace:*
         version: link:../types
       discord-api-types:
@@ -346,10 +346,10 @@ importers:
 
   packages/database:
     dependencies:
-      '@entrophy/core':
+      '@pavisie/core':
         specifier: workspace:*
         version: link:../core
-      '@entrophy/types':
+      '@pavisie/types':
         specifier: workspace:*
         version: link:../types
       '@prisma/client':
@@ -374,13 +374,13 @@ importers:
 
   packages/plugins:
     dependencies:
-      '@entrophy/core':
+      '@pavisie/core':
         specifier: workspace:*
         version: link:../core
-      '@entrophy/database':
+      '@pavisie/database':
         specifier: workspace:*
         version: link:../database
-      '@entrophy/types':
+      '@pavisie/types':
         specifier: workspace:*
         version: link:../types
       bullmq:

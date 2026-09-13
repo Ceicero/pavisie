@@ -12,8 +12,8 @@ import {
   TableHeader,
   TableRow,
   useToast,
-} from '@entrophy/ui';
-import type { TwitchChatCommandDto, TwitchChatLevelId } from '@entrophy/types/integrations';
+} from '@pavisie/ui';
+import type { TwitchChatCommandDto, TwitchChatLevelId } from '@pavisie/types/integrations';
 import { useDeleteTwitchChatCommand, useTwitchChatCommands } from '@/lib/dashboard/integrations-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ConfirmDialog } from '../confirm-dialog';

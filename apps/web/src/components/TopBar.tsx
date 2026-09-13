@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   IconButton,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { Logo } from './Logo';
 import { ButtonLink } from './Button';
 import { GuildSwitcher } from './dashboard/guild-switcher';

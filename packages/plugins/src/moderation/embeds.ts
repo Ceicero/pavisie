@@ -1,7 +1,7 @@
 import { EmbedBuilder } from 'discord.js';
-import { discordTimestamp, escapeMarkdown, sanitizeEmbedText, truncate } from '@entrophy/core';
-import type { ModerationAppeal, ModerationCase } from '@entrophy/database';
-import { BRAND, EMBED_LIMITS, brandIconUrl, env } from '@entrophy/core';
+import { discordTimestamp, escapeMarkdown, sanitizeEmbedText, truncate } from '@pavisie/core';
+import type { ModerationAppeal, ModerationCase } from '@pavisie/database';
+import { BRAND, EMBED_LIMITS, brandIconUrl, env } from '@pavisie/core';
 import { brandEmbed, userMention } from '../sdk';
 
 const CASE_TYPE_LABEL: Record<ModerationCase['type'], string> = {

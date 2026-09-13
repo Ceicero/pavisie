@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import type { ZodFastifyInstance } from '../lib/http';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import { resolveProvider, siteverify, type ProviderConfig } from '../lib/captcha';
 
 const VERIFY_DONE_TTL_SECONDS = 120;
@@ -42,7 +42,7 @@ function pageShell(body: string): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Entrophy Verification</title>
+<title>Pavisie Verification</title>
 <style>
   :root { color-scheme: dark; }
   body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0b0d10; color: #e6e8eb; font: 16px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
@@ -113,9 +113,9 @@ function widgetPage(provider: ProviderConfig, token: string, nonce: string): str
 
 /**
  * `/verify/:token` — the public CAPTCHA completion page for the `roles` plugin's CAPTCHA verification mode
- * (README.md "Known integration gap"). `/verify` slash command writes `entrophy:verify:pending:<token>` in
+ * (README.md "Known integration gap"). `/verify` slash command writes `pavisie:verify:pending:<token>` in
  * Redis (`{guildId, userId}`, 10-minute TTL); this page solves the widget, verifies the response server-side
- * with the configured provider's `siteverify` endpoint, then writes `entrophy:verify:done:<token>`, which the
+ * with the configured provider's `siteverify` endpoint, then writes `pavisie:verify:done:<token>`, which the
  * `roles` plugin's `captcha-poll` job (every 15s) picks up to grant the verified role and clean up both keys.
  * Not session-authenticated — this is a public, unauthenticated page reachable by anyone with the link.
  * Registered under a strict per-route CSP (the app-wide helmet CSP is disabled since every other route here

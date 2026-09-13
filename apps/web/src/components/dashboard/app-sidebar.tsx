@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { MessageCircle } from 'lucide-react';
-import { Sidebar, SidebarNavItem, SidebarSection, Badge } from '@entrophy/ui';
+import { Sidebar, SidebarNavItem, SidebarSection, Badge } from '@pavisie/ui';
 import { NAV, isNavItemActive, isNavItemDisabled } from './nav';
 import { BrandWordmark } from './brand-wordmark';
 import { usePlugins } from '@/lib/dashboard/queries';

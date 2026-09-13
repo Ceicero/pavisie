@@ -3,7 +3,7 @@
 // than guessing when `STEAM_API_KEY` is unset. Mirrors `integrations/providers/twitch.ts`'s thin-fetch-wrapper
 // style: no retry/backoff logic here (the caller — `service.ts`/the refresh job — decides what to do with a
 // failure), and the API key is NEVER logged, only HTTP status codes.
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import type { PluginContext } from '../sdk';
 
 const API_BASE = 'https://api.steampowered.com';

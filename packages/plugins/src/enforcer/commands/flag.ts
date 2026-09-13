@@ -6,7 +6,7 @@ import {
   type MessageContextMenuCommandInteraction,
   type SlashCommandBuilder,
 } from 'discord.js';
-import { AuditAction } from '@entrophy/core';
+import { AuditAction } from '@pavisie/core';
 import {
   assertStaffLevel,
   buildCustomId,

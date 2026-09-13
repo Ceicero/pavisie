@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { env } from '@entrophy/core';
-import type { PrismaStubOverrides } from '@entrophy/plugins/sdk/testing';
+import { env } from '@pavisie/core';
+import type { PrismaStubOverrides } from '@pavisie/plugins/sdk/testing';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
 const GUILD_ID = '500000000000000001';

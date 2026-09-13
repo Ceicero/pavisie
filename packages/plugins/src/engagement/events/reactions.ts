@@ -1,4 +1,4 @@
-import { EMBED_LIMITS, truncate } from '@entrophy/core';
+import { EMBED_LIMITS, truncate } from '@pavisie/core';
 import type { Message, MessageReaction, PartialMessageReaction, PartialUser, User } from 'discord.js';
 import { brandEmbed, resolveTextChannel, type PluginContext, type PluginEventHandler } from '../../sdk';
 import type { EngagementConfig, EngagementStarboardConfig } from '../manifest';

@@ -97,7 +97,7 @@ No new plugins or pages; making what exists more production-grade under real loa
   `locales/en.json` merged under a namespace) already supports additional locales structurally — v1
   is actually writing and shipping a second (and third) locale, plus a process for keeping plugin
   locale files in sync as commands change.
-- **Native Discord AutoMod sync.** Entrophy's own `automod` plugin is independent of Discord's
+- **Native Discord AutoMod sync.** Pavisie's own `automod` plugin is independent of Discord's
   built-in AutoMod feature today. v1 explores syncing or coordinating with Discord's native AutoMod
   rules (visibility into what it's already blocking, avoiding duplicate/conflicting rules) rather than
   operating as two unrelated systems.
@@ -107,7 +107,7 @@ No new plugins or pages; making what exists more production-grade under real loa
 - **Mobile polish** for the dashboard — it's responsive today (Tailwind, tested breakpoints) but
   hasn't had a dedicated mobile-first pass on the denser pages (Enforcer ledger, moderation case
   table, automod rule builder).
-- **Accessibility audit** — `@entrophy/ui` components are built accessible-by-default (keyboard
+- **Accessibility audit** — `@pavisie/ui` components are built accessible-by-default (keyboard
   navigation, Radix primitives, semantic markup), but there's been no end-to-end audit (screen reader
   pass, color contrast check across both themes, focus-order review) of the assembled dashboard and
   website pages as a whole.

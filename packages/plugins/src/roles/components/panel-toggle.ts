@@ -102,7 +102,7 @@ export const panelToggleHandler: ComponentHandler = {
 
 /** Records `rolesPickedAt` on `OnboardingProgress` the first time a member self-assigns a role from a panel. */
 export async function markRolesPicked(c: {
-  ctx: { prisma: import('@entrophy/database').PrismaClient };
+  ctx: { prisma: import('@pavisie/database').PrismaClient };
   guildId: string;
   interaction: { user: { id: string } };
 }): Promise<void> {

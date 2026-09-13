@@ -1,7 +1,7 @@
 // Shared command-registration helper used by the `register` CLI (src/register.ts) and by the bot at boot when
 // REGISTER_COMMANDS_ON_BOOT is enabled (ARCHITECTURE.md §9). Bulk-overwrites the application's commands via REST.
 import { REST, Routes } from 'discord.js';
-import type { PluginRegistry } from '@entrophy/plugins';
+import type { PluginRegistry } from '@pavisie/plugins';
 
 export type RegisterTarget = { scope: 'global' } | { scope: 'guild'; guildId: string };
 

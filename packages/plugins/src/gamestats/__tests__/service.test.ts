@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { GameAccountLink } from '@entrophy/database';
+import type { GameAccountLink } from '@pavisie/database';
 import { createTestContext } from '../../sdk/testing';
 import { dbd } from '../games/dbd';
 

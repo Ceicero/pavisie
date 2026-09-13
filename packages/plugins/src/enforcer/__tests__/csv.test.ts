@@ -1,4 +1,4 @@
-import type { EnforcerRecord } from '@entrophy/database';
+import type { EnforcerRecord } from '@pavisie/database';
 import { describe, expect, it } from 'vitest';
 import { recordsToCsv } from '../csv';
 

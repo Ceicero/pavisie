@@ -8,7 +8,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { ErrorState } from './error-state';
 
 export interface DataTableColumn<T> {
@@ -30,7 +30,7 @@ export interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
 }
 
-/** Generic table wrapper handling loading/error/empty states around `@entrophy/ui`'s `Table`. */
+/** Generic table wrapper handling loading/error/empty states around `@pavisie/ui`'s `Table`. */
 export function DataTable<T>({
   columns,
   rows,

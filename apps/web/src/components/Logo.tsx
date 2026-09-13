@@ -25,7 +25,7 @@ export function Logo({ className, imageSize = 28, withWordmark = true, href = '/
         // Fixed small brand mark; next/image adds no value here and this repo keeps images.unoptimized anyway.
         <img
           src={brand.logo ?? undefined}
-          alt="Entrophy"
+          alt="Pavisie"
           width={imageSize}
           height={imageSize}
           className="rounded-md object-cover"
@@ -41,7 +41,7 @@ export function Logo({ className, imageSize = 28, withWordmark = true, href = '/
           E
         </span>
       )}
-      {withWordmark && <span className="text-base font-semibold tracking-tight text-grey-7">Entrophy</span>}
+      {withWordmark && <span className="text-base font-semibold tracking-tight text-grey-7">Pavisie</span>}
     </Link>
   );
 }

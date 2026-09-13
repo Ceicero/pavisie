@@ -1,5 +1,5 @@
 import type { GuildTextBasedChannel, Message } from 'discord.js';
-import { RateLimitError, redisKey, truncate } from '@entrophy/core';
+import { RateLimitError, redisKey, truncate } from '@pavisie/core';
 import type { PluginContext, PluginEventHandler } from '../../sdk';
 import { enforceBudget, enforceCooldown } from '../service';
 import { AI_DISCLOSURE, type AiConfig } from '../manifest';

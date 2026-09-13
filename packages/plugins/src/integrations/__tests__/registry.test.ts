@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INTEGRATION_PROVIDER_IDS } from '@entrophy/types/integrations';
+import { INTEGRATION_PROVIDER_IDS } from '@pavisie/types/integrations';
 import { PROVIDER_ENUM_MAP, getProvider, providerIdFromEnum } from '../providers';
 
 // GitHub, Notion and Stripe (the guild-facing connector) were removed as offered providers on 2026-09-02

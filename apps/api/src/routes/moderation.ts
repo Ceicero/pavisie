@@ -1,13 +1,13 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { AuditAction, NotFoundError, buildPaginated, paginate } from '@entrophy/core';
-import type { ModerationCaseType } from '@entrophy/database';
-import type { ModerationCaseDto, ModerationWarningDto, Paginated } from '@entrophy/types';
+import { AuditAction, NotFoundError, buildPaginated, paginate } from '@pavisie/core';
+import type { ModerationCaseType } from '@pavisie/database';
+import type { ModerationCaseDto, ModerationWarningDto, Paginated } from '@pavisie/types';
 import type {
   ModerationAppealDto,
   ModerationNoteDto,
   ModerationSettingsDto,
-} from '@entrophy/types/moderation';
+} from '@pavisie/types/moderation';
 import { writeDashboardAudit } from '../lib/audit';
 import { toCsv } from '../lib/csv';
 import { toModerationCaseDto, toModerationWarningDto } from '../lib/dto';

@@ -1,7 +1,7 @@
 // discord.js embed/component builders for the community plugin. Kept separate from service.ts (which stays
 // discord.js-free) so the pure tally/eligibility/vote logic can be unit-tested without a gateway.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
-import { BRAND, brandIconUrl, discordTimestamp, env, truncate } from '@entrophy/core';
+import { BRAND, brandIconUrl, discordTimestamp, env, truncate } from '@pavisie/core';
 import type {
   EventRsvp,
   Giveaway,
@@ -10,7 +10,7 @@ import type {
   PollVote,
   Suggestion,
   CommunityEvent,
-} from '@entrophy/database';
+} from '@pavisie/database';
 import { brandEmbed, buildCustomId } from '../sdk';
 import { tallyPoll, type PollOptionTally } from './service';
 

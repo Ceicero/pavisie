@@ -11,8 +11,8 @@
 // or an undecryptable/missing stored refresh token) marks the `IntegrationConnection` `ERROR`. A transient
 // failure (network error, 5xx, some other status) must never brick the connection — it just logs a warning
 // and leaves the row untouched for the next attempt.
-import type { OAuthToken, TwitchChatChannel } from '@entrophy/database';
-import { decryptSecret, encryptSecret, redisKey } from '@entrophy/core';
+import type { OAuthToken, TwitchChatChannel } from '@pavisie/database';
+import { decryptSecret, encryptSecret, redisKey } from '@pavisie/core';
 import type { PluginContext } from '../../sdk';
 
 const TOKEN_URL = 'https://id.twitch.tv/oauth2/token';

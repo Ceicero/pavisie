@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import {
   useDeleteOutboundWebhook,
   useOutboundWebhooks,

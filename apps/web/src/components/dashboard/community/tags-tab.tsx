@@ -28,8 +28,8 @@ import {
   Switch,
   Textarea,
   useToast,
-} from '@entrophy/ui';
-import type { TagBodyDto, TagDto, TagTriggerModeDto } from '@entrophy/types/community';
+} from '@pavisie/ui';
+import type { TagBodyDto, TagDto, TagTriggerModeDto } from '@pavisie/types/community';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useCommunityTags, useCreateTag, useDeleteTag, useUpdateTag } from '@/lib/dashboard/community-queries';
 import { ConfirmDialog } from '../confirm-dialog';

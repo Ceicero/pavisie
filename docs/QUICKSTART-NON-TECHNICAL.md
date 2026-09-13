@@ -1,9 +1,9 @@
 # Quickstart for Brandon (no coding required)
 
-This is the plain-language version. It walks through getting Entrophy live on
-`entrophybot.com` using accounts and web forms only — every command you need to copy-paste is
+This is the plain-language version. It walks through getting Pavisie live on
+`pavisie.com` using accounts and web forms only — every command you need to copy-paste is
 in a grey box, and every click is spelled out. If a step ever produces an error message, the
-fastest way to get unstuck is to ask in the **Entrophy support Discord server** (linked on the
+fastest way to get unstuck is to ask in the **Pavisie support Discord server** (linked on the
 website's `/support` page and in its footer) — after that, check `docs/TROUBLESHOOTING.md` for the
 specific error.
 
@@ -14,7 +14,7 @@ specific error.
 | **Discord Developer Portal** (discord.com/developers) — sign in with your normal Discord account | Creates the bot application itself                            | Free                                                |
 | **Railway** (railway.app) — sign in with GitHub                                                  | Hosts the bot, API, dashboard, and website, plus the database | Paid — see [What costs money](#5-what-costs-money)  |
 | **Stripe** (stripe.com) — optional, only if you want donations                                   | Processes donation payments                                   | Free to sign up; they take a small cut per donation |
-| **Domain registrar** — wherever you bought `entrophybot.com`                                     | Points the domain at Railway                                  | Whatever you already pay for the domain             |
+| **Domain registrar** — wherever you bought `pavisie.com`                                     | Points the domain at Railway                                  | Whatever you already pay for the domain             |
 | **GitHub** — you already have this since the code lives there                                    | Railway deploys straight from your GitHub repo                | Free                                                |
 
 You do not need a code editor, a terminal, or to install anything on your computer for the
@@ -25,13 +25,13 @@ running this locally on their own machine is a separate, more technical path cov
 ## 2. Create the Discord bot application
 
 1. Go to <https://discord.com/developers/applications> and log in.
-2. Click **New Application** (top right). Name it **Entrophy**. Agree to the terms, click
+2. Click **New Application** (top right). Name it **Pavisie**. Agree to the terms, click
    **Create**.
 3. On the **General Information** page: click the icon circle, upload
-   `assets/brand/entrophy-skull.png` from the project folder as the app icon. Click **Save
+   `assets/brand/pavisie-skull.png` from the project folder as the app icon. Click **Save
    Changes**.
 4. Click **Bot** in the left sidebar. Under the bot's icon, click it and upload the same
-   `assets/brand/entrophy-skull.png` file as the bot's avatar too.
+   `assets/brand/pavisie-skull.png` file as the bot's avatar too.
 5. Still on the **Bot** page, click **Reset Token**, confirm, then click **Copy**. This is your
    bot's password — paste it somewhere temporarily safe (a private note), you'll need it in step
    4 below. If you lose it later, come back here and reset it again.
@@ -45,7 +45,7 @@ running this locally on their own machine is a separate, more technical path cov
 8. Click **OAuth2** in the sidebar → **General**. Under **Redirects**, click **Add Redirect** and
    enter exactly:
    ```
-   https://api.entrophybot.com/auth/discord/callback
+   https://api.pavisie.com/auth/discord/callback
    ```
    Click **Save Changes**.
 
@@ -56,7 +56,7 @@ Secret**. Keep them private — anyone with the bot token can control your bot.
 
 1. Go to <https://railway.app>, sign in with GitHub, and authorize Railway to see your
    repositories.
-2. Click **New Project → Deploy from GitHub repo** and pick the `entrophy` repository.
+2. Click **New Project → Deploy from GitHub repo** and pick the `pavisie` repository.
 3. Railway will ask what to deploy — add **four services**, one at a time, all pointing at the
    same repo:
    - Service named `bot` — Root Directory `/`, Dockerfile Path `infra/docker/Dockerfile.bot`
@@ -75,7 +75,7 @@ Secret**. Keep them private — anyone with the bot token can control your bot.
    - `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` → the three values from step 2
    - `ENCRYPTION_KEY` and `SESSION_SECRET` → see the grey box below for how to generate these
    - Everything else in `.env.production.example` that isn't already filled in for
-     `entrophybot.com`
+     `pavisie.com`
 
    To generate `ENCRYPTION_KEY` and `SESSION_SECRET`, you need two random strings. If you have a
    developer helping, they can run this once each and send you the output:
@@ -97,20 +97,20 @@ Secret**. Keep them private — anyone with the bot token can control your bot.
 8. Click **Deploy** on all four services. The first deploy takes a few minutes per service — watch
    the **Deployments** tab for a green checkmark on each.
 
-## 4. Point entrophybot.com at Railway
+## 4. Point pavisie.com at Railway
 
 1. In each of `api`, `dashboard`, and `web`'s Railway settings (**Settings → Networking → Custom
    Domain**), add:
-   - `api` → `api.entrophybot.com`
-   - `dashboard` → `app.entrophybot.com`
-   - `web` → `entrophybot.com` (and `www.entrophybot.com`)
+   - `api` → `api.pavisie.com`
+   - `dashboard` → `app.pavisie.com`
+   - `web` → `pavisie.com` (and `www.pavisie.com`)
      Railway will show you a target value (a CNAME, or an A/ALIAS record for the bare domain).
-2. Log into your domain registrar (wherever `entrophybot.com` is registered) and add the DNS
+2. Log into your domain registrar (wherever `pavisie.com` is registered) and add the DNS
    records Railway showed you:
    - `CNAME app` → Railway's target for `dashboard`
    - `CNAME api` → Railway's target for `api`
    - `CNAME www` → Railway's target for `web`
-   - the bare `entrophybot.com` (root/apex) → follow your registrar's instructions for an
+   - the bare `pavisie.com` (root/apex) → follow your registrar's instructions for an
      ALIAS/ANAME record, or Railway's specific apex-domain instructions if your registrar doesn't
      support ALIAS records
 3. DNS changes can take anywhere from a few minutes to a few hours to take effect. Railway shows a
@@ -119,8 +119,8 @@ Secret**. Keep them private — anyone with the bot token can control your bot.
 
 ## 5. How to know it worked
 
-- Visit `https://entrophybot.com` — you should see the Entrophy website.
-- Visit `https://app.entrophybot.com` — you should see the dashboard login page. Click **Login
+- Visit `https://pavisie.com` — you should see the Pavisie website.
+- Visit `https://app.pavisie.com` — you should see the dashboard login page. Click **Login
   with Discord**, approve, and you should land on a page listing your Discord servers.
 - In Discord, go to a server you manage and try typing `/health` — if the bot responds with an
   embed showing "status: ok", everything is connected.
@@ -143,12 +143,12 @@ Secret**. Keep them private — anyone with the bot token can control your bot.
 3. Commands need to be registered once (and again any time commands change). If you have a
    developer available, they run:
    ```
-   pnpm --filter @entrophy/bot register --global
+   pnpm --filter @pavisie/bot register --global
    ```
    Global registration can take **up to an hour** to show up in Discord — that's normal, not
    broken. After you register, try `/help` as well to confirm the slash form is working.
 
-## 7. How to update Entrophy later
+## 7. How to update Pavisie later
 
 Once it's live, updating is simple:
 
@@ -169,7 +169,7 @@ committing** — hosting prices change.
 | Thing                                                | Rough monthly cost                                                                                          |
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Railway (4 services + Postgres + Redis, low traffic) | Roughly $15–30/month depending on usage; Railway bills by actual resource use on top of a small base plan   |
-| Domain registration (`entrophybot.com`)              | Usually $10–20/**year**, already a sunk cost if you own it                                                  |
+| Domain registration (`pavisie.com`)              | Usually $10–20/**year**, already a sunk cost if you own it                                                  |
 | Stripe                                               | No monthly fee — they take a small percentage + fixed fee per donation processed (check stripe.com/pricing) |
 | Discord Developer Portal                             | Free                                                                                                        |
 
@@ -178,7 +178,7 @@ directly — that's the intended purpose stated on the page itself.
 
 ## If something goes wrong
 
-- **First stop: the Entrophy support Discord server** (linked on the website's `/support` page and
+- **First stop: the Pavisie support Discord server** (linked on the website's `/support` page and
   in its footer) — ask there first, especially if you don't have a developer on hand.
 - Nothing loads at all → check the Railway **Deployments** tab for a red/failed build on any of
   the four services, and open its logs.

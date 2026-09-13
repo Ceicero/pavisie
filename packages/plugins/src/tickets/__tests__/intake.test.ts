@@ -1,4 +1,4 @@
-import { ValidationError } from '@entrophy/core';
+import { ValidationError } from '@pavisie/core';
 import { describe, expect, it } from 'vitest';
 import { validateIntakeAnswers } from '../intake';
 import type { TicketIntakeField } from '../manifest';

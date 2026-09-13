@@ -1,7 +1,7 @@
 import RedisMock from 'ioredis-mock';
 import type Redis from 'ioredis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ExternalServiceError, redisKey } from '@entrophy/core';
+import { ExternalServiceError, redisKey } from '@pavisie/core';
 import { getCachedUserGuilds } from '../src/lib/discord';
 
 // ioredis-mock shares its store across instances in one process (see apps/api/test/discord-resources.test.ts),

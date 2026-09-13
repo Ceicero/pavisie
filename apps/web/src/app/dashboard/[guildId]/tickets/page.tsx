@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@entrophy/ui';
+import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@pavisie/ui';
 import { TicketsPanelsTab } from '@/components/dashboard/tickets/panels-tab';
 import { TicketsQueueTab } from '@/components/dashboard/tickets/queue-tab';
 import { TicketsSettingsTab } from '@/components/dashboard/tickets/settings-tab';

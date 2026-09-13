@@ -1,5 +1,5 @@
-import { NotFoundError, buildPaginated, paginate } from '@entrophy/core';
-import type { DeveloperReportDto, Paginated } from '@entrophy/types';
+import { NotFoundError, buildPaginated, paginate } from '@pavisie/core';
+import type { DeveloperReportDto, Paginated } from '@pavisie/types';
 import { toDeveloperReportDto } from '../lib/developer-reports/dto';
 import {
   developerReportIdParamSchema,
@@ -11,7 +11,7 @@ import type { ZodFastifyInstance } from '../lib/http';
 
 /**
  * `/owner/developer-reports` — the ops-console backend for the guild → developer support channel (the
- * `admin` plugin's `/entrophy report`). Every route here is gated on bot-owner identity (`requireBotOwner`),
+ * `admin` plugin's `/pavisie report`). Every route here is gated on bot-owner identity (`requireBotOwner`),
  * NOT `requireGuildAccess`: this data is intentionally cross-guild (a report from any server the bot is in),
  * which is exactly why it must never be reachable by a regular guild-managing dashboard session.
  */

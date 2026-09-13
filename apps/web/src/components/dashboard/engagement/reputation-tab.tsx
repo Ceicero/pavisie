@@ -12,8 +12,8 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
-import type { EngagementConfigDto, ReputationLeaderboardEntryDto } from '@entrophy/types/engagement';
+} from '@pavisie/ui';
+import type { EngagementConfigDto, ReputationLeaderboardEntryDto } from '@pavisie/types/engagement';
 import {
   useEngagementConfig,
   useRepLeaderboard,

@@ -1,8 +1,8 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { AuditAction, NotFoundError, buildPaginated, paginate } from '@entrophy/core';
-import type { RolesConfig } from '@entrophy/plugins/roles/manifest';
-import type { Paginated, RolePanelDto } from '@entrophy/types';
+import { AuditAction, NotFoundError, buildPaginated, paginate } from '@pavisie/core';
+import type { RolesConfig } from '@pavisie/plugins/roles/manifest';
+import type { Paginated, RolePanelDto } from '@pavisie/types';
 import type {
   AutoRolesDto,
   OnboardingConfigDto,
@@ -11,7 +11,7 @@ import type {
   VerificationRequestDto,
   VerificationSettingsDto,
   WelcomeGoodbyeDto,
-} from '@entrophy/types/roles';
+} from '@pavisie/types/roles';
 import { writeDashboardAudit } from '../lib/audit';
 import { toRolePanelDto } from '../lib/dto';
 import {
@@ -36,7 +36,7 @@ import { guildIdParamSchema, paginationQuerySchema } from '../lib/schemas';
 
 const ROLES_PLUGIN_ID = 'roles' as const;
 const ROLE_PERSISTENCE_DISCLOSURE =
-  "When on, Entrophy stores a snapshot of a leaving member's roles (excluding elevated-permission and integration-managed roles) for up to the configured number of days, and restores them automatically if that member rejoins within that window.";
+  "When on, Pavisie stores a snapshot of a leaving member's roles (excluding elevated-permission and integration-managed roles) for up to the configured number of days, and restores them automatically if that member rejoins within that window.";
 /** The API has no gateway connection, so it cannot check role hierarchy/permissions; the bot re-validates at assignment time (`grantAutoRoles`) and records skips in the `roles.autorole.apply` audit row. */
 const AUTO_ROLES_NOTE =
   'Roles are re-checked at assignment time; elevated/managed/higher-than-bot roles are skipped and logged.';

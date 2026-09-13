@@ -1,10 +1,10 @@
 // Seeds a single, clearly-labelled demo guild — never fictional live data.
-// Run with `pnpm --filter @entrophy/database seed` (tsx prisma/seed.ts).
+// Run with `pnpm --filter @pavisie/database seed` (tsx prisma/seed.ts).
 import { prisma } from '../src/client';
 import { ensureGuild } from '../src/guild';
 
 const DEMO_GUILD_ID = '000000000000000000';
-const DEMO_GUILD_NAME = 'Entrophy Demo (seed)';
+const DEMO_GUILD_NAME = 'Pavisie Demo (seed)';
 const SEED_ACTOR_ID = 'system-seed';
 
 /** Plugin ids + their default enablement, mirrored from docs/ARCHITECTURE.md §7.1. */

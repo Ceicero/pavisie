@@ -1,4 +1,4 @@
-import { defaultRetentionPolicy } from '@entrophy/database';
+import { defaultRetentionPolicy } from '@pavisie/database';
 import type { PluginJob } from '../../sdk';
 
 const DEFAULT_AUTOMOD_EVENT_DAYS = defaultRetentionPolicy.automodEventDays;
@@ -6,7 +6,7 @@ const DEFAULT_AUTOMOD_EVENT_DAYS = defaultRetentionPolicy.automodEventDays;
 /**
  * Hourly repeat job (TASK: "a repeat job 'automod:events-retention' hourly (purge AutomodEvent older than
  * DataRetentionPolicy.automodEventDays)"). Scoped to `AutomodEvent` only — the platform-wide retention sweep
- * across every table (`@entrophy/database`'s `runRetentionForGuild`) is out of this plugin's ownership; this job
+ * across every table (`@pavisie/database`'s `runRetentionForGuild`) is out of this plugin's ownership; this job
  * exists so automod's own event log respects each guild's retention setting even before that sweep lands.
  */
 export const eventsRetentionJob: PluginJob = {

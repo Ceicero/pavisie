@@ -1,5 +1,5 @@
-import { hasStaffLevel } from '@entrophy/core';
-import type { StaffLevel } from '@entrophy/types';
+import { hasStaffLevel } from '@pavisie/core';
+import type { StaffLevel } from '@pavisie/types';
 
 export interface DjGateInput {
   /** The guild's configured DJ role, or `null` if none is set. */

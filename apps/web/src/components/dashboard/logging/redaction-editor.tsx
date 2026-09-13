@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import type { LoggingConfigDto } from '@entrophy/types/logging';
+import type { LoggingConfigDto } from '@pavisie/types/logging';
 import {
   Badge,
   Button,
@@ -15,7 +15,7 @@ import {
   Input,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useRedactionTest } from '@/lib/dashboard/logging-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 

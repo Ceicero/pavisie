@@ -1,6 +1,6 @@
 import { EmbedBuilder, type ActionRowBuilder, type ButtonBuilder, type ButtonInteraction } from 'discord.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 import { parseCustomId } from '../custom-id';
 import { PAGINATION_ACTION, handlePaginationInteraction, paginatedReply } from '../pagination';
 import type { ConfirmationInteraction } from '../confirm';

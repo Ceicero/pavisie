@@ -3,8 +3,8 @@
  *
  * `LOG_KINDS`/`LogKind` deliberately duplicate `packages/plugins/src/sdk/services.ts`'s `LogKind` union
  * (string-for-string identical) and `packages/plugins/src/logging/constants.ts`'s `LOG_KIND_LABELS`. The
- * dashboard never imports `@entrophy/plugins` (ARCHITECTURE.md §3: "the dashboard never imports
- * `@entrophy/database` or `@entrophy/plugins` — it talks to the API only"), and this package's owner list for
+ * dashboard never imports `@pavisie/plugins` (ARCHITECTURE.md §3: "the dashboard never imports
+ * `@pavisie/database` or `@pavisie/plugins` — it talks to the API only"), and this package's owner list for
  * this task explicitly forbids editing `sdk/**`, so there is no single shared source of truth reachable from
  * both sides without an out-of-scope SDK change. Flagged under openIssues for a follow-up wiring pass that
  * moves `LogKind` into this file and has the SDK re-export it instead.

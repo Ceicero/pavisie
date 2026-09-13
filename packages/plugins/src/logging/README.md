@@ -91,7 +91,7 @@ unavailable. This plugin also mirrors a handful of in-process platform events (`
   either — but it is an interpretation, not something spelled out verbatim anywhere. Each handler still sets a
   specific `payload.title` (e.g. "Role deleted") so the distinction survives in the embed/stored payload even
   though the `kind` column (and `enabledKinds` toggle) groups them.
-- `LogKind`/`LOG_KIND_LABELS` are duplicated in `@entrophy/types`'s `src/logging.ts` for the dashboard/API (which
-  never import `@entrophy/plugins`'s runtime code). A follow-up wiring pass could move the union into
-  `@entrophy/types` and have `sdk/services.ts` re-export it, eliminating the duplication — out of this task's
+- `LogKind`/`LOG_KIND_LABELS` are duplicated in `@pavisie/types`'s `src/logging.ts` for the dashboard/API (which
+  never import `@pavisie/plugins`'s runtime code). A follow-up wiring pass could move the union into
+  `@pavisie/types` and have `sdk/services.ts` re-export it, eliminating the duplication — out of this task's
   ownership (`sdk/**` and `packages/types/src/index.ts` are both off-limits here).

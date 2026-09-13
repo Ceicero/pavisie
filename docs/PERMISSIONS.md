@@ -2,7 +2,7 @@
 
 # Permissions matrix
 
-Every Discord permission Entrophy's plugins can use, why each one is needed, whether it's optional, and what
+Every Discord permission Pavisie's plugins can use, why each one is needed, whether it's optional, and what
 happens when it's missing. Generated from `packages/plugins/src/*/manifest.ts` via `allManifests` — this file
 can never drift from what the bot actually declares. See also `/permissions audit` in Discord, which diffs this
 same data against the bot's real permissions in your server.
@@ -201,7 +201,7 @@ _No Discord permissions declared — every command replies over the interaction 
 
 Discord gates a few event categories behind "privileged intents" that must be turned on for the bot application
 in the [Discord Developer Portal](https://discord.com/developers/applications) (Bot tab → Privileged Gateway
-Intents) **and** in Entrophy's own `.env` (`ENABLE_MESSAGE_CONTENT_INTENT`, `ENABLE_GUILD_MEMBERS_INTENT`,
+Intents) **and** in Pavisie's own `.env` (`ENABLE_MESSAGE_CONTENT_INTENT`, `ENABLE_GUILD_MEMBERS_INTENT`,
 `ENABLE_GUILD_PRESENCES_INTENT`) before the features that need them come alive. Every plugin below degrades
 gracefully (never crashes, never silently misbehaves) when a privileged intent it lists is off — see each row for
 exactly what stops working.

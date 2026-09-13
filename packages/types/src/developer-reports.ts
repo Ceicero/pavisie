@@ -1,6 +1,6 @@
 /**
  * DTOs for the owner-only developer-reports ops API (guild admin → bot developer support channel).
- * The `admin` plugin's `/entrophy report` command is the only writer; `apps/api`'s `/owner/developer-reports`
+ * The `admin` plugin's `/pavisie report` command is the only writer; `apps/api`'s `/owner/developer-reports`
  * routes (gated on bot-owner identity, not `requireGuildAccess` — this is intentionally cross-guild data) are
  * the only reader/mutator, for the future ops-console UI.
  */

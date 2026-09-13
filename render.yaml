@@ -1,25 +1,25 @@
 # Render Blueprint — alternative to the recommended Railway path (see infra/DEPLOYMENT.md §2 for
 # Railway, §3 for how to use this file). Render reads this automatically when you create a
 # "Blueprint" from this repo. See docs/ARCHITECTURE.md §21 and §21a for the domain layout this
-# assumes (entrophybot.com / app.entrophybot.com / api.entrophybot.com).
+# assumes (pavisie.com / app.pavisie.com / api.pavisie.com).
 #
 # Every envVar marked `sync: false` is a secret Render will prompt you for when you apply this
 # blueprint (or that you fill in later under that service's Environment tab) — nothing secret is
-# committed here. Custom domains (entrophybot.com, app.entrophybot.com, api.entrophybot.com) are not
+# committed here. Custom domains (pavisie.com, app.pavisie.com, api.pavisie.com) are not
 # set by this file; add them per-service in the Render dashboard under Settings → Custom Domains
 # after the first deploy, per infra/DEPLOYMENT.md §3.
 
 databases:
-  - name: entrophy-postgres
-    databaseName: entrophy
-    user: entrophy
+  - name: pavisie-postgres
+    databaseName: pavisie
+    user: pavisie
     plan: starter
 
 services:
   # Managed Redis-compatible store (Render "Key Value"). Used for sessions, cache, and BullMQ queues
   # — never a system of record, so it needs no backup plan (see infra/DEPLOYMENT.md §8).
   - type: keyvalue
-    name: entrophy-redis
+    name: pavisie-redis
     plan: starter
     ipAllowList: [] # no external access needed; only api/bot (in this same Render account) connect
 
@@ -39,12 +39,12 @@ services:
         value: info
       - key: DATABASE_URL
         fromDatabase:
-          name: entrophy-postgres
+          name: pavisie-postgres
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: entrophy-redis
+          name: pavisie-redis
           property: connectionString
       - key: DISCORD_TOKEN
         sync: false
@@ -53,7 +53,7 @@ services:
       - key: DISCORD_CLIENT_SECRET
         sync: false
       - key: DISCORD_OAUTH_REDIRECT_URI
-        value: https://api.entrophybot.com/auth/discord/callback
+        value: https://api.pavisie.com/auth/discord/callback
       - key: ENCRYPTION_KEY
         sync: false
       - key: ENCRYPTION_KEY_PREVIOUS
@@ -63,15 +63,15 @@ services:
       - key: API_PORT
         value: '3001'
       - key: API_BASE_URL
-        value: https://api.entrophybot.com
+        value: https://api.pavisie.com
       - key: DASHBOARD_URL
-        # Same value as WEB_URL: the config dashboard is served by `web` now (entrophybot.com/dashboard/**),
-        # not by the separate `app.entrophybot.com` service (see docs/ARCHITECTURE.md §11/§11a).
-        value: https://entrophybot.com
+        # Same value as WEB_URL: the config dashboard is served by `web` now (pavisie.com/dashboard/**),
+        # not by the separate `app.pavisie.com` service (see docs/ARCHITECTURE.md §11/§11a).
+        value: https://pavisie.com
       - key: WEB_URL
-        value: https://entrophybot.com
+        value: https://pavisie.com
       - key: COOKIE_DOMAIN
-        value: .entrophybot.com
+        value: .pavisie.com
       - key: SESSION_COOKIE_SAMESITE
         value: lax
       - key: TRUST_PROXY
@@ -82,7 +82,7 @@ services:
       - key: E2E_TEST_MODE
         value: 'false'
       - key: PUBLIC_WEBHOOK_BASE_URL
-        value: https://api.entrophybot.com
+        value: https://api.pavisie.com
       - key: BOT_OWNER_IDS
         sync: false
       # --- optional integrations; leave blank in the Render dashboard to keep a feature disabled ---
@@ -156,7 +156,7 @@ services:
 
   # --- apps/dashboard — Next.js admin dashboard ----------------------------------------------------
   - type: web
-    # Legacy app.entrophybot.com redirector today (the config dashboard moved into `web`, see
+    # Legacy app.pavisie.com redirector today (the config dashboard moved into `web`, see
     # docs/ARCHITECTURE.md §11/§11a); Brandon's owner-only ops console is planned for this same
     # service next. healthCheckPath is NOT `/`: that path now 308-redirects to WEB_URL rather than
     # returning 200, which would make Render treat this service as down.
@@ -168,11 +168,11 @@ services:
     healthCheckPath: /icon.png
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        value: https://api.entrophybot.com
+        value: https://api.pavisie.com
       # Server-side (not NEXT_PUBLIC_*): redirect target for this service's own `/` and
       # `/dashboard/*` legacy-link redirects (apps/dashboard/next.config.ts).
       - key: WEB_URL
-        value: https://entrophybot.com
+        value: https://pavisie.com
 
   # --- apps/web — public marketing website -----------------------------------------------------------
   # NEXT_PUBLIC_* vars must be present at *build* time (Next.js inlines them into the JS bundle) —
@@ -187,7 +187,7 @@ services:
     healthCheckPath: /
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        value: https://api.entrophybot.com
+        value: https://api.pavisie.com
       - key: NEXT_PUBLIC_DISCORD_CLIENT_ID
         sync: false
       - key: NEXT_PUBLIC_INVITE_PERMISSIONS
@@ -214,12 +214,12 @@ services:
         value: info
       - key: DATABASE_URL
         fromDatabase:
-          name: entrophy-postgres
+          name: pavisie-postgres
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: entrophy-redis
+          name: pavisie-redis
           property: connectionString
       - key: DISCORD_TOKEN
         sync: false

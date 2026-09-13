@@ -1,5 +1,5 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
-import { assertPublicHttpUrl, SsrfError, ValidationError } from '@entrophy/core';
+import { assertPublicHttpUrl, SsrfError, ValidationError } from '@pavisie/core';
 import { errorEmbed, listEmbed, successEmbed, type CommandContext, type PluginCommand } from '../../sdk';
 import { describeAvailability } from '../service';
 import type { AiConfig } from '../manifest';

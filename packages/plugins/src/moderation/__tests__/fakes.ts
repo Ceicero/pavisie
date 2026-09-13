@@ -132,7 +132,7 @@ export function createFakeGuild(): { guild: Guild; channel: FakeTextChannel } {
 }
 
 /**
- * Minimal `PrismaClient` surface for `createCase`: `withNextCaseNumber` (@entrophy/database) calls
+ * Minimal `PrismaClient` surface for `createCase`: `withNextCaseNumber` (@pavisie/database) calls
  * `prisma.$transaction(cb)` directly, which the SDK's generic `createPrismaStub` proxy can't represent.
  */
 export function createCasePrisma(caseId = 'ckcase00000000000000000001'): {

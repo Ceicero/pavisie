@@ -1,4 +1,4 @@
-/** DTOs for the `ai` plugin (ARCHITECTURE.md §7.1 row 'ai', SPEC.md §K). Imported via the `@entrophy/types/ai` subpath — not re-exported from `./index` (see the `ai` build stage's ownership notes). */
+/** DTOs for the `ai` plugin (ARCHITECTURE.md §7.1 row 'ai', SPEC.md §K). Imported via the `@pavisie/types/ai` subpath — not re-exported from `./index` (see the `ai` build stage's ownership notes). */
 
 export type AiProviderId = 'openai' | 'anthropic' | 'compatible';
 

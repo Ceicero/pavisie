@@ -1,5 +1,5 @@
 import { ChannelType } from 'discord.js';
-import { redisKey, truncate } from '@entrophy/core';
+import { redisKey, truncate } from '@pavisie/core';
 import type { AutoPublishConfig, AutoThreadRule } from './manifest';
 
 /** Discord's hard limit on thread names. */

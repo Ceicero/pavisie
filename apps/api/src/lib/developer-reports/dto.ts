@@ -1,6 +1,6 @@
-// Maps Prisma rows to `@entrophy/types` DTOs, mirroring the convention in `apps/api/src/lib/enforcer/dto.ts`.
-import type { DeveloperReport } from '@entrophy/database';
-import type { DeveloperReportDto } from '@entrophy/types';
+// Maps Prisma rows to `@pavisie/types` DTOs, mirroring the convention in `apps/api/src/lib/enforcer/dto.ts`.
+import type { DeveloperReport } from '@pavisie/database';
+import type { DeveloperReportDto } from '@pavisie/types';
 
 export function toDeveloperReportDto(row: DeveloperReport): DeveloperReportDto {
   return {

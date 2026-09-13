@@ -132,7 +132,7 @@ describe('ModerationServiceImpl.warn — escalation-ladder race (BUG 2)', () => 
       }),
     ).rejects.toThrow('db exploded');
 
-    expect(await redis.get('entrophy:moderation:warn-escalation-lock:g1:member-1')).toBeNull();
+    expect(await redis.get('pavisie:moderation:warn-escalation-lock:g1:member-1')).toBeNull();
   });
 
   it('still records the warning when the lock cannot be acquired (degrades safely, never drops it)', async () => {
@@ -145,7 +145,7 @@ describe('ModerationServiceImpl.warn — escalation-ladder race (BUG 2)', () => 
 
     // Pre-hold the lock with a TTL longer than the service's retry budget (~1s), so every retry attempt fails
     // and the service is forced down the "degrade — proceed unlocked" path.
-    await redis.set('entrophy:moderation:warn-escalation-lock:g1:member-1', 'someone-else', 'PX', 5_000, 'NX');
+    await redis.set('pavisie:moderation:warn-escalation-lock:g1:member-1', 'someone-else', 'PX', 5_000, 'NX');
 
     await service.warn({
       guildId: 'g1',

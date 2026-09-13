@@ -1,10 +1,10 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { AppError, AuditAction, NotFoundError, buildPaginated, paginate } from '@entrophy/core';
-import { Prisma } from '@entrophy/database';
-import { stickyChannelsKey } from '@entrophy/plugins/community/sticky-keys';
-import { autoPublishCountKey, utcDayKey } from '@entrophy/plugins/community/channel-automations';
-import type { Paginated } from '@entrophy/types';
+import { AppError, AuditAction, NotFoundError, buildPaginated, paginate } from '@pavisie/core';
+import { Prisma } from '@pavisie/database';
+import { stickyChannelsKey } from '@pavisie/plugins/community/sticky-keys';
+import { autoPublishCountKey, utcDayKey } from '@pavisie/plugins/community/channel-automations';
+import type { Paginated } from '@pavisie/types';
 import type {
   AnnouncementDto,
   BirthdayConfigDto,
@@ -18,7 +18,7 @@ import type {
   StickyMessageDto,
   SuggestionDto,
   TagDto,
-} from '@entrophy/types/community';
+} from '@pavisie/types/community';
 import {
   toAnnouncementDto,
   toCommunityEventDto,
@@ -34,8 +34,8 @@ import { tagBodySchema, tagTriggersCacheKey, type TagBody } from '../lib/communi
 import { writeDashboardAudit } from '../lib/audit';
 import { requireGuildAccess } from '../lib/guild-access';
 import { guildIdParamSchema, paginationQuerySchema, snowflakeSchema } from '../lib/schemas';
-import type { CommunityConfig } from '@entrophy/plugins/community/manifest';
-import { findUnknownMessageTokens, localNow, upcomingSorted } from '@entrophy/plugins/community/birthdays';
+import type { CommunityConfig } from '@pavisie/plugins/community/manifest';
+import { findUnknownMessageTokens, localNow, upcomingSorted } from '@pavisie/plugins/community/birthdays';
 
 const ECONOMY_PLUGIN_ID = 'economy' as const;
 const COMMUNITY_PLUGIN_ID = 'community' as const;

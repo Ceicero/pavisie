@@ -1,5 +1,5 @@
 import { AttachmentBuilder, type SlashCommandBuilder } from 'discord.js';
-import { parseDuration } from '@entrophy/core';
+import { parseDuration } from '@pavisie/core';
 import { assertStaffLevel, infoEmbed, type CommandContext } from '../../sdk';
 import { recordsToCsv } from '../csv';
 

@@ -12,8 +12,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { AiUsageDailyPointDto } from '@entrophy/types/ai';
-import { EmptyState } from '@entrophy/ui';
+import type { AiUsageDailyPointDto } from '@pavisie/types/ai';
+import { EmptyState } from '@pavisie/ui';
 
 export interface UsageChartProps {
   daily: AiUsageDailyPointDto[];

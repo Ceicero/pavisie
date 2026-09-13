@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
-import { Button } from '@entrophy/ui';
-import type { IntegrationConnectionDetailDto, IntegrationProviderInfoDto } from '@entrophy/types/integrations';
+import { Button } from '@pavisie/ui';
+import type { IntegrationConnectionDetailDto, IntegrationProviderInfoDto } from '@pavisie/types/integrations';
 import { groupConnectionsByProvider } from '../src/lib/dashboard/integrations-queries';
 import { ProviderCard } from '../src/components/dashboard/integrations/provider-card';
 

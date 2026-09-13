@@ -12,8 +12,8 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
-import type { EngagementConfigDto } from '@entrophy/types/engagement';
+} from '@pavisie/ui';
+import type { EngagementConfigDto } from '@pavisie/types/engagement';
 import { useEngagementConfig, useUpdateEngagementConfig } from '@/lib/dashboard/engagement-queries';
 import { DiscordChannelSelect } from '../discord-selects';
 import { ErrorState } from '../error-state';

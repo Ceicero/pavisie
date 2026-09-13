@@ -1,8 +1,8 @@
 // Twitch chat bot — bot-identity token handling + Helix helpers (SPEC.md §J, docs/ARCHITECTURE.md's
 // twitch-chat runtime contract). All chat reads/sends run on the ONE `TwitchBotIdentity` row's user token
 // (never a broadcaster's) — see this directory's README section in packages/plugins/src/integrations/README.md.
-import type { TwitchBotIdentity, TwitchChatChannel } from '@entrophy/database';
-import { decryptSecret, encryptSecret, redisKey } from '@entrophy/core';
+import type { TwitchBotIdentity, TwitchChatChannel } from '@pavisie/database';
+import { decryptSecret, encryptSecret, redisKey } from '@pavisie/core';
 import type { PluginContext } from '../../sdk';
 import type { EngineHelixResult } from './engine';
 import {

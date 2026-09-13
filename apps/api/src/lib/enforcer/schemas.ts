@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { matcherSchema, policyMatchersSchema } from '@entrophy/plugins/enforcer/schemas';
+import { matcherSchema, policyMatchersSchema } from '@pavisie/plugins/enforcer/schemas';
 import { guildIdParamSchema, paginationQuerySchema, snowflakeSchema } from '../schemas';
 
 export { matcherSchema };

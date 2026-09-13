@@ -1,5 +1,5 @@
-import { CUSTOM_ID_MAX } from '@entrophy/core';
-import type { PluginId } from '@entrophy/types';
+import { CUSTOM_ID_MAX } from '@pavisie/core';
+import type { PluginId } from '@pavisie/types';
 
 export interface ParsedCustomId {
   pluginId: string;

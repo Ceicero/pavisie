@@ -1,6 +1,6 @@
 // DTOs owned by the `moderation` build (ARCHITECTURE.md §5 lists `ModerationCaseDto`/`ModerationWarningDto`,
 // already in `./api`; this subpath carries the rest — Notes, Appeals, and the plugin's own settings shape —
-// imported as `@entrophy/types/moderation` per this package's `"./*"` subpath export).
+// imported as `@pavisie/types/moderation` per this package's `"./*"` subpath export).
 
 export interface ModerationNoteDto {
   id: string;

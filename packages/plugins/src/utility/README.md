@@ -81,7 +81,7 @@ every gateway message regardless of the Message Content intent.
   `/utility timestamp` in your local time.
 - `/utility translate`/`/utility weather` send only the text/location you provide to the configured third-party
   adapter — never message history — and only when an operator has configured a provider.
-- The embed builder stores nothing durably; the draft lives only in Redis (`entrophy:pending:<id>`, 10-minute TTL)
+- The embed builder stores nothing durably; the draft lives only in Redis (`pavisie:pending:<id>`, 10-minute TTL)
   while you're actively editing it, and is deleted once its TTL expires.
 
 ## Known deviation from this task's literal instructions (documented, not a bug)

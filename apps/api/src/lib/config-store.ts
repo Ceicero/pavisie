@@ -1,8 +1,8 @@
 import type Redis from 'ioredis';
-import type { PlatformEvents } from '@entrophy/core';
-import type { PrismaClient } from '@entrophy/database';
-import { allManifests } from '@entrophy/plugins/manifests';
-import { GuildConfigStore, PluginRegistry, type Plugin } from '@entrophy/plugins/sdk';
+import type { PlatformEvents } from '@pavisie/core';
+import type { PrismaClient } from '@pavisie/database';
+import { allManifests } from '@pavisie/plugins/manifests';
+import { GuildConfigStore, PluginRegistry, type Plugin } from '@pavisie/plugins/sdk';
 
 /**
  * Builds the `PluginRegistry` from manifests only (not `allPlugins`) — the API only ever needs

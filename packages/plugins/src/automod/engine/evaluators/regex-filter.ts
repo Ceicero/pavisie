@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { safeTest } from '@entrophy/core';
+import { safeTest } from '@pavisie/core';
 import type { regexFilterConfigSchema } from '../../schemas';
 import { NO_MATCH, type MessageEvaluator } from '../types';
 

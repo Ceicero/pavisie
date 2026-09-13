@@ -1,11 +1,11 @@
-import { ExternalServiceError, env } from '@entrophy/core';
-import type { IntegrationProvider } from '@entrophy/database';
+import { ExternalServiceError, env } from '@pavisie/core';
+import type { IntegrationProvider } from '@pavisie/database';
 import {
   INTEGRATION_PROVIDER_IDS,
   type IntegrationProviderId as CanonicalProviderId,
   type IntegrationProviderInfoDto,
   type IntegrationProviderKind,
-} from '@entrophy/types/integrations';
+} from '@pavisie/types/integrations';
 
 // GitHub, Notion and Stripe (the guild-facing connector) were removed as offered providers on 2026-09-02
 // (Brandon's decision) — their Prisma `IntegrationProvider` enum values are retained for historical rows only
@@ -289,7 +289,7 @@ interface RawTwitchUsersResponse {
 /**
  * Identifies the Twitch user behind a freshly-exchanged user access token via Helix `GET /users`. Shared by
  * both Twitch chat-bot connect flows (`routes/oauth-integrations.ts`'s `twitch_chat` branch identifies the
- * broadcaster; its `twitch_bot` branch identifies Entrophy's own bot account) — same call, different purpose.
+ * broadcaster; its `twitch_bot` branch identifies Pavisie's own bot account) — same call, different purpose.
  */
 export async function identifyTwitchUser(accessToken: string): Promise<TwitchHelixUser> {
   const clientId = env.TWITCH_CLIENT_ID;
@@ -312,7 +312,7 @@ export async function identifyTwitchUser(accessToken: string): Promise<TwitchHel
 
 // ---------------------------------------------------------------------------
 // Setup-page provider availability (ARCHITECTURE.md's integrations connector spec: "GET /guilds/:id/integrations
-// returns availability per provider"). This uses the canonical provider-id set from `@entrophy/types/integrations`
+// returns availability per provider"). This uses the canonical provider-id set from `@pavisie/types/integrations`
 // (matching what `/integration connect`/`alerts add` accept and the `IntegrationProvider` Prisma enum, lowercased)
 // rather than this file's own `IntegrationProviderId` (which only covers the oauth/webhook connect flow above and
 // predates youtube/steam being addressable at all — they connect only via `POST .../integrations/alerts`).
@@ -365,7 +365,7 @@ const ALERT_CAPABLE: ReadonlySet<CanonicalProviderId> = new Set(['twitch', 'yout
 export type AlertProviderId = 'twitch' | 'youtube' | 'reddit' | 'steam';
 export const ALERT_PROVIDER_IDS: readonly AlertProviderId[] = ['twitch', 'youtube', 'reddit', 'steam'];
 
-/** Canonical-id (`@entrophy/types/integrations`) -> Prisma `IntegrationProvider` enum, covering every provider
+/** Canonical-id (`@pavisie/types/integrations`) -> Prisma `IntegrationProvider` enum, covering every provider
  * (unlike `PROVIDER_ENUM_MAP` above, which only covers the ids the oauth/webhook connect flow uses). */
 export const CANONICAL_PROVIDER_ENUM_MAP: Record<CanonicalProviderId, IntegrationProvider> = {
   twitch: 'TWITCH',

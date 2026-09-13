@@ -1,6 +1,6 @@
 /**
  * DTOs for the owner-only ops metrics API (`GET /owner/metrics/*`) — the data source for the local
- * "Entrophy Dev" desktop app (Electron, Brandon's machine) that monitors the bot. Cross-guild by design, same
+ * "Pavisie Dev" desktop app (Electron, Brandon's machine) that monitors the bot. Cross-guild by design, same
  * as `developer-reports.ts`: `apps/api`'s `/owner/metrics/*` routes are gated on bot-owner identity
  * (`requireBotOwner`), never `requireGuildAccess`. Read-only — there is no mutating counterpart.
  */

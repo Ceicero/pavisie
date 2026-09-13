@@ -13,8 +13,8 @@ import {
   Input,
   Label,
   useToast,
-} from '@entrophy/ui';
-import type { OutboundPlatformEvent } from '@entrophy/types/integrations';
+} from '@pavisie/ui';
+import type { OutboundPlatformEvent } from '@pavisie/types/integrations';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useCreateOutboundWebhook, type CreateOutboundWebhookResult } from '@/lib/dashboard/integrations-queries';
 

@@ -4,7 +4,7 @@
 // `./tag-schemas.ts` (discord.js-free so the API can import it); this module adds the discord.js `EmbedBuilder`
 // side and is what the bot's command/event code uses.
 import { EmbedBuilder, type Guild, type MessageMentionOptions, type User } from 'discord.js';
-import { EMBED_LIMITS, sanitizeEmbedText, truncate } from '@entrophy/core';
+import { EMBED_LIMITS, sanitizeEmbedText, truncate } from '@pavisie/core';
 import { renderTemplate, type TemplateVars } from '../roles/engine';
 import { parseColorHex } from '../utility/embed-payload';
 import { isTagEmbedEmpty, tagEmbedSchema, type TagEmbedInput } from './tag-schemas';

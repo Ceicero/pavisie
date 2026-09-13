@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { assertPublicHttpUrl, encryptSecret, SsrfError, ValidationError } from '@entrophy/core';
-import type { AiSettingsDto, AiTestResultDto, AiUsageSummaryDto } from '@entrophy/types/ai';
+import { assertPublicHttpUrl, encryptSecret, SsrfError, ValidationError } from '@pavisie/core';
+import type { AiSettingsDto, AiTestResultDto, AiUsageSummaryDto } from '@pavisie/types/ai';
 import type { ZodFastifyInstance } from '../lib/http';
 import { requireGuildAccess } from '../lib/guild-access';
 import { guildIdParamSchema } from '../lib/schemas';

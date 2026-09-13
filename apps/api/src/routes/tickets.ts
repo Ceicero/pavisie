@@ -1,9 +1,9 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { NotFoundError, ValidationError, buildPaginated, paginate, sanitizeFilename } from '@entrophy/core';
-import { Prisma } from '@entrophy/database';
-import type { Paginated } from '@entrophy/types';
-import type { TicketDetailDto, TicketPanelDto, TicketQueueItemDto } from '@entrophy/types/tickets';
+import { NotFoundError, ValidationError, buildPaginated, paginate, sanitizeFilename } from '@pavisie/core';
+import { Prisma } from '@pavisie/database';
+import type { Paginated } from '@pavisie/types';
+import type { TicketDetailDto, TicketPanelDto, TicketQueueItemDto } from '@pavisie/types/tickets';
 import { writeDashboardAudit } from '../lib/audit';
 import { requireGuildAccess } from '../lib/guild-access';
 import { guildIdParamSchema, paginationQuerySchema } from '../lib/schemas';

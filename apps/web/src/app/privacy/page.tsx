@@ -5,7 +5,7 @@ import { privacyPolicy, DEFAULT_OPERATOR, DEFAULT_CONTACT_EMAIL } from '../../co
 
 export const metadata: Metadata = {
   title: 'Privacy policy',
-  description: 'How Entrophy collects, stores, and protects data across the bot, dashboard, and website.',
+  description: 'How Pavisie collects, stores, and protects data across the bot, dashboard, and website.',
 };
 
 export default function PrivacyPage() {
@@ -14,7 +14,7 @@ export default function PrivacyPage() {
   return (
     <Section headingLevel={1} eyebrow="Legal" title="Privacy policy">
       <Glass className="mb-8 p-5 text-sm leading-relaxed text-grey-3">
-        <strong className="text-grey-6">This is a template.</strong> It describes Entrophy&apos;s default data
+        <strong className="text-grey-6">This is a template.</strong> It describes Pavisie&apos;s default data
         handling accurately, but the operator running this deployment (currently shown as &ldquo;
         {DEFAULT_OPERATOR}&rdquo;, contact &ldquo;{DEFAULT_CONTACT_EMAIL}&rdquo;) should review it for their
         own jurisdiction and business details before relying on it as a legal document.

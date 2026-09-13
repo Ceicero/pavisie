@@ -1,5 +1,5 @@
 import type Redis from 'ioredis';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import type { Track } from './providers/types';
 
 export type LoopMode = 'off' | 'track' | 'queue';

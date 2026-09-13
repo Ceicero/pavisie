@@ -11,8 +11,8 @@ import {
   verifyGithubSignature,
   verifyHmacSha256,
   verifyTwitchEventSubSignature,
-} from '@entrophy/core';
-import { Prisma } from '@entrophy/database';
+} from '@pavisie/core';
+import { Prisma } from '@pavisie/database';
 
 const endpointParamSchema = z.object({ endpointId: z.string().min(1) });
 
@@ -198,12 +198,12 @@ export default async function webhooksRoutes(app: ZodFastifyInstance): Promise<v
   app.post('/generic/:endpointId', { schema: { params: endpointParamSchema } }, async (request, reply) => {
     const { endpointId } = request.params as { endpointId: string };
     const raw = rawBodyOf(request);
-    const signatureHeader = request.headers['x-entrophy-signature'];
-    const eventIdHeader = request.headers['x-entrophy-event-id'];
-    const eventTypeHeader = request.headers['x-entrophy-event-type'];
+    const signatureHeader = request.headers['x-pavisie-signature'];
+    const eventIdHeader = request.headers['x-pavisie-event-id'];
+    const eventTypeHeader = request.headers['x-pavisie-event-type'];
 
     if (typeof signatureHeader !== 'string') {
-      throw new ValidationError('Missing X-Entrophy-Signature header.');
+      throw new ValidationError('Missing X-Pavisie-Signature header.');
     }
 
     const endpoint = await app.prisma.webhookEndpoint.findFirst({

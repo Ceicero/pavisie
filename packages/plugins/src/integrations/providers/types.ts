@@ -1,6 +1,6 @@
 import type { z } from 'zod';
-import type { IntegrationConnection } from '@entrophy/database';
-import type { IntegrationProviderId, IntegrationProviderKind } from '@entrophy/types/integrations';
+import type { IntegrationConnection } from '@pavisie/database';
+import type { IntegrationProviderId, IntegrationProviderKind } from '@pavisie/types/integrations';
 import type { PluginContext } from '../../sdk';
 
 /** A normalized inbound event handed to a provider's `handleInbound`, built by the `inbound` job processor from

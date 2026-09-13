@@ -7,7 +7,7 @@
 // *within* one plugin's `components` array (packages/plugins/src/sdk/registry.ts), which structurally rules
 // out a real collision (pluginId is unique, so `pluginId:action` can never repeat) — this script recomputes
 // it independently anyway, as a standalone check that doesn't rely on trusting that validation logic.
-// Run with: pnpm --filter @entrophy/plugins exec tsx scripts/registry-sanity.ts
+// Run with: pnpm --filter @pavisie/plugins exec tsx scripts/registry-sanity.ts
 import type { RESTPostAPIApplicationCommandsJSONBody } from 'discord-api-types/v10';
 import { allPlugins } from '../src/index';
 import { PluginRegistry } from '../src/sdk/registry';

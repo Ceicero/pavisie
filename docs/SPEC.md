@@ -1,6 +1,6 @@
-# Entrophy — Product Requirements Specification
+# Pavisie — Product Requirements Specification
 
-Entrophy is a production-ready, modular, "all-in-one" Discord bot platform. The goal is to provide the core feature categories commonly found across large Discord bots while remaining compliant with Discord's Developer Terms, Developer Policy, API rate limits, privacy expectations, and server permission model.
+Pavisie is a production-ready, modular, "all-in-one" Discord bot platform. The goal is to provide the core feature categories commonly found across large Discord bots while remaining compliant with Discord's Developer Terms, Developer Policy, API rate limits, privacy expectations, and server permission model.
 
 (This is the authoritative requirements document. Architecture and coding conventions live in `ARCHITECTURE.md`; the two must be read together.)
 
@@ -83,7 +83,7 @@ The bot must safely degrade if an optional integration is not configured.
 ### B. MODERATION PLUGIN
 
 Implement: `/warn`, `/warnings`, `/clearwarns`, `/timeout`, `/untimeout`, `/kick`, `/ban`, `/unban`, `/softban`, `/purge`, `/lock`, `/unlock`, `/slowmode`, `/nick`, `/role add`, `/role remove`, `/modnote`, `/case`, `/cases`
-(In Entrophy these live under the `/mod` command group — see ARCHITECTURE.md.)
+(In Pavisie these live under the `/mod` command group — see ARCHITECTURE.md.)
 
 Requirements:
 
@@ -252,7 +252,7 @@ Authenticated web dashboard using Discord OAuth:
 
 ### M. PUBLIC WEBSITE & DONATIONS
 
-Entrophy ships a public marketing website (separate from the admin dashboard).
+Pavisie ships a public marketing website (separate from the admin dashboard).
 
 Requirements:
 
@@ -268,7 +268,7 @@ Requirements:
 - **Donations**: Handled entirely by Ko-fi (a third-party donation platform). The donate page links to the operator's
   Ko-fi page when configured, or explains that donations are not set up when the Ko-fi URL is missing. Clear disclosure:
   donations are voluntary, fund hosting/development, are one-time, non-refundable, grant no perks or in-game advantages,
-  and are not tax-deductible unless the operator states otherwise. Entrophy stores no donor information (names, emails,
+  and are not tax-deductible unless the operator states otherwise. Pavisie stores no donor information (names, emails,
   payment details) — Ko-fi's own privacy policy governs what they collect. If Ko-fi is not configured the page says so
   instead of failing.
 - Command documentation on the website is **generated from the real plugin registry** (never hand-maintained lists) so it

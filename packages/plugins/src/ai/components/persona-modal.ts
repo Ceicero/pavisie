@@ -6,7 +6,7 @@ import {
   type ChatInputCommandInteraction,
   type ModalSubmitInteraction,
 } from 'discord.js';
-import { ValidationError } from '@entrophy/core';
+import { ValidationError } from '@pavisie/core';
 import { buildCustomId, successEmbed, type ComponentHandler } from '../../sdk';
 import type { AiConfig } from '../manifest';
 

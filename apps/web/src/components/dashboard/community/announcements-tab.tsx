@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Badge, Button, Card, CardContent, Pagination, useToast } from '@entrophy/ui';
-import type { AnnouncementDto } from '@entrophy/types/community';
+import { Badge, Button, Card, CardContent, Pagination, useToast } from '@pavisie/ui';
+import type { AnnouncementDto } from '@pavisie/types/community';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useCancelAnnouncement, useCommunityAnnouncements } from '@/lib/dashboard/community-queries';
 import { ConfirmDialog } from '../confirm-dialog';

@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, userMention } from 'discord.js';
-import { BRAND, EMBED_LIMITS, discordTimestamp, truncate } from '@entrophy/core';
+import { BRAND, EMBED_LIMITS, discordTimestamp, truncate } from '@pavisie/core';
 import { buildCustomId } from '../sdk';
 import type { EnforcerDecisionLower } from './schemas';
 

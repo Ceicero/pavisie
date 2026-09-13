@@ -1,8 +1,8 @@
 // Pure tag validation + trigger matching (spec CG-02). Deliberately free of discord.js so the API can import
-// it via `@entrophy/plugins/community/tag-schemas` (same pattern as `apps/api/src/lib/automod-schemas.ts`
+// it via `@pavisie/plugins/community/tag-schemas` (same pattern as `apps/api/src/lib/automod-schemas.ts`
 // re-exporting `automod/schemas`) — one source of truth for the body schema on both bot and dashboard sides.
 import { z } from 'zod';
-import { EMBED_LIMITS, redisKey } from '@entrophy/core';
+import { EMBED_LIMITS, redisKey } from '@pavisie/core';
 
 /** Redis key holding a guild's cached trigger-tag list (bot reads; bot + API DEL on every tag write). */
 export function tagTriggersCacheKey(guildId: string): string {

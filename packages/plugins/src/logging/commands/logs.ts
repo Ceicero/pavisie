@@ -1,5 +1,5 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder, type EmbedBuilder } from 'discord.js';
-import { parseDuration, truncate, validateUserRegex } from '@entrophy/core';
+import { parseDuration, truncate, validateUserRegex } from '@pavisie/core';
 import {
   assertStaffLevel,
   brandEmbed,
@@ -28,7 +28,7 @@ function isRealKind(value: string): value is LogKind {
 
 const data = new SlashCommandBuilder()
   .setName('logs')
-  .setDescription("Configure and search Entrophy's event logging.")
+  .setDescription("Configure and search Pavisie's event logging.")
   .setDMPermission(false)
   .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
   .addSubcommand((sub) =>

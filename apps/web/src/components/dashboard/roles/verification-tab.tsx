@@ -26,7 +26,7 @@ import {
   TableRow,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import {
   useDecideVerification,
   useUpdateVerificationSettings,

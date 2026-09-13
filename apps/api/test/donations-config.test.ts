@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { env } from '@entrophy/core';
+import { env } from '@pavisie/core';
 import { buildTestApp } from './helpers/build-test-app';
 
 describe('GET /donations/config', () => {

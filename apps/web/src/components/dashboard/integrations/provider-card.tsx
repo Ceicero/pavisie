@@ -1,12 +1,12 @@
 'use client';
 
 import { CheckCircle2, XCircle } from 'lucide-react';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@entrophy/ui';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@pavisie/ui';
 import type {
   IntegrationConnectionDetailDto,
   IntegrationLiveStatusDto,
   IntegrationProviderInfoDto,
-} from '@entrophy/types/integrations';
+} from '@pavisie/types/integrations';
 
 export interface ProviderCardProps {
   provider: IntegrationProviderInfoDto;

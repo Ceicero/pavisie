@@ -12,12 +12,12 @@ import {
   encryptSecret,
   env,
   redisKey,
-} from '@entrophy/core';
+} from '@pavisie/core';
 import {
   Prisma,
   type TwitchChatLevel as PrismaTwitchChatLevel,
   type TwitchRewardActionKind as PrismaTwitchRewardActionKind,
-} from '@entrophy/database';
+} from '@pavisie/database';
 import type {
   TwitchChatChannelDto,
   TwitchChatCommandDto,
@@ -27,7 +27,7 @@ import type {
   TwitchChatTimerDto,
   TwitchOverlayInfoDto,
   TwitchRewardActionKindId,
-} from '@entrophy/types/integrations';
+} from '@pavisie/types/integrations';
 import { writeDashboardAudit } from '../lib/audit';
 import { requireGuildAccess } from '../lib/guild-access';
 import {
@@ -151,7 +151,7 @@ async function assertSafeSoundUrl(url: string): Promise<void> {
 }
 
 /**
- * `/guilds/:guildId/integrations/twitch-chat` — Entrophy joining a streamer's Twitch chat (ARCHITECTURE.md
+ * `/guilds/:guildId/integrations/twitch-chat` — Pavisie joining a streamer's Twitch chat (ARCHITECTURE.md
  * §J/§19). Lives inside the `integrations` plugin rather than as its own plugin. All chat reads/sends run on
  * the global `TwitchBotIdentity` token (owner-only, see `routes/twitch-bot.ts`) — this file only manages the
  * per-guild channel link, its custom commands, and its timers. No chat message content is ever stored here.
@@ -946,7 +946,7 @@ export default async function twitchChatRoutes(app: ZodFastifyInstance): Promise
         targetType: 'twitch_chat_channel',
         targetId: channelId,
         // The token/URL is a bearer credential — NEVER written to the audit payload, only whether one was
-        // configured. (Field named to avoid `@entrophy/database`'s `redactForAudit`, which blanket-redacts any
+        // configured. (Field named to avoid `@pavisie/database`'s `redactForAudit`, which blanket-redacts any
         // key containing "token" — this is a plain boolean, not the secret itself, so it's fine to keep readable.)
         before: { configured: hadToken },
         after: { configured: true },

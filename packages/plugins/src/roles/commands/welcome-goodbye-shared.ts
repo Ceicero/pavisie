@@ -7,7 +7,7 @@ import {
   TextInputStyle,
   type ChatInputCommandInteraction,
 } from 'discord.js';
-import { AuditAction } from '@entrophy/core';
+import { AuditAction } from '@pavisie/core';
 import { buildCustomId, errorEmbed, successEmbed, type CommandContext, type PluginCommand } from '../../sdk';
 import { formatEmbedColorHex } from '../engine';
 import type { RolesConfig, WelcomeGoodbyeConfig } from '../manifest';

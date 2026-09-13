@@ -1,8 +1,8 @@
 // Pure ledger-search where-clause builder, shared by the bot's `/enforcer search` and the dashboard's
 // `GET /guilds/:guildId/enforcer/records` (framework-free — no discord.js — so it's safe to import from apps/api
-// via the `@entrophy/plugins/enforcer/search-filters` subpath).
-import { parseDuration } from '@entrophy/core';
-import type { EnforcerDecision, EnforcerRecordKind, EnforcerFlagStatus, Prisma } from '@entrophy/database';
+// via the `@pavisie/plugins/enforcer/search-filters` subpath).
+import { parseDuration } from '@pavisie/core';
+import type { EnforcerDecision, EnforcerRecordKind, EnforcerFlagStatus, Prisma } from '@pavisie/database';
 
 export interface RecordSearchFilters {
   guildId: string;

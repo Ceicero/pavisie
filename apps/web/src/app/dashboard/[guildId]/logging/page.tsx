@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useParams } from 'next/navigation';
-import type { LoggingConfigDto } from '@entrophy/types/logging';
+import type { LoggingConfigDto } from '@pavisie/types/logging';
 import {
   Button,
   PageHeader,
@@ -12,7 +12,7 @@ import {
   TabsList,
   TabsTrigger,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useLoggingSettings, useUpdateLoggingSettings } from '@/lib/dashboard/logging-queries';
 import { ErrorState } from '@/components/dashboard/error-state';
 import { ChannelMapTable } from '@/components/dashboard/logging/channel-map-table';

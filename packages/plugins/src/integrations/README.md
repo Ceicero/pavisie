@@ -27,12 +27,12 @@ degrades independently when its env vars are unset — the plugin itself never b
 
 ## Twitch chat bot
 
-Entrophy joining a streamer's Twitch chat to answer commands — a distinct feature from the Twitch stream-live
+Pavisie joining a streamer's Twitch chat to answer commands — a distinct feature from the Twitch stream-live
 alert watcher above, sharing only the `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` env vars. Lives in
 `twitch-chat/` (`helix.ts`, `socket.ts`, `manager.ts`, `engine.ts`, `timers.ts`) + the `twitch-chat-tick` job.
 See `docs/ARCHITECTURE.md` §19a for the full runtime contract.
 
-- **How it works**: Entrophy runs as ONE dedicated Twitch bot account, authorized once by Brandon (owner-only
+- **How it works**: Pavisie runs as ONE dedicated Twitch bot account, authorized once by Brandon (owner-only
   `POST /owner/twitch-bot/connect`, `routes/twitch-bot.ts`). A streamer links their channel from the dashboard's
   "Twitch chat" tab (`POST /:guildId/integrations/twitch-chat/connect`, OAuth scope `channel:bot`). Chat
   messages arrive over the official EventSub WebSocket (`channel.chat.message` v1, Node 22's built-in global
@@ -53,13 +53,13 @@ See `docs/ARCHITECTURE.md` §19a for the full runtime contract.
 
 ## Twitch channel-point rewards
 
-A viewer redeeming a Twitch channel-point reward can trigger an action in Entrophy. Lives in `twitch-chat/`
+A viewer redeeming a Twitch channel-point reward can trigger an action in Pavisie. Lives in `twitch-chat/`
 (`rewards.ts`, `tts.ts`, `broadcaster-token.ts`, `manager.ts`) with overlay routes in `apps/api`. Shares the
 same `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` vars and EventSub socket as the chat bot above. See
 `docs/ARCHITECTURE.md` §19b for the full runtime contract.
 
 - **How it works**: a streamer enables rewards on a linked channel and grants `channel:read:redemptions` scope
-  (must re-link — existing channels have only `channel:bot`). When a viewer redeems the reward in chat, Entrophy
+  (must re-link — existing channels have only `channel:bot`). When a viewer redeems the reward in chat, Pavisie
   matches it against configured `TwitchChatReward` rows by reward title or id, applies per-reward cooldowns, and
   runs the configured action. Four action kinds: SOUND (play an audio URL on the overlay), TTS (speak text via
   server-side synthesis on the overlay), CHAT (post to Twitch chat), DISCORD (post to a Discord channel). Text
@@ -145,7 +145,7 @@ alert watch management, and inbound/outbound webhook tabs with deliveries.
   `apps/api/src/lib/integrations/providers.ts` (pre-existing, not changed here); that dashboard OAuth flow links
   the connecting staff member's own account but isn't required for alerts to work — `/integration alerts add`
   (app-token based) is what actually watches a target. The **Twitch chat bot** (above) is the exception: it
-  genuinely runs on real per-connection user OAuth — the broadcaster's `channel:bot` grant plus Entrophy's own
+  genuinely runs on real per-connection user OAuth — the broadcaster's `channel:bot` grant plus Pavisie's own
   dedicated bot-account token — not the app-level client-credentials grant the alert watcher uses.
 - GitHub's optional `repo:`/`branch:` filters are encoded as extra entries in `WebhookEndpoint.events` (there's no
   dedicated filter column on that model) rather than a real event-type allowlist plus separate filter fields.

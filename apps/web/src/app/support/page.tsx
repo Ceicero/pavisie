@@ -7,7 +7,7 @@ import { supportServerUrl } from '../../lib/site';
 export const metadata: Metadata = {
   title: 'Support',
   description:
-    'Get help with Entrophy: join the community Discord server for setup help, bug reports, and feature requests.',
+    'Get help with Pavisie: join the community Discord server for setup help, bug reports, and feature requests.',
 };
 
 const USE_CASES = [
@@ -21,7 +21,7 @@ const USE_CASES = [
   },
   {
     title: 'Feature requests',
-    body: 'Missing something your server needs? Suggest it. The roadmap is shaped by what real communities running Entrophy actually ask for.',
+    body: 'Missing something your server needs? Suggest it. The roadmap is shaped by what real communities running Pavisie actually ask for.',
   },
 ];
 
@@ -34,7 +34,7 @@ export default function SupportPage() {
         headingLevel={1}
         eyebrow="Support"
         title="Get help from the community"
-        subtitle="Entrophy is community-run, and the Discord server is the main place to get help — setup questions, bug reports, and feature requests all land there. It's a new server, so response times will vary."
+        subtitle="Pavisie is community-run, and the Discord server is the main place to get help — setup questions, bug reports, and feature requests all land there. It's a new server, so response times will vary."
       >
         {support ? (
           <ButtonLink href={support} external variant="primary" size="lg">

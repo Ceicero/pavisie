@@ -1,5 +1,5 @@
 import { ChannelType, SlashCommandBuilder } from 'discord.js';
-import { AuditAction, hasStaffLevel } from '@entrophy/core';
+import { AuditAction, hasStaffLevel } from '@pavisie/core';
 import {
   assertStaffLevel,
   errorEmbed,

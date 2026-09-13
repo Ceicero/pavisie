@@ -21,7 +21,7 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useAiSettings, useAiUsage } from '@/lib/dashboard/ai-queries';
 import { usePlugins, useTogglePlugin } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';

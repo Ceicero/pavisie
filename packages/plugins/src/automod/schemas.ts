@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { validateUserRegex } from '@entrophy/core';
+import { validateUserRegex } from '@pavisie/core';
 
 /** Per-rule action taken when a rule matches (SPEC.md §C: "warn, delete, timeout, quarantine, alert staff, or ignore"). */
 export const automodActionTypeSchema = z.enum([

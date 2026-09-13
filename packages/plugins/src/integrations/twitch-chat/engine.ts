@@ -2,7 +2,7 @@
 // feeds it a channel snapshot + its cached commands on every incoming `channel.chat.message` notification, and
 // injects tiny `helix`-shaped callbacks for the two built-ins that need a Helix call. NEVER log or persist
 // `messageText`/chatter identity here — this module only returns a reply string (or `null`) to send back.
-import type { TwitchChatLevel } from '@entrophy/database';
+import type { TwitchChatLevel } from '@pavisie/database';
 
 export interface EngineCommand {
   name: string;

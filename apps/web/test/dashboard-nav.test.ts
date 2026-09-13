@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PluginSummary } from '@entrophy/types';
+import type { PluginSummary } from '@pavisie/types';
 import { NAV, isNavItemActive, isNavItemDisabled } from '../src/components/dashboard/nav';
 import { AppSidebar } from '../src/components/dashboard/app-sidebar';
 import { DashboardTabStrip } from '../src/components/dashboard/dashboard-tab-strip';

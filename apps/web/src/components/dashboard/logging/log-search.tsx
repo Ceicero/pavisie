@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 import { Download, Search } from 'lucide-react';
-import type { LogEventDto } from '@entrophy/types';
-import { LOG_KINDS, LOG_KIND_LABELS } from '@entrophy/types/logging';
+import type { LogEventDto } from '@pavisie/types';
+import { LOG_KINDS, LOG_KIND_LABELS } from '@pavisie/types/logging';
 import {
   Badge,
   Button,
@@ -31,7 +31,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { logsExportCsvUrl, useLogSearch, type LogSearchFilters } from '@/lib/dashboard/logging-queries';
 import { ErrorState } from '../error-state';
 import { formatDateTime } from '@/lib/dashboard/format';

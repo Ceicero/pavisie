@@ -1,5 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import { BRAND, EMBED_LIMITS, brandIconUrl, env, truncate } from '@entrophy/core';
+import { BRAND, EMBED_LIMITS, brandIconUrl, env, truncate } from '@pavisie/core';
 
 /** A bare embed pre-set to the platform brand color and footer (with the brand icon when `WEB_URL` is set), timestamped. */
 export function brandEmbed(): EmbedBuilder {

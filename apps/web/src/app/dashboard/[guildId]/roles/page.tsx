@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 import { useParams } from 'next/navigation';
-import type { RoleGroupDto } from '@entrophy/types/roles';
-import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@entrophy/ui';
+import type { RoleGroupDto } from '@pavisie/types/roles';
+import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@pavisie/ui';
 import { AutoRolesTab } from '@/components/dashboard/roles/autoroles-tab';
 import { GroupsTab } from '@/components/dashboard/roles/groups-tab';
 import { OnboardingTab } from '@/components/dashboard/roles/onboarding-tab';

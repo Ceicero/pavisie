@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import { buildTestApp } from './helpers/build-test-app';
 
 const TOKEN = 'test-verify-token-123';

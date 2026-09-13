@@ -1,7 +1,7 @@
 // `messageCreate` handler for `/utility afk`: clears the sender's own AFK status, and replies (at most once per
 // mentioned user per 60s, via a Redis dedupe key) when a message mentions someone who is currently AFK.
 import { type Message } from 'discord.js';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import { infoEmbed, type PluginContext, type PluginEventHandler } from '../../sdk';
 import type { UtilityConfig } from '../manifest';
 

@@ -2,11 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // See `twitch-chat-helix.test.ts`/`delivery.test.ts` for why this file has no static imports of its own:
-// `@entrophy/core`'s `env` is computed once, at that module's first import, from `process.env` —
+// `@pavisie/core`'s `env` is computed once, at that module's first import, from `process.env` —
 // `ENCRYPTION_KEY` must be set first. This file drives the real `broadcaster-token.ts` refresh path (rather
 // than mocking it) so the 401-triggers-one-forced-refresh test below exercises the actual reauth wiring,
 // mirroring how `twitch-chat-helix.test.ts` tests the bot-identity equivalent.
-let encryptSecret: typeof import('@entrophy/core').encryptSecret;
+let encryptSecret: typeof import('@pavisie/core').encryptSecret;
 let createTestContext: typeof import('../../sdk/testing').createTestContext;
 let createRewardRedemptionSubscription: typeof import('../twitch-chat/helix').createRewardRedemptionSubscription;
 let listCustomRewards: typeof import('../twitch-chat/helix').listCustomRewards;
@@ -15,7 +15,7 @@ beforeAll(async () => {
   process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? randomBytes(32).toString('base64');
   process.env.TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID ?? 'test-client-id';
   process.env.TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET ?? 'test-client-secret';
-  ({ encryptSecret } = await import('@entrophy/core'));
+  ({ encryptSecret } = await import('@pavisie/core'));
   ({ createTestContext } = await import('../../sdk/testing'));
   ({ createRewardRedemptionSubscription, listCustomRewards } = await import('../twitch-chat/helix'));
 });

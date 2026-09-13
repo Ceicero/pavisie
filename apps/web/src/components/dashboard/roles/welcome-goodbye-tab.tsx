@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { WelcomeGoodbyeDto } from '@entrophy/types/roles';
+import type { WelcomeGoodbyeDto } from '@pavisie/types/roles';
 import {
   Button,
   Card,
@@ -15,7 +15,7 @@ import {
   Switch,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import {
   useGoodbyeConfig,
   useTestGoodbye,

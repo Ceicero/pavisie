@@ -2,8 +2,8 @@
 // discord.js-dependent, but takes plain data in and returns builders/plain values out — no live API calls — so
 // it's still directly unit-testable (customId shapes/lengths, option counts, chunking).
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
-import type { RolePanel, RolePanelOption } from '@entrophy/database';
-import type { PluginId } from '@entrophy/types';
+import type { RolePanel, RolePanelOption } from '@pavisie/database';
+import type { PluginId } from '@pavisie/types';
 import { brandEmbed, buildCustomId, chunk } from '../sdk';
 
 const ROLES_PLUGIN_ID: PluginId = 'roles';

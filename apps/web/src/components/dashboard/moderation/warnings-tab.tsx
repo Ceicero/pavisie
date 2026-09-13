@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Badge, Button, EmptyState, Input, Skeleton } from '@entrophy/ui';
+import { Badge, Button, EmptyState, Input, Skeleton } from '@pavisie/ui';
 import { ErrorState } from '../error-state';
 import { useModerationWarnings } from '@/lib/dashboard/moderation-queries';
 

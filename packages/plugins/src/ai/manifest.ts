@@ -66,7 +66,7 @@ export const manifest = defineManifest({
   privacyNotes: [
     'Disabled by default. An admin must opt in and configure a provider and API key (or enable the env-key fallback) before it will respond.',
     `${AI_DISCLOSURE} This disclosure is attached to every AI response.`,
-    'Message content sent to the configured provider is redacted where possible first (mentions, emails, phone numbers, URL paths, and token/key-shaped strings are stripped before the request leaves Entrophy).',
+    'Message content sent to the configured provider is redacted where possible first (mentions, emails, phone numbers, URL paths, and token/key-shaped strings are stripped before the request leaves Pavisie).',
     "The platform does not opt server data into provider model training by default; check your provider's own data-use terms for your account.",
     "/summarize only reads messages the invoking user could already see and permits (channel view + read history) — it never reads other channels on the user's behalf.",
     '/mod-assist reads moderation case metadata (types, counts, reasons) for context, never raw message content, and only ever suggests — it can never perform a moderation action itself.',

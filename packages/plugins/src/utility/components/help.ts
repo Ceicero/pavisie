@@ -1,5 +1,5 @@
 import type { StringSelectMenuInteraction } from 'discord.js';
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 import { getCommandCatalog } from '../command-catalog';
 import { infoEmbed, listEmbed, type ComponentContext, type ComponentHandler, COMMAND_PREFIX_DISPLAY } from '../../sdk';
 

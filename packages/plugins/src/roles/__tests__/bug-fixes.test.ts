@@ -82,8 +82,8 @@ describe('CAPTCHA token handling — BUG 4 fixes', () => {
     const { ctx } = createTestContext();
 
     const token = 'malformed-token';
-    const doneKey = `entrophy:verify:done:${token}`;
-    const pendingKey = `entrophy:verify:pending:${token}`;
+    const doneKey = `pavisie:verify:done:${token}`;
+    const pendingKey = `pavisie:verify:pending:${token}`;
 
     // Set up tokens with no valid context
     await ctx.redis.set(doneKey, 'invalid-json', 'EX', 600);
@@ -107,8 +107,8 @@ describe('CAPTCHA token handling — BUG 4 fixes', () => {
     const guildId = 'guild-unavailable';
     const userId = 'user-x';
 
-    const doneKey = `entrophy:verify:done:${token}`;
-    const pendingKey = `entrophy:verify:pending:${token}`;
+    const doneKey = `pavisie:verify:done:${token}`;
+    const pendingKey = `pavisie:verify:pending:${token}`;
     const context = JSON.stringify({ guildId, userId });
 
     await ctx.redis.set(doneKey, context, 'EX', 600);

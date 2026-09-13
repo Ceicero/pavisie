@@ -1,6 +1,6 @@
-# @entrophy/bot
+# @pavisie/bot
 
-The Discord gateway process: logs into the bot account, loads every plugin from `@entrophy/plugins`, routes slash/context-menu/autocomplete/component interactions, runs BullMQ workers for plugin background jobs and the shared `bot-actions` queue, upserts `Guild` rows on join/leave, and serves a tiny `/health` endpoint.
+The Discord gateway process: logs into the bot account, loads every plugin from `@pavisie/plugins`, routes slash/context-menu/autocomplete/component interactions, runs BullMQ workers for plugin background jobs and the shared `bot-actions` queue, upserts `Guild` rows on join/leave, and serves a tiny `/health` endpoint.
 
 See `docs/ARCHITECTURE.md` §9 for the design this implements, and `docs/SPEC.md` for product requirements.
 
@@ -38,8 +38,8 @@ REDIS_URL=redis://...
 Postgres and Redis must already be running and migrated (`pnpm db:migrate` from the repo root) before starting the bot.
 
 ```bash
-pnpm --filter @entrophy/bot dev      # tsx watch
-pnpm --filter @entrophy/bot start    # tsx (prod-equivalent, no watch)
+pnpm --filter @pavisie/bot dev      # tsx watch
+pnpm --filter @pavisie/bot start    # tsx (prod-equivalent, no watch)
 ```
 
 The process fails fast with a clear message (and a non-zero exit code) if `DISCORD_TOKEN`, `DATABASE_URL`, `REDIS_URL`, or `DISCORD_CLIENT_ID` is missing — it never hangs waiting on a connection it can't make.
@@ -49,13 +49,13 @@ The process fails fast with a clear message (and a non-zero exit code) if `DISCO
 Discord does not pick up command changes automatically — run this after adding, renaming, or removing a command:
 
 ```bash
-pnpm --filter @entrophy/bot register              # DEV_GUILD_ID if set, else global
-pnpm --filter @entrophy/bot register --guild <id>  # register to one guild (updates instantly — good for local dev)
-pnpm --filter @entrophy/bot register --global      # register globally (can take up to an hour to propagate)
-pnpm --filter @entrophy/bot register --clear       # clear commands from the resolved target instead of registering
+pnpm --filter @pavisie/bot register              # DEV_GUILD_ID if set, else global
+pnpm --filter @pavisie/bot register --guild <id>  # register to one guild (updates instantly — good for local dev)
+pnpm --filter @pavisie/bot register --global      # register globally (can take up to an hour to propagate)
+pnpm --filter @pavisie/bot register --clear       # clear commands from the resolved target instead of registering
 ```
 
-Set `DEV_GUILD_ID` in `.env` during development so plain `pnpm --filter @entrophy/bot register` updates your test server instantly instead of registering globally.
+Set `DEV_GUILD_ID` in `.env` during development so plain `pnpm --filter @pavisie/bot register` updates your test server instantly instead of registering globally.
 
 ### Health check
 
@@ -88,17 +88,17 @@ See `.env.example` for the full documented list. The ones that specifically affe
 
 ## What to test by hand after a change
 
-1. **Boots and logs in**: `pnpm --filter @entrophy/bot dev`, confirm `"bot ready"` logs with a guild count.
+1. **Boots and logs in**: `pnpm --filter @pavisie/bot dev`, confirm `"bot ready"` logs with a guild count.
 2. **Commands respond**: run `/setup status`, `/config view`, `/plugin list`, `/permissions audit`, `/health` in a server the bot is in — each should reply ephemerally with an embed, not an error.
 3. **Permission gating**: try an admin-only command (e.g. `/plugin enable`) as a non-staff member — expect a clear "you need at least admin staff level" ephemeral reply, not a crash or a silent no-op.
 4. **Plugin enable/disable**: `/plugin disable <id>` then try one of that plugin's commands — expect "this plugin is disabled" rather than the command running.
 5. **Health endpoint**: `curl http://localhost:3002/health` while the bot is running — expect `"status":"ok"` and a `plugins` object listing every plugin.
-6. **Missing token**: temporarily unset `DISCORD_TOKEN` and run `pnpm --filter @entrophy/bot start` — it should print a clear "Missing required environment variable(s): DISCORD_TOKEN" message and exit immediately (not hang).
+6. **Missing token**: temporarily unset `DISCORD_TOKEN` and run `pnpm --filter @pavisie/bot start` — it should print a clear "Missing required environment variable(s): DISCORD_TOKEN" message and exit immediately (not hang).
 
 ## Tests
 
 ```bash
-pnpm --filter @entrophy/bot test
+pnpm --filter @pavisie/bot test
 ```
 
 Covers requirement evaluation (`staffLevel` vs `discordPermissions` OR semantics, `botOwnerOnly`, cooldown/rate-limit key derivation) and component custom-id routing (unknown id, kind mismatch, `ownerOnly` rejection, correct dispatch with parsed args) — all against in-memory fakes, no live Discord gateway or database.

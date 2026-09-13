@@ -1,7 +1,7 @@
 // Shared CAPTCHA provider resolution + server-side verification. Sole consumer is `/verify/:token` (the roles
 // plugin's CAPTCHA verification mode). Donations no longer use CAPTCHA — the Stripe checkout endpoint that
 // required one was removed when donations became a Ko-fi link-out (see docs/ARCHITECTURE.md §18).
-import { env } from '@entrophy/core';
+import { env } from '@pavisie/core';
 
 export interface ProviderConfig {
   id: 'hcaptcha' | 'turnstile';

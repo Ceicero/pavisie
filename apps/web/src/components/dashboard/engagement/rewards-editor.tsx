@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Trash2 } from 'lucide-react';
-import { Button, EmptyState, IconButton, Input, Skeleton, useToast } from '@entrophy/ui';
+import { Button, EmptyState, IconButton, Input, Skeleton, useToast } from '@pavisie/ui';
 import { useCreateLevelReward, useDeleteLevelReward, useLevelRewards } from '@/lib/dashboard/engagement-queries';
 import { DiscordRoleSelect } from '../discord-selects';
 import { ErrorState } from '../error-state';

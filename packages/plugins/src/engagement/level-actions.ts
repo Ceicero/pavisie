@@ -39,9 +39,9 @@ async function applyRoleRewards(
 
   try {
     if (plan.toAdd.length > 0)
-      await member.roles.add(plan.toAdd, `Entrophy engagement: reached level ${newLevel}`);
+      await member.roles.add(plan.toAdd, `Pavisie engagement: reached level ${newLevel}`);
     if (plan.toRemove.length > 0)
-      await member.roles.remove(plan.toRemove, `Entrophy engagement: level rewards (${mode})`);
+      await member.roles.remove(plan.toRemove, `Pavisie engagement: level rewards (${mode})`);
   } catch (err) {
     ctx.logger.warn(
       { guildId, userId: member.id, err: err instanceof Error ? err.message : String(err) },

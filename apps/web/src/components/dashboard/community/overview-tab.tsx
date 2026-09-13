@@ -1,7 +1,7 @@
 'use client';
 
 import { Gift, ListChecks, Megaphone, MessageSquareText, Vote } from 'lucide-react';
-import { StatCard } from '@entrophy/ui';
+import { StatCard } from '@pavisie/ui';
 import {
   useCommunityAnnouncements,
   useCommunityEvents,

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { EnforcerSettingsDto } from '@entrophy/types';
+import type { EnforcerSettingsDto } from '@pavisie/types';
 import {
   Button,
   Card,
@@ -18,7 +18,7 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useEnforcerSettings, useUpdateEnforcerSettings } from '@/lib/dashboard/enforcer-queries';
 import { DiscordChannelSelect, DiscordRoleSelect } from '../discord-selects';
 import { ErrorState } from '../error-state';

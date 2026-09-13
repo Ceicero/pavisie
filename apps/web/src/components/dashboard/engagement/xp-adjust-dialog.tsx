@@ -18,7 +18,7 @@ import {
   SelectValue,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useXpAdjust } from '@/lib/dashboard/engagement-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 

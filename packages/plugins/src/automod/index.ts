@@ -16,7 +16,7 @@ registerPluginLocales('automod', { en });
 /**
  * Every per-rule-type config schema, re-exported as the single source of truth (TASK: "export them from the
  * plugin's index.ts as 'automodRuleSchemas' (+ types); then make apps/api/src/lib/automod-schemas.ts re-export
- * from '@entrophy/plugins' so there is one source of truth").
+ * from '@pavisie/plugins' so there is one source of truth").
  */
 export const automodRuleSchemas = ruleSchemas;
 export type { AutomodAction, AutomodActionType, AutomodRuleConfig, AutomodRuleTypeValue } from './schemas';

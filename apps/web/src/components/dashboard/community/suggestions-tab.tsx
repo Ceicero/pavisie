@@ -19,8 +19,8 @@ import {
   SelectValue,
   Textarea,
   useToast,
-} from '@entrophy/ui';
-import type { SuggestionDto } from '@entrophy/types/community';
+} from '@pavisie/ui';
+import type { SuggestionDto } from '@pavisie/types/community';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useCommunitySuggestions, useUpdateSuggestionStatus } from '@/lib/dashboard/community-queries';
 import { DataTable, type DataTableColumn } from '../data-table';

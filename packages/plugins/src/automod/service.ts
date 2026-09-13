@@ -11,8 +11,8 @@ import {
   type Message,
   type PartialMessage,
 } from 'discord.js';
-import { BRAND, Cooldowns, redisKey, sanitizeEmbedText, truncate } from '@entrophy/core';
-import type { AutomodEvent, AutomodRule, Prisma } from '@entrophy/database';
+import { BRAND, Cooldowns, redisKey, sanitizeEmbedText, truncate } from '@pavisie/core';
+import type { AutomodEvent, AutomodRule, Prisma } from '@pavisie/database';
 import { buildCustomId, resolveTextChannel, type PluginContext } from '../sdk';
 import type { AutomodConfig } from './manifest';
 import {

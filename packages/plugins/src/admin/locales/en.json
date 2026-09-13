@@ -36,7 +36,7 @@
     "hierarchyWarning": "⚠️ My highest role is at or below <@&{roleId}> — I may not be able to moderate members with that role.",
     "intentsOk": "✅ Every privileged intent needed by an enabled plugin is enabled.",
     "intentWarning": "⚠️ **{plugin}** needs the {intent} privileged intent, which isn't enabled — related features are degraded.",
-    "administratorGranted": "⚠️ I have been granted **Administrator**, which is more than I need. Entrophy is designed to run on a least-privilege permission set — consider removing Administrator and re-inviting me with the documented invite link instead."
+    "administratorGranted": "⚠️ I have been granted **Administrator**, which is more than I need. Pavisie is designed to run on a least-privilege permission set — consider removing Administrator and re-inviting me with the documented invite link instead."
   },
   "health": {
     "title": "Bot health",
@@ -49,8 +49,8 @@
     "plugins": "Plugins"
   },
   "report": {
-    "discloseTitle": "Report to the Entrophy developer",
-    "discloseBody": "This goes straight to the Entrophy developer, not to any other server. Included: exactly what you type in the next step (subject and body), plus this server's id and name, your user id and tag, the current time, and the bot's version. Nothing else is sent — no surrounding messages, channel history, or member list. A record is also written to this server's own audit log so other admins can see a report was sent.",
-    "success": "Sent to the Entrophy developer. Thanks for the report!"
+    "discloseTitle": "Report to the Pavisie developer",
+    "discloseBody": "This goes straight to the Pavisie developer, not to any other server. Included: exactly what you type in the next step (subject and body), plus this server's id and name, your user id and tag, the current time, and the bot's version. Nothing else is sent — no surrounding messages, channel history, or member list. A record is also written to this server's own audit log so other admins can see a report was sent.",
+    "success": "Sent to the Pavisie developer. Thanks for the report!"
   }
 }

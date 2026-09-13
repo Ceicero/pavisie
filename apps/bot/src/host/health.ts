@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { Client } from 'discord.js';
 import type { Logger } from 'pino';
-import type { PluginHealth } from '@entrophy/plugins';
+import type { PluginHealth } from '@pavisie/plugins';
 import type { LoadedHost } from './loader';
 
 export interface HealthServerDeps {

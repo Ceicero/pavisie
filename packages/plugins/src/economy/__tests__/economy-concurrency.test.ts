@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
-import type { StaffLevel } from '@entrophy/types';
+import type { StaffLevel } from '@pavisie/types';
 import { createTestContext } from '../../sdk/testing';
 import type { CommandContext } from '../../sdk';
 import { command as economyCommand } from '../commands/economy';

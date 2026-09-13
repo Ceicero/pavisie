@@ -1,5 +1,5 @@
 import { PermissionFlagsBits, SlashCommandBuilder, type EmbedBuilder } from 'discord.js';
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 import {
   assertStaffLevel,
   errorEmbed,

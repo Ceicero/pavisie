@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Shared Tailwind preset for Entrophy apps. Consumers add `presets: [preset]` to their own
+ * Shared Tailwind preset for Pavisie apps. Consumers add `presets: [preset]` to their own
  * `tailwind.config.ts` and extend `content` with their own source globs.
  */
 const preset = {

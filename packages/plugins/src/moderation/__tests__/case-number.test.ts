@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { Prisma } from '@entrophy/database';
+import { Prisma } from '@pavisie/database';
 import type { PluginContext } from '../../sdk';
 import { createTestContext } from '../../sdk/testing';
 import { ModerationServiceImpl } from '../service';
 
 /**
- * `withNextCaseNumber`/`nextCaseNumber` (@entrophy/database) call `prisma.$transaction(cb)` directly — a
+ * `withNextCaseNumber`/`nextCaseNumber` (@pavisie/database) call `prisma.$transaction(cb)` directly — a
  * top-level method the SDK's generic `createPrismaStub` proxy can't represent (it only proxies
  * `prisma.<model>.<method>()` calls). This hand-built fake implements just enough of the `PrismaClient` surface
  * `ModerationServiceImpl.createCase` touches to exercise the real retry loop.

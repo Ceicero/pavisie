@@ -24,6 +24,6 @@ test.describe('login', () => {
 
     await page.goto('/dashboard');
     await expect(page.getByRole('heading', { name: /your servers/i })).toBeVisible();
-    await expect(page.getByText(/entrophy demo/i)).toBeVisible();
+    await expect(page.getByText(/pavisie demo/i)).toBeVisible();
   });
 });

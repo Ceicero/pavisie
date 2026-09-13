@@ -28,6 +28,6 @@ describe('BrandWordmark (sidebar logo)', () => {
   });
 
   it('brand.json (checked in, synced by scripts/sync-brand.mjs) points at the real skull asset, not a placeholder', () => {
-    expect(brand.logo).toBe('/brand/entrophy-skull.png');
+    expect(brand.logo).toBe('/brand/pavisie-skull.png');
   });
 });

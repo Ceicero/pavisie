@@ -12,8 +12,8 @@ import {
   TableHeader,
   TableRow,
   useToast,
-} from '@entrophy/ui';
-import type { TwitchChatRewardDto } from '@entrophy/types/integrations';
+} from '@pavisie/ui';
+import type { TwitchChatRewardDto } from '@pavisie/types/integrations';
 import { useDeleteTwitchChatReward, useTwitchChatRewards } from '@/lib/dashboard/integrations-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ConfirmDialog } from '../confirm-dialog';

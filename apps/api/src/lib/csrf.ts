@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { PermissionError, env, timingSafeEqualStr } from '@entrophy/core';
+import { PermissionError, env, timingSafeEqualStr } from '@pavisie/core';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const CSRF_HEADER = 'x-csrf-token';

@@ -1,5 +1,5 @@
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
-import { parseDuration } from '@entrophy/core';
+import { parseDuration } from '@pavisie/core';
 import {
   errorEmbed,
   listEmbed,

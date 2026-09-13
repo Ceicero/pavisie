@@ -1,4 +1,4 @@
-import { ExternalServiceError } from '@entrophy/core';
+import { ExternalServiceError } from '@pavisie/core';
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 

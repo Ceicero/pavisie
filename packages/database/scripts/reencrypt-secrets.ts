@@ -1,4 +1,4 @@
-// CLI: `pnpm --filter @entrophy/database reencrypt:secrets [--dry-run]`
+// CLI: `pnpm --filter @pavisie/database reencrypt:secrets [--dry-run]`
 //
 // Re-encrypts every encrypted-at-rest secret in the database under the current `ENCRYPTION_KEY`.
 // This is the second half of a key rotation (see docs/SECURITY.md "Incident response — leaked
@@ -16,7 +16,7 @@
 //   - PluginConfig.config.apiKeyEnc  (JSON field, only present on the `ai` plugin's config)
 //
 // If a new encrypted field is added to the schema or to a plugin's configSchema later, add it here.
-import { loadEnv, requireEnv, env, createLogger, decryptSecret, encryptSecret } from '@entrophy/core';
+import { loadEnv, requireEnv, env, createLogger, decryptSecret, encryptSecret } from '@pavisie/core';
 import { prisma } from '../src/client';
 
 const logger = createLogger('reencrypt-secrets');

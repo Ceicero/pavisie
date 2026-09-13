@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CUSTOM_ID_MAX } from '@entrophy/core';
+import { CUSTOM_ID_MAX } from '@pavisie/core';
 import {
   buildPanelButtonRows,
   buildPanelEmbed,

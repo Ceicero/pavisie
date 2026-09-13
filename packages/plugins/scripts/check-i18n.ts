@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-// `pnpm --filter @entrophy/plugins check:i18n` (root alias could call this per-package) — walks every plugin's
+// `pnpm --filter @pavisie/plugins check:i18n` (root alias could call this per-package) — walks every plugin's
 // `src/**/*.ts` for `t('key')` / `c.t('key')` call sites and verifies each key literal actually resolves to a
 // registered translation, simulating the exact runtime lookup in `packages/core/src/i18n/index.ts`'s `t()` +
 // `packages/plugins/src/sdk/locales.ts`'s `registerPluginLocales` (plugin-prefixed lookup first, then a
@@ -11,7 +11,7 @@
 // Also verifies every plugin listed in `allManifests` (the canonical id list, ARCHITECTURE.md §7.1) has
 // registered a `locales/en.json` bundle at all, per CLAUDE.md's i18n audit requirement.
 //
-// Run with: pnpm --filter @entrophy/plugins check:i18n
+// Run with: pnpm --filter @pavisie/plugins check:i18n
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';

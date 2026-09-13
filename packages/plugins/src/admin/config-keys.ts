@@ -9,8 +9,8 @@ import {
   ZodString,
   type ZodTypeAny,
 } from 'zod';
-import { ValidationError } from '@entrophy/core';
-import type { PluginId } from '@entrophy/types';
+import { ValidationError } from '@pavisie/core';
+import type { PluginId } from '@pavisie/types';
 import { isSnowflake } from '../sdk';
 import type { PluginManifest } from '../sdk';
 import type { GuildConfigPatch } from '../sdk';

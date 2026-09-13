@@ -1,5 +1,5 @@
 import type { EmbedBuilder } from 'discord.js';
-import { EMBED_LIMITS } from '@entrophy/core';
+import { EMBED_LIMITS } from '@pavisie/core';
 
 export interface LogBatcherOptions {
   /** Flush a channel's queued embeds after this many ms of inactivity since its first unflushed embed. Default 2000 (ARCHITECTURE.md's logging task: "flush every 2s or 5 embeds"). */

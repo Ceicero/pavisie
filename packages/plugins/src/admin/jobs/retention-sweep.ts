@@ -1,9 +1,9 @@
-import { defaultRetentionPolicy, runRetentionForGuild, type RetentionPolicyDays } from '@entrophy/database';
+import { defaultRetentionPolicy, runRetentionForGuild, type RetentionPolicyDays } from '@pavisie/database';
 import type { PluginJob } from '../../sdk';
 
 /**
  * Daily repeat job (04:00 UTC) that actually enforces every guild's `DataRetentionPolicy` — the platform-wide
- * counterpart to `@entrophy/database`'s `runRetentionForGuild`, which until this job existed was only ever
+ * counterpart to `@pavisie/database`'s `runRetentionForGuild`, which until this job existed was only ever
  * referenced in comments/docs and never actually scheduled anywhere (docs/PRIVACY_POLICY_TEMPLATE.md §5 claims
  * "a scheduled job... purges records past their retention window automatically"). Lives in `admin` because it's
  * always-loaded and has no plugin-specific ownership of any one target table. Scoped, single-table jobs like

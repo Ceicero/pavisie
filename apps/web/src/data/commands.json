@@ -159,17 +159,17 @@
           "subcommands": []
         },
         {
-          "name": "entrophy",
-          "fullName": "/entrophy",
+          "name": "pavisie",
+          "fullName": "/pavisie",
           "type": "slash",
-          "description": "Bot-level tools for talking to the Entrophy developer. • +help",
+          "description": "Bot-level tools for talking to the Pavisie developer. • +help",
           "staffLevel": "admin",
           "options": [],
           "subcommands": [
             {
               "name": "report",
-              "fullName": "/entrophy report",
-              "description": "Send a bug report, feedback, or question to the Entrophy developer.",
+              "fullName": "/pavisie report",
+              "description": "Send a bug report, feedback, or question to the Pavisie developer.",
               "options": [
                 {
                   "name": "kind",
@@ -1390,7 +1390,7 @@
           "name": "logs",
           "fullName": "/logs",
           "type": "slash",
-          "description": "Configure and search Entrophy's event logging. • +help",
+          "description": "Configure and search Pavisie's event logging. • +help",
           "staffLevel": "moderator",
           "options": [],
           "subcommands": [
@@ -4189,7 +4189,7 @@
           "name": "help",
           "fullName": "/help",
           "type": "slash",
-          "description": "Every Entrophy command. Tip: just type +help in chat.",
+          "description": "Every Pavisie command. Tip: just type +help in chat.",
           "options": [],
           "subcommands": []
         },
@@ -4844,7 +4844,7 @@
           "name": "twitch",
           "fullName": "/twitch",
           "type": "slash",
-          "description": "Manage Entrophy joining this server's Twitch chat. • +help",
+          "description": "Manage Pavisie joining this server's Twitch chat. • +help",
           "staffLevel": "admin",
           "discordPermissions": [
             "ManageGuild"

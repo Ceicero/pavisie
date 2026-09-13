@@ -1,5 +1,5 @@
 import type { Guild } from 'discord.js';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import type { PluginContext, PluginJob } from '../../sdk';
 import type { CommunityConfig } from '../manifest';
 import { collectCounts, renderStatsName, RENAME_BUDGET_MS, type GuildCounts } from '../stats-channels';

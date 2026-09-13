@@ -101,13 +101,13 @@ describe('GuildConfigStore', () => {
     await store.getConfig('g1', 'moderation');
     await store.getGuildConfig('g1');
 
-    expect(await redis.get('entrophy:cfg:g1:moderation')).not.toBeNull();
-    expect(await redis.get('entrophy:guildcfg:g1')).not.toBeNull();
+    expect(await redis.get('pavisie:cfg:g1:moderation')).not.toBeNull();
+    expect(await redis.get('pavisie:guildcfg:g1')).not.toBeNull();
 
     await store.invalidate('g1');
 
-    expect(await redis.get('entrophy:cfg:g1:moderation')).toBeNull();
-    expect(await redis.get('entrophy:guildcfg:g1')).toBeNull();
+    expect(await redis.get('pavisie:cfg:g1:moderation')).toBeNull();
+    expect(await redis.get('pavisie:guildcfg:g1')).toBeNull();
   });
 
   it("invalidate(guildId, pluginId) clears only that plugin's cache", async () => {
@@ -121,8 +121,8 @@ describe('GuildConfigStore', () => {
 
     await store.invalidate('g1', 'moderation');
 
-    expect(await redis.get('entrophy:cfg:g1:moderation')).toBeNull();
-    expect(await redis.get('entrophy:guildcfg:g1')).not.toBeNull();
+    expect(await redis.get('pavisie:cfg:g1:moderation')).toBeNull();
+    expect(await redis.get('pavisie:guildcfg:g1')).not.toBeNull();
   });
 
   it('isEnabled returns true for alwaysEnabled plugins without touching prisma', async () => {

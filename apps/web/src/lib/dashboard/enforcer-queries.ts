@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { EnforcerPolicyDto, EnforcerRecordDto, EnforcerSettingsDto, Paginated } from '@entrophy/types';
+import type { EnforcerPolicyDto, EnforcerRecordDto, EnforcerSettingsDto, Paginated } from '@pavisie/types';
 import { API_BASE_URL, apiFetch, toQueryString } from './api';
 
 export const enforcerQueryKeys = {

@@ -1,5 +1,5 @@
 import type { Message } from 'discord.js';
-import { hasStaffLevel, redisKey, resolveStaffLevel } from '@entrophy/core';
+import { hasStaffLevel, redisKey, resolveStaffLevel } from '@pavisie/core';
 import type { PluginEventHandler } from '../../sdk';
 import { evaluate } from '../engine';
 import type { EnforcerConfig } from '../manifest';

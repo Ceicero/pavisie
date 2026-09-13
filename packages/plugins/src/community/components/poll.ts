@@ -1,5 +1,5 @@
 import type { ButtonInteraction, StringSelectMenuInteraction } from 'discord.js';
-import type { PrismaClient } from '@entrophy/database';
+import type { PrismaClient } from '@pavisie/database';
 import { errorEmbed, type ComponentHandler } from '../../sdk';
 import { refreshPollMessage } from '../actions';
 import { decidePollVote } from '../service';

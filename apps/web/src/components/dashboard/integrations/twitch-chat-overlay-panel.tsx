@@ -13,8 +13,8 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
-import type { TwitchChatChannelDto } from '@entrophy/types/integrations';
+} from '@pavisie/ui';
+import type { TwitchChatChannelDto } from '@pavisie/types/integrations';
 import {
   useRegenerateTwitchChatOverlay,
   useTwitchChatOverlay,

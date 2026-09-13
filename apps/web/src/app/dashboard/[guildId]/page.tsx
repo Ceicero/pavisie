@@ -15,7 +15,7 @@ import {
   PageHeader,
   Skeleton,
   StatCard,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useGuild } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
 
@@ -51,7 +51,7 @@ export default function GuildOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={data.guild.name} description="Overview of this server's Entrophy setup." />
+      <PageHeader title={data.guild.name} description="Overview of this server's Pavisie setup." />
 
       {data.setupIncomplete ? (
         <Alert variant="warning">

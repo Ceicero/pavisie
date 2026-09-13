@@ -9,12 +9,12 @@ describe('signOutboundPayload', () => {
     const signed = signOutboundPayload(payload, secret, 'moderation.caseCreated', 'delivery-1');
 
     expect(signed.body).toBe(JSON.stringify(payload));
-    expect(signed.headers['X-Entrophy-Event']).toBe('moderation.caseCreated');
-    expect(signed.headers['X-Entrophy-Delivery']).toBe('delivery-1');
+    expect(signed.headers['X-Pavisie-Event']).toBe('moderation.caseCreated');
+    expect(signed.headers['X-Pavisie-Delivery']).toBe('delivery-1');
     expect(signed.headers['Content-Type']).toBe('application/json');
 
     const expected = createHmac('sha256', secret).update(signed.body).digest('hex');
-    expect(signed.headers['X-Entrophy-Signature']).toBe(expected);
+    expect(signed.headers['X-Pavisie-Signature']).toBe(expected);
   });
 
   it('generates a fresh delivery id per call when none is given', () => {
@@ -27,7 +27,7 @@ describe('signOutboundPayload', () => {
     const payload = { a: 1 };
     const signed1 = signOutboundPayload(payload, 'secret-a', 'custom', 'd1');
     const signed2 = signOutboundPayload(payload, 'secret-b', 'custom', 'd1');
-    expect(signed1.headers['X-Entrophy-Signature']).not.toBe(signed2.headers['X-Entrophy-Signature']);
+    expect(signed1.headers['X-Pavisie-Signature']).not.toBe(signed2.headers['X-Pavisie-Signature']);
   });
 });
 

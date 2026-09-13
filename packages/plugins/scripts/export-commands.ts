@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-// `pnpm --filter @entrophy/plugins export:commands` (root alias: `pnpm commands:export`) — walks `allPlugins`
+// `pnpm --filter @pavisie/plugins export:commands` (root alias: `pnpm commands:export`) — walks `allPlugins`
 // and emits a plain-JSON description of every command, generated from the real plugin registry so the website's
 // command docs (ARCHITECTURE.md §17) can never drift from what the bot actually registers.
 //
@@ -18,7 +18,7 @@ import type {
   RESTPostAPIApplicationCommandsJSONBody,
   APIApplicationCommandOption,
 } from 'discord-api-types/v10';
-import { INVITE_PERMISSIONS_BITFIELD } from '@entrophy/core';
+import { INVITE_PERMISSIONS_BITFIELD } from '@pavisie/core';
 import { allPlugins, withHelpHint } from '../src/index';
 import type { PluginCommand } from '../src/sdk';
 
@@ -27,7 +27,7 @@ const WEB_OUTPUT = join(REPO_ROOT, 'apps', 'web', 'src', 'data', 'commands.json'
 const DOCS_COMMANDS_OUTPUT = join(REPO_ROOT, 'docs', 'commands.json');
 const DOCS_INVITE_OUTPUT = join(REPO_ROOT, 'docs', 'invite.json');
 // The website reads its default invite permission bitfield from this local copy (falls back to it when
-// NEXT_PUBLIC_INVITE_PERMISSIONS is unset) so it never drifts from `INVITE_PERMISSIONS` in `@entrophy/core`.
+// NEXT_PUBLIC_INVITE_PERMISSIONS is unset) so it never drifts from `INVITE_PERMISSIONS` in `@pavisie/core`.
 const WEB_INVITE_OUTPUT = join(REPO_ROOT, 'apps', 'web', 'src', 'data', 'invite.json');
 
 const SUBCOMMAND_TYPES = new Set<number>([

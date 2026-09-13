@@ -8,7 +8,7 @@ import {
   encryptSecret,
   env,
   redisKey,
-} from '@entrophy/core';
+} from '@pavisie/core';
 import { writeDashboardAudit } from '../lib/audit';
 import { requireAuth } from '../lib/guild-access';
 import {
@@ -37,7 +37,7 @@ type TwitchChatOAuthKind = 'twitch_chat' | 'twitch_bot';
 
 interface OAuthStatePayload {
   /** Present for every guild-scoped flow (the generic connect flow, and `kind: 'twitch_chat'`); absent for the
-   * owner-only `kind: 'twitch_bot'` flow, which authorizes Entrophy's own account, not a per-guild link. */
+   * owner-only `kind: 'twitch_bot'` flow, which authorizes Pavisie's own account, not a per-guild link. */
   guildId?: string;
   provider: OAuthProviderId;
   userId: string;
@@ -63,7 +63,7 @@ interface OAuthStatePayload {
  *       never orphans the previous connection/token.
  *     - creates the new connection + token, and upserts the guild's `TwitchChatChannel` row (status PENDING
  *       until the chat-bot manager's next reconcile tick subscribes it, nudged along below).
- * - `'twitch_bot'` (`routes/twitch-bot.ts`'s owner-only connect): identifies Entrophy's own Twitch account and
+ * - `'twitch_bot'` (`routes/twitch-bot.ts`'s owner-only connect): identifies Pavisie's own Twitch account and
  *   upserts the single `TwitchBotIdentity` row (fixed id, see `TWITCH_BOT_IDENTITY_ID`), replacing
  *   tokens/scopes/expiry on re-auth.
  * Scopes are decided server-side only, by whichever `/connect` route built the authorize URL — this callback
@@ -132,7 +132,7 @@ export default async function oauthIntegrationsRoutes(app: ZodFastifyInstance): 
         // No dashboard page owns this (owner-only, not part of the per-guild web dashboard) — a small
         // self-contained confirmation page avoids depending on a redirect target that may not exist.
         reply.type('text/html');
-        return `<!doctype html><html><head><meta charset="utf-8"><title>Twitch bot connected</title></head><body style="font-family:system-ui,sans-serif;padding:2rem;text-align:center"><h1>Twitch bot connected</h1><p>Entrophy's Twitch bot account (@${twitchUser.login}) is authorized. You can close this tab.</p></body></html>`;
+        return `<!doctype html><html><head><meta charset="utf-8"><title>Twitch bot connected</title></head><body style="font-family:system-ui,sans-serif;padding:2rem;text-align:center"><h1>Twitch bot connected</h1><p>Pavisie's Twitch bot account (@${twitchUser.login}) is authorized. You can close this tab.</p></body></html>`;
       }
 
       if (payload.kind === 'twitch_chat') {

@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
   Skeleton,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { usePlugins } from '@/lib/dashboard/queries';
 import { useEnforcerSettings } from '@/lib/dashboard/enforcer-queries';
 import { ErrorState } from '../error-state';

@@ -11,8 +11,8 @@ import {
   DialogTitle,
   Pagination,
   Skeleton,
-} from '@entrophy/ui';
-import type { PollDto } from '@entrophy/types/community';
+} from '@pavisie/ui';
+import type { PollDto } from '@pavisie/types/community';
 import { useCommunityPolls, usePollResults } from '@/lib/dashboard/community-queries';
 import { DataTable, type DataTableColumn } from '../data-table';
 

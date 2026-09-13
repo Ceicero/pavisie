@@ -1,11 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// See `delivery.test.ts` for why this file has no static imports of its own: `@entrophy/core`'s `env` is
+// See `delivery.test.ts` for why this file has no static imports of its own: `@pavisie/core`'s `env` is
 // computed once, at that module's first import, from `process.env` — `ENCRYPTION_KEY` must be set first.
-let encryptSecret: typeof import('@entrophy/core').encryptSecret;
-let decryptSecret: typeof import('@entrophy/core').decryptSecret;
-let redisKey: typeof import('@entrophy/core').redisKey;
+let encryptSecret: typeof import('@pavisie/core').encryptSecret;
+let decryptSecret: typeof import('@pavisie/core').decryptSecret;
+let redisKey: typeof import('@pavisie/core').redisKey;
 let createTestContext: typeof import('../../sdk/testing').createTestContext;
 let getBotAccessToken: typeof import('../twitch-chat/helix').getBotAccessToken;
 let sendChatMessage: typeof import('../twitch-chat/helix').sendChatMessage;
@@ -14,7 +14,7 @@ beforeAll(async () => {
   process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? randomBytes(32).toString('base64');
   process.env.TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID ?? 'test-client-id';
   process.env.TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET ?? 'test-client-secret';
-  ({ encryptSecret, decryptSecret, redisKey } = await import('@entrophy/core'));
+  ({ encryptSecret, decryptSecret, redisKey } = await import('@pavisie/core'));
   ({ createTestContext } = await import('../../sdk/testing'));
   ({ getBotAccessToken, sendChatMessage } = await import('../twitch-chat/helix'));
 });
@@ -23,7 +23,7 @@ function makeIdentity(overrides: Record<string, unknown> = {}) {
   return {
     id: 'identity-1',
     botUserId: 'bot-1',
-    botLogin: 'entrophybot',
+    botLogin: 'pavisiebot',
     accessTokenEnc: encryptSecret('old-access-token'),
     refreshTokenEnc: encryptSecret('old-refresh-token'),
     scopes: ['user:read:chat', 'user:write:chat', 'user:bot'],
@@ -69,7 +69,7 @@ describe('getBotAccessToken', () => {
     });
 
     const token = await getBotAccessToken(ctx);
-    expect(token).toEqual({ accessToken: 'old-access-token', botUserId: 'bot-1', botLogin: 'entrophybot' });
+    expect(token).toEqual({ accessToken: 'old-access-token', botUserId: 'bot-1', botLogin: 'pavisiebot' });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

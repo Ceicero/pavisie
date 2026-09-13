@@ -16,7 +16,7 @@ import {
   PageHeader,
   Skeleton,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import {
   useDataRequests,
   useRequestDataDelete,
@@ -28,7 +28,7 @@ import { ErrorState } from '@/components/dashboard/error-state';
 import { ConfirmDialog } from '@/components/dashboard/confirm-dialog';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { formatDateTime } from '@/lib/dashboard/format';
-import type { DataRequestDto, RetentionPolicyDto } from '@entrophy/types';
+import type { DataRequestDto, RetentionPolicyDto } from '@pavisie/types';
 
 const STATUS_VARIANT: Record<DataRequestDto['status'], 'default' | 'success' | 'destructive' | 'secondary'> =
   {
@@ -139,7 +139,7 @@ export default function PrivacyPage() {
     <div className="space-y-6">
       <PageHeader
         title="Privacy &amp; data retention"
-        description="Control how long Entrophy keeps this server's data, and export or delete it."
+        description="Control how long Pavisie keeps this server's data, and export or delete it."
       />
 
       {error ? (
@@ -188,7 +188,7 @@ export default function PrivacyPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Generates a JSON export of this server&apos;s Entrophy data (config, moderation cases, tickets,
+            Generates a JSON export of this server&apos;s Pavisie data (config, moderation cases, tickets,
             and similar records). Large exports can take a few minutes to prepare.
           </p>
           <Button variant="outline" onClick={handleExport} disabled={requestExport.isPending}>
@@ -238,7 +238,7 @@ export default function PrivacyPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Permanently deletes this server&apos;s Entrophy data — moderation cases, tickets, automod rules,
+            Permanently deletes this server&apos;s Pavisie data — moderation cases, tickets, automod rules,
             configuration, and everything else stored for this guild. This does not remove the bot from your
             server or affect Discord itself. This cannot be undone.
           </p>
@@ -253,7 +253,7 @@ export default function PrivacyPage() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete all server data?"
-        description="This permanently deletes every record Entrophy has for this server. This cannot be undone."
+        description="This permanently deletes every record Pavisie has for this server. This cannot be undone."
         confirmLabel="Delete permanently"
         variant="destructive"
         loading={requestDelete.isPending}

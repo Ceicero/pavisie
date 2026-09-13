@@ -1,5 +1,5 @@
 import { Construction } from 'lucide-react';
-import { EmptyState, PageHeader } from '@entrophy/ui';
+import { EmptyState, PageHeader } from '@pavisie/ui';
 
 export interface ComingSoonPageProps {
   title: string;

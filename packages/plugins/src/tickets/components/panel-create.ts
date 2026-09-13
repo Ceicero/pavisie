@@ -1,8 +1,8 @@
 // Modal submit handler for `/ticket panel create` (see ../commands/ticket.ts's `handlePanelCreate`, which stashes
 // the slash-command options in Redis via PendingStore and shows this modal for the title/description/button text).
 import type { ModalSubmitInteraction } from 'discord.js';
-import { AuditAction, NotFoundError } from '@entrophy/core';
-import type { Prisma, TicketMode } from '@entrophy/database';
+import { AuditAction, NotFoundError } from '@pavisie/core';
+import type { Prisma, TicketMode } from '@pavisie/database';
 import { PendingStore, errorEmbed, successEmbed, type ComponentHandler } from '../../sdk';
 import type { TicketsConfig } from '../manifest';
 import { postPanelMessage } from '../service';

@@ -10,7 +10,7 @@ import {
   TWITCH_CHAT_RESERVED_COMMAND_NAMES,
   TWITCH_REWARD_ACTION_KINDS,
   type TwitchRewardActionKindId,
-} from '@entrophy/types/integrations';
+} from '@pavisie/types/integrations';
 import { snowflakeSchema } from '../schemas';
 
 /** `/^[a-z0-9_]{1,32}$/`, stored lowercase — shared by command and timer names. */

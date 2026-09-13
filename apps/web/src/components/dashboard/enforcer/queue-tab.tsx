@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import type { EnforcerRecordDto } from '@entrophy/types';
-import { Badge, Button, PageHeader } from '@entrophy/ui';
+import type { EnforcerRecordDto } from '@pavisie/types';
+import { Badge, Button, PageHeader } from '@pavisie/ui';
 import { useEnforcerQueue, type DecideInput } from '@/lib/dashboard/enforcer-queries';
 import { DataTable, type DataTableColumn } from '../data-table';
 import { formatDateTime } from '@/lib/dashboard/format';

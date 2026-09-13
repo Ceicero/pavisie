@@ -1,14 +1,14 @@
-// Maps Prisma rows / plugin config sections to the `roles`-specific DTOs in `@entrophy/types/roles`
+// Maps Prisma rows / plugin config sections to the `roles`-specific DTOs in `@pavisie/types/roles`
 // (ARCHITECTURE.md §10). `RolePanelDto`/`RolePanelOptionDto` already live in the shared `lib/dto.ts` — this
 // file only covers what that one doesn't (groups, welcome/goodbye, verification, onboarding, persistence).
-import type { RoleGroup, VerificationRequest } from '@entrophy/database';
+import type { RoleGroup, VerificationRequest } from '@pavisie/database';
 import type {
   OnboardingConfigDto,
   RoleGroupDto,
   VerificationRequestDto,
   WelcomeGoodbyeDto,
-} from '@entrophy/types/roles';
-import type { RolesConfig, WelcomeGoodbyeConfig } from '@entrophy/plugins/roles/manifest';
+} from '@pavisie/types/roles';
+import type { RolesConfig, WelcomeGoodbyeConfig } from '@pavisie/plugins/roles/manifest';
 
 export function toRoleGroupDto(row: RoleGroup): RoleGroupDto {
   return {

@@ -1,6 +1,6 @@
 import { GatewayIntentBits } from 'discord.js';
 import type { RESTPostAPIApplicationCommandsJSONBody } from 'discord-api-types/v10';
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 import type { Plugin, PluginManifest, PrivilegedIntent } from './types';
 import { withHelpHint } from './help-hint';
 

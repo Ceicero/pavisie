@@ -4,8 +4,8 @@
 // directly (they need panel-specific overrides and Discord interaction context the narrow service interface
 // doesn't carry).
 import { AttachmentBuilder, ChannelType, PermissionFlagsBits, type Guild } from 'discord.js';
-import { AppError, NotFoundError, ValidationError, redisKey, sanitizeFilename } from '@entrophy/core';
-import type { Prisma, Ticket, TicketPanel } from '@entrophy/database';
+import { AppError, NotFoundError, ValidationError, redisKey, sanitizeFilename } from '@pavisie/core';
+import type { Prisma, Ticket, TicketPanel } from '@pavisie/database';
 import type { CreateTicketInput, PluginContext, TicketsService } from '../sdk';
 import { assertBotPermissions, fetchMemberSafe, resolveTextChannel, safeDm } from '../sdk';
 import { ticketChannelName } from './channel-name';

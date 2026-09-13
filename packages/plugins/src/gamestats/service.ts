@@ -2,7 +2,7 @@
 // `buildLeaderboard` and `formatStatValue` are pure and unit-tested directly; `refreshMemberStats` is the one
 // impure entry point, shared by `jobs/refresh.ts` and the future `/dbd` commands so there is exactly one code
 // path that writes a `GameStatSnapshot`.
-import type { GameAccountLink } from '@entrophy/database';
+import type { GameAccountLink } from '@pavisie/database';
 import type { PluginContext } from '../sdk';
 import { curateStats, providerStatKeys, type GameDescriptor, type GameStatDef } from './games';
 import { getGameStats, getPlayerSummary } from './steam';

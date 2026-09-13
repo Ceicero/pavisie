@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { env as coreEnv } from '@entrophy/core';
-import type { GameAccountLink } from '@entrophy/database';
+import { env as coreEnv } from '@pavisie/core';
+import type { GameAccountLink } from '@pavisie/database';
 import { createTestContext } from '../../sdk/testing';
 
 // `jobs/refresh.ts` imports `refreshMemberStats` from `../service` — mock it so this file tests only the job's

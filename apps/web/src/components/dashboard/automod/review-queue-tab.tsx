@@ -1,8 +1,8 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import type { AutomodEventDto } from '@entrophy/types';
-import { Badge, Button, PageHeader, useToast } from '@entrophy/ui';
+import type { AutomodEventDto } from '@pavisie/types';
+import { Badge, Button, PageHeader, useToast } from '@pavisie/ui';
 import { useAutomodEvents, useAutomodRules, useReviewAutomodEvent } from '@/lib/dashboard/automod-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { DataTable } from '../data-table';

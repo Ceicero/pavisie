@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { IntegrationConnection } from '@entrophy/database';
+import type { IntegrationConnection } from '@pavisie/database';
 import type { PluginContext } from '../../sdk';
 import { resolveTextChannel } from '../../sdk';
 import { renderDefaultPayloadPreview, renderTemplate } from '../templating';

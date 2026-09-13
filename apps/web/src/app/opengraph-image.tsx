@@ -1,5 +1,5 @@
 // Default Open Graph image for the whole site (ARCHITECTURE.md §17, §22). Embeds the real canonical skull logo
-// (`assets/brand/entrophy-skull.png`, 1254x1254, PNG — the JPEG-decoder issue that used to block this route was
+// (`assets/brand/pavisie-skull.png`, 1254x1254, PNG — the JPEG-decoder issue that used to block this route was
 // specific to next/og's decoder choking on that stale JPEG source; the canonical logo is a lossless PNG now and
 // decodes fine) as a base64 `data:` URI, read once at module load time with `node:fs` so the build stays 100%
 // offline: zero network calls, zero runtime file reads (the read happens at build/module time, not per-request).
@@ -10,7 +10,7 @@ import { ImageResponse } from 'next/og';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const alt = 'Entrophy — Discord moderation you can trust';
+export const alt = 'Pavisie — Discord moderation you can trust';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -28,15 +28,15 @@ const SKULL_ROWS = [
 ];
 
 // Candidate paths for the canonical logo, covering both plausible `process.cwd()` values for `next build`
-// (pnpm's `--filter @entrophy/web build` runs the script with cwd = apps/web, per package.json's own `prebuild`/
+// (pnpm's `--filter @pavisie/web build` runs the script with cwd = apps/web, per package.json's own `prebuild`/
 // `build` scripts) and a repo-root cwd, plus the sync-brand.mjs-generated copy as a secondary fallback. The first
 // candidate — the git-tracked source under `assets/brand/` — is copied into every Docker build context by
 // `COPY . .` in infra/docker/Dockerfile.web regardless of script execution order, so it is the most reliable.
 const LOGO_CANDIDATES = [
-  join(process.cwd(), '..', '..', 'assets', 'brand', 'entrophy-skull.png'), // cwd = apps/web
-  join(process.cwd(), 'assets', 'brand', 'entrophy-skull.png'), // cwd = repo root
-  join(process.cwd(), 'public', 'brand', 'entrophy-skull.png'), // cwd = apps/web, synced copy
-  join(process.cwd(), 'apps', 'web', 'public', 'brand', 'entrophy-skull.png'), // cwd = repo root, synced copy
+  join(process.cwd(), '..', '..', 'assets', 'brand', 'pavisie-skull.png'), // cwd = apps/web
+  join(process.cwd(), 'assets', 'brand', 'pavisie-skull.png'), // cwd = repo root
+  join(process.cwd(), 'public', 'brand', 'pavisie-skull.png'), // cwd = apps/web, synced copy
+  join(process.cwd(), 'apps', 'web', 'public', 'brand', 'pavisie-skull.png'), // cwd = repo root, synced copy
 ];
 
 function loadLogoDataUri(): string | null {
@@ -93,7 +93,7 @@ export default function Image() {
           </div>
         )}
         <div style={{ marginTop: 40, fontSize: 96, fontWeight: 700, letterSpacing: -2, display: 'flex' }}>
-          ENTROPHY
+          PAVISIE
         </div>
         <div style={{ marginTop: 20, fontSize: 34, color: '#a3a3a3', display: 'flex' }}>
           Discord moderation you can trust

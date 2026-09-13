@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildTestApp, loginAs } from './helpers/build-test-app';
 
 // `requireBotOwner` (apps/api/src/lib/bot-owner.ts) deliberately re-reads `process.env.BOT_OWNER_IDS` on every
-// request rather than `@entrophy/core`'s cached `env` singleton, specifically so tests can flip the allowlist
+// request rather than `@pavisie/core`'s cached `env` singleton, specifically so tests can flip the allowlist
 // per-case with a plain assignment like this — no module-cache reset or dynamic import dance needed.
 const ORIGINAL_BOT_OWNER_IDS = process.env.BOT_OWNER_IDS;
 

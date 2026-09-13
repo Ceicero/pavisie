@@ -1,9 +1,9 @@
-import type { IntegrationProvider as PrismaIntegrationProvider } from '@entrophy/database';
+import type { IntegrationProvider as PrismaIntegrationProvider } from '@pavisie/database';
 import {
   INTEGRATION_PROVIDER_IDS,
   type IntegrationProviderId,
   type IntegrationProviderInfoDto,
-} from '@entrophy/types/integrations';
+} from '@pavisie/types/integrations';
 import { genericWebhookProvider } from './generic-webhook';
 import { googleCalendarProvider } from './google-calendar';
 import { instagramProvider } from './instagram';

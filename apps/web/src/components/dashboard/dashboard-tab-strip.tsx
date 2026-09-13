@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Badge } from '@entrophy/ui';
+import { Badge } from '@pavisie/ui';
 import { NAV, isNavItemActive, isNavItemDisabled } from './nav';
 import { usePlugins } from '@/lib/dashboard/queries';
 

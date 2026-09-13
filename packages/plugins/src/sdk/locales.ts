@@ -1,5 +1,5 @@
-import { registerLocaleBundle, t as coreT } from '@entrophy/core';
-import type { PluginId } from '@entrophy/types';
+import { registerLocaleBundle, t as coreT } from '@pavisie/core';
+import type { PluginId } from '@pavisie/types';
 
 export type PluginLocaleBundles = Record<string, Record<string, unknown>>;
 export type BoundTFunction = (key: string, vars?: Record<string, string | number>, locale?: string) => string;

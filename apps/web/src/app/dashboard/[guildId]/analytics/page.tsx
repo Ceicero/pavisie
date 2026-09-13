@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
   Skeleton,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useAnalytics, type AnalyticsRange } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
 import { ApiClientError } from '@/lib/dashboard/api';

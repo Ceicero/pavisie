@@ -31,7 +31,7 @@ export const tempVoiceSweepJob: PluginJob = {
 
         if (isOrphanTempVoiceChannel(channel.members.size)) {
           await channel
-            .delete('Entrophy engagement: temp voice sweep (empty channel)')
+            .delete('Pavisie engagement: temp voice sweep (empty channel)')
             .catch(() => undefined);
           await ctx.prisma.tempVoiceChannel.delete({ where: { id: row.id } }).catch(() => undefined);
         }

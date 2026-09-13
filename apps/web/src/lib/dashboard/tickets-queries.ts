@@ -1,14 +1,14 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Paginated } from '@entrophy/types';
+import type { Paginated } from '@pavisie/types';
 import type {
   TicketDetailDto,
   TicketIntakeFieldDto,
   TicketPanelDto,
   TicketQueueItemDto,
   TicketsSettingsDto,
-} from '@entrophy/types/tickets';
+} from '@pavisie/types/tickets';
 import { apiFetch, toQueryString } from './api';
 
 export const ticketsQueryKeys = {

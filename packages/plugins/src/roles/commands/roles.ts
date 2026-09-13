@@ -7,7 +7,7 @@ import {
   TextInputStyle,
   type ChatInputCommandInteraction,
 } from 'discord.js';
-import { formatDuration } from '@entrophy/core';
+import { formatDuration } from '@pavisie/core';
 import {
   assertStaffLevel,
   buildCustomId,
@@ -273,7 +273,7 @@ const data = new SlashCommandBuilder()
   );
 
 const ROLE_PERSISTENCE_DISCLOSURE =
-  "When on, Entrophy stores a snapshot of a leaving member's roles (excluding elevated-permission and integration-managed roles) for up to the configured number of days, and restores them automatically if that member rejoins within that window. This is stored per-member in the database until it expires or is restored.";
+  "When on, Pavisie stores a snapshot of a leaving member's roles (excluding elevated-permission and integration-managed roles) for up to the configured number of days, and restores them automatically if that member rejoins within that window. This is stored per-member in the database until it expires or is restored.";
 
 export const command: PluginCommand = {
   data,

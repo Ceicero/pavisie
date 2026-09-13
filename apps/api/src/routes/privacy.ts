@@ -1,8 +1,8 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { AuditAction, NotFoundError, ValidationError, buildPaginated, paginate } from '@entrophy/core';
-import { defaultRetentionPolicy } from '@entrophy/database';
-import type { DataRequestDto, Paginated, RetentionPolicyDto } from '@entrophy/types';
+import { AuditAction, NotFoundError, ValidationError, buildPaginated, paginate } from '@pavisie/core';
+import { defaultRetentionPolicy } from '@pavisie/database';
+import type { DataRequestDto, Paginated, RetentionPolicyDto } from '@pavisie/types';
 import { writeDashboardAudit } from '../lib/audit';
 import { toDataRequestDto, toRetentionPolicyDto } from '../lib/dto';
 import { requireGuildAccess } from '../lib/guild-access';
@@ -190,7 +190,7 @@ export default async function privacyRoutes(app: ZodFastifyInstance): Promise<vo
       if (!blob) throw new NotFoundError('That export could not be found.');
 
       reply.header('Content-Type', 'application/json; charset=utf-8');
-      reply.header('Content-Disposition', `attachment; filename="entrophy-export-${guildId}.json"`);
+      reply.header('Content-Disposition', `attachment; filename="pavisie-export-${guildId}.json"`);
       return blob.content;
     },
   );

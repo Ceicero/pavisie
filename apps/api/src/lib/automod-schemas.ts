@@ -1,6 +1,6 @@
 // Single source of truth: packages/plugins/src/automod/schemas.ts (TASK: "export them from the plugin's
 // index.ts as 'automodRuleSchemas' ... then make apps/api/src/lib/automod-schemas.ts re-export from
-// '@entrophy/plugins' so there is one source of truth"). This file exists only so existing imports of
+// '@pavisie/plugins' so there is one source of truth"). This file exists only so existing imports of
 // '../lib/automod-schemas' inside apps/api keep working without touching every call site.
 export {
   automodActionTypeSchema,
@@ -28,4 +28,4 @@ export {
   type AutomodAction,
   type AutomodRuleConfig,
   type AutomodRuleTypeValue,
-} from '@entrophy/plugins/automod/schemas';
+} from '@pavisie/plugins/automod/schemas';

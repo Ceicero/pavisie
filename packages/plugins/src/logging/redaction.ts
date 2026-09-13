@@ -1,4 +1,4 @@
-import { validateUserRegex } from '@entrophy/core';
+import { validateUserRegex } from '@pavisie/core';
 import { isValidLuhn } from './luhn';
 
 export interface RedactionPattern {

@@ -1,6 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type ButtonInteraction, type EmbedBuilder } from 'discord.js';
-import { shortId } from '@entrophy/core';
-import type { PluginId } from '@entrophy/types';
+import { shortId } from '@pavisie/core';
+import type { PluginId } from '@pavisie/types';
 import { buildCustomId, parseCustomId } from './custom-id';
 import { errorEmbed, infoEmbed } from './embeds';
 import type { ConfirmationInteraction } from './confirm';

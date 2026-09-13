@@ -1,9 +1,9 @@
 // Small, dependency-free helpers for the public site's environment-driven links (ARCHITECTURE.md §17). The web
-// app does not depend on `@entrophy/core`, so these read `process.env.NEXT_PUBLIC_*` directly — Next.js inlines
+// app does not depend on `@pavisie/core`, so these read `process.env.NEXT_PUBLIC_*` directly — Next.js inlines
 // every `NEXT_PUBLIC_*` reference into both the server and client bundles at build time.
 import inviteDefaults from '../data/invite.json';
 
-/** Base URL of the Entrophy API (`@entrophy/api`). No trailing slash. */
+/** Base URL of the Pavisie API (`@pavisie/api`). No trailing slash. */
 export function apiUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/+$/, '');
 }
@@ -48,7 +48,7 @@ export function inviteUrl(): string | null {
   return `https://discord.com/oauth2/authorize?${params.toString()}`;
 }
 
-export const SITE_URL = 'https://entrophybot.com';
+export const SITE_URL = 'https://pavisie.com';
 
-/** Public source repository (AGPL-3.0). Entrophy is open source — linked from the footer. */
-export const GITHUB_URL = 'https://github.com/Ceicero/entrophy';
+/** Public source repository (AGPL-3.0). Pavisie is open source — linked from the footer. */
+export const GITHUB_URL = 'https://github.com/Ceicero/pavisie';

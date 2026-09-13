@@ -1,11 +1,11 @@
 import type Redis from 'ioredis';
-import { redisKey, shortId } from '@entrophy/core';
+import { redisKey, shortId } from '@pavisie/core';
 
 const DEFAULT_TTL_SECONDS = 120;
 
 /**
  * Short-lived Redis-backed store for payloads too large to fit in a component custom id
- * (ARCHITECTURE.md §7.7: `entrophy:pending:<uuid>` TTL 120s).
+ * (ARCHITECTURE.md §7.7: `pavisie:pending:<uuid>` TTL 120s).
  */
 export class PendingStore {
   constructor(private readonly redis: Redis) {}

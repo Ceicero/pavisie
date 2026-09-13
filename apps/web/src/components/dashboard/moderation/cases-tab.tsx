@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Download } from 'lucide-react';
-import type { ModerationCaseDto } from '@entrophy/types';
+import type { ModerationCaseDto } from '@pavisie/types';
 import {
   Badge,
   Button,
@@ -13,7 +13,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { DataTable, type DataTableColumn } from '../data-table';
 import { formatDateTime } from '@/lib/dashboard/format';
 import {

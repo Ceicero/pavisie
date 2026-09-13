@@ -5,11 +5,11 @@ import {
   resolveStaffLevel,
   type MemberLike,
   type StaffRoleConfig,
-} from '@entrophy/core';
-import type { StaffLevel } from '@entrophy/types';
-import type { CommandRequirement } from '@entrophy/plugins';
+} from '@pavisie/core';
+import type { StaffLevel } from '@pavisie/types';
+import type { CommandRequirement } from '@pavisie/plugins';
 
-/** Converts a real discord.js `GuildMember` into the plain-data shape `@entrophy/core`'s staff-level resolver needs. */
+/** Converts a real discord.js `GuildMember` into the plain-data shape `@pavisie/core`'s staff-level resolver needs. */
 export function toMemberLike(member: GuildMember): MemberLike {
   return {
     id: member.id,

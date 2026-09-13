@@ -2,16 +2,16 @@ import { Queue } from 'bullmq';
 import type { RedisOptions } from 'ioredis';
 import type Redis from 'ioredis';
 import type { Client } from 'discord.js';
-import { createLogger, RateLimiter, env as coreEnv, type PlatformEvents } from '@entrophy/core';
-import { writeAudit, type PrismaClient } from '@entrophy/database';
-import type { PluginId } from '@entrophy/types';
+import { createLogger, RateLimiter, env as coreEnv, type PlatformEvents } from '@pavisie/core';
+import { writeAudit, type PrismaClient } from '@pavisie/database';
+import type { PluginId } from '@pavisie/types';
 import {
   GuildConfigStore,
   ServiceRegistry,
   registerPluginLocales,
   type Plugin,
   type PluginContext,
-} from '@entrophy/plugins';
+} from '@pavisie/plugins';
 
 export interface BuildContextDeps {
   client: Client<true>;

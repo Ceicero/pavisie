@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMBED_LIMITS } from '@entrophy/core';
+import { EMBED_LIMITS } from '@pavisie/core';
 import {
   embedPayloadFromJson,
   EmbedPayloadError,

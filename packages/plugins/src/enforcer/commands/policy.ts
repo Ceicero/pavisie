@@ -1,5 +1,5 @@
 import { ChannelType, type SlashCommandBuilder } from 'discord.js';
-import type { EnforcerDecision } from '@entrophy/database';
+import type { EnforcerDecision } from '@pavisie/database';
 import {
   assertStaffLevel,
   errorEmbed,

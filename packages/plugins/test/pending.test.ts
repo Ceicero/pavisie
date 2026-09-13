@@ -30,7 +30,7 @@ describe('PendingStore', () => {
     const redis = new RedisMock();
     const store = new PendingStore(redis);
     const id = await store.put({ x: true }, 30);
-    const ttl = await redis.ttl(`entrophy:pending:${id}`);
+    const ttl = await redis.ttl(`pavisie:pending:${id}`);
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(30);
   });

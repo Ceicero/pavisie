@@ -1,4 +1,4 @@
-# Entrophy — Marketing Research & Draft Copy
+# Pavisie — Marketing Research & Draft Copy
 
 **Status: RESEARCH ONLY. Nothing in this document has been posted, submitted, or published anywhere.
 Every listing submission, every Reddit post, and every account action described below is a draft for
@@ -31,7 +31,7 @@ below is secondhand paraphrase or guesswork anymore.
 | 2 | **discordlist.gg** | Do first. Actively surfaces brand-new/0-server bots in a "Trending" feed — unusually friendly to a bot with no traction yet. |
 | 3 | **botlist.me** | Do early. Published, achievable requirements (5 real commands + a help command + 24/7 uptime). Audience skews anime/gacha/RPG bots, but has real Moderation/Utility/Logging tags. |
 | 4 | **discordbotlist.com** | Do early. Real, active, has a Moderation category and a "New Bots" discovery page, but the submission form is behind Discord OAuth login and its exact field rules aren't publicly documented — budget extra time to find out live. |
-| 5 | **discord.bots.gg** | Do, but later / after the others. Active and legitimate, but it's a small volunteer team doing fully manual review (their own About page literally lists a "Chief Bot Denial Helper" role), historically slower and pickier than top.gg. Better odds once Entrophy has a support server with some activity and a couple of other listings live. |
+| 5 | **discord.bots.gg** | Do, but later / after the others. Active and legitimate, but it's a small volunteer team doing fully manual review (their own About page literally lists a "Chief Bot Denial Helper" role), historically slower and pickier than top.gg. Better odds once Pavisie has a support server with some activity and a couple of other listings live. |
 | 6 | **discadia.com** | Low priority — see caution below. |
 | — | **disforge.com** | **Do not use.** See finding below — this is no longer the site people remember. |
 | — | **wumpus.store** | **Could not verify this exists.** See finding below. |
@@ -46,12 +46,12 @@ below is secondhand paraphrase or guesswork anymore.
 - **Short description**: the step-by-step submission guide states **under 140 characters**. Note: the separate Guidelines page references not padding text "to reach the 200 character limit" for the same field — those two docs disagree with each other, so treat 140 as the safe target and double-check the live character counter in the form. [How to Add Your Bot](https://support.top.gg/hc/en-us/articles/23135162935708-How-to-Add-Your-Bot) / [Discord Bot Guidelines](https://support.top.gg/support/solutions/articles/73000502502-bot-guidelines)
 - **Long description**: markdown and HTML/CSS supported.
 - **Tags**: up to 12 categories, developer's choice, no `#`. **Languages**: up to 12.
-- **Invite URL**: you supply your own (or top.gg auto-generates a 0-permission one). This is a natural fit for Entrophy since the product already never requests Administrator.
+- **Invite URL**: you supply your own (or top.gg auto-generates a 0-permission one). This is a natural fit for Pavisie since the product already never requests Administrator.
 - **Support URL**: must be a non-expiring invite.
-- **Disqualifiers relevant to a new bot**: cannot require Administrator permission; must have a working, obvious entry point (e.g. `/help`); cannot be an unmodified fork; no vote-manipulation or reward-for-voting-elsewhere schemes; owner/dev commands must be locked down; no NSFW anywhere on the page. None of these are a problem for Entrophy as described. [Discord Bot Guidelines](https://support.top.gg/support/solutions/articles/73000502502-bot-guidelines)
+- **Disqualifiers relevant to a new bot**: cannot require Administrator permission; must have a working, obvious entry point (e.g. `/help`); cannot be an unmodified fork; no vote-manipulation or reward-for-voting-elsewhere schemes; owner/dev commands must be locked down; no NSFW anywhere on the page. None of these are a problem for Pavisie as described. [Discord Bot Guidelines](https://support.top.gg/support/solutions/articles/73000502502-bot-guidelines)
 
 #### 2. discordlist.gg — DO FIRST
-- Confirmed live and active by direct browsing (2026-08-20). Categories include Moderation, Auto Moderation, Logging, Server Management, Utility — a strong fit for Entrophy.
+- Confirmed live and active by direct browsing (2026-08-20). Categories include Moderation, Auto Moderation, Logging, Server Management, Utility — a strong fit for Pavisie.
 - Notably, its "Trending bots" section on the homepage prominently features bots with **0 servers** — meaning the site's discovery mechanics don't punish a brand-new bot the way vote/server-count-sorted lists do.
 - Submission requires "Sign in with Discord" (OAuth). I could not find a public docs/rules page describing exact char limits, image dimensions, or a review queue — that detail only appears inside the logged-in dashboard. Budget time to read the in-dashboard rules at signup before filling anything in.
 
@@ -60,12 +60,12 @@ below is secondhand paraphrase or guesswork anymore.
 - **Published requirements** (from the add-bot page itself): at least 5 commands that aren't generic (not just help/ping/stats), a working help command, most commands functional, bot online 24/7 (outside maintenance). Long description accepts Markdown and HTML.
 - **Disqualifiers**: scam bots (e.g. nitro generators), mass-DM bots, unmodified copies of other bots/GitHub repos, commands that fire without a prefix/mention (with limited exceptions), NSFW commands outside NSFW channels.
 - No published minimum server count, no published char limit for the short description, no published image dimensions — none of these appeared on the public add page.
-- **Audience caveat**: the live "Top Voted" and "Random" bot rails on botlist.me are dominated by anime/gacha card-collecting RPG bots and one bot explicitly tagged "Certified" that is an adult-roleplay/AI-persona bot. That's a values mismatch for a compliance-first brand, but the platform itself does have real Moderation/Utility/Logging/Role Management tags and doesn't require anything Entrophy can't honestly claim.
+- **Audience caveat**: the live "Top Voted" and "Random" bot rails on botlist.me are dominated by anime/gacha card-collecting RPG bots and one bot explicitly tagged "Certified" that is an adult-roleplay/AI-persona bot. That's a values mismatch for a compliance-first brand, but the platform itself does have real Moderation/Utility/Logging/Role Management tags and doesn't require anything Pavisie can't honestly claim.
 
 #### 4. discordbotlist.com — DO EARLY, EXPECT FRICTION FINDING THE RULES
 - Confirmed live and active. Has a dedicated Moderation category (`/discord-moderation-bots`) and a `/new` "New Discord Bots" discovery page.
 - Submission is gated behind "Log in with Discord" — I could not locate a public page listing char limits, image specs, minimum servers, or review turnaround; every dead-end (`/add-bot`, `/docs`, `/help`) 404'd. This is very likely because that information only lives inside the logged-in submission flow.
-- Recommendation: log in, read whatever the dashboard shows at submission time, and note it down for next time (nothing here disqualifies Entrophy on what's publicly visible).
+- Recommendation: log in, read whatever the dashboard shows at submission time, and note it down for next time (nothing here disqualifies Pavisie on what's publicly visible).
 
 #### 5. discord.bots.gg — LEGITIMATE BUT SLOWER; DO LATER
 - Confirmed alive and active by direct browsing (2026-08-20) — this is "the original Discord bot list," a community-run, all-volunteer operation.
@@ -106,8 +106,8 @@ Facts used below (all verified against the repo on 2026-09-06, nothing invented)
 **"Discord moderation you can trust,"** **command prefix `+`, entry point `+help`**, **15 modular
 plugins,** **297 invocable commands** (51 top-level, of which 47 are slash commands and 4 are
 right-click context-menu commands; 284 of the 297 are subcommands), invite never requests
-Administrator, support server `https://discord.gg/5fpRPFMUKu`, site `https://entrophybot.com`,
-dashboard `https://entrophybot.com/dashboard`. Counts are read from `docs/commands.json` — recount
+Administrator, support server `https://discord.gg/5fpRPFMUKu`, site `https://pavisie.com`,
+dashboard `https://pavisie.com/dashboard`. Counts are read from `docs/commands.json` — recount
 there before reusing them, never estimate. Invite link uses the production client ID from the repo's own
 Railway config plus the least-privilege permission integer documented in `docs/PERMISSIONS.md`:
 
@@ -130,7 +130,7 @@ The Discord Developer Portal's **General Information** tab has a 400-character *
 short — this is a bot *profile*, read at a glance next to the avatar, not a listing page. It only has to
 do two things: name the entry point, and point at the site for everything else.
 ```
-Type +help to get started. Moderation, automod, tickets, roles and leveling — all opt-in, never Administrator. Full command list: https://entrophybot.com
+Type +help to get started. Moderation, automod, tickets, roles and leveling — all opt-in, never Administrator. Full command list: https://pavisie.com
 ```
 
 **App Directory long description** (reuse the top.gg long description from Part 2.1 verbatim).
@@ -159,11 +159,11 @@ Type **`+help`** in any channel to see all available commands. Every command als
 
 ## Moderation you don't have to take on trust
 
-Entrophy is a modular, compliance-first Discord bot for community and gaming servers. It's brand new — no big server count, just a working product in front of real communities for the first time. Here's what makes it different.
+Pavisie is a modular, compliance-first Discord bot for community and gaming servers. It's brand new — no big server count, just a working product in front of real communities for the first time. Here's what makes it different.
 
 ### The Admin Enforcer
 
-Most moderation bots ask you to trust that whoever's on duty made the right call. Entrophy's **Enforcer** plugin instead turns policy violations into a paper trail: an admin writes plain-language policies, the bot flags matches (or staff flag something by hand) into a private review queue, a moderator picks an action, and the bot carries it out and messages the user directly — no DMs, no confrontations. Every flag and every decision gets written to a read-only, append-only ledger channel in your own server, and members can appeal. It's moderation that stays consistent no matter who's on shift, with a record nobody has to take on faith.
+Most moderation bots ask you to trust that whoever's on duty made the right call. Pavisie's **Enforcer** plugin instead turns policy violations into a paper trail: an admin writes plain-language policies, the bot flags matches (or staff flag something by hand) into a private review queue, a moderator picks an action, and the bot carries it out and messages the user directly — no DMs, no confrontations. Every flag and every decision gets written to a read-only, append-only ledger channel in your own server, and members can appeal. It's moderation that stays consistent no matter who's on shift, with a record nobody has to take on faith.
 
 ### 15 plugins, 297 commands, all opt-in per server
 
@@ -171,16 +171,16 @@ Admin · Moderation · Automod · Enforcer · Logging · Tickets · Roles & Onbo
 
 ### Least-privilege by default
 
-Entrophy **never asks for Administrator.** Every command requests only the specific permission it needs, and message-content-dependent features stay off until an admin explicitly turns them on.
+Pavisie **never asks for Administrator.** Every command requests only the specific permission it needs, and message-content-dependent features stay off until an admin explicitly turns them on.
 
 ### Get started
 
 - Type `+help` in Discord to see all commands (also works as `/help`)
-- Invite: `https://entrophybot.com` or use the button on this page
-- Dashboard: `https://entrophybot.com/dashboard`
+- Invite: `https://pavisie.com` or use the button on this page
+- Dashboard: `https://pavisie.com/dashboard`
 - Support: `https://discord.gg/5fpRPFMUKu`
 
-We're brand new here. If you try Entrophy and something's broken, missing, or confusing, the support server is the fastest way to reach us directly.
+We're brand new here. If you try Pavisie and something's broken, missing, or confusing, the support server is the fastest way to reach us directly.
 ```
 
 **Invite URL to submit**: the client-ID link above.
@@ -225,7 +225,7 @@ Type +help to start. Modular bot: moderation, automod, Enforcer (audit ledger), 
 **Long description**: reuse the top.gg long description (Part 2.1); botlist.me's add form explicitly
 supports Markdown and HTML, so no reformatting needed.
 
-**Before submitting, confirm live**: Entrophy has far more than the required 5 non-generic commands exposed (297 total), and `+help` and `/help` both work as the obvious entry point, per their published rule.
+**Before submitting, confirm live**: Pavisie has far more than the required 5 non-generic commands exposed (297 total), and `+help` and `/help` both work as the obvious entry point, per their published rule.
 
 ---
 
@@ -251,7 +251,7 @@ self-promotion breakdowns at [mediafa.st](https://www.mediafa.st/reddit-self-pro
 an account that shows up only to drop links to its own bot, in multiple subreddits, in a short window,
 reads as spam and gets action taken against it (post removal, shadowban, or suspension) regardless of
 the literal ratio. **For an account that has posted little or nothing except things related to its own
-project — which is the realistic starting point here — every subreddit post about Entrophy should be
+project — which is the realistic starting point here — every subreddit post about Pavisie should be
 treated as spending down a very limited trust budget, not as a free/repeatable channel.**
 
 ### Subreddit-by-subreddit findings (verified live on 2026-08-20 via old.reddit.com)
@@ -320,7 +320,7 @@ treated as spending down a very limited trust budget, not as a free/repeatable c
   service in comments if it's relevant and adds value."* There's also a Wednesday-only exception for
   dashboards/companion tools, and a "New Project Megathread" exception for projects under 3 months old.
 - **Reasoning for the verdict**: none of that matters here because of a topic mismatch, not a rule
-  problem — r/selfhosted is for software people run on their **own** infrastructure. Entrophy is a
+  problem — r/selfhosted is for software people run on their **own** infrastructure. Pavisie is a
   hosted bot/dashboard (Brandon runs it on Railway; users invite it, they don't deploy it). Per the
   product facts for this document, there's no self-hostable release to point to.
 - **Source**: `https://old.reddit.com/r/selfhosted/about/rules.json`
@@ -369,14 +369,14 @@ treated as spending down a very limited trust budget, not as a free/repeatable c
   policy.
 - **Source**: `https://old.reddit.com/r/IndieBiz/about.json` (sidebar/description field)
 - **VERDICT: POST** — self-post, `[INTRO]` tag, describe the product honestly (no location applies —
-  Entrophy is online-only).
+  Pavisie is online-only).
 
 #### r/alphaandbetausers — 42,649 subscribers
 - **Submission guidance (sidebar)**: *"Posts must include links to products that are ready to be
   tested. Please tag title with stage and system, i.e., [Android, Alpha] or [IOS, Beta]... DO NOT post
   links to pages that only request email addresses or 'registration for launch'... If you are posting,
   please take the time to test someone else's product as well."*
-- This is a good fit specifically because Entrophy has a real, invitable bot and a live dashboard —
+- This is a good fit specifically because Pavisie has a real, invitable bot and a live dashboard —
   not just a landing page — which is the exact bar this sub sets.
 - **Source**: `https://old.reddit.com/r/alphaandbetausers/about.json` (sidebar/description field)
 - **VERDICT: POST** — title tagged `[Discord, Beta]`, reciprocal testing expected as a norm.
@@ -411,7 +411,7 @@ Since r/DiscordServers doesn't exist, here's what a live search of Reddit's own 
 |---|---|---|---|
 | r/Discord_Servers_List | 16,612 | Real directory. Sidebar: *"share your discord server for free or find new communities to join... we only approve servers we can access to review for rule violations."* Rule: promotion restricted to Discord servers only, no social/website links. | **POST**, but only after granting the mod team access to review the server first — that's a real gate, not optional. |
 | r/DiscordServerGrow | 11,291 | Sidebar: *"Advertise your favorite Discord Servers here! Please join the subreddit prior to posting, or posts may be removed by AutoMod."* No structured rules configured beyond that. | **POST** (join the sub first). |
-| r/PromoteDiscordServer | 6,273 | Rules: post limit once per 24 hours, SFW servers only, valid Discord link required, no "ad servers"/"growth hubs," no giveaway-only or monetary/paid-focus servers, English only. | **POST** — Entrophy's support server isn't a giveaway/growth-hub server, so it clears these rules. |
+| r/PromoteDiscordServer | 6,273 | Rules: post limit once per 24 hours, SFW servers only, valid Discord link required, no "ad servers"/"growth hubs," no giveaway-only or monetary/paid-focus servers, English only. | **POST** — Pavisie's support server isn't a giveaway/growth-hub server, so it clears these rules. |
 | r/DiscordServerPromos | 19,706 | Sidebar frames it as the *"official subreddit used by [two named Twitch streamers]"*; **comments are globally disabled** sitewide on the sub. Rules exist (age-gating ban, Discord/Reddit ToS, "remember the human") but the overall shape reads as a personal/branded space, not a general open directory. | **NOT RECOMMENDED** — ambiguous fit, low confidence this is a genuine general-purpose venue; skip rather than guess. |
 | r/DiscordServersAd | 2,272 | Exists (200 OK), rules not read — too small to be worth the research time given the alternatives above. | Not pursued. |
 | r/PostDiscordServerAds | 77 | Exists but `subreddit_type: restricted` (posting likely needs approval), rules not read — negligible reach. | Not pursued. |
@@ -427,7 +427,7 @@ Since r/DiscordServers doesn't exist, here's what a live search of Reddit's own 
 | r/discordbots | 18,803 | REPLY-ONLY | Same, plus: link via top.gg, never a direct invite |
 | r/DiscordBotDesigner | 2,627 | DO NOT POST | "Do not promote services" rule; tiny, narrow focus |
 | r/SideProject | 814,266 | POST | Self-promotion is the sub's purpose; strict title format |
-| r/selfhosted | 824,458 | DO NOT POST | Entrophy is hosted, not self-hostable — topic mismatch |
+| r/selfhosted | 824,458 | DO NOT POST | Pavisie is hosted, not self-hostable — topic mismatch |
 | r/programming | 6,912,953 | DO NOT POST | Explicit "No Product Promotion" rule |
 | r/webdev | 3,299,593 | MEGATHREAD ONLY | Showoff Saturday only |
 | r/startups | 2,115,467 | MEGATHREAD ONLY | Monthly "Share Your Startup" thread only |
@@ -456,19 +456,19 @@ equivalent available.
 
 **Title** (reformatted to the sub's required `[Project name] - [Short description]` shape — see Part 3):
 ```
-Entrophy - a Discord bot that turns mod decisions into a public, appealable audit log
+Pavisie - a Discord bot that turns mod decisions into a public, appealable audit log
 ```
 
 **Body:**
 ```
-Hey — developer here, this is my own project (Entrophy), posting because I think the approach might
+Hey — developer here, this is my own project (Pavisie), posting because I think the approach might
 be useful to some of you even if you never install it.
 
 The problem I kept running into on every Discord server I've modded: moderation runs on trust. Someone
 gets timed out or banned, and unless you were watching, you just have to believe the mod made the right
 call. There's usually no record a regular member can check.
 
-Entrophy's main feature (called the Enforcer) tries to fix that mechanically instead of just asking for
+Pavisie's main feature (called the Enforcer) tries to fix that mechanically instead of just asking for
 more trust: an admin writes a plain-language policy, the bot watches for matches (or staff flag something
 manually), a moderator reviews the flagged message in a private queue and picks an action, and the bot
 carries it out and messages the user itself — no DMs, no back-and-forth. Every flag and every decision
@@ -486,8 +486,8 @@ Every command works both as a slash command (`/`) and as a message command with 
 It's brand new. No real user base yet, no track record — I'm posting here specifically to get honest
 first reactions before I put real effort into growing it.
 
-Site: https://entrophybot.com
-Dashboard (if you want to see the config UI without inviting anything): https://entrophybot.com/dashboard
+Site: https://pavisie.com
+Dashboard (if you want to see the config UI without inviting anything): https://pavisie.com/dashboard
 
 Happy to answer anything about the architecture, the moderation-audit design, the prefix-command layer, 
 or why I went with an append-only ledger instead of just better logging.
@@ -502,7 +502,7 @@ constructive feedback," and explicitly invites it in the last line.)*
 
 Both subs' current rules ban a standalone "I made this" post (see Part 3). The only permitted use is a
 **genuinely helpful reply to someone else's question**, written so it's useful even to someone who
-never installs Entrophy — the disclosure comes after the actual answer, not instead of it. On
+never installs Pavisie — the disclosure comes after the actual answer, not instead of it. On
 r/discordbots specifically, link via a reputable source like top.gg rather than a direct invite link;
 on r/Discord_Bots, keep this kind of reply a small fraction of the account's total activity there.
 
@@ -516,7 +516,7 @@ since only the mods can read it. Worth comparing candidates on: does it log to a
 can read, can that log be edited after the fact, and is there any kind of appeal path for the person who
 got actioned.
 
-(Disclosure: I built one of these — Entrophy — specifically because I kept hitting this exact problem
+(Disclosure: I built one of these — Pavisie — specifically because I kept hitting this exact problem
 modding my own servers. Its Enforcer plugin writes every flagged message and every mod decision to a
 read-only, append-only ledger channel, plus a built-in appeal command. Not saying it's the only answer —
 just flagging what's worth checking for regardless of which bot you land on.)
@@ -526,12 +526,12 @@ just flagging what's worth checking for regardless of which bot you land on.)
 
 **Title** (per the sub's required `[TAG]` format):
 ```
-[INTRO] Entrophy — a modular, compliance-first Discord moderation bot
+[INTRO] Pavisie — a modular, compliance-first Discord moderation bot
 ```
 
 **Body:**
 ```
-Hi all — introducing my project, Entrophy. Online-only (no physical location — it's a Discord bot with
+Hi all — introducing my project, Pavisie. Online-only (no physical location — it's a Discord bot with
 a web dashboard, not a local business).
 
 What it is: a modular Discord bot for community/gaming servers — 15 independently-toggleable plugins
@@ -549,20 +549,20 @@ never requests the Administrator permission; every command asks for only what it
 Where it's at: brand new, shipped and live, no meaningful user base yet. Not here to claim numbers I
 don't have — mostly interested in feedback and in connecting with other people building in this space.
 
-Site: https://entrophybot.com
-Dashboard: https://entrophybot.com/dashboard
+Site: https://pavisie.com
+Dashboard: https://pavisie.com/dashboard
 ```
 
 ### 4.4 — r/alphaandbetausers (POST)
 
 **Title** (per the sub's required `[System, Stage]` tag format):
 ```
-[Discord, Beta] Entrophy — modular bot with +help entry point and public, appealable mod-ledger
+[Discord, Beta] Pavisie — modular bot with +help entry point and public, appealable mod-ledger
 ```
 
 **Body:**
 ```
-Product: Entrophy, a modular Discord bot — invite it and toggle on whichever of its 15 plugins your
+Product: Pavisie, a modular Discord bot — invite it and toggle on whichever of its 15 plugins your
 server needs (moderation, automod, logging, tickets, roles, leveling, community tools, utility,
 integrations, optional AI assistant, and more). Every command works as both a slash command and a 
 message command with the `+` prefix — try `+help` to explore.
@@ -575,8 +575,8 @@ asks for Administrator.
 It's live and working, not a landing page — invite link and dashboard both below. No real servers using
 it yet, so this is genuinely early feedback I'm after.
 
-Invite: https://entrophybot.com
-Dashboard: https://entrophybot.com/dashboard
+Invite: https://pavisie.com
+Dashboard: https://pavisie.com/dashboard
 
 Happy to return the favor and test something of yours in exchange — drop a link.
 ```
@@ -587,7 +587,7 @@ Mods check post history for affiliation before approving, and the required templ
 follow it exactly:
 
 ```
-**The product**: Entrophy (https://entrophybot.com) — a modular Discord moderation bot. Its headline
+**The product**: Pavisie (https://pavisie.com) — a modular Discord moderation bot. Its headline
 feature, the Enforcer, writes every flagged message and moderator decision to a read-only, append-only
 ledger channel in the server itself, with a built-in appeal command, instead of leaving moderation as
 something members just have to trust. Entry point: type `+help` in Discord to see all commands (or 
@@ -603,7 +603,7 @@ differentiator inside an otherwise saturated space, not that the space itself is
 channel at best. Few, if any, write an append-only, member-readable ledger with a built-in appeal
 command as a first-class feature rather than an afterthought.
 
-**Stage**: shipped and live — real bot, real dashboard (https://entrophybot.com/dashboard), zero meaningful
+**Stage**: shipped and live — real bot, real dashboard (https://pavisie.com/dashboard), zero meaningful
 server count so far. Not raising money; this is self-funded and small right now.
 
 **Customer conversion strategy**: honestly the weakest part right now — this document (bot-list
@@ -619,7 +619,7 @@ it — that's what I'm here for.
 
 **r/webdev — "Showoff Saturday" only:**
 ```
-Entrophy — a modular Discord moderation bot. Most interested in feedback on one thing: instead of
+Pavisie — a modular Discord moderation bot. Most interested in feedback on one thing: instead of
 logging admin actions to a private mod channel, it writes every flagged message and mod decision to a
 read-only, append-only ledger channel that regular members can read, plus a built-in appeal command.
 15 opt-in plugins total (moderation, automod, tickets, roles, leveling, integrations, AI, etc.), 
@@ -628,40 +628,40 @@ never requests Administrator. Type +help in Discord to explore all commands (als
 Brand new, no real user base yet — genuinely trying to find out if the audit-log idea is actually
 useful or just adds friction.
 
-Site: https://entrophybot.com | Dashboard: https://entrophybot.com/dashboard
+Site: https://pavisie.com | Dashboard: https://pavisie.com/dashboard
 ```
 
 **r/startups — "Monthly Share Your Startup" thread only:**
 ```
-Entrophy — modular, compliance-first Discord bot for community/gaming servers. Differentiator: mod
+Pavisie — modular, compliance-first Discord bot for community/gaming servers. Differentiator: mod
 decisions get written to a public, read-only, append-only ledger in the server itself (with an appeal
 command), instead of just a private mod-only log — moderation you can audit, not just trust.
 
 Stage: shipped and live (site + dashboard), no meaningful user base yet — here for feedback on
 positioning more than growth at this point.
 
-https://entrophybot.com
+https://pavisie.com
 ```
 
 **r/Entrepreneur — designated weekly promo thread only (confirm current thread name/rules live):**
 ```
-Entrophy — a modular Discord moderation bot for community/gaming servers. The differentiator: every
+Pavisie — a modular Discord moderation bot for community/gaming servers. The differentiator: every
 flagged message and moderator decision is written to a read-only, append-only ledger channel in the
 server itself, with a built-in appeal command — an audit trail instead of "just trust the mods."
 Never requests Administrator. Brand new, no track record yet — feedback welcome.
 
-https://entrophybot.com
+https://pavisie.com
 ```
 
 ### 4.7 — Discord-server-growth directories (promoting the support server itself, not the bot pitch)
 
-These three are about getting people into the Entrophy support/feedback server as a community, not
+These three are about getting people into the Pavisie support/feedback server as a community, not
 about pitching the bot's features — keep the copy honest about size (new, small) per the no-fake-content
 rule.
 
 **r/Discord_Servers_List** (POST, but grant the mods review access to the server before it'll be approved):
 ```
-Entrophy Support & Feedback — a brand-new space for a Discord moderation bot I'm building. Come by if
+Pavisie Support & Feedback — a brand-new space for a Discord moderation bot I'm building. Come by if
 you're evaluating mod bots, want to poke at the dashboard, or just want to see how the Enforcer
 audit-log feature works before inviting anything to your own server. Small right now — that's the
 honest state of it, not a sales pitch.
@@ -671,7 +671,7 @@ https://discord.gg/5fpRPFMUKu
 
 **r/DiscordServerGrow** (POST — join the sub before posting):
 ```
-Entrophy Support & Feedback — new support server for a modular Discord moderation bot (Enforcer plugin
+Pavisie Support & Feedback — new support server for a modular Discord moderation bot (Enforcer plugin
 writes mod decisions to a public, appealable ledger instead of a private mod-only log). Looking for
 early testers and feedback more than members for their own sake.
 
@@ -680,8 +680,8 @@ https://discord.gg/5fpRPFMUKu
 
 **r/PromoteDiscordServer** (POST — respect the once-per-24h limit, SFW-only, not framed as a growth hub):
 ```
-Entrophy Support & Feedback Server
-A new support/feedback community for Entrophy, a modular Discord moderation bot. Come talk to the
+Pavisie Support & Feedback Server
+A new support/feedback community for Pavisie, a modular Discord moderation bot. Come talk to the
 developer directly, try the dashboard, or get help setting it up. Small and new — not an established
 community, just an honest invite to the people actually building and testing it.
 
@@ -720,7 +720,7 @@ using it anywhere, per Part 2.)*
   have an explicit current rule against exactly that (quoted in Part 3) — this isn't a judgment call,
   it's a rule that will get the post removed and can get the account actioned.
 - **Claiming numbers that don't exist.** No server counts, uptime percentages, or user testimonials
-  appear anywhere in this document, on purpose — Entrophy has none yet, and inventing any would violate
+  appear anywhere in this document, on purpose — Pavisie has none yet, and inventing any would violate
   both Brandon's explicit no-fake-content rule and most of these communities' own rules against
   misleading claims.
 - **Submitting to a listing site whose brand doesn't fit and getting flagged as a mismatch.** Discadia's
@@ -768,6 +768,6 @@ using it anywhere, per Part 2.)*
     on its own.
 11. **Hold off on discordbotlist.com and discord.bots.gg's exact rules discovery** (log in, read what
     the dashboard says) until step 2–3 are done, since neither is time-sensitive and both benefit from
-    Entrophy having a slightly less "just created" footprint by the time you look.
+    Pavisie having a slightly less "just created" footprint by the time you look.
 12. **Skip discadia.com and disforge.com** entirely unless Brandon explicitly decides the reach is worth
     the brand-adjacency risk after reading the findings above.

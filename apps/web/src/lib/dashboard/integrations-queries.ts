@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Paginated } from '@entrophy/types';
+import type { Paginated } from '@pavisie/types';
 import type {
   ConnectOAuthResponseDto,
   CreateAlertConnectionInput,
@@ -24,7 +24,7 @@ import type {
   UpdateTwitchChatTimerInput,
   WebhookDeliveryDto,
   WebhookEndpointDetailDto,
-} from '@entrophy/types/integrations';
+} from '@pavisie/types/integrations';
 import { apiFetch, toQueryString } from './api';
 
 export const integrationsQueryKeys = {
@@ -295,8 +295,8 @@ export function useOutboundDeliveries(guildId: string, endpointId: string | unde
 }
 
 // ---------------------------------------------------------------------------
-// Twitch chat bot (Entrophy joining a streamer's Twitch chat) — lives inside this same `integrations`
-// plugin rather than as its own tab-worth of unrelated infra. See @entrophy/types/integrations for the DTOs.
+// Twitch chat bot (Pavisie joining a streamer's Twitch chat) — lives inside this same `integrations`
+// plugin rather than as its own tab-worth of unrelated infra. See @pavisie/types/integrations for the DTOs.
 // ---------------------------------------------------------------------------
 
 export function useTwitchChatStatus(guildId: string | undefined) {

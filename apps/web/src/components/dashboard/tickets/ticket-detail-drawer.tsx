@@ -14,7 +14,7 @@ import {
   SheetTitle,
   Skeleton,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { formatDateTime } from '@/lib/dashboard/format';
 import { useAssignTicket, useCloseTicket, useTicket, ticketTranscriptUrl } from '@/lib/dashboard/tickets-queries';

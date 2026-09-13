@@ -1,4 +1,4 @@
-import type { DonationConfigDto } from '@entrophy/types';
+import type { DonationConfigDto } from '@pavisie/types';
 import { apiUrl } from './site';
 
 /** Server-side fetch of `GET /donations/config`. Never cached — Ko-fi URL can change without a rebuild,

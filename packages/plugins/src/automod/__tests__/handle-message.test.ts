@@ -1,6 +1,6 @@
 import type { Guild, Message } from 'discord.js';
 import { describe, expect, it } from 'vitest';
-import type { AutomodRule } from '@entrophy/database';
+import type { AutomodRule } from '@pavisie/database';
 import { createTestContext } from '../../sdk/testing';
 import type { AutomodConfig } from '../manifest';
 import type { AutomodRuleConfig } from '../schemas';

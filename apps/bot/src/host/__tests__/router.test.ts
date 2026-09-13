@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Cooldowns, MemoryRateLimiter, createPlatformEvents } from '@entrophy/core';
+import { Cooldowns, MemoryRateLimiter, createPlatformEvents } from '@pavisie/core';
 import {
   DEFAULT_GUILD_CONFIG,
   ServiceRegistry,
@@ -10,8 +10,8 @@ import {
   type PluginContext,
   type PluginManifest,
   type PluginRegistry,
-} from '@entrophy/plugins';
-import type { PluginId } from '@entrophy/types';
+} from '@pavisie/plugins';
+import type { PluginId } from '@pavisie/types';
 import { routeInteraction } from '../router';
 import type { LoadedHost } from '../loader';
 

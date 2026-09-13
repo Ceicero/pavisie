@@ -16,8 +16,8 @@ import {
   TabsList,
   TabsTrigger,
   useToast,
-} from '@entrophy/ui';
-import type { AlertProviderId, IntegrationLiveStatusDto } from '@entrophy/types/integrations';
+} from '@pavisie/ui';
+import type { AlertProviderId, IntegrationLiveStatusDto } from '@pavisie/types/integrations';
 import {
   groupConnectionsByProvider,
   useAlertConnections,
@@ -48,7 +48,7 @@ import { TwitchChatTab } from '@/components/dashboard/integrations/twitch-chat-t
  * a raw, un-mapped code either. */
 const OAUTH_CALLBACK_ERROR_MESSAGES: Record<string, string> = {
   'twitch-chat-already-linked':
-    "That Twitch channel's chat is already linked to a different Entrophy server — Twitch only allows one server per channel at a time.",
+    "That Twitch channel's chat is already linked to a different Pavisie server — Twitch only allows one server per channel at a time.",
 };
 
 export default function IntegrationsPage() {

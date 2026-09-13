@@ -1,5 +1,5 @@
 import type { Config } from 'tailwindcss';
-import { preset } from '@entrophy/ui/tailwind.preset';
+import { preset } from '@pavisie/ui/tailwind.preset';
 
 const config: Config = {
   presets: [preset],

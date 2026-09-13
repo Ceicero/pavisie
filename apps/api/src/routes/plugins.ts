@@ -1,8 +1,8 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { NotFoundError } from '@entrophy/core';
-import { assertKnownConfigKeys } from '@entrophy/plugins';
-import { PLUGIN_IDS, type PluginId, type PluginSummary } from '@entrophy/types';
+import { NotFoundError } from '@pavisie/core';
+import { assertKnownConfigKeys } from '@pavisie/plugins';
+import { PLUGIN_IDS, type PluginId, type PluginSummary } from '@pavisie/types';
 import { requireGuildAccess } from '../lib/guild-access';
 import { buildPluginSummaries } from '../lib/plugin-summaries';
 import { guildIdParamSchema } from '../lib/schemas';

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ExternalServiceError } from '@entrophy/core';
+import { ExternalServiceError } from '@pavisie/core';
 import { fetchWithTimeout } from '../providers/fetch-with-timeout';
 
 describe('fetchWithTimeout', () => {

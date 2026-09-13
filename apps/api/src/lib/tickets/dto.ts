@@ -1,14 +1,14 @@
-// Maps Prisma `Ticket`/`TicketPanel`/`TicketParticipant` rows to `@entrophy/types/tickets` DTOs. Kept separate
+// Maps Prisma `Ticket`/`TicketPanel`/`TicketParticipant` rows to `@pavisie/types/tickets` DTOs. Kept separate
 // from the shared `apps/api/src/lib/dto.ts` (not owned by this task) which already exports the narrower root
 // `TicketDto` used elsewhere.
-import type { Ticket, TicketPanel, TicketParticipant } from '@entrophy/database';
+import type { Ticket, TicketPanel, TicketParticipant } from '@pavisie/database';
 import type {
   TicketDetailDto,
   TicketIntakeFieldDto,
   TicketPanelDto,
   TicketParticipantDto,
   TicketQueueItemDto,
-} from '@entrophy/types/tickets';
+} from '@pavisie/types/tickets';
 import { isSlaBreached } from './sla';
 
 function intakeFormOf(value: unknown): TicketIntakeFieldDto[] | null {

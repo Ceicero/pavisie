@@ -1,7 +1,7 @@
 /** Main entry point for prefix-command handling. */
 import type { Message } from 'discord.js';
 import type { Logger } from 'pino';
-import { errorEmbed } from '@entrophy/plugins';
+import { errorEmbed } from '@pavisie/plugins';
 import type { LoadedHost } from '../loader';
 import { routeInteraction } from '../router';
 import { parsePrefixMessage, isBarePrefix } from './parse';

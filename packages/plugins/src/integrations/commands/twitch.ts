@@ -5,15 +5,15 @@ import {
   type TwitchChatChannel,
   type TwitchChatLevel as PrismaTwitchChatLevel,
   type TwitchRewardActionKind as PrismaTwitchRewardActionKind,
-} from '@entrophy/database';
+} from '@pavisie/database';
 import {
   TWITCH_CHAT_LEVELS,
   TWITCH_CHAT_RESERVED_COMMAND_NAMES,
   TWITCH_REWARD_ACTION_KINDS,
   type TwitchChatLevelId,
   type TwitchRewardActionKindId,
-} from '@entrophy/types/integrations';
-import { SsrfError, assertPublicHttpUrl, decryptSecret, encryptSecret, redisKey } from '@entrophy/core';
+} from '@pavisie/types/integrations';
+import { SsrfError, assertPublicHttpUrl, decryptSecret, encryptSecret, redisKey } from '@pavisie/core';
 import {
   assertStaffLevel,
   brandEmbed,
@@ -129,7 +129,7 @@ function nudgeReconcile(ctx: PluginContext): void {
 
 const data = new SlashCommandBuilder()
   .setName('twitch')
-  .setDescription("Manage Entrophy joining this server's Twitch chat.")
+  .setDescription("Manage Pavisie joining this server's Twitch chat.")
   .setDMPermission(false)
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((sub) => sub.setName('status').setDescription('Show Twitch chat bot status for this server.'))

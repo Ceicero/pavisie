@@ -1,4 +1,4 @@
-// Entrophy — Prisma schema. See docs/ARCHITECTURE.md §8 for conventions.
+// Pavisie — Prisma schema. See docs/ARCHITECTURE.md §8 for conventions.
 // Every tenant table carries `guildId` + `@@index([guildId])`. Timestamps are
 // `createdAt @default(now())` / `updatedAt @updatedAt` unless a model is an
 // append-only log (createdAt only). Soft delete via `deletedAt DateTime?` on
@@ -1277,7 +1277,7 @@ model ProcessedWebhookEvent {
   @@unique([provider, eventId])
 }
 
-/// Singleton (one row): Entrophy's own Twitch bot account, authorized once by the bot owner
+/// Singleton (one row): Pavisie's own Twitch bot account, authorized once by the bot owner
 /// (scopes `user:read:chat user:write:chat user:bot`). All chat reads/sends run on this token —
 /// per-guild channels only grant the bot entry via `channel:bot` (see TwitchChatChannel).
 model TwitchBotIdentity {
@@ -1518,7 +1518,7 @@ model Donation {
 
 // ---------------------------------------------------------------------------
 // Developer reports — guild admin → bot developer support channel (`admin`
-// plugin's `/entrophy report`). Only what the admin typed plus unavoidable
+// plugin's `/pavisie report`). Only what the admin typed plus unavoidable
 // routing metadata is ever stored here; never message history or member lists.
 // ---------------------------------------------------------------------------
 

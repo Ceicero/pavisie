@@ -21,7 +21,7 @@ import {
   type ButtonInteraction,
   type EmbedBuilder,
 } from 'discord.js';
-import { Prisma, type GameAccountLink } from '@entrophy/database';
+import { Prisma, type GameAccountLink } from '@pavisie/database';
 import {
   brandEmbed,
   buildCustomId,

@@ -16,7 +16,7 @@ const vars: TemplateVars = {
   user: 'brandon',
   'user.tag': 'brandon#0',
   'user.id': '123',
-  server: 'Entrophy HQ',
+  server: 'Pavisie HQ',
   memberCount: 42,
   mention: '<@123>',
 };
@@ -90,7 +90,7 @@ describe('renderTag', () => {
       { content: 'Read {server} rules, {user}. {unknown} {process.env}', embed: null },
       vars,
     );
-    expect(rendered.content).toBe('Read Entrophy HQ rules, brandon. {unknown} {process.env}');
+    expect(rendered.content).toBe('Read Pavisie HQ rules, brandon. {unknown} {process.env}');
     expect(rendered.embeds).toBeUndefined();
   });
 
@@ -123,7 +123,7 @@ describe('renderTag', () => {
     expect(rendered.content).toBeUndefined();
     expect(rendered.embeds).toHaveLength(1);
     const json = rendered.embeds![0].toJSON();
-    expect(json.title).toBe('Welcome to Entrophy HQ');
+    expect(json.title).toBe('Welcome to Pavisie HQ');
     expect(json.description).toBe('Hey [mention], brandon joined. [mention]');
     expect(json.footer?.text).toBe('members: 42');
     expect(json.color).toBe(0x5865f2);

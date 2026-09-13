@@ -79,7 +79,7 @@ function parseOverlayEvent(raw: string): OverlayEvent | null {
 }
 
 /**
- * Parses and re-serializes `raw` (the exact string published to `entrophy:overlay:<channelId>` by the bot,
+ * Parses and re-serializes `raw` (the exact string published to `pavisie:overlay:<channelId>` by the bot,
  * per the fixed SOUND/TTS payload contract) into a normalized SSE `data:` frame, then writes it to every
  * connection currently registered for `channelId`. Re-serializing rather than forwarding `raw` verbatim both
  * validates the shape and guarantees the frame can never contain a bare newline that would corrupt SSE

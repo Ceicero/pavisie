@@ -1,9 +1,9 @@
 import type { ZodFastifyInstance } from '../lib/http';
-import { NotFoundError, buildPaginated, paginate } from '@entrophy/core';
-import { evaluate, type NormalizedMessage, type Policy } from '@entrophy/plugins/enforcer/engine';
-import { extractInvites, extractLinks } from '@entrophy/plugins/enforcer/normalize';
-import type { EnforcerConfig } from '@entrophy/plugins/enforcer/manifest';
-import type { EnforcerPolicyDto, EnforcerRecordDto, Paginated } from '@entrophy/types';
+import { NotFoundError, buildPaginated, paginate } from '@pavisie/core';
+import { evaluate, type NormalizedMessage, type Policy } from '@pavisie/plugins/enforcer/engine';
+import { extractInvites, extractLinks } from '@pavisie/plugins/enforcer/normalize';
+import type { EnforcerConfig } from '@pavisie/plugins/enforcer/manifest';
+import type { EnforcerPolicyDto, EnforcerRecordDto, Paginated } from '@pavisie/types';
 import { writeDashboardAudit } from '../lib/audit';
 import { toCsv } from '../lib/csv';
 import { toEnforcerPolicyDto, toEnforcerRecordDto, toEnforcerSettingsDto } from '../lib/enforcer/dto';
@@ -19,7 +19,7 @@ import {
 } from '../lib/enforcer/schemas';
 import { requireGuildAccess } from '../lib/guild-access';
 import { guildIdParamSchema } from '../lib/schemas';
-import { buildRecordSearchWhere } from '@entrophy/plugins/enforcer/search-filters';
+import { buildRecordSearchWhere } from '@pavisie/plugins/enforcer/search-filters';
 
 const ENFORCER_PLUGIN_ID = 'enforcer' as const;
 

@@ -408,9 +408,9 @@ export const command: PluginCommand = {
         if (plan.toAdd.length === 0 && plan.toRemove.length === 0) continue;
         try {
           if (plan.toAdd.length > 0)
-            await member.roles.add(plan.toAdd, 'Entrophy engagement: /level rewards sync');
+            await member.roles.add(plan.toAdd, 'Pavisie engagement: /level rewards sync');
           if (plan.toRemove.length > 0)
-            await member.roles.remove(plan.toRemove, 'Entrophy engagement: /level rewards sync');
+            await member.roles.remove(plan.toRemove, 'Pavisie engagement: /level rewards sync');
           synced += 1;
         } catch {
           // Missing permission/hierarchy for this member; skip and keep going.

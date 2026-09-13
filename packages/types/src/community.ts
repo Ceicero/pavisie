@@ -1,6 +1,6 @@
 // DTOs for the community + economy plugins' dashboard-facing endpoints (ARCHITECTURE.md §10, community build
 // stage). Deliberately a standalone module (not re-exported from `./index.ts` — the wiring stage adds that
-// barrel export) so `@entrophy/types/community` can be imported directly per the community build task's
+// barrel export) so `@pavisie/types/community` can be imported directly per the community build task's
 // ownership rules.
 
 export interface PollOptionDto {

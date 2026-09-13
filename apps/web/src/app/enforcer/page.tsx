@@ -9,7 +9,7 @@ import { enforcerWorkflow, enforcerPrivacyPoints, enforcerFaq } from '../../cont
 export const metadata: Metadata = {
   title: 'Admin Enforcer',
   description:
-    "How Entrophy's policy-driven, hands-off moderation works: flag, review, decide, ledger, appeal.",
+    "How Pavisie's policy-driven, hands-off moderation works: flag, review, decide, ledger, appeal.",
 };
 
 export default function EnforcerPage() {
@@ -55,7 +55,7 @@ export default function EnforcerPage() {
       >
         <div className="max-w-xl">
           <EmbedMock
-            author="Entrophy — Enforcer ledger"
+            author="Pavisie — Enforcer ledger"
             title="Record #E-142 — DECISION"
             fields={[
               { name: 'User', value: '@example.user (912...045)', inline: true },
@@ -66,7 +66,7 @@ export default function EnforcerPage() {
               { name: 'Case', value: '#118', inline: true },
               { name: 'Context', value: '"...check out this giveaway link..." [Jump to message]' },
             ]}
-            footer="Source: automatic flag · Entrophy Enforcer"
+            footer="Source: automatic flag · Pavisie Enforcer"
           />
         </div>
       </Section>

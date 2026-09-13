@@ -12,8 +12,8 @@ import {
   Input,
   Textarea,
   useToast,
-} from '@entrophy/ui';
-import type { TwitchChatTimerDto } from '@entrophy/types/integrations';
+} from '@pavisie/ui';
+import type { TwitchChatTimerDto } from '@pavisie/types/integrations';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useCreateTwitchChatTimer, useUpdateTwitchChatTimer } from '@/lib/dashboard/integrations-queries';
 

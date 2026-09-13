@@ -2,7 +2,7 @@
 // through `escapeHtml` before being placed in the HTML document, and attachment hrefs are restricted to
 // http(s) URLs (never `javascript:`/`data:`) so a message like `<script>...` or a malicious filename/URL can
 // never execute in a viewer's browser (ARCHITECTURE.md §15: "HTML transcripts escaped, strict CSP <meta>").
-import { escapeHtml } from '@entrophy/core';
+import { escapeHtml } from '@pavisie/core';
 
 export interface TranscriptAttachment {
   name: string;

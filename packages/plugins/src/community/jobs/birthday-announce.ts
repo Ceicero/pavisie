@@ -104,7 +104,7 @@ export async function announceBirthdaysForGuild(
     if (role) {
       let roleAdded = false;
       try {
-        await member.roles.add(role, 'Entrophy community: birthday role');
+        await member.roles.add(role, 'Pavisie community: birthday role');
         roleAdded = true;
       } catch (err) {
         ctx.logger.warn(
@@ -128,7 +128,7 @@ export async function announceBirthdaysForGuild(
           );
           // The 24h auto-removal job couldn't be scheduled — undo the grant (best-effort) so it can't become permanent.
           await member.roles
-            .remove(role.id, 'Entrophy community: could not schedule the automatic removal')
+            .remove(role.id, 'Pavisie community: could not schedule the automatic removal')
             .catch(() => undefined);
         }
       }

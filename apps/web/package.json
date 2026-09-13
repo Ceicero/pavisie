@@ -1,5 +1,5 @@
 {
-  "name": "@entrophy/web",
+  "name": "@pavisie/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -25,8 +25,8 @@
     "tailwind-merge": "^2.6.0",
     "class-variance-authority": "^0.7.1",
     "recharts": "^2.15.0",
-    "@entrophy/ui": "workspace:*",
-    "@entrophy/types": "workspace:*"
+    "@pavisie/ui": "workspace:*",
+    "@pavisie/types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

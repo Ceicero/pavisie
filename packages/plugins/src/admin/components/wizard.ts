@@ -4,9 +4,9 @@ import type {
   RoleSelectMenuInteraction,
   StringSelectMenuInteraction,
 } from 'discord.js';
-import { AuditAction, PermissionError } from '@entrophy/core';
-import { redactForAudit } from '@entrophy/database';
-import type { PluginId } from '@entrophy/types';
+import { AuditAction, PermissionError } from '@pavisie/core';
+import { redactForAudit } from '@pavisie/database';
+import type { PluginId } from '@pavisie/types';
 import { errorEmbed, successEmbed, type ComponentContext, type ComponentHandler } from '../../sdk';
 import {
   WIZARD_STEP_IDS,

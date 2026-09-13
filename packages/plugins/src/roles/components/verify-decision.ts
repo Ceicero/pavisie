@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, type ButtonInteraction } from 'discord.js';
-import { AppError } from '@entrophy/core';
+import { AppError } from '@pavisie/core';
 import { errorEmbed, successEmbed, type ComponentHandler } from '../../sdk';
 import { canDecideVerification } from '../engine';
 

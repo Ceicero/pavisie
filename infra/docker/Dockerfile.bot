@@ -27,12 +27,12 @@ COPY . .
 
 RUN pnpm db:generate
 
-RUN addgroup -S entrophy && adduser -S entrophy -G entrophy && chown -R entrophy:entrophy /app
-USER entrophy
+RUN addgroup -S pavisie && adduser -S pavisie -G pavisie && chown -R pavisie:pavisie /app
+USER pavisie
 
 EXPOSE 3002
 
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=10s \
   CMD wget -qO- http://localhost:3002/health || exit 1
 
-CMD ["pnpm", "--filter", "@entrophy/bot", "start"]
+CMD ["pnpm", "--filter", "@pavisie/bot", "start"]

@@ -1,5 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import { EMBED_LIMITS, truncate } from '@entrophy/core';
+import { EMBED_LIMITS, truncate } from '@pavisie/core';
 import { resolveTextChannel, roleMention, type PluginContext } from '../sdk';
 import type { AlertEmbedData } from './formatters/types';
 

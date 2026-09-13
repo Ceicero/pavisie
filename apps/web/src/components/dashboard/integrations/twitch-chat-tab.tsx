@@ -1,13 +1,13 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle, Button, EmptyState, Skeleton, useToast } from '@entrophy/ui';
+import { Alert, AlertDescription, AlertTitle, Button, EmptyState, Skeleton, useToast } from '@pavisie/ui';
 import { useConnectTwitchChat, useTwitchChatStatus } from '@/lib/dashboard/integrations-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ErrorState } from '../error-state';
 import { TwitchChatChannelCard } from './twitch-chat-channel-card';
 
-/** The "Twitch chat" tab: Entrophy joining a streamer's Twitch chat (distinct from the Twitch *alert*
+/** The "Twitch chat" tab: Pavisie joining a streamer's Twitch chat (distinct from the Twitch *alert*
  * watches on the Alerts tab, which just post "went live" messages). Honest about two independent
  * prerequisites — the deployment's Twitch app credentials, and the bot owner's own Twitch account. */
 export function TwitchChatTab({ guildId }: { guildId: string }) {
@@ -47,7 +47,7 @@ export function TwitchChatTab({ guildId }: { guildId: string }) {
     return (
       <EmptyState
         title="Not available on this deployment"
-        description="The operator hasn't set up Twitch API credentials, so Entrophy can't join Twitch chat here."
+        description="The operator hasn't set up Twitch API credentials, so Pavisie can't join Twitch chat here."
       />
     );
   }
@@ -56,9 +56,9 @@ export function TwitchChatTab({ guildId }: { guildId: string }) {
     <div className="space-y-4">
       {!status.botConfigured ? (
         <Alert variant="warning">
-          <AlertTitle>Entrophy's Twitch account isn't set up yet</AlertTitle>
+          <AlertTitle>Pavisie's Twitch account isn't set up yet</AlertTitle>
           <AlertDescription>
-            The bot owner still needs to connect Entrophy's own Twitch account before it can read or send
+            The bot owner still needs to connect Pavisie's own Twitch account before it can read or send
             chat messages. You can link your channel below now — commands and timers will start working
             once that's done.
           </AlertDescription>
@@ -77,7 +77,7 @@ export function TwitchChatTab({ guildId }: { guildId: string }) {
       {status.channels.length === 0 ? (
         <EmptyState
           title="No Twitch channel linked yet"
-          description="Connect your Twitch channel so Entrophy can join your chat, answer commands, and run timers."
+          description="Connect your Twitch channel so Pavisie can join your chat, answer commands, and run timers."
         />
       ) : (
         <div className="space-y-4">

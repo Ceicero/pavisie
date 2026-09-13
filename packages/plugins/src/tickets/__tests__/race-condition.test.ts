@@ -14,7 +14,7 @@ describe('ticket open race condition — BUG 2 fixes', () => {
     // This serializes concurrent opens for the same guild+user pair.
 
     const { ctx } = createTestContext();
-    const lockKey = 'entrophy:tickets:open-lock:guild-1:user-1';
+    const lockKey = 'pavisie:tickets:open-lock:guild-1:user-1';
 
     // Simulate the lock being already held
     await ctx.redis.set(lockKey, '1', 'PX', 30_000, 'NX');
@@ -37,7 +37,7 @@ describe('ticket open race condition — BUG 2 fixes', () => {
     // This test verifies locks can be re-acquired after an operation (success or failure).
 
     const { ctx } = createTestContext();
-    const lockKey = 'entrophy:tickets:open-lock:guild-2:user-2';
+    const lockKey = 'pavisie:tickets:open-lock:guild-2:user-2';
 
     // Acquire lock
     let acquired = await ctx.redis.set(lockKey, '1', 'PX', 30_000, 'NX');

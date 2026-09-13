@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { Button, Card, CardContent, EmptyState, PageHeader, Skeleton } from '@entrophy/ui';
+import { Button, Card, CardContent, EmptyState, PageHeader, Skeleton } from '@pavisie/ui';
 import { useGuilds } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
 import { API_BASE_URL } from '@/lib/dashboard/api';
@@ -24,7 +24,7 @@ export default function GuildSelectorPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
-      <PageHeader title="Your servers" description="Pick a server to configure Entrophy for it." />
+      <PageHeader title="Your servers" description="Pick a server to configure Pavisie for it." />
 
       {error ? <ErrorState error={error} onRetry={() => refetch()} /> : null}
 
@@ -63,7 +63,7 @@ export default function GuildSelectorPage() {
                   <Button variant="outline" asChild>
                     <a href={`${API_BASE_URL}/auth/invite?guild_id=${guild.id}`}>
                       <Plus className="h-4 w-4" />
-                      Add Entrophy
+                      Add Pavisie
                     </a>
                   </Button>
                 )}

@@ -2,8 +2,8 @@ import { Worker, type Job } from 'bullmq';
 import type { RedisOptions } from 'ioredis';
 import type { Client } from 'discord.js';
 import type { Logger } from 'pino';
-import { ensureGuild, type PrismaClient } from '@entrophy/database';
-import type { ServiceMap, ServiceRegistry } from '@entrophy/plugins';
+import { ensureGuild, type PrismaClient } from '@pavisie/database';
+import type { ServiceMap, ServiceRegistry } from '@pavisie/plugins';
 
 export const BOT_ACTIONS_QUEUE_NAME = 'bot-actions';
 

@@ -8,7 +8,7 @@ import {
   type Role,
   type TextChannel,
 } from 'discord.js';
-import { PermissionError, ValidationError, hasStaffLevel, sanitizeFilename } from '@entrophy/core';
+import { PermissionError, ValidationError, hasStaffLevel, sanitizeFilename } from '@pavisie/core';
 import {
   PendingStore,
   assertStaffLevel,

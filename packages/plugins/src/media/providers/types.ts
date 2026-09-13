@@ -12,7 +12,7 @@ export interface Track {
 }
 
 /**
- * Loose env-like shape so providers don't need `@entrophy/core`'s `env` type directly, while still accepting
+ * Loose env-like shape so providers don't need `@pavisie/core`'s `env` type directly, while still accepting
  * the real (fully-typed, not-all-strings) `ctx.env`/`coreEnv` object as-is: `MEDIA_PROVIDER` is always a string
  * (the core env schema defaults it to `'none'`), and every other key is read defensively by providers anyway.
  */

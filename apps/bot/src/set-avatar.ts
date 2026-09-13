@@ -1,14 +1,14 @@
-// CLI: `pnpm --filter @entrophy/bot set-avatar [--file <path>]`
+// CLI: `pnpm --filter @pavisie/bot set-avatar [--file <path>]`
 // One-off tool to set the bot's Discord avatar to the brand logo (ARCHITECTURE.md §22). Logs in with no gateway
 // intents (just enough to authenticate as the application's bot user), uploads the image, then logs out.
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'discord.js';
-import { loadEnv, requireEnv, env, createLogger } from '@entrophy/core';
+import { loadEnv, requireEnv, env, createLogger } from '@pavisie/core';
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..');
-const DEFAULT_CANDIDATES = ['assets/brand/entrophy-skull.png', 'assets/brand/entrophy-skull.jpg'];
+const DEFAULT_CANDIDATES = ['assets/brand/pavisie-skull.png', 'assets/brand/pavisie-skull.jpg'];
 
 interface ParsedArgs {
   file: string | null;
@@ -22,7 +22,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       file = argv[i + 1] ?? null;
       i += 1;
       if (!file) {
-        throw new Error('--file requires a path argument, e.g. --file assets/brand/entrophy-skull.png');
+        throw new Error('--file requires a path argument, e.g. --file assets/brand/pavisie-skull.png');
       }
     } else if (arg.startsWith('--')) {
       throw new Error(`Unknown flag "${arg}". Supported flags: --file <path>.`);
@@ -47,7 +47,7 @@ async function resolveAvatarPath(args: ParsedArgs): Promise<string> {
   }
   throw new Error(
     `No brand logo file found (looked for ${DEFAULT_CANDIDATES.join(', ')}). Pass --file <path> explicitly, or add ` +
-      `assets/brand/entrophy-skull.png (see assets/brand/README.md).`,
+      `assets/brand/pavisie-skull.png (see assets/brand/README.md).`,
   );
 }
 

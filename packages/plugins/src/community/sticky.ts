@@ -10,8 +10,8 @@ import {
   type Guild,
   type GuildTextBasedChannel,
 } from 'discord.js';
-import { Prisma, type StickyMessage } from '@entrophy/database';
-import { AuditAction, EMBED_LIMITS, sanitizeEmbedText, truncate } from '@entrophy/core';
+import { Prisma, type StickyMessage } from '@pavisie/database';
+import { AuditAction, EMBED_LIMITS, sanitizeEmbedText, truncate } from '@pavisie/core';
 import { resolveTextChannel, type PluginContext } from '../sdk';
 import type { CommunityConfig } from './manifest';
 import {

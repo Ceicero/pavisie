@@ -108,7 +108,7 @@ status community` reports the plugin as degraded, and triggers are simply inacti
   that channel; without it only the bot's own posts are published. Discord caps publishing at 10 messages per
   hour per channel. Failures (missing permission, crosspost limit) are logged **once per hour per channel**
   (Redis `SET NX EX 3600`) to the bot log and, if the `logging` plugin is on, as a `bot.error` entry. Successful
-  publishes bump a per-day Redis counter (`entrophy:community:autopublish-count:<guildId>:<YYYY-MM-DD>`, UTC)
+  publishes bump a per-day Redis counter (`pavisie:community:autopublish-count:<guildId>:<YYYY-MM-DD>`, UTC)
   that the dashboard shows as "published today" (`GET /guilds/:guildId/community/channel-automations/stats`).
 - **Auto-threads** — every human post in a listed text/announcement channel gets its own thread named from the
   template (`{user}` = display name, `{user.tag}`, `{server}`, `{date}` = YYYY-MM-DD; unknown tokens are left
@@ -128,7 +128,7 @@ Constraints (also stated in the UI):
 - **Discord allows 2 channel-name edits per 10 minutes per channel.** Counters therefore refresh on a schedule
   (`statsRefreshMinutes`, minimum 10) and `/statschannel refresh` is limited to once per 5 minutes; member
   join/leave events deliberately do _not_ trigger a rename.
-- **`{online}` is not offered** — it needs the Presence privileged intent, which Entrophy does not enable. The
+- **`{online}` is not offered** — it needs the Presence privileged intent, which Pavisie does not enable. The
   command rejects it with that explanation.
 - `{humans}`/`{bots}` need the Server Members intent; without it `{humans}` = `{members}` and `{bots}` = 0 (the
   reply says so).

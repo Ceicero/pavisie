@@ -10,7 +10,7 @@
 // in by the time a command executes) and self-healing (a failed fetch just gets retried on the next call
 // rather than leaving `/help` permanently empty for the process lifetime).
 import { ApplicationCommandType, type ApplicationCommandOptionData, type Client } from 'discord.js';
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 import { allManifests } from '../manifests';
 import { HELP_HINT_SUFFIX } from '../sdk/help-hint';
 import { OTHER_GROUP, resolvePluginForCommand } from './help-map';

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { ModerationCaseDto } from '@entrophy/types';
+import type { ModerationCaseDto } from '@pavisie/types';
 import {
   Badge,
   Button,
@@ -14,7 +14,7 @@ import {
   Skeleton,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { formatDateTime } from '@/lib/dashboard/format';
 import { useModerationNotes, useModerationWarnings, useUpdateCaseReason } from '@/lib/dashboard/moderation-queries';
 import { ApiClientError } from '@/lib/dashboard/api';

@@ -6,7 +6,7 @@ import type {
   EscalationRuleDto,
   ModerationSettingsDto,
   RequireReasonAction,
-} from '@entrophy/types/moderation';
+} from '@pavisie/types/moderation';
 import {
   Button,
   Card,
@@ -24,7 +24,7 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { DiscordChannelSelect } from '../discord-selects';
 import { ErrorState } from '../error-state';
 import { useModerationSettings, useUpdateModerationSettings } from '@/lib/dashboard/moderation-queries';

@@ -1,4 +1,4 @@
-# Entrophy — Architecture & Coding Conventions
+# Pavisie — Architecture & Coding Conventions
 
 This document is binding for everyone (human or agent) writing code in this repo. It fixes the decisions that
 `SPEC.md` leaves open so that independently-built parts fit together. When SPEC.md and this file conflict on a
@@ -9,18 +9,18 @@ mechanism, this file wins; when they conflict on a _requirement_, SPEC.md wins.
 ## 1. Repository layout
 
 ```
-entrophy/
+pavisie/
 ├── apps/
-│   ├── bot/            @entrophy/bot        Discord gateway process + BullMQ workers
-│   ├── api/            @entrophy/api        Fastify REST API, Discord OAuth, webhook receivers, OpenAPI
-│   ├── web/            @entrophy/web        Next.js 15 (App Router) marketing site + per-guild config dashboard (/dashboard/**, §11)
-│   └── dashboard/      @entrophy/dashboard  Next.js 15 (App Router); legacy app.entrophybot.com redirector today, owner-only ops console next (§11a)
+│   ├── bot/            @pavisie/bot        Discord gateway process + BullMQ workers
+│   ├── api/            @pavisie/api        Fastify REST API, Discord OAuth, webhook receivers, OpenAPI
+│   ├── web/            @pavisie/web        Next.js 15 (App Router) marketing site + per-guild config dashboard (/dashboard/**, §11)
+│   └── dashboard/      @pavisie/dashboard  Next.js 15 (App Router); legacy app.pavisie.com redirector today, owner-only ops console next (§11a)
 ├── packages/
-│   ├── types/          @entrophy/types      Shared TS types (no runtime deps)
-│   ├── core/           @entrophy/core       env config, logger, errors, encryption, permissions, rate limiting, i18n, utils
-│   ├── database/       @entrophy/database   Prisma schema, client singleton, migrations, seed
-│   ├── plugins/        @entrophy/plugins    Plugin SDK + every feature plugin
-│   └── ui/             @entrophy/ui         Shared component library (Tailwind + Radix), used by both apps/web's dashboard routes and apps/dashboard
+│   ├── types/          @pavisie/types      Shared TS types (no runtime deps)
+│   ├── core/           @pavisie/core       env config, logger, errors, encryption, permissions, rate limiting, i18n, utils
+│   ├── database/       @pavisie/database   Prisma schema, client singleton, migrations, seed
+│   ├── plugins/        @pavisie/plugins    Plugin SDK + every feature plugin
+│   └── ui/             @pavisie/ui         Shared component library (Tailwind + Radix), used by both apps/web's dashboard routes and apps/dashboard
 ├── infra/
 │   ├── docker/         Dockerfile.bot, Dockerfile.api, Dockerfile.web, Dockerfile.dashboard
 │   └── DEPLOYMENT.md
@@ -67,7 +67,7 @@ entrophy/
 - Workspace packages export **TypeScript source directly** — no build step for libraries:
   ```json
   {
-    "name": "@entrophy/core",
+    "name": "@pavisie/core",
     "version": "0.1.0",
     "private": true,
     "type": "module",
@@ -78,8 +78,8 @@ entrophy/
   ```
   (Packages with subpath entry points may add explicit entries, e.g. `"./manifests": "./src/manifests.ts"`.)
 - Apps `bot` and `api` run with `tsx` in dev (`tsx watch src/index.ts`) **and** in production Docker (`tsx src/index.ts`). This is deliberate: zero build pipeline, one less thing to break. `typecheck` = `tsc --noEmit`.
-- Dashboard uses `next build`; `next.config.ts` sets `transpilePackages: ['@entrophy/ui', '@entrophy/types', '@entrophy/core']`. The dashboard **never imports `@entrophy/database` or `@entrophy/plugins`** — it talks to the API only.
-- Workspace deps are declared as `"@entrophy/core": "workspace:*"`.
+- Dashboard uses `next build`; `next.config.ts` sets `transpilePackages: ['@pavisie/ui', '@pavisie/types', '@pavisie/core']`. The dashboard **never imports `@pavisie/database` or `@pavisie/plugins`** — it talks to the API only.
+- Workspace deps are declared as `"@pavisie/core": "workspace:*"`.
 - `tsconfig.base.json`:
   ```json
   {
@@ -108,26 +108,26 @@ entrophy/
   lint           → pnpm -r run lint
   typecheck      → pnpm -r run typecheck
   test           → pnpm -r run test
-  test:e2e       → pnpm --filter @entrophy/dashboard test:e2e
+  test:e2e       → pnpm --filter @pavisie/dashboard test:e2e
   build          → pnpm -r run build          (only dashboard has a real build; others are no-ops or omitted)
-  db:generate    → pnpm --filter @entrophy/database generate
-  db:migrate     → pnpm --filter @entrophy/database migrate:deploy
-  db:migrate:dev → pnpm --filter @entrophy/database migrate:dev
-  db:seed        → pnpm --filter @entrophy/database seed
-  commands:register → pnpm --filter @entrophy/bot register
+  db:generate    → pnpm --filter @pavisie/database generate
+  db:migrate     → pnpm --filter @pavisie/database migrate:deploy
+  db:migrate:dev → pnpm --filter @pavisie/database migrate:dev
+  db:seed        → pnpm --filter @pavisie/database seed
+  commands:register → pnpm --filter @pavisie/bot register
   format         → prettier --write .
   ```
 - Root `.env` is the single env file; apps load it with `dotenv` from repo root (`config({ path: findUp('.env') })` — core exposes `loadEnv()` which walks up from `process.cwd()` looking for `.env`; missing file is fine).
 - ESLint: one root `eslint.config.js` (flat) using typescript-eslint recommended (non-type-checked, to keep it fast), `eslint-config-prettier` last, ignores `**/dist`, `**/.next`, `**/node_modules`, `**/generated`. Rule tweaks: `@typescript-eslint/no-unused-vars: ["warn", {argsIgnorePattern:"^_", varsIgnorePattern:"^_"}]`, `@typescript-eslint/no-explicit-any: "warn"`. Package `lint` scripts run `eslint .` from the package dir using the root config (`eslint` finds the root config automatically since flat config lookup starts from cwd — so each package's lint script is `eslint --config ../../eslint.config.js src` to be explicit).
 
-## 4. Environment variables (`.env.example`) — all read through `@entrophy/core` `env`
+## 4. Environment variables (`.env.example`) — all read through `@pavisie/core` `env`
 
 Required (process fails fast with a clear message if missing where needed):
 
 ```
 NODE_ENV=development
 LOG_LEVEL=info
-DATABASE_URL=postgresql://entrophy:entrophy@localhost:5432/entrophy
+DATABASE_URL=postgresql://pavisie:pavisie@localhost:5432/pavisie
 REDIS_URL=redis://localhost:6379
 DISCORD_TOKEN=                # bot only
 DISCORD_CLIENT_ID=
@@ -174,9 +174,9 @@ MEDIA_PROVIDER=none           # none | <compliant provider id>; media plugin is 
 PUBLIC_WEBHOOK_BASE_URL=      # public https base for inbound webhooks (EventSub, GitHub, generic)
 ```
 
-`@entrophy/core` exports `env` (a zod-validated object) with **all keys optional except NODE_ENV/LOG_LEVEL**, plus `requireEnv('DISCORD_TOKEN')` helper that throws `ConfigError` with a helpful message. Each app validates the subset it needs at boot.
+`@pavisie/core` exports `env` (a zod-validated object) with **all keys optional except NODE_ENV/LOG_LEVEL**, plus `requireEnv('DISCORD_TOKEN')` helper that throws `ConfigError` with a helpful message. Each app validates the subset it needs at boot.
 
-## 5. `@entrophy/types` (pure types)
+## 5. `@pavisie/types` (pure types)
 
 - `StaffLevel = 'member' | 'helper' | 'moderator' | 'admin' | 'owner'` (ordered; helper `STAFF_LEVEL_RANK`).
 - `PluginId` string union of all plugin ids (§7.1).
@@ -184,7 +184,7 @@ PUBLIC_WEBHOOK_BASE_URL=      # public https base for inbound webhooks (EventSub
 - API DTOs (shared between api & dashboard): `ApiError`, `SessionUser`, `GuildSummary`, `PluginSummary`, `GuildConfigDto`, `AuditLogEntryDto`, `ModerationCaseDto`, `AutomodRuleDto`, `TicketDto`, `RolePanelDto`, `IntegrationConnectionDto`, `AnalyticsDto`, `RetentionPolicyDto`, `Paginated<T>`.
 - Branded `Snowflake = string`.
 
-## 6. `@entrophy/core` (exports from `src/index.ts`)
+## 6. `@pavisie/core` (exports from `src/index.ts`)
 
 | Module                     | Exports                                                                                                                                                                                                                                                                                           | Notes                                                                                                                                                                                                      |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -197,7 +197,7 @@ PUBLIC_WEBHOOK_BASE_URL=      # public https base for inbound webhooks (EventSub
 | `permissions/hierarchy.ts` | `checkModerationTarget({ actor, target, botMember, guildOwnerId, botOwnerIds }): { ok: true } \| { ok: false; reason: HierarchyReason }` where reason ∈ `'self' \| 'bot' \| 'guild_owner' \| 'bot_owner' \| 'target_higher_or_equal_than_actor' \| 'target_higher_or_equal_than_bot'`             | takes plain data (`{ id, highestRolePosition, isBot }`) so it is unit-testable without discord.js                                                                                                          |
 | `permissions/discord.ts`   | `PERMISSION_NAMES`, `describePermission(flag)`, `missingPermissions(member/channel, required)`, `INVITE_PERMISSIONS` (least-privilege default set), `buildInviteUrl(clientId, permissions)`                                                                                                       |                                                                                                                                                                                                            |
 | `ratelimit.ts`             | `RateLimiter` (Redis sliding window via `MULTI INCR/PEXPIRE`), `MemoryRateLimiter` (same interface, for tests), `Cooldowns` (`take(key, seconds)`)                                                                                                                                                | interface `RateLimiterLike { consume(key, limit, windowMs): Promise<{allowed, remaining, resetMs}> }`                                                                                                      |
-| `redis.ts`                 | `createRedis(url)`, `getRedis()` singleton, `redisKey(...parts)` → `entrophy:${parts.join(':')}`                                                                                                                                                                                                  |                                                                                                                                                                                                            |
+| `redis.ts`                 | `createRedis(url)`, `getRedis()` singleton, `redisKey(...parts)` → `pavisie:${parts.join(':')}`                                                                                                                                                                                                  |                                                                                                                                                                                                            |
 | `i18n/index.ts`            | `t(key, vars?, locale?)`, `locales/en.json`, `resolveLocale(discordLocale)`                                                                                                                                                                                                                       | fallback to en; interpolation `{name}`                                                                                                                                                                     |
 | `audit.ts`                 | `AuditAction` string constants (`config.update`, `plugin.enable`, `plugin.disable`, `moderation.*`, `automod.rule.*`, `ticket.*`, `integration.*`, `retention.update`, `data.export`, `data.delete`, ...), `type AuditEntry`                                                                      | writer lives in database package (`writeAudit`)                                                                                                                                                            |
 | `utils/safe-regex.ts`      | `validateUserRegex(pattern, flags): {ok, error?}` (max length 256, `safe-regex2`, disallow lookbehind-heavy nesting), `safeTest(re, input, {maxInputLength=2000})`                                                                                                                                |                                                                                                                                                                                                            |
@@ -207,9 +207,9 @@ PUBLIC_WEBHOOK_BASE_URL=      # public https base for inbound webhooks (EventSub
 | `utils/ids.ts`             | `newId()` (crypto.randomUUID), `shortId()`                                                                                                                                                                                                                                                        |                                                                                                                                                                                                            |
 | `utils/pagination.ts`      | `paginate(params)`                                                                                                                                                                                                                                                                                |                                                                                                                                                                                                            |
 | `events.ts`                | `PlatformEvents` (typed EventEmitter over `PlatformEventMap`), `createPlatformEvents()`                                                                                                                                                                                                           |                                                                                                                                                                                                            |
-| `constants.ts`             | `BRAND = { name: 'Entrophy', color: 0xe5e5e5, ... }`, `brandIconUrl(env)`, `EMBED_LIMITS`                                                                                                                                                                                                         | monochrome per §20                                                                                                                                                                                         |
+| `constants.ts`             | `BRAND = { name: 'Pavisie', color: 0xe5e5e5, ... }`, `brandIconUrl(env)`, `EMBED_LIMITS`                                                                                                                                                                                                         | monochrome per §20                                                                                                                                                                                         |
 
-## 7. Plugin SDK (`@entrophy/plugins`, folder `packages/plugins/src/sdk/`)
+## 7. Plugin SDK (`@pavisie/plugins`, folder `packages/plugins/src/sdk/`)
 
 ### 7.1 Plugin ids and ownership
 
@@ -231,7 +231,7 @@ PUBLIC_WEBHOOK_BASE_URL=      # public https base for inbound webhooks (EventSub
 | `integrations` | `src/integrations` | `/integration connect\|disconnect\|status\|list`, `/integration alerts add\|remove\|list`, `/integration webhook create\|list\|delete`, `/integration outbound create\|list\|delete\|test`, `/twitch status\|setup\|off`, `/twitch command add\|remove\|list`, `/twitch timer add\|remove\|list`, `/twitch reward add\|remove\|list` (chat bot + channel-point rewards — §19a–19b) | disabled                                               |
 | `ai`           | `src/ai`           | `/ask`, `/summarize`, `/draft`, `/mod-assist`, `/ai config view\|set-key\|clear-key\|provider\|model\|channels\|budget`                                                                                                                                                                                                                                                         | disabled                                               |
 
-`PluginId` union in `@entrophy/types` = exactly these ids. `packages/plugins/src/index.ts` exports `allPlugins: Plugin[]` in this order and `packages/plugins/src/manifests.ts` exports `allManifests: PluginManifest[]` (import each plugin's `manifest.ts` only — **manifest files must not import discord.js runtime code beyond types/enums** so the API can load them cheaply).
+`PluginId` union in `@pavisie/types` = exactly these ids. `packages/plugins/src/index.ts` exports `allPlugins: Plugin[]` in this order and `packages/plugins/src/manifests.ts` exports `allManifests: PluginManifest[]` (import each plugin's `manifest.ts` only — **manifest files must not import discord.js runtime code beyond types/enums** so the API can load them cheaply).
 
 Every plugin folder has this shape:
 
@@ -270,11 +270,11 @@ import type {
   Locale,
 } from 'discord.js';
 import type { Job, Queue } from 'bullmq';
-import type { PrismaClient } from '@entrophy/database';
+import type { PrismaClient } from '@pavisie/database';
 import type Redis from 'ioredis';
 import type { Logger } from 'pino';
-import type { PluginId, StaffLevel, PlatformEventMap } from '@entrophy/types';
-import type { PlatformEvents, RateLimiterLike } from '@entrophy/core';
+import type { PluginId, StaffLevel, PlatformEventMap } from '@pavisie/types';
+import type { PlatformEvents, RateLimiterLike } from '@pavisie/core';
 
 export type PluginCategory =
   'admin' | 'moderation' | 'community' | 'utility' | 'integrations' | 'ai' | 'media';
@@ -400,7 +400,7 @@ export interface PluginContext {
   services: ServiceRegistry; // cross-plugin services (see §7.5)
   audit: (entry: Omit<AuditEntry, 'id' | 'createdAt'>) => Promise<void>;
   t: (key: string, vars?: Record<string, string | number>, locale?: string) => string;
-  env: typeof import('@entrophy/core').env;
+  env: typeof import('@pavisie/core').env;
   botOwnerIds: string[];
   intentsEnabled: { messageContent: boolean; guildMembers: boolean; guildPresences: boolean };
 }
@@ -427,7 +427,7 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 
 ### 7.4 Config store (`src/sdk/config-store.ts`)
 
-`GuildConfigStore` — reads `PluginConfig` rows (`guildId`, `pluginId`, `config Json`) merged over `manifest.defaultConfig` via `configSchema.parse({...defaults, ...stored})`; Redis cache key `entrophy:cfg:<guildId>:<pluginId>` TTL 300s, invalidated on write. Enablement is `PluginState` (`guildId`, `pluginId`, `enabled`) with the same cache pattern (`entrophy:plugin:<guildId>:<pluginId>`); missing row → `manifest.defaultEnabled`. Both **api and bot** use this store, so config changes from the dashboard are visible to the bot after invalidation (api deletes the same Redis keys).
+`GuildConfigStore` — reads `PluginConfig` rows (`guildId`, `pluginId`, `config Json`) merged over `manifest.defaultConfig` via `configSchema.parse({...defaults, ...stored})`; Redis cache key `pavisie:cfg:<guildId>:<pluginId>` TTL 300s, invalidated on write. Enablement is `PluginState` (`guildId`, `pluginId`, `enabled`) with the same cache pattern (`pavisie:plugin:<guildId>:<pluginId>`); missing row → `manifest.defaultEnabled`. Both **api and bot** use this store, so config changes from the dashboard are visible to the bot after invalidation (api deletes the same Redis keys).
 
 ### 7.5 Cross-plugin services (`src/sdk/services.ts`)
 
@@ -439,7 +439,7 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 - `tickets`, `roles` (`assignRoles`, `verifyMember`), `integrations` (`sendOutbound(guildId, endpointId, payload)`), `ai` (`complete(...)`) — each plugin registers its service in `onLoad` and consumers call `ctx.services.get('x')` and no-op gracefully if absent.
 - `twitchChat`: `{ status(): TwitchChatRuntimeStatus; reconcileNow(): Promise<void>; stop(): Promise<void> }` — the `integrations` plugin's Twitch chat bot runtime; registered from the same `onLoad` (§19a).
 
-### 7.6 Platform events (`@entrophy/types` `PlatformEventMap`)
+### 7.6 Platform events (`@pavisie/types` `PlatformEventMap`)
 
 ```
 'guild.configChanged': { guildId; pluginId; actorId; source }
@@ -461,7 +461,7 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 
 - Every command file exports `const command: PluginCommand`. Use `SlashCommandBuilder` with `.setDMPermission(false)` and `.setDefaultMemberPermissions(...)` matching the requirement (so Discord hides it from non-staff by default). Set descriptions ≤100 chars, names lowercase.
 - Reply **ephemerally** for config, moderation detail, confirmations, errors. Public for community features.
-- Destructive actions (kick/ban/softban/purge/bulk role/ticket delete/data delete): reply ephemeral with an embed summarising the action + `Confirm`/`Cancel` buttons (`<plugin>:confirm-<action>:<ownerUserId>:<payload>`), 60s timeout, unless the guild's `admin` config `fastActions=true` **and** the action is not `purge>100`. Payload that doesn't fit in customId → store in Redis `entrophy:pending:<uuid>` TTL 120s and pass the uuid.
+- Destructive actions (kick/ban/softban/purge/bulk role/ticket delete/data delete): reply ephemeral with an embed summarising the action + `Confirm`/`Cancel` buttons (`<plugin>:confirm-<action>:<ownerUserId>:<payload>`), 60s timeout, unless the guild's `admin` config `fastActions=true` **and** the action is not `purge>100`. Payload that doesn't fit in customId → store in Redis `pavisie:pending:<uuid>` TTL 120s and pass the uuid.
 - Autocomplete for case ids, config keys, rule ids, ticket ids, plugin ids, timezones.
 - Use `t()` for all user-facing strings (add keys to `packages/plugins/src/<id>/locales/en.json`, merged by the SDK into the i18n table under namespace `<pluginId>.`; core i18n exposes `registerLocaleBundle(ns, locale, bundle)`).
 - Errors: throw `AppError` subclasses; the host router catches, logs (no user content), and replies with `t('errors.<code>')` ephemerally. Never leak stack traces.
@@ -472,13 +472,13 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 - Bot invite permission set `INVITE_PERMISSIONS` (core): ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles, ReadMessageHistory, AddReactions, UseExternalEmojis, ManageMessages, ManageChannels, ManageRoles, ManageNicknames, ModerateMembers, KickMembers, BanMembers, ManageThreads, CreatePublicThreads, CreatePrivateThreads, ManageWebhooks, ViewAuditLog, Connect, Speak, MoveMembers, ManageEvents, MuteMembers, DeafenMembers. **Never Administrator.**
 - Each plugin lists its permissions in `manifest.permissions`; `/permissions audit` diffs against `guild.members.me.permissions` and reports missing ones per feature with the fallback text.
 
-## 8. Database (`@entrophy/database`)
+## 8. Database (`@pavisie/database`)
 
 - `prisma/schema.prisma` (postgres). Client singleton in `src/client.ts` (`export const prisma`, `export * from '@prisma/client'` types). `src/index.ts` also exports `writeAudit(prisma, entry)`, `withGuild(guildId)` helpers, and `retention.ts` helpers.
 - Migration: `prisma/migrations/0001_init/migration.sql` + `migration_lock.toml`, generated with `prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script` (no DB needed). Scripts: `generate`, `migrate:dev`, `migrate:deploy`, `migrate:diff`, `seed` (`tsx prisma/seed.ts`), `studio`.
 - Conventions: ids `String @id @default(cuid())` unless a Discord snowflake is natural (`Guild.id`, `UserProfile.id` = discord user id). Every tenant table has `guildId String` + `@@index([guildId])` (+ compound indexes for hot lookups). Timestamps `createdAt @default(now())`, `updatedAt @updatedAt`. Soft delete via `deletedAt DateTime?` on ModerationCase, Ticket, RolePanel, AutomodRule, Suggestion, WebhookEndpoint, IntegrationConnection. FK to `Guild` with `onDelete: Cascade` (guild data deletion = delete Guild row → cascades). Json config columns typed `Json`.
-- Models (minimum): Guild, GuildConfig (1:1; staff role ids, locale, timezone, fastActions, modLogChannelId, dataCollection flags), PluginState, PluginConfig, PluginMigration, UserProfile, ModerationCase (`caseNumber Int` per guild `@@unique([guildId, caseNumber])`, type enum WARN|TIMEOUT|UNTIMEOUT|KICK|BAN|UNBAN|SOFTBAN|PURGE|LOCK|UNLOCK|SLOWMODE|NICK|ROLE_ADD|ROLE_REMOVE|QUARANTINE|NOTE, targetId, moderatorId, reason, evidenceUrls String[], durationMs, expiresAt, expiredAt, dmSent Boolean, metadata Json, source), ModerationWarning, ModerationNote, ModerationAppeal, ModerationEscalationRule (or inside config Json), AutomodRule, AutomodEvent (with reviewStatus enum PENDING|APPROVED|FALSE_POSITIVE), AuditLog, LogEvent (logging plugin searchable store; content fields nullable), Ticket, TicketParticipant, TicketTranscript, TicketPanel, RolePanel, RolePanelOption, RoleGroup, MemberRoleSnapshot (role persistence), VerificationRequest, OnboardingProgress, ScheduledJob, Reminder, ScheduledAnnouncement, Giveaway, GiveawayEntry, Poll, PollOption, PollVote, Suggestion, SuggestionVote, StarboardEntry, TempVoiceChannel, CommunityEvent, EventRsvp, LevelProfile, LevelReward, ReputationEvent, EconomyAccount, EconomyTransaction, AfkStatus, IntegrationConnection, OAuthToken (encrypted fields `accessTokenEnc`, `refreshTokenEnc`, `expiresAt`, `scopes String[]`), WebhookEndpoint (inbound + outbound, `secretEnc`), WebhookDelivery, ProcessedWebhookEvent (idempotency: `@@unique([provider, eventId])`), DataRetentionPolicy, DataRequest (export/delete jobs), AiUsage, GuildAnalyticsDaily, TwitchBotIdentity (singleton — Entrophy's own Twitch chat-bot account), TwitchChatChannel (a guild's linked Twitch channel, with `overlayTokenEnc` + `rewardsEnabled` for channel-point rewards — §19b), TwitchChatCommand, TwitchChatTimer (enum `TwitchChatLevel` EVERYONE|SUBSCRIBER|VIP|MODERATOR|BROADCASTER — see §19a), TwitchChatReward (channel-point reward → action mapping, enum `TwitchRewardActionKind` SOUND|TTS|CHAT|DISCORD — see §19b), GameAccountLink, GameStatSnapshot (enum `GameAccountProvider` STEAM only in v1, per-guild opt-in link + latest curated stat snapshot — see §19c).
-- Seed (`prisma/seed.ts`): only creates a **demo guild clearly named `Entrophy Demo (seed)`** with id `000000000000000000`, sample plugin states, one sample automod rule in dry-run, sample retention policy. No fake users/messages.
+- Models (minimum): Guild, GuildConfig (1:1; staff role ids, locale, timezone, fastActions, modLogChannelId, dataCollection flags), PluginState, PluginConfig, PluginMigration, UserProfile, ModerationCase (`caseNumber Int` per guild `@@unique([guildId, caseNumber])`, type enum WARN|TIMEOUT|UNTIMEOUT|KICK|BAN|UNBAN|SOFTBAN|PURGE|LOCK|UNLOCK|SLOWMODE|NICK|ROLE_ADD|ROLE_REMOVE|QUARANTINE|NOTE, targetId, moderatorId, reason, evidenceUrls String[], durationMs, expiresAt, expiredAt, dmSent Boolean, metadata Json, source), ModerationWarning, ModerationNote, ModerationAppeal, ModerationEscalationRule (or inside config Json), AutomodRule, AutomodEvent (with reviewStatus enum PENDING|APPROVED|FALSE_POSITIVE), AuditLog, LogEvent (logging plugin searchable store; content fields nullable), Ticket, TicketParticipant, TicketTranscript, TicketPanel, RolePanel, RolePanelOption, RoleGroup, MemberRoleSnapshot (role persistence), VerificationRequest, OnboardingProgress, ScheduledJob, Reminder, ScheduledAnnouncement, Giveaway, GiveawayEntry, Poll, PollOption, PollVote, Suggestion, SuggestionVote, StarboardEntry, TempVoiceChannel, CommunityEvent, EventRsvp, LevelProfile, LevelReward, ReputationEvent, EconomyAccount, EconomyTransaction, AfkStatus, IntegrationConnection, OAuthToken (encrypted fields `accessTokenEnc`, `refreshTokenEnc`, `expiresAt`, `scopes String[]`), WebhookEndpoint (inbound + outbound, `secretEnc`), WebhookDelivery, ProcessedWebhookEvent (idempotency: `@@unique([provider, eventId])`), DataRetentionPolicy, DataRequest (export/delete jobs), AiUsage, GuildAnalyticsDaily, TwitchBotIdentity (singleton — Pavisie's own Twitch chat-bot account), TwitchChatChannel (a guild's linked Twitch channel, with `overlayTokenEnc` + `rewardsEnabled` for channel-point rewards — §19b), TwitchChatCommand, TwitchChatTimer (enum `TwitchChatLevel` EVERYONE|SUBSCRIBER|VIP|MODERATOR|BROADCASTER — see §19a), TwitchChatReward (channel-point reward → action mapping, enum `TwitchRewardActionKind` SOUND|TTS|CHAT|DISCORD — see §19b), GameAccountLink, GameStatSnapshot (enum `GameAccountProvider` STEAM only in v1, per-guild opt-in link + latest curated stat snapshot — see §19c).
+- Seed (`prisma/seed.ts`): only creates a **demo guild clearly named `Pavisie Demo (seed)`** with id `000000000000000000`, sample plugin states, one sample automod rule in dry-run, sample retention policy. No fake users/messages.
 
 ## 9. Bot host (`apps/bot`)
 
@@ -491,7 +491,7 @@ src/host/router.ts    interactionCreate: slash → command lookup → guildOnly/
 src/host/prefix/       message-command prefix layer — transforms `+commandname args` into slash-command interactions
 src/host/permissions.ts   resolveStaffLevel wrapper using GuildConfig; requirement checks; bot permission checks
 src/host/health.ts    tiny http server GET /health → { status, uptime, guilds, ws ping, plugins: {id: health} }
-src/register.ts       `pnpm --filter @entrophy/bot register [--global|--guild <id>|--clear]` — REST PUT applicationCommands (DEV_GUILD_ID default when set)
+src/register.ts       `pnpm --filter @pavisie/bot register [--global|--guild <id>|--clear]` — REST PUT applicationCommands (DEV_GUILD_ID default when set)
 src/workers.ts        BullMQ Worker bootstrap for all plugin jobs + shared queues `bot-actions` (dashboard→bot requests: post role panel, send test welcome, etc.)
 ```
 
@@ -532,7 +532,7 @@ with a configurable prefix, default `+`. For example: `/mod ban @user spam` can 
 
 - Fastify 5 + `fastify-type-provider-zod` (`serializerCompiler`, `validatorCompiler`, `jsonSchemaTransform` for swagger). Swagger UI at `/docs`, JSON at `/docs/json` — **registered only when `NODE_ENV !== 'production'`**; disabled in production so the exact request shape of public endpoints like `/auth/discord/login` isn't handed to anyone who looks (see `docs/SECURITY.md`). Script `openapi:export` writes `docs/openapi.json` from a dev/test run.
 - Plugins: helmet, cors (`origin: [env.DASHBOARD_URL]`, `credentials: true`), cookie (signed with SESSION_SECRET), rate-limit (global 300/min per IP, auth routes 20/min; Redis-backed store, shared across api instances and survives restarts — not per-process memory), sensible.
-- Session: `sid` cookie (httpOnly, sameSite `lax`, secure in prod, `domain: COOKIE_DOMAIN?`), 32-byte random id, Redis hash `entrophy:session:<sid>` TTL 7d: `{ userId, username, avatar, accessTokenEnc, refreshTokenEnc, expiresAt, csrfToken }`. `request.session` decorator. Logout deletes.
+- Session: `sid` cookie (httpOnly, sameSite `lax`, secure in prod, `domain: COOKIE_DOMAIN?`), 32-byte random id, Redis hash `pavisie:session:<sid>` TTL 7d: `{ userId, username, avatar, accessTokenEnc, refreshTokenEnc, expiresAt, csrfToken }`. `request.session` decorator. Logout deletes.
 - CSRF: mutating routes require header `X-CSRF-Token` equal to session csrf token (returned by `GET /auth/me`) **and** `Origin`/`Referer` (when present) must be in the allowlist. Dashboard api client sends the header.
 - Auth: `GET /auth/discord/login` (state in Redis 10min, PKCE not required for Discord but include `state`), scopes `identify guilds`; `GET /auth/discord/callback`; `POST /auth/logout`; `GET /auth/me` → `{ user, csrfToken }`. `POST /auth/test-login` only when `E2E_TEST_MODE=true && NODE_ENV!=='production'` (creates a session for a synthetic user + synthetic guild `000000000000000000` where the user is admin) — used by Playwright.
 - Guild access: `GET /guilds` → guilds where user has `MANAGE_GUILD` or `ADMINISTRATOR` or is owner (from `/users/@me/guilds` with user token, cached 60s in Redis) intersected with guilds the bot is in (`Guild` table with `botPresent=true`; the bot upserts on guildCreate/guildDelete/ready). Response marks `botPresent` so the dashboard can show an "Add bot" link (invite URL) for others. `preHandler requireGuildAccess` on `/guilds/:guildId/*` re-checks from the cached guild list (403 otherwise). All writes call `writeAudit` with `source: 'dashboard'`.
@@ -554,21 +554,21 @@ with a configurable prefix, default `+`. For example: `/mod ban @user spam` can 
   - `routes/analytics.ts` — `GET /:guildId/analytics?range=7d|30d|90d` (from GuildAnalyticsDaily; only if `GuildConfig.dataCollectionEnabled`)
   - `routes/privacy.ts` — retention policy get/put, `POST /:guildId/data/export` (queues job → downloadable JSON), `POST /:guildId/data/delete` (requires confirmation phrase, queues deletion), `GET /:guildId/data/requests`
   - `routes/webhooks.ts` (NOT under /guilds): `POST /webhooks/github/:endpointId`, `POST /webhooks/twitch`, `POST /webhooks/generic/:endpointId` — raw body, signature verification, idempotency via `ProcessedWebhookEvent`, then enqueue to `integrations.inbound` queue. (`POST /webhooks/stripe` was removed with the Stripe connector, §18a — GitHub's route stays wired but has no provider left to act on deliveries, see §18a.)
-  - `routes/oauth-integrations.ts` — `/integrations/:provider/callback`, branching on the OAuth state's `kind`: absent (the original generic per-guild connect flow, unchanged), `twitch_chat` (identifies the broadcaster via Helix, creates the `IntegrationConnection`+`OAuthToken`, upserts `TwitchChatChannel` status PENDING), `twitch_bot` (owner-only — identifies Entrophy's own Twitch account and upserts the singleton `TwitchBotIdentity`, replacing tokens/scopes/expiry on re-auth; returns a small standalone HTML confirmation page instead of a dashboard redirect)
-  - `routes/developer-reports.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner`) — ops-console backend for the guild → developer support channel written by the `admin` plugin's `/entrophy report`; intentionally cross-guild data, which is exactly why it is bot-owner-only rather than `requireGuildAccess`: `GET /owner/developer-reports` (cursor-paginated, newest-first, filters `?status=OPEN|HANDLED&kind=BUG|FEEDBACK|QUESTION&guildId=`), `GET /owner/developer-reports/:id`, `PATCH /owner/developer-reports/:id` (`status` and/or `notes`, at least one required — `notes` is internal-only triage text never shown to the reporting guild; flipping to `HANDLED` stamps `handledAt`/`handledBy` from the session, back to `OPEN` clears both)
-  - `routes/owner-metrics.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner` like `routes/developer-reports.ts`) — read-only metrics for the local "Entrophy Dev" desktop app: `GET /owner/metrics/overview` (guild presence/growth, member totals + largest guild, developer-report counts, 7d activity), `GET /owner/metrics/guilds` (cursor-paginated, newest-joined first, `?query=&botPresent=`, per-guild plugin/case/ticket/last-activity aggregates), `GET /owner/metrics/errors` (cursor-paginated feed merged from the four models with an error column — `IntegrationConnection.lastError`, `ScheduledJob.lastError`, `WebhookDelivery.error`, `DataRequest.error`, `?source=&guildId=`), `GET /owner/metrics/growth?days=` (daily join/leave counts + running net, zero-filled, clamped 1–365)
-  - `routes/twitch-bot.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner`) — Entrophy's own Twitch chat-bot account identity, the singleton `TwitchBotIdentity` row (§19a): `GET /owner/twitch-bot` → the DTO or `{ configured: false }`, `POST /owner/twitch-bot/connect` → OAuth authorize URL (scopes `user:read:chat user:write:chat user:bot`), `DELETE /owner/twitch-bot`. Never returns the encrypted access/refresh tokens.
+  - `routes/oauth-integrations.ts` — `/integrations/:provider/callback`, branching on the OAuth state's `kind`: absent (the original generic per-guild connect flow, unchanged), `twitch_chat` (identifies the broadcaster via Helix, creates the `IntegrationConnection`+`OAuthToken`, upserts `TwitchChatChannel` status PENDING), `twitch_bot` (owner-only — identifies Pavisie's own Twitch account and upserts the singleton `TwitchBotIdentity`, replacing tokens/scopes/expiry on re-auth; returns a small standalone HTML confirmation page instead of a dashboard redirect)
+  - `routes/developer-reports.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner`) — ops-console backend for the guild → developer support channel written by the `admin` plugin's `/pavisie report`; intentionally cross-guild data, which is exactly why it is bot-owner-only rather than `requireGuildAccess`: `GET /owner/developer-reports` (cursor-paginated, newest-first, filters `?status=OPEN|HANDLED&kind=BUG|FEEDBACK|QUESTION&guildId=`), `GET /owner/developer-reports/:id`, `PATCH /owner/developer-reports/:id` (`status` and/or `notes`, at least one required — `notes` is internal-only triage text never shown to the reporting guild; flipping to `HANDLED` stamps `handledAt`/`handledBy` from the session, back to `OPEN` clears both)
+  - `routes/owner-metrics.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner` like `routes/developer-reports.ts`) — read-only metrics for the local "Pavisie Dev" desktop app: `GET /owner/metrics/overview` (guild presence/growth, member totals + largest guild, developer-report counts, 7d activity), `GET /owner/metrics/guilds` (cursor-paginated, newest-joined first, `?query=&botPresent=`, per-guild plugin/case/ticket/last-activity aggregates), `GET /owner/metrics/errors` (cursor-paginated feed merged from the four models with an error column — `IntegrationConnection.lastError`, `ScheduledJob.lastError`, `WebhookDelivery.error`, `DataRequest.error`, `?source=&guildId=`), `GET /owner/metrics/growth?days=` (daily join/leave counts + running net, zero-filled, clamped 1–365)
+  - `routes/twitch-bot.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner`) — Pavisie's own Twitch chat-bot account identity, the singleton `TwitchBotIdentity` row (§19a): `GET /owner/twitch-bot` → the DTO or `{ configured: false }`, `POST /owner/twitch-bot/connect` → OAuth authorize URL (scopes `user:read:chat user:write:chat user:bot`), `DELETE /owner/twitch-bot`. Never returns the encrypted access/refresh tokens.
 - Errors: `setErrorHandler` → `toPublicError` → `{ error: { code, message, details? } }`, zod errors → 400 with issues. Fastify `FST_ERR_*` client errors keep their own 4xx status with a fixed public message table (`empty_body`, `invalid_json`, `unsupported_media_type`, `payload_too_large`); `@fastify/rate-limit`'s 429 → `rate_limited`.
 - Tests: `vitest` with `app.inject()` for auth guard, csrf, guild access (mock Redis via `ioredis-mock`), signature verification.
 
 ## 11. Per-guild config dashboard (lives in `apps/web`, not `apps/dashboard`)
 
-**Merged into the main site (`entrophybot.com`).** The per-guild config dashboard described below
+**Merged into the main site (`pavisie.com`).** The per-guild config dashboard described below
 is served by `apps/web` at `/dashboard/**` — there is no separate dashboard domain or app anymore.
-`apps/dashboard` (`app.entrophybot.com`) is a different, much smaller thing now — see §11a.
+`apps/dashboard` (`app.pavisie.com`) is a different, much smaller thing now — see §11a.
 
 - Next.js 15 App Router, `apps/web/src/app/dashboard/**`. Reuses `apps/web`'s root layout/providers
-  (Tailwind + `@entrophy/ui` + `next-themes` dark mode (class) + React Query + session, all mounted
+  (Tailwind + `@pavisie/ui` + `next-themes` dark mode (class) + React Query + session, all mounted
   once for the whole app — see §17) rather than a per-route provider tree. Responsive sidebar
   layout (`components/dashboard/app-sidebar.tsx`) + below-`lg` tab strip
   (`components/dashboard/dashboard-tab-strip.tsx`).
@@ -596,13 +596,13 @@ is served by `apps/web` at `/dashboard/**` — there is no separate dashboard do
   marketing homepage (§17) has always lived at `/`, and its existing "Open dashboard" CTA now just
   links to `/dashboard` directly (same origin, no more `NEXT_PUBLIC_DASHBOARD_URL`/cross-domain
   link).
-- Data layer: `apps/web/src/lib/dashboard/api.ts` — `apiFetch(path, init)` with `credentials: 'include'`, adds `X-CSRF-Token` from `/auth/me` (cached in a React context `SessionProvider`, `apps/web/src/lib/dashboard/session.tsx`), throws `ApiClientError`. React Query hooks in `apps/web/src/lib/dashboard/queries.ts` (+ one `*-queries.ts` per plugin area). Discord embed preview component `EmbedPreview` in `@entrophy/ui`.
+- Data layer: `apps/web/src/lib/dashboard/api.ts` — `apiFetch(path, init)` with `credentials: 'include'`, adds `X-CSRF-Token` from `/auth/me` (cached in a React context `SessionProvider`, `apps/web/src/lib/dashboard/session.tsx`), throws `ApiClientError`. React Query hooks in `apps/web/src/lib/dashboard/queries.ts` (+ one `*-queries.ts` per plugin area). Discord embed preview component `EmbedPreview` in `@pavisie/ui`.
 - Auth gate: `apps/web/src/app/dashboard/layout.tsx` is a client component that calls `/auth/me`; unauthenticated → redirect `/`. A fast-path `apps/web/src/middleware.ts` checks the `sid` cookie exists and, when absent, redirects `/dashboard/*` straight to `/` before any client JS runs — same conservative "only when `COOKIE_DOMAIN` is a shared parent" caveat as before; it does not (and must not) touch `/` itself, since `/` is the marketing homepage here, not a login gate.
 - Navigation: **one** top bar for the whole app (`apps/web/src/components/TopBar.tsx`, mounted once
   in the root layout) — not a dashboard-specific header. It shows the guild switcher
   (`components/dashboard/guild-switcher.tsx`) only on `/dashboard/[guildId]/**` routes, and the
   theme toggle/account menu only inside `/dashboard/**` generally. Its one hamburger menu is
-  grouped: "This server" (the 16 sections above, only inside a guild) and "Entrophy" (Commands/
+  grouped: "This server" (the 16 sections above, only inside a guild) and "Pavisie" (Commands/
   Enforcer/Support/Donate, always) — this is what makes the site's marketing pages reachable from
   inside the dashboard, and vice versa, at every breakpoint. `AppSidebar`'s own mobile slide-in
   Sheet is effectively superseded by `DashboardTabStrip` (already covers below-`lg` navigation) and
@@ -613,26 +613,26 @@ is served by `apps/web` at `/dashboard/**` — there is no separate dashboard do
   `AppSidebar`'s `Sidebar` `footer` slot, and as an extra action in `ErrorState`'s "something went
   wrong" display — both render nothing when the env var is unset.
 
-## 11a. `apps/dashboard` (`app.entrophybot.com`) — legacy-link redirector today, ops console next
+## 11a. `apps/dashboard` (`app.pavisie.com`) — legacy-link redirector today, ops console next
 
 Not deleted — repurposed. Since the dashboard UI above moved into `apps/web`, this service's job
-today is purely to keep old `app.entrophybot.com/dashboard/...` links alive (bookmarks, the Top.gg
+today is purely to keep old `app.pavisie.com/dashboard/...` links alive (bookmarks, the Top.gg
 listing, a live Reddit post): its `next.config.ts` `redirects()` 308s `/`, `/dashboard`, and
 `/dashboard/:path*` to the equivalent `WEB_URL` path, read server-side (not a `NEXT_PUBLIC_*`
 build-time var). The redirect is deliberately **path-scoped, not a blanket catch-all** — Brandon is
 building an owner-only ops console (cross-server support tickets, fleet metrics, error monitoring,
-bot health) to live on this same service next, most likely on a separate `dev.entrophybot.com`
+bot health) to live on this same service next, most likely on a separate `dev.pavisie.com`
 domain, and a wildcard redirect would fight any `/ops/...` routes added later.
 
 The app is kept **fully real and deployable**, not stripped to a config file: its root
-`layout.tsx`/`Providers` (theme + React Query + session), `@entrophy/ui` wiring, and vitest/
+`layout.tsx`/`Providers` (theme + React Query + session), `@pavisie/ui` wiring, and vitest/
 Playwright test setup are all intact and covered by `apps/dashboard/test/*.test.ts`. Its current
 `src/app/page.tsx` is an honest placeholder (not fake ops content) that exercises that session/
 theme/UI wiring so it stays a verified baseline rather than dead scaffolding. `src/middleware.ts`
 (the old cookie-based auth fast-redirect) was removed — superseded by the `next.config.ts`
 redirects, since this service no longer has any dashboard auth flow of its own to fast-path.
 
-## 12. `@entrophy/ui`
+## 12. `@pavisie/ui`
 
 Components (all accessible, keyboard-friendly, dark-mode aware, `cn()` helper): Button, IconButton, Card, Badge, Input, Textarea, Select, Switch, Checkbox, Label, Tabs, Dialog, Sheet/Drawer, DropdownMenu, Tooltip, Table, Pagination, EmptyState, Skeleton, Alert, Toast (sonner-free simple), FormField, ColorPicker (native input), ChannelPicker/RolePicker (props: options), EmbedPreview (Discord-style), CodeBlock, StatCard, PageHeader, Sidebar/Nav, ThemeToggle. `packages/ui/src/index.ts` re-exports; `tailwind.preset.ts` (colors: brand indigo `#6366f1`, semantic tokens) consumed by both `apps/dashboard` and `apps/web`'s `tailwind.config.ts` (`presets: [preset]`, `content` includes `../../packages/ui/src/**/*.{ts,tsx}`) — `apps/web` layers its own monochrome `ink`/`grey`/`paper` tokens (§17) on top for marketing pages via the same config's `theme.extend`.
 
@@ -643,7 +643,7 @@ Components (all accessible, keyboard-friendly, dark-mode aware, `cn()` helper): 
 
 ## 14. Docker
 
-- `infra/docker/Dockerfile.{bot,api}`: `node:22-alpine`, `corepack enable && corepack prepare pnpm@9.15.9 --activate`, copy workspace manifests, `pnpm install --frozen-lockfile`, copy source, `pnpm db:generate`, `CMD ["pnpm","--filter","@entrophy/bot","start"]` (start = `tsx src/index.ts`). Non-root user. Healthcheck hits `BOT_HEALTH_PORT` / `API_PORT/health`.
+- `infra/docker/Dockerfile.{bot,api}`: `node:22-alpine`, `corepack enable && corepack prepare pnpm@9.15.9 --activate`, copy workspace manifests, `pnpm install --frozen-lockfile`, copy source, `pnpm db:generate`, `CMD ["pnpm","--filter","@pavisie/bot","start"]` (start = `tsx src/index.ts`). Non-root user. Healthcheck hits `BOT_HEALTH_PORT` / `API_PORT/health`.
 - `Dockerfile.dashboard`: multi-stage `next build` with `output: 'standalone'`, `CMD ["node","apps/dashboard/server.js"]`.
 - `docker-compose.yml`: `postgres` (16-alpine, volume, healthcheck), `redis` (7-alpine), `migrate` (api image, `pnpm db:migrate`, depends_on healthy postgres), `bot`, `api`, `dashboard` — all `env_file: .env`, DATABASE_URL/REDIS_URL overridden to service hostnames.
 
@@ -662,14 +662,14 @@ Components (all accessible, keyboard-friendly, dark-mode aware, `cn()` helper): 
 
 README (top-level): overview, features, prerequisites, Discord Developer Portal setup, OAuth redirect config, invite URL (scopes `bot applications.commands`, least-privilege permission integer), privileged intents guidance, local setup (with & without Docker), production deployment, plugin configuration guide (link PLUGINS.md), permissions matrix (link PERMISSIONS.md), privacy policy template (link), troubleshooting, roadmap (link). Every plugin's README.md is linked from PLUGINS.md.
 
-## 17. `apps/web` (@entrophy/web)
+## 17. `apps/web` (@pavisie/web)
 
 - Next.js 15 App Router (same versions as dashboard), Tailwind 3, `next dev -p 3003`. Also serves the
   per-guild config dashboard now (§11) at `/dashboard/**`, merged in from the formerly-separate
-  `apps/dashboard` app. Depends on `@entrophy/types` (still not `core`) and, since that merge, also
-  `@entrophy/ui`/`@tanstack/react-query`/`next-themes` (the dashboard half's dependencies) — but
+  `apps/dashboard` app. Depends on `@pavisie/types` (still not `core`) and, since that merge, also
+  `@pavisie/ui`/`@tanstack/react-query`/`next-themes` (the dashboard half's dependencies) — but
   marketing pages still use only the website's own monochrome component set under
-  `src/components/`, not `@entrophy/ui`; the two component systems coexist (§11's Tailwind preset
+  `src/components/`, not `@pavisie/ui`; the two component systems coexist (§11's Tailwind preset
   note) without either being forced on the other's pages.
 - Palette tokens (CSS variables in `src/app/globals.css`): `--ink-0:#050505 --ink-1:#0a0a0a --ink-2:#111111
 --ink-3:#171717 --ink-4:#1f1f1f --ink-5:#262626 --ink-6:#333333 --ink-7:#404040 --grey-1:#525252 --grey-2:#737373
@@ -680,7 +680,7 @@ README (top-level): overview, features, prerequisites, Discord Developer Portal 
   `mix-blend-mode: screen`, opacity 0.08–0.18) animated with slow translate/scale keyframes (60–120s), disabled under
   `prefers-reduced-motion`; `Grain.tsx` overlays an SVG `feTurbulence` noise data-URI at ~4% opacity; `Glass` card =
   `bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl`.
-- Data: `src/data/commands.json` is generated by `pnpm --filter @entrophy/plugins export:commands`
+- Data: `src/data/commands.json` is generated by `pnpm --filter @pavisie/plugins export:commands`
   (`packages/plugins/scripts/export-commands.ts` walks `allPlugins`, calls `data.toJSON()` and emits
   `{ generatedAt, plugins: [{ id, name, description, category, defaultEnabled, privilegedIntents, commands: [{ name,
 fullName ("/mod warn"), type: 'slash'|'user'|'message', description, staffLevel?, discordPermissions?: string[],
@@ -711,7 +711,7 @@ options: [{name, description, required, type}], subcommands: [{ name, fullName, 
 
 Donations moved from Stripe Checkout to a Ko-fi link-out on 2026-08-30 after a public card-testing incident
 forced a Stripe account ban on 2026-08-26. Rather than defend the checkout endpoint against further abuse, the
-decision was to remove it entirely — Entrophy no longer processes payments at all. Ko-fi (a third-party donation
+decision was to remove it entirely — Pavisie no longer processes payments at all. Ko-fi (a third-party donation
 platform) hosts the payment page and owns all fraud/abuse handling. This removes the entire card-testing attack
 surface instead of just hardening one endpoint.
 
@@ -729,7 +729,7 @@ surface instead of just hardening one endpoint.
 - **Donation database table left in place for now, unused.** Prisma model `Donation` exists but no code writes to
   it anymore. The table is not dropped so operator data is not destroyed, and future use (e.g. logging who donated
   at what time without storing personal data) remains possible without a migration.
-- Entrophy handles **no card data, no payment secrets, and no donation webhooks**. Ko-fi handles everything.
+- Pavisie handles **no card data, no payment secrets, and no donation webhooks**. Ko-fi handles everything.
 - The `/docs` Swagger UI no longer shows any donation endpoints (no endpoints exist).
 
 ### 18a. Stripe integration connector (removed 2026-09-02)
@@ -747,7 +747,7 @@ provider file/registry entry for one without deciding whether its enum value sho
 
 ## 19. `enforcer` plugin
 
-- Plugin id `enforcer` (add to `PluginId` / `PLUGIN_IDS` in `@entrophy/types`, to `allPlugins` after `automod`, and to
+- Plugin id `enforcer` (add to `PluginId` / `PLUGIN_IDS` in `@pavisie/types`, to `allPlugins` after `automod`, and to
   the §7.1 table). Folder `packages/plugins/src/enforcer`. Category `moderation`. `defaultEnabled: false`.
   `privilegedIntents: ['MessageContent']` (automatic flagging only; manual flags via context menu work without it —
   message context-menu interactions include the resolved message content regardless of intent). Note: Message Content
@@ -809,7 +809,7 @@ attachments: {name, contentType?}[], links: string[], invites: string[], isStaff
   allowedDecisions), `enforcer:context:<recordId>` (View context: live fetch `contextBefore` before + `contextAfter`
   after the flagged message; falls back to snapshot; ephemeral), `enforcer:history:<recordId>` (Suspect history:
   counts + last 5 records ephemeral). All buttons `ownerOnly: false`, requirement staffLevel `moderator` (Dismiss and
-  View context: `helper`). Decision click → Redis lock `entrophy:enforcer:lock:<recordId>` (NX PX 30000) + status check
+  View context: `helper`). Decision click → Redis lock `pavisie:enforcer:lock:<recordId>` (NX PX 30000) + status check
   → for timeout/mute/kick/ban (and warn when required) open a modal (`enforcer:decide-modal:<recordId>:<decision>`
   fields reason (required per config), duration for timeout/mute (parseDuration), banDeleteMessages days for ban) →
   execute via moderation service (`warn` / `timeout` / `kick` / `ban` / for MUTE add `muteRoleId` role through
@@ -860,12 +860,12 @@ search(...) }` — used by the bot-action `enforcer.decide` (dashboard decisions
 
 ## 19a. Twitch chat bot (inside the `integrations` plugin)
 
-Entrophy joining a streamer's Twitch chat to answer commands — a distinct feature from the `integrations`
+Pavisie joining a streamer's Twitch chat to answer commands — a distinct feature from the `integrations`
 plugin's Twitch stream-live alerts (§J), sharing only the `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` env vars.
 No 15th plugin: lives in `packages/plugins/src/integrations/twitch-chat/` (`helix.ts`, `socket.ts`, `manager.ts`,
 `engine.ts`, `timers.ts`) plus the `twitch-chat-tick` job; command `/twitch` (§7.1).
 
-- **Identity model**: ONE global `TwitchBotIdentity` row — Brandon authorizes Entrophy's own Twitch account once
+- **Identity model**: ONE global `TwitchBotIdentity` row — Brandon authorizes Pavisie's own Twitch account once
   (owner-only `POST /owner/twitch-bot/connect`, scopes `user:read:chat user:write:chat user:bot`). Every chat
   read/send runs on this token, never a broadcaster's. Per guild, a streamer links their channel from the
   dashboard (`POST /:guildId/integrations/twitch-chat/connect`, scope `channel:bot`), which upserts a
@@ -916,7 +916,7 @@ No 15th plugin: lives in `packages/plugins/src/integrations/twitch-chat/` (`heli
 ## 19b. Twitch channel-point rewards (inside the `integrations` plugin)
 
 A channel-point reward (something a Twitch viewer buys with channel points in chat) triggers an action in
-Entrophy: playing a sound on the streamer's OBS overlay, speaking text via TTS, posting to Twitch chat, or
+Pavisie: playing a sound on the streamer's OBS overlay, speaking text via TTS, posting to Twitch chat, or
 posting to a Discord channel. Live inside `integrations/twitch-chat/` (`rewards.ts`, `tts.ts`, `manager.ts`,
 `broadcaster-token.ts`) plus API routes and dashboard UI; command `/twitch reward` (§7.1).
 
@@ -937,7 +937,7 @@ posting to a Discord channel. Live inside `integrations/twitch-chat/` (`rewards.
   each linked channel can now carry **two** subscriptions (chat + rewards), the channel cap dropped from 300 to 150
   (worst case: every channel has rewards enabled).
 - **Overlay delivery** (SOUND + TTS actions): the redemption arrives in the `bot` process, but the overlay browser
-  connects to the `api` process. The bot publishes the action over Redis (`entrophy:overlay:<channelId>`) and the
+  connects to the `api` process. The bot publishes the action over Redis (`pavisie:overlay:<channelId>`) and the
   `api` process subscribes via a **second, dedicated ioredis client in subscriber mode** — a subscriber-mode client
   cannot run normal Redis commands and the shared client is already in use by BullMQ + rate limiting. This design
   works with multiple `api` replicas: each replica receives every message and writes only to its own connections.
@@ -1046,7 +1046,7 @@ Production runs on a cloud host, not a home machine. Deliverables and rules:
   bot uses `BOT_HEALTH_PORT` for its healthcheck; web/dashboard healthcheck `/`).
 - **Alternative: Render Blueprint** — root `render.yaml` declaring: `api` (web, docker, healthCheckPath /health,
   preDeployCommand `pnpm db:migrate`), `dashboard` (web, docker), `web` (web, docker), `bot` (worker, docker),
-  `entrophy-postgres` (database), `entrophy-redis` (keyvalue/redis). Env vars wired with `fromDatabase`/`fromService`
+  `pavisie-postgres` (database), `pavisie-redis` (keyvalue/redis). Env vars wired with `fromDatabase`/`fromService`
   and `sync: false` for secrets. Note that free tiers sleep — bots need a paid always-on worker.
 - **Alternative: any VPS** with the existing `docker-compose.yml` (document Caddy/Traefik TLS in front).
 - Cross-site cookies: PaaS-provided subdomains (`*.up.railway.app`, `*.onrender.com`) are on the Public Suffix List, so
@@ -1062,71 +1062,71 @@ Production runs on a cloud host, not a home machine. Deliverables and rules:
   snapshots), updating (push to main → auto-deploy), rollback (redeploy previous build), and rough monthly cost
   guidance with a "check current pricing" caveat. GitHub Actions CI stays as the gate before auto-deploy.
 
-## 21a. Production domain: entrophybot.com
+## 21a. Production domain: pavisie.com
 
-Brandon owns `entrophybot.com`. Canonical production layout (use these everywhere docs need a concrete example, and
+Brandon owns `pavisie.com`. Canonical production layout (use these everywhere docs need a concrete example, and
 ship `.env.production.example` pre-filled with them, secrets blank):
 
 | Surface                                     | URL                                                                                                        | Env                                                                                          |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Website + config dashboard (§11)           | `https://entrophybot.com` (+ `www` → redirect to apex; dashboard UI at `/dashboard/**`, no separate domain) | `WEB_URL=https://entrophybot.com`                                                            |
-| Legacy dashboard redirector / ops console (§11a) | `https://app.entrophybot.com` — 308s `/` and `/dashboard/*` to the website above; other paths reach the real (currently placeholder) app | `DASHBOARD_URL=https://entrophybot.com` (same value as `WEB_URL` now), plus `WEB_URL`/`NEXT_PUBLIC_API_URL` set on this service itself (see §11a) |
-| API                                         | `https://api.entrophybot.com`                                                                              | `API_BASE_URL=https://api.entrophybot.com`, `NEXT_PUBLIC_API_URL`, `PUBLIC_WEBHOOK_BASE_URL` |
-| Cookies                                     | shared apex                                                                                                | `COOKIE_DOMAIN=.entrophybot.com`, `SESSION_COOKIE_SAMESITE=lax` (default; `none` not needed) |
-| Discord OAuth redirect                      | `https://api.entrophybot.com/auth/discord/callback`                                                        | `DISCORD_OAUTH_REDIRECT_URI`                                                                 |
-| Twitch EventSub / generic webhooks          | `https://api.entrophybot.com/webhooks/...`                                                                 | —                                                                                            |
-| Brand links                                 | `BRAND.siteUrl = 'https://entrophybot.com'`, embed icon `https://entrophybot.com/brand/entrophy-skull.png` | `WEB_URL`                                                                                    |
-| Contact in policy templates                 | `entrophybot@gmail.com` (confirmed 2026-08-24, monitored), operator name "Entrophy"                        | —                                                                                            |
+| Website + config dashboard (§11)           | `https://pavisie.com` (+ `www` → redirect to apex; dashboard UI at `/dashboard/**`, no separate domain) | `WEB_URL=https://pavisie.com`                                                            |
+| Legacy dashboard redirector / ops console (§11a) | `https://app.pavisie.com` — 308s `/` and `/dashboard/*` to the website above; other paths reach the real (currently placeholder) app | `DASHBOARD_URL=https://pavisie.com` (same value as `WEB_URL` now), plus `WEB_URL`/`NEXT_PUBLIC_API_URL` set on this service itself (see §11a) |
+| API                                         | `https://api.pavisie.com`                                                                              | `API_BASE_URL=https://api.pavisie.com`, `NEXT_PUBLIC_API_URL`, `PUBLIC_WEBHOOK_BASE_URL` |
+| Cookies                                     | shared apex                                                                                                | `COOKIE_DOMAIN=.pavisie.com`, `SESSION_COOKIE_SAMESITE=lax` (default; `none` not needed) |
+| Discord OAuth redirect                      | `https://api.pavisie.com/auth/discord/callback`                                                        | `DISCORD_OAUTH_REDIRECT_URI`                                                                 |
+| Twitch EventSub / generic webhooks          | `https://api.pavisie.com/webhooks/...`                                                                 | —                                                                                            |
+| Brand links                                 | `BRAND.siteUrl = 'https://pavisie.com'`, embed icon `https://pavisie.com/brand/pavisie-skull.png` | `WEB_URL`                                                                                    |
+| Contact in policy templates                 | `contact@pavisie.com` (confirmed 2026-08-24, monitored), operator name "Pavisie"                        | —                                                                                            |
 
 DNS (documented in `infra/DEPLOYMENT.md`, cloud-first): at the registrar create `CNAME app` / `CNAME api` /
-`CNAME www` → the host's per-service targets, and apex `entrophybot.com` via ALIAS/ANAME (or the host's apex
+`CNAME www` → the host's per-service targets, and apex `pavisie.com` via ALIAS/ANAME (or the host's apex
 instructions); the host provisions TLS automatically. CORS allowlist = `[DASHBOARD_URL, WEB_URL]` — both now the
-same origin (`https://entrophybot.com`) post-merge, so this allowlist has one effective entry in practice, not two.
+same origin (`https://pavisie.com`) post-merge, so this allowlist has one effective entry in practice, not two.
 
 ## 22. Brand assets (logo = bot avatar)
 
-The Entrophy logo and bot avatar is a pixel-art skull (brighter/cleaner grey pixels on pure black, square,
+The Pavisie logo and bot avatar is a pixel-art skull (brighter/cleaner grey pixels on pure black, square,
 1254×1254), used everywhere: website, dashboard, bot embed icon, and Discord avatar. Canonical file:
-`assets/brand/entrophy-skull.png` (present in the repo, lossless PNG; takes precedence over the `.jpg` when both
-exist). `assets/brand/entrophy-skull.jpg` is the same art re-encoded as JPEG, kept only so any URL or cached
+`assets/brand/pavisie-skull.png` (present in the repo, lossless PNG; takes precedence over the `.jpg` when both
+exist). `assets/brand/pavisie-skull.jpg` is the same art re-encoded as JPEG, kept only so any URL or cached
 reference that still names the `.jpg` file keeps serving the current art instead of 404ing or showing stale art. The
 sync script copies every existing shared candidate (both `.png` and `.jpg`, when present) into each app's
 `public/brand/`, and writes `public/brand/manifest.json` with `logo` naming the preferred one
-(`{ "logo": "/brand/entrophy-skull.png" }`) so pages reference the right extension. If no shared file is present,
+(`{ "logo": "/brand/pavisie-skull.png" }`) so pages reference the right extension. If no shared file is present,
 everything below must degrade gracefully — never fail a build because it is missing.
 
 - `assets/brand/README.md` documents the expected files and how they are consumed.
-- Website: `apps/web/public/brand/entrophy-skull.png` + `.jpg` (copied at build by `scripts/sync-brand.mjs`, root
+- Website: `apps/web/public/brand/pavisie-skull.png` + `.jpg` (copied at build by `scripts/sync-brand.mjs`, root
   script `brand:sync`, run automatically as `prebuild`/`predev` of web and dashboard; the script is a no-op when the
   source is missing) used in the header, hero, Open Graph image (`opengraph-image` route rendering the skull on
   black) and `src/app/apple-icon.png`. The `Logo` component (`apps/web/src/components/Logo.tsx`) reads the
   build-time copy of the manifest at `apps/web/src/data/brand.json` (git-tracked, written by the sync script) rather
   than fetching `public/brand/manifest.json` at runtime, so the logo path is known at build time in every
   environment including the Docker standalone runner.
-- Dashboard: same sync into `apps/dashboard/public/brand/entrophy-skull.png` + `.jpg`; the sidebar wordmark
+- Dashboard: same sync into `apps/dashboard/public/brand/pavisie-skull.png` + `.jpg`; the sidebar wordmark
   (`apps/dashboard/src/components/brand-wordmark.tsx`) reads its own build-time manifest copy at
   `apps/dashboard/src/data/brand.json` (git-tracked, same pattern as the web app's) rather than hard-coding the
   path, and falls back to a text wordmark when the image 404s (`<img onError>` → hide) or when the manifest has no
   logo.
 - Browser-tab favicons: `apps/web/src/app/icon.png` and `apps/dashboard/src/app/icon.png` (256×256, resized from
-  `assets/brand/entrophy-skull.png`, black background kept) are committed static files picked up by Next's
+  `assets/brand/pavisie-skull.png`, black background kept) are committed static files picked up by Next's
   app-router file convention — `sync-brand.mjs` does not generate or touch them, and no `icons` entry is needed in
   either app's `metadata`. Regenerate both by hand (see `assets/brand/README.md` "Regenerating favicons") whenever
   the canonical skull PNG changes.
-- Bot: `pnpm --filter @entrophy/bot set-avatar [--file assets/brand/entrophy-skull.png]` (`apps/bot/src/set-avatar.ts`,
+- Bot: `pnpm --filter @pavisie/bot set-avatar [--file assets/brand/pavisie-skull.png]` (`apps/bot/src/set-avatar.ts`,
   one-off CLI: logs in, `client.user.setAvatar(buffer)`, exits; warns about Discord's avatar-change rate limit) and
-  `BRAND.iconUrl = ${WEB_URL}/brand/entrophy-skull.png` used as embed author/footer icon when `WEB_URL` is set (core
-  `constants.ts` exports `brandIconUrl(env)`, default path `/brand/entrophy-skull.png`, overridable via
+  `BRAND.iconUrl = ${WEB_URL}/brand/pavisie-skull.png` used as embed author/footer icon when `WEB_URL` is set (core
+  `constants.ts` exports `brandIconUrl(env)`, default path `/brand/pavisie-skull.png`, overridable via
   `BRAND_LOGO_PATH`).
-- Also list `assets/brand/entrophy-skull.png` in the README "Discord Developer Portal setup" step (upload as the App
+- Also list `assets/brand/pavisie-skull.png` in the README "Discord Developer Portal setup" step (upload as the App
   Icon and Bot avatar) — the Portal upload is manual.
-- Website-only override (optional, currently unused): `assets/brand/entrophy-skull-web.png`/`.jpg`, if ever added,
+- Website-only override (optional, currently unused): `assets/brand/pavisie-skull-web.png`/`.jpg`, if ever added,
   would be a variant used by the public website's header/hero/`apple-icon` only, resolved from web-specific
   candidates before falling back to the shared candidates above. No such file exists in the repo today — the shared
   logo already is the clean/bright art the website wants — but the sync script still supports it: on fallback,
   `apps/web/public/brand/manifest.json` and `apps/web/src/data/brand.json` gain a `sharedLogo` key alongside `logo`
-  (`{ "logo": "/brand/entrophy-skull.png", "sharedLogo": "/brand/entrophy-skull.png" }` while unused — both point at
+  (`{ "logo": "/brand/pavisie-skull.png", "sharedLogo": "/brand/pavisie-skull.png" }` while unused — both point at
   the same shared file); `logo` is "whatever the website displays" and `sharedLogo` always points at the shared file
   for any website code that needs the canonical/bot-avatar image specifically. The dashboard manifest, the bot's
   `set-avatar` script, and `brandIconUrl` (core `constants.ts`) are untouched by this override and always read the
-  shared `entrophy-skull.<ext>` — never the web-only variant.
+  shared `pavisie-skull.<ext>` — never the web-only variant.

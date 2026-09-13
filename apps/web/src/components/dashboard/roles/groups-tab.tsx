@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import type { RoleGroupDto } from '@entrophy/types/roles';
+import type { RoleGroupDto } from '@pavisie/types/roles';
 import {
   Badge,
   Button,
@@ -24,7 +24,7 @@ import {
   TableHeader,
   TableRow,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import {
   useCreateRoleGroup,
   useDeleteRoleGroup,

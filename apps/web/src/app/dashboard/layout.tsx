@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Skeleton } from '@entrophy/ui';
+import { Skeleton } from '@pavisie/ui';
 import { useSession } from '@/lib/dashboard/session';
 
 /** Auth gate for the entire `/dashboard` tree: redirects unauthenticated visitors to the landing page. */

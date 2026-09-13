@@ -1,4 +1,4 @@
-import type { Paginated } from '@entrophy/types';
+import type { Paginated } from '@pavisie/types';
 
 export interface PaginateParams {
   cursor?: string | null;

@@ -11,8 +11,8 @@ import {
   type Guild,
   type User,
 } from 'discord.js';
-import { AuditAction, ValidationError, hasStaffLevel, truncate } from '@entrophy/core';
-import type { Tag } from '@entrophy/database';
+import { AuditAction, ValidationError, hasStaffLevel, truncate } from '@pavisie/core';
+import type { Tag } from '@pavisie/database';
 import {
   assertStaffLevel,
   buildCustomId,

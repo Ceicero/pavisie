@@ -1,6 +1,6 @@
 # Deployment guide
 
-Entrophy runs in the cloud, not on a home machine or a laptop. This guide is cloud-first: **Railway**
+Pavisie runs in the cloud, not on a home machine or a laptop. This guide is cloud-first: **Railway**
 is the recommended path with an exact click-path below, **Render** is a documented Blueprint
 alternative, and **any VPS** with the existing `docker-compose.yml` is the fallback for anyone who
 wants full control. Pick one — don't mix them.
@@ -15,9 +15,9 @@ Four deployables, all built from this one GitHub repo, plus two managed data sto
 | Deployable  | What it is                                              | Dockerfile                          | Public?                                          |
 | ----------- | ------------------------------------------------------- | ----------------------------------- | ------------------------------------------------ |
 | `bot`       | Discord gateway process + background job workers        | `infra/docker/Dockerfile.bot`       | No (outbound only; has a private `/health` port) |
-| `api`       | REST API, Discord OAuth, webhook receivers              | `infra/docker/Dockerfile.api`       | Yes — `api.entrophybot.com`                      |
-| `dashboard` | Legacy-link redirector today; owner-only ops console next (Next.js) | `infra/docker/Dockerfile.dashboard` | Yes — `app.entrophybot.com`                      |
-| `web`       | Public marketing website + the per-guild config dashboard (`/dashboard/**`) | `infra/docker/Dockerfile.web`       | Yes — `entrophybot.com`                          |
+| `api`       | REST API, Discord OAuth, webhook receivers              | `infra/docker/Dockerfile.api`       | Yes — `api.pavisie.com`                      |
+| `dashboard` | Legacy-link redirector today; owner-only ops console next (Next.js) | `infra/docker/Dockerfile.dashboard` | Yes — `app.pavisie.com`                      |
+| `web`       | Public marketing website + the per-guild config dashboard (`/dashboard/**`) | `infra/docker/Dockerfile.web`       | Yes — `pavisie.com`                          |
 | Postgres 16 | System of record — everything durable                   | — (managed plugin/add-on)           | No                                               |
 | Redis 7     | Sessions, cache, job queues (BullMQ) — not durable data | — (managed plugin/add-on)           | No                                               |
 
@@ -25,13 +25,13 @@ All four deployables build from the **same repo** with **Root Directory `/`** an
 Dockerfile path each — there is nothing to fork or split out.
 
 **Topology note (post dashboard→web merge):** the per-guild config dashboard that used to be its
-own app now lives inside `web` at `entrophybot.com/dashboard/**` — there is no separate admin UI
+own app now lives inside `web` at `pavisie.com/dashboard/**` — there is no separate admin UI
 domain anymore. The `dashboard` service still exists and still deploys as a real, working Next.js
-app (theme, `@entrophy/ui`, and session wiring all still work) — today its only job is redirecting
-old `app.entrophybot.com/dashboard/...` links (bookmarks, the Top.gg listing, a live Reddit post) to
-the new `entrophybot.com/dashboard/...` URLs, 308, so nothing 404s. Brandon is building an
+app (theme, `@pavisie/ui`, and session wiring all still work) — today its only job is redirecting
+old `app.pavisie.com/dashboard/...` links (bookmarks, the Top.gg listing, a live Reddit post) to
+the new `pavisie.com/dashboard/...` URLs, 308, so nothing 404s. Brandon is building an
 owner-only ops console (cross-server support tickets, fleet metrics, error monitoring, bot health)
-to live on this same service next, most likely on a separate `dev.entrophybot.com` domain — see
+to live on this same service next, most likely on a separate `dev.pavisie.com` domain — see
 `apps/dashboard/next.config.ts`'s `redirects()` doc comment for why the redirect is scoped to just
 `/` and `/dashboard/*` rather than a blanket catch-all.
 
@@ -44,7 +44,7 @@ Redis with one click, and deploys automatically on every push to `main`.
 
 1. Go to [railway.app](https://railway.app) and sign in (GitHub sign-in is simplest since your code
    is already there).
-2. Click **New Project** → **Deploy from GitHub repo** → pick the `entrophy` repo. Authorize Railway
+2. Click **New Project** → **Deploy from GitHub repo** → pick the `pavisie` repo. Authorize Railway
    to access it if asked.
 3. Railway creates one service from the repo. Rename it to `bot` (click the service → **Settings** →
    **Service Name**).
@@ -52,7 +52,7 @@ Redis with one click, and deploys automatically on every push to `main`.
    - **Root Directory**: `/`
    - **Builder**: Dockerfile
    - **Dockerfile Path**: `infra/docker/Dockerfile.bot`
-5. Repeat **+ New → GitHub Repo** three more times, picking the same `entrophy` repo each time, to
+5. Repeat **+ New → GitHub Repo** three more times, picking the same `pavisie` repo each time, to
    create three more services in the same project:
    - `api` — Dockerfile Path `infra/docker/Dockerfile.api`, Root Directory `/`
    - `dashboard` — Dockerfile Path `infra/docker/Dockerfile.dashboard`, Root Directory `/`
@@ -91,15 +91,15 @@ ENCRYPTION_KEY=<openssl rand -base64 32>
 
 ```
 DISCORD_CLIENT_SECRET=<from Discord Developer Portal>
-DISCORD_OAUTH_REDIRECT_URI=https://api.entrophybot.com/auth/discord/callback
+DISCORD_OAUTH_REDIRECT_URI=https://api.pavisie.com/auth/discord/callback
 SESSION_SECRET=<openssl rand -base64 32>
 API_PORT=3001
-API_BASE_URL=https://api.entrophybot.com
-DASHBOARD_URL=https://entrophybot.com
-WEB_URL=https://entrophybot.com
-COOKIE_DOMAIN=.entrophybot.com
+API_BASE_URL=https://api.pavisie.com
+DASHBOARD_URL=https://pavisie.com
+WEB_URL=https://pavisie.com
+COOKIE_DOMAIN=.pavisie.com
 TRUST_PROXY=1
-PUBLIC_WEBHOOK_BASE_URL=https://api.entrophybot.com
+PUBLIC_WEBHOOK_BASE_URL=https://api.pavisie.com
 KOFI_URL=<optional — full Ko-fi page URL, e.g. https://ko-fi.com/yourname>
 CAPTCHA_PROVIDER=turnstile
 TURNSTILE_SITE_KEY=<from your Cloudflare Turnstile widget>
@@ -122,8 +122,8 @@ build-time, so set these as Railway variables _and_ trigger a redeploy after any
 variable-only save doesn't rebuild the image):
 
 ```
-NEXT_PUBLIC_API_URL=https://api.entrophybot.com
-WEB_URL=https://entrophybot.com
+NEXT_PUBLIC_API_URL=https://api.pavisie.com
+WEB_URL=https://pavisie.com
 ```
 
 `WEB_URL` here is server-side (read at request time by this service's own `next.config.ts`
@@ -136,7 +136,7 @@ Railway variables _and_ trigger a redeploy after any change, since a variable-on
 rebuild the image):
 
 ```
-NEXT_PUBLIC_API_URL=https://api.entrophybot.com
+NEXT_PUBLIC_API_URL=https://api.pavisie.com
 NEXT_PUBLIC_DISCORD_CLIENT_ID=<same as DISCORD_CLIENT_ID>
 NEXT_PUBLIC_INVITE_PERMISSIONS=<invite permission integer — see docs/invite.json>
 NEXT_PUBLIC_SUPPORT_SERVER_URL=<optional — shown in the dashboard sidebar/error states (now part of this service) and the site's footer/support page>
@@ -164,27 +164,27 @@ Don't generate a fresh `openssl rand -base64 32` for every field — generate `E
    temporary `*.up.railway.app` URL for each — use these to sanity-check a deploy before DNS is
    wired up.
 2. Still in **Settings → Networking**, click **+ Custom Domain** and enter:
-   - `api` → `api.entrophybot.com`
-   - `dashboard` → `app.entrophybot.com`
-   - `web` → `entrophybot.com` (and add `www.entrophybot.com` as a second custom domain on the same
+   - `api` → `api.pavisie.com`
+   - `dashboard` → `app.pavisie.com`
+   - `web` → `pavisie.com` (and add `www.pavisie.com` as a second custom domain on the same
      service, redirecting to the apex — or point `www` at the apex via your registrar and let `web`
      handle both)
 3. Railway shows you a DNS record to create for each (usually a `CNAME` pointing at something like
    `xyz.up.railway.app`, or for the apex an `A`/`ALIAS` record — Railway's UI tells you exactly which
    for your domain).
-4. At your **domain registrar** (wherever `entrophybot.com` is registered), open DNS management and
+4. At your **domain registrar** (wherever `pavisie.com` is registered), open DNS management and
    add the records Railway showed you:
    - `CNAME app → <value Railway gave you>`
    - `CNAME api → <value Railway gave you>`
    - `CNAME www → <value Railway gave you>` (or a redirect rule, per registrar)
-   - Apex `entrophybot.com` → an `ALIAS`/`ANAME` record if your registrar supports it, pointing at
+   - Apex `pavisie.com` → an `ALIAS`/`ANAME` record if your registrar supports it, pointing at
      the value Railway gave you for `web`; if your registrar only supports plain `A` records for the
      apex, follow Railway's apex-domain instructions for that case.
 5. Wait for DNS to propagate (usually minutes, sometimes up to a few hours) — Railway shows a green
    check next to each custom domain once it verifies and issues TLS automatically. You do not manage
    TLS certificates yourself.
 6. Go back into Discord Developer Portal → your application → **OAuth2** → add
-   `https://api.entrophybot.com/auth/discord/callback` as a redirect URL (must match
+   `https://api.pavisie.com/auth/discord/callback` as a redirect URL (must match
    `DISCORD_OAUTH_REDIRECT_URI` byte-for-byte).
 
 ### 2.5 Run migrations
@@ -216,18 +216,18 @@ Both are one-off CLI commands, run once (and again only when commands change):
 
 ```
 railway run --service bot pnpm commands:register
-railway run --service bot pnpm --filter @entrophy/bot set-avatar
+railway run --service bot pnpm --filter @pavisie/bot set-avatar
 ```
 
 `commands:register` registers slash commands globally (can take up to an hour to show up
 everywhere the first time — set `DEV_GUILD_ID` temporarily on `bot` and re-run for instant
 registration to one test server while you're verifying). `set-avatar` uploads
-`assets/brand/entrophy-skull.png` as the bot's Discord avatar — you only need to run it once (Discord
+`assets/brand/pavisie-skull.png` as the bot's Discord avatar — you only need to run it once (Discord
 rate-limits avatar changes).
 
 ### 2.6a Setting up a hub/community server from a plan
 
-If you're also running Entrophy's own community hub server (support, announcements, the
+If you're also running Pavisie's own community hub server (support, announcements, the
 server-owner lounge), it's configured declaratively rather than by hand: `scripts/hub-setup.mjs`
 reconciles a real Discord server's roles, channels, permissions, and pinned messages against a
 plan JSON, idempotently (safe to re-run) and read-only by default (`--dry-run`; pass `--apply` to
@@ -236,7 +236,7 @@ actually write). Run it from a machine with the repo checked out and `DISCORD_TO
 
 ### 2.7 Health checks
 
-- `api`: `GET https://api.entrophybot.com/health` → `200 {"status":"ok", ...}`.
+- `api`: `GET https://api.pavisie.com/health` → `200 {"status":"ok", ...}`.
 - `bot`: has no public URL; Railway pings its private health port directly (`bot.railway.json`
   configures `healthcheckPath` — see `infra/railway/README.md` for why the bot's healthcheck is
   handled differently from the other three).
@@ -276,7 +276,7 @@ file. This repo ships `render.yaml` at the root — Render reads it automaticall
 2. In the [Render dashboard](https://dashboard.render.com), click **New → Blueprint**, connect the
    repo, and Render parses `render.yaml` and shows you the services it will create: `api`,
    `dashboard`, `web` (all Docker web services), `bot` (a Docker **worker**, since it has no HTTP
-   traffic to serve publicly), `entrophy-postgres` (managed Postgres), `entrophy-redis` (Render Key
+   traffic to serve publicly), `pavisie-postgres` (managed Postgres), `pavisie-redis` (Render Key
    Value, Render's managed Redis-compatible store).
 3. Render prompts you for every variable marked `sync: false` in the blueprint (the secrets — Discord
    token/client secret, `ENCRYPTION_KEY`, `SESSION_SECRET`, any integration keys, etc.) — fill them in on that
@@ -287,14 +287,14 @@ file. This repo ships `render.yaml` at the root — Render reads it automaticall
    idea as the Railway pre-deploy command in §2.5 — nothing extra to do.
 6. `api` declares `healthCheckPath: /health`; Render won't route traffic to a new deploy until it
    passes.
-7. Custom domains: each web service's **Settings → Custom Domains** — add `api.entrophybot.com`,
-   `app.entrophybot.com`, `entrophybot.com`/`www.entrophybot.com` the same way, then add the CNAME/ALIAS
+7. Custom domains: each web service's **Settings → Custom Domains** — add `api.pavisie.com`,
+   `app.pavisie.com`, `pavisie.com`/`www.pavisie.com` the same way, then add the CNAME/ALIAS
    records Render shows you at your registrar (same idea as §2.4).
 8. Run `commands:register` and `set-avatar` once via **Shell** on the `bot` service (Render gives
    every service a **Shell** tab in its dashboard):
    ```
    pnpm commands:register
-   pnpm --filter @entrophy/bot set-avatar
+   pnpm --filter @pavisie/bot set-avatar
    ```
 
 **Free-tier caveat**: Render's free web services spin down after inactivity and cold-start on the
@@ -309,10 +309,10 @@ runs everything on one box. Put [Caddy](https://caddyserver.com/) in front for a
 
 1. Provision a VPS (2 vCPU / 4GB RAM is comfortable headroom for all four services + Postgres +
    Redis at small-to-medium scale), install Docker + Docker Compose, and point the three DNS records
-   (`entrophybot.com`, `app.entrophybot.com`, `api.entrophybot.com`) at the VPS's IP address (`A`
+   (`pavisie.com`, `app.pavisie.com`, `api.pavisie.com`) at the VPS's IP address (`A`
    records) at your registrar.
 2. Clone the repo onto the VPS, copy `.env.production.example` to `.env`, and fill in every secret
-   (see §6 for the full table). Set `COOKIE_DOMAIN=.entrophybot.com` and `TRUST_PROXY=1` (Caddy is the one
+   (see §6 for the full table). Set `COOKIE_DOMAIN=.pavisie.com` and `TRUST_PROXY=1` (Caddy is the one
    reverse-proxy hop in front of `api` here too — see the callout in §2.3 for why this must be an exact hop
    count, not `true`). If you want donations enabled, also set `KOFI_URL` to your Ko-fi page URL (see §2.3).
 3. `docker compose up -d --build` — this builds and starts `postgres`, `redis`, runs `migrate` once,
@@ -324,15 +324,15 @@ runs everything on one box. Put [Caddy](https://caddyserver.com/) in front for a
    certificates from Let's Encrypt automatically:
 
    ```caddyfile
-   entrophybot.com, www.entrophybot.com {
+   pavisie.com, www.pavisie.com {
        reverse_proxy localhost:3003
    }
 
-   app.entrophybot.com {
+   app.pavisie.com {
        reverse_proxy localhost:3000
    }
 
-   api.entrophybot.com {
+   api.pavisie.com {
        reverse_proxy localhost:3001
    }
    ```
@@ -344,7 +344,7 @@ runs everything on one box. Put [Caddy](https://caddyserver.com/) in front for a
 5. Register commands and set the avatar from the host:
    ```
    docker compose run --rm api pnpm commands:register
-   docker compose run --rm api pnpm --filter @entrophy/bot set-avatar
+   docker compose run --rm api pnpm --filter @pavisie/bot set-avatar
    ```
    (the `api` image has the full workspace installed, so it can run any workspace script — or build
    and run the `bot` image the same way).
@@ -359,8 +359,8 @@ though they're both "yours." That breaks the default `SameSite=Lax` session cook
 testing on the platform's default domains before DNS is wired up, set `SESSION_COOKIE_SAMESITE=none`
 on `api` (this also forces the cookie to be `Secure`, and the API refuses to boot with
 `SESSION_COOKIE_SAMESITE=none` unless `API_BASE_URL` looks like `https://`). **Once you're on the
-custom domains under the shared apex `entrophybot.com`**, switch back to the default
-`SESSION_COOKIE_SAMESITE=lax` (or just unset it) and set `COOKIE_DOMAIN=.entrophybot.com` — this is
+custom domains under the shared apex `pavisie.com`**, switch back to the default
+`SESSION_COOKIE_SAMESITE=lax` (or just unset it) and set `COOKIE_DOMAIN=.pavisie.com` — this is
 the recommended, permanent configuration and is what `.env.production.example` ships with. CSRF
 protection (the `X-CSRF-Token` header plus the `DASHBOARD_URL`/`WEB_URL` Origin allowlist) applies in
 both modes.
@@ -380,18 +380,18 @@ list with comments; every var there is also documented in `docs/ARCHITECTURE.md`
 | `DISCORD_TOKEN`                                                                                                                                                                                                                                              | Yes                      | bot                                                | Discord Developer Portal → your application → **Bot** → Reset Token                                                                                                            |
 | `DISCORD_CLIENT_ID`                                                                                                                                                                                                                                          | Yes                      | bot, api, web (as `NEXT_PUBLIC_DISCORD_CLIENT_ID`) | Discord Developer Portal → **General Information** → Application ID                                                                                                            |
 | `DISCORD_CLIENT_SECRET`                                                                                                                                                                                                                                      | Yes                      | api                                                | Discord Developer Portal → **OAuth2** → Client Secret                                                                                                                          |
-| `DISCORD_OAUTH_REDIRECT_URI`                                                                                                                                                                                                                                 | Yes                      | api                                                | `https://api.entrophybot.com/auth/discord/callback` — must also be added in the Portal's OAuth2 redirect list, byte-for-byte                                                   |
+| `DISCORD_OAUTH_REDIRECT_URI`                                                                                                                                                                                                                                 | Yes                      | api                                                | `https://api.pavisie.com/auth/discord/callback` — must also be added in the Portal's OAuth2 redirect list, byte-for-byte                                                   |
 | `ENCRYPTION_KEY`                                                                                                                                                                                                                                             | Yes                      | bot, api                                           | You generate it: `openssl rand -base64 32`                                                                                                                                     |
 | `ENCRYPTION_KEY_PREVIOUS`                                                                                                                                                                                                                                    | Only during key rotation | bot, api                                           | The previous `ENCRYPTION_KEY` value, set temporarily — see `docs/SECURITY.md`                                                                                                  |
 | `SESSION_SECRET`                                                                                                                                                                                                                                             | Yes                      | api                                                | You generate it: `openssl rand -base64 32`                                                                                                                                     |
 | `API_PORT`                                                                                                                                                                                                                                                   | No (defaults `3001`)     | api                                                | Literal `3001`                                                                                                                                                                 |
-| `API_BASE_URL`                                                                                                                                                                                                                                               | Yes                      | api                                                | `https://api.entrophybot.com`                                                                                                                                                  |
-| `DASHBOARD_URL`                                                                                                                                                                                                                                              | Yes                      | api                                                | `https://entrophybot.com` — same value as `WEB_URL` now that the dashboard UI lives in `web` (CORS allowlist + OAuth post-login redirect target)                              |
-| `WEB_URL`                                                                                                                                                                                                                                                    | Yes                      | api, web (server-side), dashboard (server-side)    | `https://entrophybot.com` (CORS allowlist entry + brand links on api/web; redirect target for `dashboard`'s legacy `/` and `/dashboard/*` paths)                               |
-| `NEXT_PUBLIC_API_URL`                                                                                                                                                                                                                                        | Yes                      | dashboard, web                                     | `https://api.entrophybot.com`                                                                                                                                                  |
+| `API_BASE_URL`                                                                                                                                                                                                                                               | Yes                      | api                                                | `https://api.pavisie.com`                                                                                                                                                  |
+| `DASHBOARD_URL`                                                                                                                                                                                                                                              | Yes                      | api                                                | `https://pavisie.com` — same value as `WEB_URL` now that the dashboard UI lives in `web` (CORS allowlist + OAuth post-login redirect target)                              |
+| `WEB_URL`                                                                                                                                                                                                                                                    | Yes                      | api, web (server-side), dashboard (server-side)    | `https://pavisie.com` (CORS allowlist entry + brand links on api/web; redirect target for `dashboard`'s legacy `/` and `/dashboard/*` paths)                               |
+| `NEXT_PUBLIC_API_URL`                                                                                                                                                                                                                                        | Yes                      | dashboard, web                                     | `https://api.pavisie.com`                                                                                                                                                  |
 | `NEXT_PUBLIC_INVITE_PERMISSIONS`                                                                                                                                                                                                                             | No                       | web                                                | Integer permission bitfield — see `docs/invite.json` (generated)                                                                                                               |
 | `NEXT_PUBLIC_SUPPORT_SERVER_URL`                                                                                                                                                                                                                             | No                       | web                                                | Your support Discord server invite link, if you have one                                                                                                                       |
-| `COOKIE_DOMAIN`                                                                                                                                                                                                                                              | Recommended              | api                                                | `.entrophybot.com`                                                                                                                                                             |
+| `COOKIE_DOMAIN`                                                                                                                                                                                                                                              | Recommended              | api                                                | `.pavisie.com`                                                                                                                                                             |
 | `SESSION_COOKIE_SAMESITE`                                                                                                                                                                                                                                    | No (defaults `lax`)      | api                                                | `lax` on custom domains; `none` only if temporarily using platform default subdomains — see §5                                                                                 |
 | `TRUST_PROXY`                                                                                                                                                                                                                                                | Yes in production        | api                                                | `1` — an integer hop count, not a boolean. All three cloud paths put exactly one reverse proxy/load balancer in front of the API. Never `true` (see the §2.3 callout).         |
 | `E2E_TEST_MODE`                                                                                                                                                                                                                                              | Must be unset/`false`    | api                                                | Leave unset. The API also hard-refuses this in production regardless.                                                                                                          |
@@ -400,7 +400,7 @@ list with comments; every var there is also documented in `docs/ARCHITECTURE.md`
 | `BOT_HEALTH_PORT`                                                                                                                                                                                                                                            | No (defaults `3002`)     | bot                                                | Literal `3002`                                                                                                                                                                 |
 | `ENABLE_GUILD_MEMBERS_INTENT`                                                                                                                                                                                                                                | Recommended `true`       | bot                                                | Enabled in Discord Developer Portal → **Bot** → Privileged Gateway Intents → Server Members Intent, then set `true` here to match                                              |
 | `ENABLE_MESSAGE_CONTENT_INTENT`                                                                                                                                                                                                                              | No (default `false`)     | bot                                                | Only after Discord approves the privileged intent for your bot (or while under 100 servers, which doesn't require approval) — enable in the Portal first, then set `true` here |
-| `PUBLIC_WEBHOOK_BASE_URL`                                                                                                                                                                                                                                    | Yes if using webhooks    | api                                                | `https://api.entrophybot.com`                                                                                                                                                  |
+| `PUBLIC_WEBHOOK_BASE_URL`                                                                                                                                                                                                                                    | Yes if using webhooks    | api                                                | `https://api.pavisie.com`                                                                                                                                                  |
 | `KOFI_URL`                                                                                                                                                                                                                                                      | No (donations are optional)      | api                                                | Full Ko-fi page URL, e.g. `https://ko-fi.com/yourname`. Leave blank to disable the donate page.                                                                              |
 | `CAPTCHA_PROVIDER` (`hcaptcha`/`turnstile`) + that provider's `*_SITE_KEY`/`*_SECRET`                                                                                                                                                                       | No (optional; powers the `roles` plugin's verification mode only) | api                                                | Cloudflare Turnstile or hCaptcha's own dashboard. Donations are now handled by Ko-fi and do not require CAPTCHA here. |
 | Other integration keys (`TWITCH_*`, `YOUTUBE_API_KEY`, `GITHUB_WEBHOOK_SECRET`, `REDDIT_*`, `STEAM_API_KEY`, `GOOGLE_*`, `MICROSOFT_*`, `NOTION_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPL_API_KEY`, `OPENWEATHERMAP_API_KEY`)                       | No                       | api, bot                                           | Each provider's own developer console. Blank = that feature stays disabled; nothing else is affected.                                                                          |
@@ -423,7 +423,7 @@ framing is in `docs/SECURITY.md`; this is the mechanical "how."
   This immediately invalidates every existing signed session cookie — every logged-in dashboard user
   is signed out and has to log in again. There's no partial/rolling option for this one.
 - **`ENCRYPTION_KEY`**: see the dedicated walkthrough in `docs/SECURITY.md` — it needs the
-  `ENCRYPTION_KEY_PREVIOUS` two-step and the re-encryption script (`pnpm --filter @entrophy/database
+  `ENCRYPTION_KEY_PREVIOUS` two-step and the re-encryption script (`pnpm --filter @pavisie/database
 reencrypt:secrets`), not just a variable swap, or every already-encrypted OAuth token, webhook
   secret, and stored AI API key becomes unreadable.
 - **Any integration key** (Twitch/YouTube/Reddit/Steam/Google/Microsoft/OpenAI/Anthropic/etc.):
@@ -431,9 +431,9 @@ reencrypt:secrets`), not just a variable swap, or every already-encrypted OAuth 
   jobs run there), restart.
 - **Dashboard session invalidation** (force everyone out without rotating `SESSION_SECRET` — e.g. you
   just want a clean slate, not a full secret rotation): connect to Redis and delete every
-  `entrophy:session:*` key:
+  `pavisie:session:*` key:
   ```
-  redis-cli --scan --pattern 'entrophy:session:*' | xargs -r redis-cli del
+  redis-cli --scan --pattern 'pavisie:session:*' | xargs -r redis-cli del
   ```
   (On Railway/Render, open a shell on a service that has `REDIS_URL` set and run `redis-cli -u
 "$REDIS_URL" ...` instead, or use the platform's Redis data browser if it has one.)
@@ -444,7 +444,7 @@ reencrypt:secrets`), not just a variable swap, or every already-encrypted OAuth 
   backup (Railway and Render both offer this on their Postgres plans — check current plan details,
   since free tiers usually have shorter retention or none). In addition, run periodic `pg_dump`
   backups you control and store somewhere separate from the platform (`pg_dump $DATABASE_URL -Fc -f
-entrophy-$(date +%Y%m%d).dump`, restore with `pg_restore`). **Test a restore periodically** — an
+pavisie-$(date +%Y%m%d).dump`, restore with `pg_restore`). **Test a restore periodically** — an
   untested backup is not a backup.
 - **Redis**: treat it as ephemeral cache/queue/session state, not a system of record. Losing it logs
   everyone out and drops in-flight jobs, but no durable data is lost — nothing in Redis needs a
@@ -455,18 +455,18 @@ entrophy-$(date +%Y%m%d).dump`, restore with `pg_restore`). **Test a restore per
 There's no dedicated monitoring dashboard shipped yet (see `docs/ROADMAP.md`) — for now, monitoring
 means checking the health endpoints and logs:
 
-- `GET https://api.entrophybot.com/health` — should always return `200`.
+- `GET https://api.pavisie.com/health` — should always return `200`.
 - `bot`'s private health port (`BOT_HEALTH_PORT`) — Railway/Render check this automatically per
   §2.7/§3; on a VPS, `docker compose ps` shows each service's healthcheck status, or curl it directly
   from inside the container network.
-- `GET https://entrophybot.com/` — should return `200`.
-- `GET https://app.entrophybot.com/` — now expected to return a `308` redirect to
-  `https://entrophybot.com/`, not `200` (see §1's topology note); update any existing uptime check
-  that asserted `200` here, or point it at `https://entrophybot.com/dashboard/123/automod`-style
+- `GET https://pavisie.com/` — should return `200`.
+- `GET https://app.pavisie.com/` — now expected to return a `308` redirect to
+  `https://pavisie.com/`, not `200` (see §1's topology note); update any existing uptime check
+  that asserted `200` here, or point it at `https://pavisie.com/dashboard/123/automod`-style
   legacy link instead and assert it redirects rather than 404s.
 - Set up an external uptime check (UptimeRobot, Better Uptime, or similar — any free tier is fine)
   against those four URLs if you want to be notified before a user tells you something's down.
-- `GET https://api.entrophybot.com/docs` (the Swagger UI) is expected to 404 in production — it's registered
+- `GET https://api.pavisie.com/docs` (the Swagger UI) is expected to 404 in production — it's registered
   only when `NODE_ENV !== 'production'`, so the exact request shapes of public endpoints aren't published to
   anyone who looks. It still works locally/in dev.
 - Watch each platform's built-in resource graphs (CPU/memory) for `bot` and `api` — a slow creep

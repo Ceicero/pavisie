@@ -8,7 +8,7 @@
 // it on). It has no logger dependency at all, so there is nothing here that could leak them; the caller
 // (`manager.ts`) must keep the same discipline when it logs about a dispatched action (reward title + action
 // kind only, never the templated text or the redeemer's name).
-import type { TwitchChatReward } from '@entrophy/database';
+import type { TwitchChatReward } from '@pavisie/database';
 
 /** One incoming `channel.channel_points_custom_reward_redemption.add` v1 notification, reduced to exactly what
  * this module needs (field names translated from Twitch's own snake_case payload by the caller). */
@@ -33,7 +33,7 @@ export type RewardAction =
 const TTS_MAX_CHARS = 200;
 const TEXT_MAX_CHARS = 300;
 
-// eslint-disable-next-line no-control-regex -- intentionally stripping control characters before any templated text is emitted (mirrors sanitizeFilename's own control-char strip in @entrophy/core)
+// eslint-disable-next-line no-control-regex -- intentionally stripping control characters before any templated text is emitted (mirrors sanitizeFilename's own control-char strip in @pavisie/core)
 const CONTROL_CHARS_PATTERN = /[\x00-\x1F\x7F]/g;
 
 /** Safety gate applied to every templated string right before it's queued to be spoken/posted/published: strips

@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@entrophy/ui';
+import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@pavisie/ui';
 import { AppealsTab } from '@/components/dashboard/moderation/appeals-tab';
 import { CasesTab } from '@/components/dashboard/moderation/cases-tab';
 import { SettingsTab } from '@/components/dashboard/moderation/settings-tab';

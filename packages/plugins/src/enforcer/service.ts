@@ -1,7 +1,7 @@
 import { ChannelType, type Guild, type TextChannel } from 'discord.js';
-import { AppError, NotFoundError, PermissionError, ValidationError, redisKey } from '@entrophy/core';
-import { nextEnforcerRecordNumber } from '@entrophy/database/guild';
-import { Prisma, type EnforcerRecord, type ModerationCase, type PrismaClient } from '@entrophy/database';
+import { AppError, NotFoundError, PermissionError, ValidationError, redisKey } from '@pavisie/core';
+import { nextEnforcerRecordNumber } from '@pavisie/database/guild';
+import { Prisma, type EnforcerRecord, type ModerationCase, type PrismaClient } from '@pavisie/database';
 import { fetchMemberSafe, hierarchyGuard, resolveTextChannel, safeDm, type PluginContext } from '../sdk';
 import type {
   EnforcerDecideInput,
@@ -22,7 +22,7 @@ import type { EnforcerDecisionLower, MatcherInput, PolicySeverityValue } from '.
 
 const RECORD_NUMBER_MAX_ATTEMPTS = 3;
 
-/** Retries `create` up to 3 times on a Prisma unique-constraint violation on `[guildId, recordNumber]`, mirroring `@entrophy/database`'s `withNextCaseNumber`. */
+/** Retries `create` up to 3 times on a Prisma unique-constraint violation on `[guildId, recordNumber]`, mirroring `@pavisie/database`'s `withNextCaseNumber`. */
 export async function withNextRecordNumber<T>(
   prisma: PrismaClient,
   guildId: string,
@@ -218,7 +218,7 @@ export async function flagRecord(ctx: PluginContext, input: FlagRecordInput): Pr
   const config = await ctx.getConfig<EnforcerConfig>(input.guildId);
   const guild = await ctx.client.guilds.fetch(input.guildId).catch(() => null);
   if (!guild) {
-    throw new AppError('guild_unreachable', 'Entrophy could not reach that server right now.', {
+    throw new AppError('guild_unreachable', 'Pavisie could not reach that server right now.', {
       status: 502,
       expose: true,
     });

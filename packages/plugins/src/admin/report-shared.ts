@@ -1,7 +1,7 @@
-// Pure, unit-tested helpers backing `/entrophy report` (command + components). Kept dependency-free of
+// Pure, unit-tested helpers backing `/pavisie report` (command + components). Kept dependency-free of
 // discord.js so the validation/rate-limit logic can be exercised without building a fake interaction.
-import { RateLimitError, ValidationError, type RateLimiterLike } from '@entrophy/core';
-import type { DeveloperReportKind } from '@entrophy/types';
+import { RateLimitError, ValidationError, type RateLimiterLike } from '@pavisie/core';
+import type { DeveloperReportKind } from '@pavisie/types';
 
 export const REPORT_KINDS = ['BUG', 'FEEDBACK', 'QUESTION'] as const;
 

@@ -1,9 +1,9 @@
 // Framework-free (no discord.js) so this file is safe to import from `apps/api` via the
-// `@entrophy/plugins/enforcer/schemas` subpath without pulling in any gateway/command code
+// `@pavisie/plugins/enforcer/schemas` subpath without pulling in any gateway/command code
 // (ARCHITECTURE.md §7.1's "manifest files must not import discord.js runtime code" rule extended
 // here to every non-command file this plugin exposes for cross-process reuse).
 import { z } from 'zod';
-import { validateUserRegex } from '@entrophy/core';
+import { validateUserRegex } from '@pavisie/core';
 
 export const MATCHER_TYPES = [
   'keyword',

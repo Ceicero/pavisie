@@ -1,6 +1,6 @@
 import type Redis from 'ioredis';
-import type { PrismaClient } from '@entrophy/database';
-import type { GuildConfigStore, PluginRegistry } from '@entrophy/plugins/sdk';
+import type { PrismaClient } from '@pavisie/database';
+import type { GuildConfigStore, PluginRegistry } from '@pavisie/plugins/sdk';
 import type { QueueRegistryLike } from '../lib/queues';
 import type { SessionData } from '../lib/session';
 

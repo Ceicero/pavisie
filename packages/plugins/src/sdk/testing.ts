@@ -5,7 +5,7 @@ import type { Client } from 'discord.js';
 import RedisMock from 'ioredis-mock';
 import type Redis from 'ioredis';
 import pino from 'pino';
-import { MemoryRateLimiter, PlatformEvents, env as coreEnv, t as coreT } from '@entrophy/core';
+import { MemoryRateLimiter, PlatformEvents, env as coreEnv, t as coreT } from '@pavisie/core';
 import { ServiceRegistry } from './services';
 import type { PluginContext } from './types';
 

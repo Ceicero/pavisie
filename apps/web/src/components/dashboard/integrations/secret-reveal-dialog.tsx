@@ -9,7 +9,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 
 export interface SecretRevealDialogProps {
   open: boolean;

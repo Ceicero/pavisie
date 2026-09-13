@@ -1,7 +1,7 @@
 // Pure, discord.js-free policy engine (ARCHITECTURE.md §19). Everything here operates on plain data so it is
 // fully unit-testable without a gateway connection — `normalize.ts` builds `NormalizedMessage` from a real
 // discord.js `Message`, and `service.ts` is the only caller that touches Discord/Prisma.
-import { safeTest, sanitizeEmbedText, truncate } from '@entrophy/core';
+import { safeTest, sanitizeEmbedText, truncate } from '@pavisie/core';
 import { matcherValues, type MatcherInput, type PolicySeverityValue } from './schemas';
 
 /** A minimal, discord.js-free view of a message, so the engine is pure and unit-testable (ARCHITECTURE.md §19). */

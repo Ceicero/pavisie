@@ -1,4 +1,4 @@
-import { Prisma } from '@entrophy/database';
+import { Prisma } from '@pavisie/database';
 import { describe, expect, it } from 'vitest';
 import { createTestContext } from '../../sdk/testing';
 import { nextTicketNumber, withNextTicketNumber } from '../number';

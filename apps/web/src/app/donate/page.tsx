@@ -6,7 +6,7 @@ import { fetchDonationConfig } from '../../lib/donations';
 
 export const metadata: Metadata = {
   title: 'Donate',
-  description: "Support Entrophy's hosting and development with a one-time donation via Ko-fi.",
+  description: "Support Pavisie's hosting and development with a one-time donation via Ko-fi.",
 };
 
 // Fetched at request time (never at build time) — donations availability depends on whether KOFI_URL is
@@ -20,8 +20,8 @@ export default async function DonatePage() {
     <Section
       headingLevel={1}
       eyebrow="Donate"
-      title="Help keep Entrophy running"
-      subtitle="Entrophy is community-run. Donations fund hosting and development — one-time, non-refundable, and they grant no perks or in-game advantages."
+      title="Help keep Pavisie running"
+      subtitle="Pavisie is community-run. Donations fund hosting and development — one-time, non-refundable, and they grant no perks or in-game advantages."
     >
       <div className="mx-auto max-w-lg">
         <Glass className="p-6 sm:p-8">
@@ -29,7 +29,7 @@ export default async function DonatePage() {
             <>
               <p className="text-sm leading-relaxed text-grey-3">
                 Support us on Ko-fi to help fund hosting, development, and new features. Your donations go
-                directly toward keeping Entrophy running.
+                directly toward keeping Pavisie running.
               </p>
               <ButtonLink
                 href={config.kofiUrl}

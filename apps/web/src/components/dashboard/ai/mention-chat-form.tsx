@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import type { AiChatSettingsDto, AiSettingsDto } from '@entrophy/types/ai';
-import { Button, FormField, Input, Switch, Textarea, useToast } from '@entrophy/ui';
+import type { AiChatSettingsDto, AiSettingsDto } from '@pavisie/types/ai';
+import { Button, FormField, Input, Switch, Textarea, useToast } from '@pavisie/ui';
 import { useUpdateAiSettings } from '@/lib/dashboard/ai-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ChannelAllowlistPicker } from './channel-allowlist-picker';

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { encryptSecret, redisKey } from '@entrophy/core';
+import { encryptSecret, redisKey } from '@pavisie/core';
 import { buildTestApp } from './helpers/build-test-app';
 import {
   dispatchOverlayMessage,

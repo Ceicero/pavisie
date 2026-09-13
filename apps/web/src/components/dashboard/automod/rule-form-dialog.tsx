@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import type { AutomodRuleDto } from '@entrophy/types';
-import type { AutomodActionInput, AutomodRuleTypeValue } from '@entrophy/types/automod';
+import type { AutomodRuleDto } from '@pavisie/types';
+import type { AutomodActionInput, AutomodRuleTypeValue } from '@pavisie/types/automod';
 import {
   Button,
   Dialog,
@@ -25,7 +25,7 @@ import {
   TabsTrigger,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useCreateAutomodRule, useTestAutomodRule, useUpdateAutomodRule } from '@/lib/dashboard/automod-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { MultiRolePicker } from '../multi-role-picker';

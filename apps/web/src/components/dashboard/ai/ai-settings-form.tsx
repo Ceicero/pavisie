@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { CheckCircle2, KeyRound } from 'lucide-react';
-import type { AiProviderId, AiSettingsDto, AiSettingsPatchDto } from '@entrophy/types/ai';
+import type { AiProviderId, AiSettingsDto, AiSettingsPatchDto } from '@pavisie/types/ai';
 import {
   Badge,
   Button,
@@ -15,7 +15,7 @@ import {
   SelectValue,
   Switch,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useTestAiConnection, useUpdateAiSettings } from '@/lib/dashboard/ai-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ChannelAllowlistPicker } from './channel-allowlist-picker';

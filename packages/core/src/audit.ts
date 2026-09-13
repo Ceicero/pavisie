@@ -49,7 +49,7 @@ export const AuditAction = {
 /** Union of all `AuditAction` string values. */
 export type AuditActionValue = (typeof AuditAction)[keyof typeof AuditAction];
 
-/** A single audit trail entry. Persistence (writeAudit) lives in `@entrophy/database`. */
+/** A single audit trail entry. Persistence (writeAudit) lives in `@pavisie/database`. */
 export interface AuditEntry {
   id?: string;
   guildId: string;

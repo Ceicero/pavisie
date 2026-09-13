@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { IntegrationConnection } from '@entrophy/database';
-import { redisKey } from '@entrophy/core';
+import type { IntegrationConnection } from '@pavisie/database';
+import { redisKey } from '@pavisie/core';
 import type { PluginContext } from '../../sdk';
 import { formatTwitchStreamEmbed, type TwitchStream } from '../formatters/twitch';
 import {

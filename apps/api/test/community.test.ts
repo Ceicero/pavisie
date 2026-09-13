@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
 const GUILD_ID = '111111111111111111';
@@ -376,7 +376,7 @@ describe('community tags (spec CG-02)', () => {
     createdAt: now,
     updatedAt: now,
   };
-  const triggerKey = `entrophy:community:tag-triggers:${GUILD_ID}`;
+  const triggerKey = `pavisie:community:tag-triggers:${GUILD_ID}`;
 
   it('lists tags with a name-prefix filter and maps the DTO', async () => {
     let seenWhere: unknown;
@@ -513,7 +513,7 @@ describe('community tags (spec CG-02)', () => {
   });
 
   it('maps a Prisma P2002 unique violation on tag.create to 409 tag_exists (race past the check-then-write gate)', async () => {
-    const { Prisma } = await import('@entrophy/database');
+    const { Prisma } = await import('@pavisie/database');
     const { app, mutHeaders } = await authedApp({
       tag: {
         findUnique: async () => null, // the pre-check sees no clash…
@@ -540,7 +540,7 @@ describe('community tags (spec CG-02)', () => {
   });
 
   it('maps a Prisma P2002 unique violation on tag.update (rename) to 409 tag_exists', async () => {
-    const { Prisma } = await import('@entrophy/database');
+    const { Prisma } = await import('@pavisie/database');
     const { app, mutHeaders } = await authedApp({
       tag: {
         findFirst: async () => tagRow,
@@ -802,7 +802,7 @@ describe('community channel-automation stats', () => {
 
   it("reads the plugin's Redis daily counter", async () => {
     const { autoPublishCountKey, utcDayKey } =
-      await import('@entrophy/plugins/community/channel-automations');
+      await import('@pavisie/plugins/community/channel-automations');
     const { app, redis, cookieHeader } = await authedApp();
     await redis.set(autoPublishCountKey(GUILD_ID, utcDayKey()), '7');
     const res = await app.inject({

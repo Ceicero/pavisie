@@ -1,5 +1,5 @@
 // Pure, unit-tested: validates intake-form answers against the panel's configured questions.
-import { ValidationError } from '@entrophy/core';
+import { ValidationError } from '@pavisie/core';
 import type { TicketIntakeField } from './manifest';
 
 const SHORT_MAX = 200;

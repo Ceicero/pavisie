@@ -11,7 +11,7 @@ export const ownerMetricsGuildsQuerySchema = paginationQuerySchema.extend({
     .transform((v) => (v === undefined ? undefined : v === 'true')),
 });
 
-/** The four models carrying an error column — see `@entrophy/types` `OwnerMetricsErrorSource` for why. */
+/** The four models carrying an error column — see `@pavisie/types` `OwnerMetricsErrorSource` for why. */
 export const OWNER_METRICS_ERROR_SOURCES = ['integration', 'job', 'webhook', 'data-request'] as const;
 export const ownerMetricsErrorSourceSchema = z.enum(OWNER_METRICS_ERROR_SOURCES);
 

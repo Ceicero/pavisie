@@ -5,7 +5,7 @@ import { termsOfService, DEFAULT_OPERATOR, DEFAULT_CONTACT_EMAIL } from '../../c
 
 export const metadata: Metadata = {
   title: 'Terms of service',
-  description: 'The terms governing use of the Entrophy bot, dashboard, and website.',
+  description: 'The terms governing use of the Pavisie bot, dashboard, and website.',
 };
 
 export default function TermsPage() {
@@ -14,7 +14,7 @@ export default function TermsPage() {
   return (
     <Section headingLevel={1} eyebrow="Legal" title="Terms of service">
       <Glass className="mb-8 p-5 text-sm leading-relaxed text-grey-3">
-        <strong className="text-grey-6">This is a template.</strong> It reflects Entrophy&apos;s default
+        <strong className="text-grey-6">This is a template.</strong> It reflects Pavisie&apos;s default
         behavior (no wagering, non-refundable donations, etc.) but the operator running this deployment
         (currently shown as &ldquo;{DEFAULT_OPERATOR}&rdquo;, contact &ldquo;{DEFAULT_CONTACT_EMAIL}&rdquo;)
         should review it before relying on it as a legal document.

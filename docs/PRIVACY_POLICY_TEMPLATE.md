@@ -15,14 +15,14 @@ data collection you've turned on, what integrations you've connected).
 
 ## 1. Who this covers
 
-This policy explains what **[Operator]** collects when you use the Entrophy Discord bot named
+This policy explains what **[Operator]** collects when you use the Pavisie Discord bot named
 **[Bot name]**, its dashboard, and its companion website, and why. It does not cover Discord itself —
 see Discord's own Privacy Policy and Terms of Service for that; using this bot at all requires having
 a Discord account and agreeing to Discord's terms.
 
 ## 2. What the bot stores, by feature
 
-Entrophy is modular — every plugin below is optional, and a server administrator controls which are
+Pavisie is modular — every plugin below is optional, and a server administrator controls which are
 enabled from the dashboard (`/dashboard/[guildId]/plugins`) or with `/plugin enable|disable`. Nothing
 in a disabled plugin's row is ever written. Every row below is scoped to the Discord server (guild)
 it was created in, and is deleted when that server removes the bot (`Guild` deletion cascades to
@@ -46,7 +46,7 @@ everything below it — see `docs/ARCHITECTURE.md` §8).
 | Integrations                                             | OAuth access/refresh tokens, **encrypted at rest** (AES-256-GCM), decrypted only in-process to make an API call on your behalf; webhook secrets, also encrypted at rest and shown in plaintext exactly once at creation                                                                                                                                                                                                                          | `OAuthToken` (`accessTokenEnc`, `refreshTokenEnc`), `WebhookEndpoint` (`secretEnc`)                      |
 | AI assistant (disabled by default)                       | If a server admin sets their own API key, it's encrypted at rest the same way; usage counters (not full prompts/responses) for budget tracking. If mention chat is turned on for a channel, @mentioning the bot there sends that message plus up to a configured number of recent messages from the same channel (redacted, same as everything else) to the configured provider for that one reply — nothing beyond the usage counters is stored | `PluginConfig` (`ai` plugin's `apiKeyEnc`, `chat.*`), `AiUsage`                                          |
 | Economy (disabled by default)                            | Virtual-currency balances and transaction history — **no real money involved, ever**; not personal data beyond the Discord user id                                                                                                                                                                                                                                                                                                               | `EconomyAccount`, `EconomyTransaction`                                                                   |
-| Donations                                                | None — donations are handled entirely by Ko-fi (a third-party donation platform). Entrophy stores no information about donors, donations, or personal data from donations; Ko-fi's own privacy policy covers their collection.                                                                                                                                                                                                                   | (no table — donations processed externally by Ko-fi)                                                      |
+| Donations                                                | None — donations are handled entirely by Ko-fi (a third-party donation platform). Pavisie stores no information about donors, donations, or personal data from donations; Ko-fi's own privacy policy covers their collection.                                                                                                                                                                                                                   | (no table — donations processed externally by Ko-fi)                                                      |
 | Dashboard sign-in                                        | Discord user id, username, avatar, and which servers you manage — just enough to determine what you're allowed to configure; a session cookie and (encrypted) OAuth tokens                                                                                                                                                                                                                                                                       | Redis session hash, `OAuthToken`                                                                         |
 | Every configuration change                               | Actor, timestamp, and a redacted before/after diff, for every setup wizard run, `/config set`, or plugin enable/disable                                                                                                                                                                                                                                                                                                                          | `AuditLog`                                                                                               |
 
@@ -117,7 +117,7 @@ a server administrator.
 
 ## 8. Children / age requirement
 
-Entrophy runs entirely on top of Discord, and Discord's own Terms of Service require users to be at
+Pavisie runs entirely on top of Discord, and Discord's own Terms of Service require users to be at
 least 13 years old (or the higher minimum age required in some jurisdictions — Discord enforces this,
 not this bot). [Operator] does not knowingly collect data from anyone below the applicable minimum
 age and relies on Discord's own age-gating rather than performing separate age verification.

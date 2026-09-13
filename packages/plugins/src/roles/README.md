@@ -73,13 +73,13 @@ any skips are recorded in the audit row.
 ## CAPTCHA mode — Redis contract
 
 CAPTCHA mode only activates when `CAPTCHA_PROVIDER` (`hcaptcha` or `turnstile`) is set. `/verify` writes
-`entrophy:verify:pending:<token>` → `{"guildId","userId"}` (TTL 10 min) and replies with
+`pavisie:verify:pending:<token>` → `{"guildId","userId"}` (TTL 10 min) and replies with
 `${API_BASE_URL}/verify/<token>`. The `/verify/:token` public web page (`apps/api/src/routes/verify.ts`, added
 by the wiring stage) renders the configured provider's widget under a strict per-route CSP, verifies the
 response server-side against the provider's `siteverify` endpoint, and on success writes
-`entrophy:verify:done:<token>` (120s TTL — the poll job below deletes both keys once seen). If `CAPTCHA_PROVIDER`
+`pavisie:verify:done:<token>` (120s TTL — the poll job below deletes both keys once seen). If `CAPTCHA_PROVIDER`
 is `none` (or the configured provider's site/secret keys aren't set), the page 404s with a plain explanation. The
-`captcha-poll` job (`jobs/captcha-poll.ts`) scans for `entrophy:verify:done:*` every 15 seconds, resolves the
+`captcha-poll` job (`jobs/captcha-poll.ts`) scans for `pavisie:verify:done:*` every 15 seconds, resolves the
 `{guildId,userId}` context, grants the verified role via `RolesService.verifyMember`, and deletes both keys.
 
 ## Bot-actions dispatch convention

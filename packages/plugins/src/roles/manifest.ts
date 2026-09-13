@@ -32,7 +32,7 @@ const rolePersistenceSchema = z.object({
 });
 
 /** A Discord snowflake id (17-20 decimal digits). Mirrors `apps/api/src/lib/schemas.ts`'s `snowflakeSchema` —
- * kept as a local literal rather than a cross-package import so this plugin package stays free of an `@entrophy/api`
+ * kept as a local literal rather than a cross-package import so this plugin package stays free of an `@pavisie/api`
  * dependency edge. */
 const roleSnowflakeSchema = z.string().regex(/^\d{17,20}$/, 'Must be a valid Discord snowflake id.');
 

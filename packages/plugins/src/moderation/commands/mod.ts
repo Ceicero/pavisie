@@ -5,8 +5,8 @@ import {
   type GuildMember,
   type Role,
 } from 'discord.js';
-import { ValidationError } from '@entrophy/core';
-import type { ModerationCase, ModerationCaseType } from '@entrophy/database';
+import { ValidationError } from '@pavisie/core';
+import type { ModerationCase, ModerationCaseType } from '@pavisie/database';
 import {
   assertBotPermissions,
   assertStaffLevel,

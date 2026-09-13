@@ -3,8 +3,8 @@ import './globals.css';
 import { Providers } from '../components/providers';
 
 export const metadata: Metadata = {
-  title: 'Entrophy',
-  description: 'Entrophy — a modular, compliance-first Discord bot platform.',
+  title: 'Pavisie',
+  description: 'Pavisie — a modular, compliance-first Discord bot platform.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

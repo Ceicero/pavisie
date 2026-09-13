@@ -1,4 +1,4 @@
-import { decryptSecret } from '@entrophy/core';
+import { decryptSecret } from '@pavisie/core';
 import type { AiConfig } from './manifest';
 import { envKeyNameFor } from './providers/resolve';
 

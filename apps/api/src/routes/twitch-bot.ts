@@ -1,18 +1,18 @@
 import { randomBytes } from 'node:crypto';
 import type { ZodFastifyInstance } from '../lib/http';
-import { ExternalServiceError, NotFoundError, env, redisKey } from '@entrophy/core';
-import type { TwitchBotIdentityDto } from '@entrophy/types/integrations';
+import { ExternalServiceError, NotFoundError, env, redisKey } from '@pavisie/core';
+import type { TwitchBotIdentityDto } from '@pavisie/types/integrations';
 import { requireBotOwner } from '../lib/bot-owner';
 import { toTwitchBotIdentityDto } from '../lib/integrations/dto';
 import { buildProviderAuthorizeUrl, isOAuthProviderConfigured } from '../lib/integrations/providers';
 import { nudgeTwitchChatReconcile } from '../lib/integrations/twitch-chat-reconcile';
 
-/** Scopes for Entrophy's own Twitch bot account (ARCHITECTURE.md §19/§J) — never the generic Twitch
+/** Scopes for Pavisie's own Twitch bot account (ARCHITECTURE.md §19/§J) — never the generic Twitch
  * integration's scope, and never the per-guild `channel:bot` chat-channel scope (`routes/twitch-chat.ts`). */
 const TWITCH_BOT_SCOPE = 'user:read:chat user:write:chat user:bot';
 
 /**
- * `/owner/twitch-bot` — Entrophy's own Twitch bot account identity (one global row, `TwitchBotIdentity`),
+ * `/owner/twitch-bot` — Pavisie's own Twitch bot account identity (one global row, `TwitchBotIdentity`),
  * authorized once by the bot owner. Every route here is gated on bot-owner identity (`requireBotOwner`), NOT
  * `requireGuildAccess` — same reasoning as `routes/owner-metrics.ts`/`routes/developer-reports.ts`: this is
  * intentionally cross-guild (there is exactly one bot account for the whole deployment), which is exactly why
@@ -40,7 +40,7 @@ export default async function twitchBotRoutes(app: ZodFastifyInstance): Promise<
       }
 
       const state = randomBytes(24).toString('hex');
-      // No `guildId` — this flow authorizes Entrophy's own account, not a per-guild channel link (contrast
+      // No `guildId` — this flow authorizes Pavisie's own account, not a per-guild channel link (contrast
       // `routes/twitch-chat.ts`'s `connect`, whose state carries `guildId`).
       await app.redis.set(
         redisKey('oauthstate', 'integration', state),

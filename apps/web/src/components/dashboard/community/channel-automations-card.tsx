@@ -30,7 +30,7 @@ import {
   Switch,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useChannelAutomationStats } from '@/lib/dashboard/community-queries';
 import { useGuildChannels, usePluginConfig, useUpdatePluginConfig } from '@/lib/dashboard/queries';
@@ -50,7 +50,7 @@ const ARCHIVE_OPTIONS: { value: AutoThreadRule['archiveMinutes']; label: string 
   { value: 10080, label: '1 week' },
 ];
 
-/** Mirrors the `autoPublish` / `autoThreads` keys of `packages/plugins/src/community/manifest.ts` (hand-kept in sync; the dashboard doesn't depend on `@entrophy/plugins`). Other community keys pass through untouched. */
+/** Mirrors the `autoPublish` / `autoThreads` keys of `packages/plugins/src/community/manifest.ts` (hand-kept in sync; the dashboard doesn't depend on `@pavisie/plugins`). Other community keys pass through untouched. */
 export interface AutoThreadRule {
   channelId: string;
   nameTemplate: string;
@@ -305,7 +305,7 @@ export function ChannelAutomationsCard({ guildId }: { guildId: string }) {
                 <div>
                   <p className="text-sm font-medium">Also publish other bots and webhooks</p>
                   <p className="text-xs text-muted-foreground">
-                    Off by default: only members&apos; messages and Entrophy&apos;s own posts are published.
+                    Off by default: only members&apos; messages and Pavisie&apos;s own posts are published.
                   </p>
                 </div>
                 <Switch
@@ -332,7 +332,7 @@ export function ChannelAutomationsCard({ guildId }: { guildId: string }) {
               Discord allows at most <strong>10 publishes per hour per channel</strong>; past that, messages
               stay unpublished until the next hour (you can still publish them by hand). Publishing other
               members&apos; messages needs the bot to have <strong>Manage Messages</strong> in that channel —
-              without it, only Entrophy&apos;s own messages are published and a warning is logged once per
+              without it, only Pavisie&apos;s own messages are published and a warning is logged once per
               hour.
             </AlertDescription>
           </Alert>

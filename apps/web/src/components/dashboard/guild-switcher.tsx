@@ -10,7 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useGuilds } from '@/lib/dashboard/queries';
 import { API_BASE_URL } from '@/lib/dashboard/api';
 

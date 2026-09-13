@@ -1,5 +1,5 @@
 import type { ZodFastifyInstance } from '../lib/http';
-import type { DiscordChannelOption, DiscordRoleOption } from '@entrophy/types';
+import type { DiscordChannelOption, DiscordRoleOption } from '@pavisie/types';
 import { getCachedGuildChannels, getCachedGuildRoles } from '../lib/discord';
 import { requireGuildAccess } from '../lib/guild-access';
 import { guildIdParamSchema } from '../lib/schemas';

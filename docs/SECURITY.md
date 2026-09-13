@@ -44,7 +44,7 @@ Each of these is implemented in code today, not aspirational — file references
   encrypted with a 32-byte key from `ENCRYPTION_KEY`, format `v1:<iv>:<tag>:<ciphertext>` (all
   base64). Decrypted only in-process, only where used. `packages/core/src/crypto/encryption.ts`.
 - **Sessions** — dashboard auth is a random 32-byte `sid` cookie (`httpOnly`, `sameSite`, `secure` in
-  production) mapping to a Redis hash (`entrophy:session:<sid>`, 7-day TTL) holding the user id and
+  production) mapping to a Redis hash (`pavisie:session:<sid>`, 7-day TTL) holding the user id and
   encrypted OAuth tokens. Nothing about the session is trusted from the client except the opaque id.
   `apps/api/src/routes/auth.ts`, ARCHITECTURE §10.
 - **CSRF** — every mutating dashboard API route requires the `X-CSRF-Token` header to match the
@@ -87,10 +87,10 @@ audit`.
 
 ## 3. Reporting a vulnerability
 
-Security contact: `entrophybot@gmail.com` (confirmed and monitored — the project's general contact
+Security contact: `contact@pavisie.com` (confirmed and monitored — the project's general contact
 mailbox, also used by the policy pages).
 
-If you find a security issue: email `entrophybot@gmail.com` with what you found, how to reproduce
+If you find a security issue: email `contact@pavisie.com` with what you found, how to reproduce
 it, and its potential impact. Please don't open a public GitHub issue for anything that could be
 actively exploited before a fix ships (encryption bugs, auth bypasses, SSRF/RCE-class findings) —
 issues not already covered by the controls in §2 (e.g. a genuinely new bypass, not "the bot could
@@ -133,12 +133,12 @@ secret — treat it seriously even on suspicion alone.
    needed for new data.
 4. Run the re-encryption script once to migrate everything still encrypted under the old key:
    ```
-   pnpm --filter @entrophy/database reencrypt:secrets
+   pnpm --filter @pavisie/database reencrypt:secrets
    ```
    This walks `OAuthToken.accessTokenEnc`/`refreshTokenEnc`, `WebhookEndpoint.secretEnc`, and the
    `ai` plugin's `PluginConfig.config.apiKeyEnc`, decrypting each (via the same primary-then-previous
    fallback) and re-encrypting under the current `ENCRYPTION_KEY`. It's idempotent and safe to
-   re-run; use `--reencrypt:secrets -- --dry-run` (i.e. `pnpm --filter @entrophy/database exec tsx
+   re-run; use `--reencrypt:secrets -- --dry-run` (i.e. `pnpm --filter @pavisie/database exec tsx
 scripts/reencrypt-secrets.ts --dry-run`) first if you want a preview without writing anything. The
    script is `packages/database/scripts/reencrypt-secrets.ts` — if a future encrypted field is added
    to the schema or a plugin's config, add it to that script's coverage.
@@ -164,11 +164,11 @@ you suspect a specific stolen cookie rather than a leaked signing key, or you ju
 after a config change.
 
 ```
-redis-cli --scan --pattern 'entrophy:session:*' | xargs -r redis-cli del
+redis-cli --scan --pattern 'pavisie:session:*' | xargs -r redis-cli del
 ```
 
 On a managed Redis (Railway/Render), run this from a shell with `REDIS_URL` set:
-`redis-cli -u "$REDIS_URL" --scan --pattern 'entrophy:session:*' | xargs -r redis-cli -u "$REDIS_URL" del`.
+`redis-cli -u "$REDIS_URL" --scan --pattern 'pavisie:session:*' | xargs -r redis-cli -u "$REDIS_URL" del`.
 Every dashboard user has to log in again on their next request; nothing else is affected (guild data,
 moderation history, etc. are untouched — sessions are pure Redis state).
 
@@ -198,11 +198,11 @@ validity via small charges rather than genuine purchases. Stripe flagged the pat
 account. No donor personal data was exposed — Stripe Checkout is the only party that ever sees payment details.
 
 **Resolution (2026-08-30):** Rather than defend the checkout endpoint against ongoing abuse, donations were moved
-entirely to Ko-fi, a third-party donation platform. Entrophy no longer processes payments at all. This removes
+entirely to Ko-fi, a third-party donation platform. Pavisie no longer processes payments at all. This removes
 the entire card-testing attack surface instead of just hardening one endpoint. The `POST /donations/checkout`
 endpoint is gone; the `/donations/config` route returns a simple link to Ko-fi when configured. This also
 eliminated the need for the hardening controls below — they were situational defenses against a payment-processing
-role Entrophy no longer plays.
+role Pavisie no longer plays.
 
 Earlier hardening (archived for reference, no longer in effect):
 

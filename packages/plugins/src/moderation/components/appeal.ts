@@ -1,5 +1,5 @@
 import type { ButtonInteraction, ModalSubmitInteraction } from 'discord.js';
-import { NotFoundError, PermissionError } from '@entrophy/core';
+import { NotFoundError, PermissionError } from '@pavisie/core';
 import { infoEmbed, successEmbed, type ComponentHandler } from '../../sdk';
 import { moderationService } from '../commands/shared';
 

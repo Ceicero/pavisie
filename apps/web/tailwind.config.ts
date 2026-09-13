@@ -1,8 +1,8 @@
 import type { Config } from 'tailwindcss';
-import { preset } from '@entrophy/ui/tailwind.preset';
+import { preset } from '@pavisie/ui/tailwind.preset';
 
 // The dashboard (formerly apps/dashboard, now apps/web/src/app/dashboard/**) brought its
-// `@entrophy/ui` component library and shadcn-style tokens (`bg-background`, `text-foreground`,
+// `@pavisie/ui` component library and shadcn-style tokens (`bg-background`, `text-foreground`,
 // `border-border`, ...) with it — this preset supplies those, scanning `packages/ui/src` below.
 // Marketing pages are untouched: they keep using the monochrome `ink`/`grey`/`paper` tokens
 // defined below and in `src/app/globals.css` (ARCHITECTURE.md §17 / §O), which the preset's

@@ -1,11 +1,11 @@
-# Entrophy — Competitive position (2026-08)
+# Pavisie — Competitive position (2026-08)
 
-Honest comparison of Entrophy against the seven Discord bots most servers pick from: MEE6, Dyno, Carl-bot, Wick,
+Honest comparison of Pavisie against the seven Discord bots most servers pick from: MEE6, Dyno, Carl-bot, Wick,
 ProBot, Sapphire, Arcane. Written from a research pass over the competitors' official docs/pricing pages plus
 top.gg / third-party reviews (MEE6, Dyno, Carl-bot in depth; Wick partially; ProBot / Sapphire / Arcane from
-general product knowledge — see the caveat in §1) and from reading Entrophy's actual code
+general product knowledge — see the caveat in §1) and from reading Pavisie's actual code
 (`packages/plugins/src/*/manifest.ts`, `docs/commands.json`, `apps/api/src/routes`, the dashboard pages) — not
-from the marketing copy. Where Entrophy is missing something, it says so.
+from the marketing copy. Where Pavisie is missing something, it says so.
 
 Companion to `ROADMAP.md`. Implementation specs for the top gaps live outside the repo (see §5).
 
@@ -14,7 +14,7 @@ Companion to `ROADMAP.md`. Implementation specs for the top gaps live outside th
 ## 1. Feature matrix
 
 Legend: ✅ has it · ⚠️ partial / with caveats · ❌ missing · 💰 competitor gates it behind a paid tier
-(per-server premium unless noted). "Entrophy" reflects code on `main` today, not plans.
+(per-server premium unless noted). "Pavisie" reflects code on `main` today, not plans.
 
 Caveat: the MEE6 / Dyno / Carl-bot columns are from a full read of their docs and pricing tables. The Wick column
 covers moderation/anti-raid (the part of the research payload that arrived intact). ProBot / Sapphire / Arcane are
@@ -22,7 +22,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ### Moderation
 
-| Feature                                | Entrophy                                                       | MEE6      | Dyno   | Carl-bot | Wick   | ProBot† | Sapphire† | Arcane† |
+| Feature                                | Pavisie                                                       | MEE6      | Dyno   | Carl-bot | Wick   | ProBot† | Sapphire† | Arcane† |
 | -------------------------------------- | -------------------------------------------------------------- | --------- | ------ | -------- | ------ | ------- | --------- | ------- |
 | Core commands (warn/timeout/kick/ban…) | ✅ `/mod *` + context menus                                    | ✅ 💰     | ✅     | ✅       | ✅     | ✅      | ✅        | ✅      |
 | Case numbers + mod-log channel         | ✅ per-guild `ModerationCase`, embeds, export CSV              | ⚠️        | ✅     | ✅       | ✅     | ⚠️      | ✅        | ⚠️      |
@@ -40,7 +40,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ### Automod / anti-raid
 
-| Feature                                        | Entrophy                                                | MEE6  | Dyno | Carl-bot | Wick    | ProBot† | Sapphire† | Arcane† |
+| Feature                                        | Pavisie                                                | MEE6  | Dyno | Carl-bot | Wick    | ProBot† | Sapphire† | Arcane† |
 | ---------------------------------------------- | ------------------------------------------------------- | ----- | ---- | -------- | ------- | ------- | --------- | ------- |
 | Word/regex/link/invite/mention/caps/dupe rules | ✅ rule types, safe-regex validated                     | ✅ 💰 | ✅   | ✅       | ✅ heat | ✅      | ✅        | ⚠️      |
 | Per-rule actions + exemptions                  | ✅                                                      | ✅ 💰 | ✅   | ✅       | ✅      | ⚠️      | ✅        | ⚠️      |
@@ -55,7 +55,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ### Logging
 
-| Feature                                | Entrophy                                                | MEE6     | Dyno   | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
+| Feature                                | Pavisie                                                | MEE6     | Dyno   | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
 | -------------------------------------- | ------------------------------------------------------- | -------- | ------ | -------- | ---- | ------- | --------- | ------- |
 | Per-kind log channels                  | ✅ 16 kinds, per-kind routing                           | ⚠️ 1 ch  | ✅     | ✅       | ⚠️   | ✅      | ✅        | ⚠️      |
 | Message content capture                | ⚠️ **off by default**, opt-in + redaction rules         | ✅ 💰    | ✅     | ✅       | ⚠️   | ✅      | ✅        | ⚠️      |
@@ -67,7 +67,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ### Tickets / support
 
-| Feature                          | Entrophy                                                | MEE6  | Dyno   | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
+| Feature                          | Pavisie                                                | MEE6  | Dyno   | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
 | -------------------------------- | ------------------------------------------------------- | ----- | ------ | -------- | ---- | ------- | --------- | ------- |
 | Button ticket panels             | ✅ channel or private-thread mode                       | ✅ 💰 | ✅ 1   | ❌       | ❌   | ⚠️      | ✅        | ❌      |
 | Intake form (modal)              | ✅                                                      | ❌    | ✅     | ❌       | ❌   | ❌      | ✅        | ❌      |
@@ -77,7 +77,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ### Roles / onboarding / verification
 
-| Feature                                | Entrophy                                                | MEE6  | Dyno   | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
+| Feature                                | Pavisie                                                | MEE6  | Dyno   | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
 | -------------------------------------- | ------------------------------------------------------- | ----- | ------ | -------- | ---- | ------- | --------- | ------- |
 | Button / select / **reaction** panels  | ✅ all three styles (`RolePanelStyle`)                  | ✅ 💰 | ✅ 3   | ✅ react | ❌   | ✅      | ✅        | ❌      |
 | Role groups w/ max-selection           | ✅                                                      | ❌    | ⚠️     | ✅ modes | ❌   | ⚠️      | ✅        | ❌      |
@@ -93,7 +93,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ### Leveling / engagement
 
-| Feature                        | Entrophy                                     | MEE6    | Dyno  | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
+| Feature                        | Pavisie                                     | MEE6    | Dyno  | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
 | ------------------------------ | -------------------------------------------- | ------- | ----- | -------- | ---- | ------- | --------- | ------- |
 | XP / levels / leaderboard      | ✅ free, anti-farm cooldowns                 | ✅ 💰   | 💰    | 💰       | ❌   | ✅      | ✅        | ✅      |
 | Level role rewards             | ✅ stack or replace, `/level rewards sync`   | ✅ 💰   | 💰    | 💰       | ❌   | ✅      | ✅        | ✅ 💰   |
@@ -108,7 +108,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ### Community
 
-| Feature                         | Entrophy                                   | MEE6  | Dyno   | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
+| Feature                         | Pavisie                                   | MEE6  | Dyno   | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
 | ------------------------------- | ------------------------------------------ | ----- | ------ | -------- | ---- | ------- | --------- | ------- |
 | Polls (anon option)             | ✅                                         | ✅ 💰 | ✅     | ✅       | ❌   | ✅      | ✅        | ❌      |
 | Giveaways (eligibility, reroll) | ✅                                         | ✅ 💰 | ✅ web | ✅       | ❌   | ✅      | ✅        | ❌      |
@@ -124,7 +124,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ### Utility
 
-| Feature                                  | Entrophy                                     | MEE6   | Dyno   | Carl-bot   | Wick | ProBot† | Sapphire† | Arcane† |
+| Feature                                  | Pavisie                                     | MEE6   | Dyno   | Carl-bot   | Wick | ProBot† | Sapphire† | Arcane† |
 | ---------------------------------------- | -------------------------------------------- | ------ | ------ | ---------- | ---- | ------- | --------- | ------- |
 | **Custom commands / tags**               | ❌                                           | ✅ 💰  | ✅ 25  | ✅ TagScript| ❌   | ⚠️      | ✅        | ❌      |
 | **Auto-responders (trigger → reply)**    | ❌                                           | ⚠️     | ✅ 10  | ✅ 50      | ❌   | ⚠️      | ✅        | ❌      |
@@ -139,7 +139,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ### Integrations / AI / media
 
-| Feature                                | Entrophy                                                  | MEE6         | Dyno  | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
+| Feature                                | Pavisie                                                  | MEE6         | Dyno  | Carl-bot | Wick | ProBot† | Sapphire† | Arcane† |
 | -------------------------------------- | --------------------------------------------------------- | ------------ | ----- | -------- | ---- | ------- | --------- | ------- |
 | Twitch / YouTube alerts                | ✅ official APIs (EventSub / Data API)                    | ✅ 💰 10 nets| 💰    | ✅ 2/5   | ❌   | ⚠️      | ✅        | ❌      |
 | GitHub / generic webhooks (in+out)     | ✅ signed, SSRF-guarded                                   | ❌           | ❌    | ❌       | ❌   | ❌      | ⚠️        | ❌      |
@@ -151,7 +151,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ### Dashboard / trust / pricing
 
-| Feature                                   | Entrophy                                                        | MEE6            | Dyno         | Carl-bot     | Wick        | ProBot†   | Sapphire† | Arcane†  |
+| Feature                                   | Pavisie                                                        | MEE6            | Dyno         | Carl-bot     | Wick        | ProBot†   | Sapphire† | Arcane†  |
 | ----------------------------------------- | --------------------------------------------------------------- | --------------- | ------------ | ------------ | ----------- | --------- | --------- | -------- |
 | Web dashboard, per-plugin toggles         | ✅                                                              | ✅              | ✅           | ✅           | ✅          | ✅        | ✅        | ✅       |
 | Auto-generated config forms from schema   | ✅ every plugin gets a form for free                            | ❌              | ❌           | ❌           | ❌          | ❌        | ❌        | ❌       |
@@ -165,7 +165,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 
 ---
 
-## 2. Where Entrophy already wins
+## 2. Where Pavisie already wins
 
 These are real, in the code, and none of the seven competitors does all of them. They are the product's moat and
 every new feature should reinforce them rather than dilute them.
@@ -180,7 +180,7 @@ every new feature should reinforce them rather than dilute them.
 3. **Compliance as a feature.** No music scraping (adapter-only media plugin that stays unavailable without a
    compliant provider), no gambling/real-money economy, no NFT/Web3, no wagering, no self-bot tricks, AI is opt-in,
    BYO-key, redacts before sending, and is labelled assistive-only. Free forever; donations grant no perks. MEE6's
-   history (NFT promo, music removal, expanding paywall) is the cautionary tale — Entrophy has structurally opted out.
+   history (NFT promo, music removal, expanding paywall) is the cautionary tale — Pavisie has structurally opted out.
 4. **Dashboard audit trail.** Every config write from either surface (`/config set` or the dashboard) is an
    `AuditLog` row with actor, before/after, and source; visible on `/dashboard/[guildId]/audit` and exportable.
    Only Dyno approaches this (3-month web audit log).
@@ -204,7 +204,7 @@ every competitor; no public web surfaces (leaderboard, appeals page, forms); no 
 
 ## 3. Gap list, ranked
 
-Score = demand (1–3, from how many competitors ship it and how often reviews mention it) × fit with Entrophy's
+Score = demand (1–3, from how many competitors ship it and how often reviews mention it) × fit with Pavisie's
 compliance-first/transparent positioning (1–3) × effort factor (S=3, M=2, L=1). Verified against code: none of
 the ❌ items exist on `main` today.
 
@@ -224,7 +224,7 @@ the ❌ items exist on `main` today.
 | 12  | Member `/report message` (non-staff)                         | 2      | 3   | S      | 9     | Fits enforcer: `/report` creates a MANUAL flag with `flaggedBy` = reporter. Next-up.               |
 | 13  | Purge filters (links/images/bots/embeds)                     | 2      | 2   | S      | 12    | `/mod purge` has count/user/contains; add links/images/bots/embeds. Keep confirmation. Next-up.    |
 | 14  | Welcome image cards                                          | 3      | 2   | L      | 6     | Needs an image renderer dependency (`@napi-rs/canvas`) + font shipping; deferred.                  |
-| 15  | Web appeal page                                              | 2      | 3   | L      | 6     | Entrophy has in-Discord appeals; a public form needs auth-less signed links. Deferred.             |
+| 15  | Web appeal page                                              | 2      | 3   | L      | 6     | Pavisie has in-Discord appeals; a public form needs auth-less signed links. Deferred.             |
 | 16  | Forms builder (Dyno)                                         | 2      | 3   | L      | 6     | Ticket intake forms exist; general forms are a new plugin. Deferred.                               |
 | 17  | Timed / temp roles + voice-role links                        | 1      | 2   | M      | 4     |                                                                                                    |
 | 18  | Public web leaderboard                                       | 2      | 2   | L      | 4     | Requires a public read API + privacy toggle. Deferred.                                             |
@@ -239,21 +239,21 @@ the ❌ items exist on `main` today.
 
 ## 4. "Do it better" notes for the top gaps
 
-- **Auto-role (CG-01).** Competitors just add the role. Entrophy: refuse roles that carry elevated permissions
+- **Auto-role (CG-01).** Competitors just add the role. Pavisie: refuse roles that carry elevated permissions
   (reuse `checkRoleAssignable`), never assign while membership screening is pending, optional delay via a job so a
   role can gate a first-hour "newcomer" period, a separate list for bots, and an audit row per assignment. The
   dashboard shows the exact reason a role was refused instead of failing silently.
 - **Tags / auto-responders (CG-02).** MEE6 gives 3–5 free; Dyno 25; Carl-bot's TagScript is powerful but a
-  learning curve. Entrophy: unlimited plain-text/embed tags with the same safe `{user}`/`{server}` variables the
+  learning curve. Pavisie: unlimited plain-text/embed tags with the same safe `{user}`/`{server}` variables the
   welcome engine already uses (no code execution, no recursion), staff-restrictable per tag, every create/edit is an
   audit row, `/tag list` is public so members can see what commands exist. Auto-responders are opt-in per tag and
   only run when the Message Content intent is on; the plugin says so in `/plugin status`.
-- **Sticky (CG-03).** Carl-bot paywalls it. Entrophy: free, one per channel, cooldown so it never floods, and the
+- **Sticky (CG-03).** Carl-bot paywalls it. Pavisie: free, one per channel, cooldown so it never floods, and the
   sticky is stored as a normal message payload (text or embed JSON) — no message-content reading required.
-- **Auto-publish + auto-threads (CG-04).** Nobody in the top three offers auto-publish. Entrophy: per-channel
+- **Auto-publish + auto-threads (CG-04).** Nobody in the top three offers auto-publish. Pavisie: per-channel
   allowlists in the plugin config (auto-form for free), skips messages the bot can't publish and logs why once,
   never touches non-announcement channels.
-- **Stats channels (CG-05).** MEE6 charges for it. Entrophy: rate-limit-aware refresh (Discord allows two channel
+- **Stats channels (CG-05).** MEE6 charges for it. Pavisie: rate-limit-aware refresh (Discord allows two channel
   renames per 10 minutes) with a `/statschannel refresh` that explains the wait, templates limited to counts the
   bot already has (members, humans, bots, online is *not* offered — it needs the Presence intent), and a clear
   "channel must be a voice/category channel members can see but not join" hint.

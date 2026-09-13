@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { Badge, ChannelPicker, Input, type ChannelKind } from '@entrophy/ui';
+import { Badge, ChannelPicker, Input, type ChannelKind } from '@pavisie/ui';
 import { useGuildChannels } from '@/lib/dashboard/queries';
 
 const DEFAULT_KINDS: ChannelKind[] = ['text', 'announcement', 'forum', 'voice'];

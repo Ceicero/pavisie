@@ -1,8 +1,8 @@
 // `/tag create|edit` modal submit + `/tag delete` confirm/cancel buttons (spec CG-02).
 // Modal custom id: `community:tag-modal:<ownerUserId>:<create|edit>:<name>[:<staffOnly 0|1>]`.
 import type { ModalSubmitInteraction } from 'discord.js';
-import { AuditAction } from '@entrophy/core';
-import { Prisma } from '@entrophy/database';
+import { AuditAction } from '@pavisie/core';
+import { Prisma } from '@pavisie/database';
 import { errorEmbed, registerConfirmHandlers, successEmbed, type ComponentHandler } from '../../sdk';
 import type { CommunityConfig } from '../manifest';
 import { invalidateTagTriggerCache } from '../tag-cache';

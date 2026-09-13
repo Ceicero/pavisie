@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
-import { Toaster } from '@entrophy/ui';
+import { Toaster } from '@pavisie/ui';
 import { SessionProvider } from '../lib/session';
 
 /** Root client-side providers: theme, React Query, and the dashboard session. Mounted once in the root layout. */

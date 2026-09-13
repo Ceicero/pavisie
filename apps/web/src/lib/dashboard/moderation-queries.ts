@@ -1,12 +1,12 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ModerationCaseDto, ModerationWarningDto, Paginated } from '@entrophy/types';
+import type { ModerationCaseDto, ModerationWarningDto, Paginated } from '@pavisie/types';
 import type {
   ModerationAppealDto,
   ModerationNoteDto,
   ModerationSettingsDto,
-} from '@entrophy/types/moderation';
+} from '@pavisie/types/moderation';
 import { apiFetch, toQueryString } from './api';
 
 export const moderationQueryKeys = {

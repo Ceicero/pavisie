@@ -6,7 +6,7 @@ import {
   type ButtonInteraction,
   type ModalSubmitInteraction,
 } from 'discord.js';
-import { AuditAction, ValidationError } from '@entrophy/core';
+import { AuditAction, ValidationError } from '@pavisie/core';
 import { buildCustomId, successEmbed, type ComponentHandler } from '../../sdk';
 import {
   checkReportRateLimit,
@@ -17,7 +17,7 @@ import {
   validateReportInput,
 } from '../report-shared';
 
-/** Step 2 of 2: the "Write report" button from `/entrophy report` opens the subject/body modal. */
+/** Step 2 of 2: the "Write report" button from `/pavisie report` opens the subject/body modal. */
 const reportContinueHandler: ComponentHandler = {
   action: 'report-continue',
   kind: 'button',
@@ -29,7 +29,7 @@ const reportContinueHandler: ComponentHandler = {
 
     const modal = new ModalBuilder()
       .setCustomId(buildCustomId('admin', 'report-modal', ownerId, kind))
-      .setTitle('Report to the Entrophy developer')
+      .setTitle('Report to the Pavisie developer')
       .addComponents(
         new ActionRowBuilder<TextInputBuilder>().addComponents(
           new TextInputBuilder()
@@ -72,7 +72,7 @@ const reportModalHandler: ComponentHandler = {
     const [, kindRaw] = c.args;
 
     if (!kindRaw || !isReportKind(kindRaw)) {
-      throw new ValidationError('Unknown report kind. Please run `/entrophy report` again.');
+      throw new ValidationError('Unknown report kind. Please run `/pavisie report` again.');
     }
     const kind = kindRaw;
 

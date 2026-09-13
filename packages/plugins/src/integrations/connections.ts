@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import type { IntegrationConnection, Prisma, WebhookEndpoint } from '@entrophy/database';
-import { AuditAction, ValidationError, assertPublicHttpUrl, encryptSecret } from '@entrophy/core';
-import type { AlertProviderId } from '@entrophy/types/integrations';
+import type { IntegrationConnection, Prisma, WebhookEndpoint } from '@pavisie/database';
+import { AuditAction, ValidationError, assertPublicHttpUrl, encryptSecret } from '@pavisie/core';
+import type { AlertProviderId } from '@pavisie/types/integrations';
 import type { PluginContext } from '../sdk';
 import { ensureTwitchEventSub } from './providers/twitch';
 import { getProvider, isProviderEnvSatisfied, PROVIDER_ENUM_MAP } from './providers';

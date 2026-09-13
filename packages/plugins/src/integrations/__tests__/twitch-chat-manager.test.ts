@@ -123,7 +123,7 @@ function notificationFrame(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   FakeWebSocket.instances = [];
   vi.clearAllMocks();
-  mocks.getBotIdentityRow.mockResolvedValue({ botUserId: 'bot-1', botLogin: 'entrophybot' });
+  mocks.getBotIdentityRow.mockResolvedValue({ botUserId: 'bot-1', botLogin: 'pavisiebot' });
   mocks.createChatSubscription.mockImplementation(async (_ctx: unknown, _sessionId: string, broadcasterUserId: string) => ({
     ok: true,
     subscriptionId: `sub-${broadcasterUserId}`,
@@ -178,7 +178,7 @@ describe('TwitchChatManager idle states', () => {
     expect(manager.status().enabled).toBe(false);
 
     // Owner finishes the connect flow later; no restart happens, just the next `twitch-chat-tick`.
-    mocks.getBotIdentityRow.mockResolvedValue({ botUserId: 'bot-1', botLogin: 'entrophybot' });
+    mocks.getBotIdentityRow.mockResolvedValue({ botUserId: 'bot-1', botLogin: 'pavisiebot' });
     await manager.reconcile(ctx);
 
     expect(FakeWebSocket.instances).toHaveLength(1);
@@ -423,7 +423,7 @@ describe('TwitchChatManager tryConnect guards', () => {
 
     const startPromise = manager.start(ctx);
     await manager.stop();
-    resolveIdentity({ botUserId: 'bot-1', botLogin: 'entrophybot' });
+    resolveIdentity({ botUserId: 'bot-1', botLogin: 'pavisiebot' });
     await startPromise;
     await flush();
 
@@ -515,7 +515,7 @@ describe('TwitchChatManager re-checks the bot identity every reconcile tick', ()
     expect(manager.status().connected).toBe(true);
 
     // A terminal token-refresh failure elsewhere marked the identity row ERROR.
-    mocks.getBotIdentityRow.mockResolvedValue({ botUserId: 'bot-1', botLogin: 'entrophybot', status: 'ERROR' });
+    mocks.getBotIdentityRow.mockResolvedValue({ botUserId: 'bot-1', botLogin: 'pavisiebot', status: 'ERROR' });
     await manager.reconcile(ctx);
 
     const status = manager.status();
@@ -688,7 +688,7 @@ describe('TwitchChatManager chat message handling', () => {
 
     ws.emit(
       'notification',
-      notificationFrame({ chatter_user_id: 'bot-1', chatter_user_name: 'entrophybot', message: { text: '!hello' } }),
+      notificationFrame({ chatter_user_id: 'bot-1', chatter_user_name: 'pavisiebot', message: { text: '!hello' } }),
     );
     await flush();
 

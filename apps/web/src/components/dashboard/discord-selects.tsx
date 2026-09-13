@@ -1,6 +1,6 @@
 'use client';
 
-import { ChannelPicker, Input, RolePicker, type ChannelKind } from '@entrophy/ui';
+import { ChannelPicker, Input, RolePicker, type ChannelKind } from '@pavisie/ui';
 import { useGuildChannels, useGuildRoles } from '@/lib/dashboard/queries';
 
 export interface DiscordChannelSelectProps {

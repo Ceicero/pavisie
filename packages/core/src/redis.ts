@@ -36,7 +36,7 @@ export function getRedis(): Redis {
   return singleton;
 }
 
-/** Builds a namespaced Redis key: `entrophy:<part>:<part>...`. */
+/** Builds a namespaced Redis key: `pavisie:<part>:<part>...`. */
 export function redisKey(...parts: string[]): string {
-  return ['entrophy', ...parts].join(':');
+  return ['pavisie', ...parts].join(':');
 }

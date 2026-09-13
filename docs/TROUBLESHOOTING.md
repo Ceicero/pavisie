@@ -1,7 +1,7 @@
 # Troubleshooting
 
 Real problems, real fixes. If something here doesn't match what you're seeing, ask in the
-**Entrophy support Discord server** (linked on the website's `/support` page and footer, and in the
+**Pavisie support Discord server** (linked on the website's `/support` page and footer, and in the
 dashboard) — check `infra/DEPLOYMENT.md` (production operations) or open an issue with the exact
 error text and which of `bot` / `api` / `dashboard` / `web` printed it.
 
@@ -67,7 +67,7 @@ running before starting the bot.
 Commands must be **registered** with Discord separately from the bot being online — starting the
 bot does not register anything.
 
-1. Run `pnpm --filter @entrophy/bot register`.
+1. Run `pnpm --filter @pavisie/bot register`.
 2. Check whether `DEV_GUILD_ID` is set in your `.env`:
    - **Set** → commands register to that one server only, and show up **instantly**. Make sure
      you're testing in that exact server.
@@ -81,7 +81,7 @@ bot does not register anything.
    scopes) — Discord won't show slash commands for a bot that was never granted this scope, even if
    registration succeeded.
 4. If commands changed (renamed, added, removed) and old ones still show up or new ones don't, re-run
-   `pnpm --filter @entrophy/bot register` — Discord doesn't diff automatically; you have to push the
+   `pnpm --filter @pavisie/bot register` — Discord doesn't diff automatically; you have to push the
    update.
 
 ---
@@ -121,7 +121,7 @@ list if needed.
 
 **A moderator can't act on a specific member ("target is higher than you" / "target is higher than
 the bot")**
-→ This is intentional, not a bug: Entrophy checks that the acting moderator, and the bot itself, both
+→ This is intentional, not a bug: Pavisie checks that the acting moderator, and the bot itself, both
 outrank the target before allowing kick/ban/timeout/role actions. It also always refuses to act on
 the server owner, the bot itself, or another bot owner. Raise the acting moderator's role (or lower
 the target's), or have someone who does outrank the target perform the action.
@@ -190,14 +190,14 @@ webhook sources.
 1. **The API must be reachable from the public internet** at the URL you configured with the
    provider — `localhost` is never reachable from GitHub/Twitch's servers. In production, this is
    `https://api.yourdomain.com/webhooks/...` (`PUBLIC_WEBHOOK_BASE_URL` / `API_BASE_URL`).
-2. **Signing secrets must match.** Each provider signs its webhook payloads, and Entrophy verifies
+2. **Signing secrets must match.** Each provider signs its webhook payloads, and Pavisie verifies
    the signature before doing anything with the request — a wrong or missing secret means every
    delivery is silently rejected as unverified (check the api process's logs; it logs a rejection,
    never the payload itself). Re-copy the secret from the provider's webhook settings into the
    matching `.env` variable (`GITHUB_WEBHOOK_SECRET`, `TWITCH_EVENTSUB_SECRET`) exactly —
    regenerating the endpoint on the provider's side usually issues a new secret.
 3. **Check the provider's own delivery log** (GitHub → repo Settings → Webhooks → Recent
-   Deliveries) — it shows the HTTP status Entrophy's API returned, which narrows this down fast: a
+   Deliveries) — it shows the HTTP status Pavisie's API returned, which narrows this down fast: a
    `401`/`400` is almost always the signature/secret problem above; a connection failure/timeout
    means the URL isn't reachable at all (step 1); a `5xx` means the API errored after verifying the
    signature — check the api logs for that request.
@@ -219,11 +219,11 @@ conflicts with your data, that needs a hand-written compensating migration — d
 migration file that has already been applied elsewhere.
 
 **"Migration already applied" / drift errors on a database you're not sure about**
-→ Run `pnpm --filter @entrophy/database exec prisma migrate status` to see exactly what Prisma
+→ Run `pnpm --filter @pavisie/database exec prisma migrate status` to see exactly what Prisma
 thinks has and hasn't been applied before doing anything destructive.
 
 **Local dev database is in a state you don't care about preserving**
-→ Easiest fix is often to drop it and start clean: stop the app, drop/recreate the `entrophy`
+→ Easiest fix is often to drop it and start clean: stop the app, drop/recreate the `pavisie`
 database (or `docker compose down -v` to also wipe the Postgres volume), then `pnpm db:migrate`
 again from zero.
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PrismaStubOverrides } from '@entrophy/plugins/sdk/testing';
+import type { PrismaStubOverrides } from '@pavisie/plugins/sdk/testing';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
 const GUILD_ID = '666666666666666666';

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { ModerationAppealDto } from '@entrophy/types/moderation';
+import type { ModerationAppealDto } from '@pavisie/types/moderation';
 import {
   Badge,
   Button,
@@ -21,7 +21,7 @@ import {
   Skeleton,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { ErrorState } from '../error-state';
 import { formatDateTime } from '@/lib/dashboard/format';
 import { useDecideAppeal, useModerationAppeals } from '@/lib/dashboard/moderation-queries';

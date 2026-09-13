@@ -1,4 +1,4 @@
-import type { AutomodRule } from '@entrophy/database';
+import type { AutomodRule } from '@pavisie/database';
 
 export interface ExemptionCheckInput {
   userId: string;

@@ -1,13 +1,13 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LogEventDto, Paginated } from '@entrophy/types';
-// Not (yet) re-exported from `@entrophy/types`'s barrel — see `packages/types/src/logging.ts`'s header comment.
+import type { LogEventDto, Paginated } from '@pavisie/types';
+// Not (yet) re-exported from `@pavisie/types`'s barrel — see `packages/types/src/logging.ts`'s header comment.
 import type {
   LoggingConfigDto,
   RedactionTestRequestDto,
   RedactionTestResponseDto,
-} from '@entrophy/types/logging';
+} from '@pavisie/types/logging';
 import { apiFetch, toQueryString } from './api';
 
 /** Own query-key namespace per this plugin's ownership boundary (do not add these to the shared `lib/queries.ts`). */

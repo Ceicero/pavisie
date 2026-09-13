@@ -10,7 +10,7 @@ import {
   type Role,
   type User,
 } from 'discord.js';
-import { discordTimestamp, redisKey } from '@entrophy/core';
+import { discordTimestamp, redisKey } from '@pavisie/core';
 import {
   brandEmbed,
   errorEmbed,

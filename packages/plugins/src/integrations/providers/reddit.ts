@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import type { PluginContext } from '../../sdk';
 import { formatRedditPostEmbed, isRedditPostNsfw, type RedditPost } from '../formatters/reddit';
 import {

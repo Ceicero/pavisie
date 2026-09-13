@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { decryptSecret, env, redisKey } from '@entrophy/core';
-import type { PrismaStubOverrides } from '@entrophy/plugins/sdk/testing';
+import { decryptSecret, env, redisKey } from '@pavisie/core';
+import type { PrismaStubOverrides } from '@pavisie/plugins/sdk/testing';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
 const GUILD_ID = '600000000000000001';
@@ -341,7 +341,7 @@ describe('GET /guilds/:guildId/integrations/twitch-chat', () => {
     const fixture = twitchChatFixture();
     fixture.botIdentities.set(
       'bot1',
-      botIdentityDefaults({ id: 'bot1', botUserId: 'bot-uid', botLogin: 'entrophybot' }),
+      botIdentityDefaults({ id: 'bot1', botUserId: 'bot-uid', botLogin: 'pavisiebot' }),
     );
     fixture.channels.set(
       'chan1',
@@ -363,7 +363,7 @@ describe('GET /guilds/:guildId/integrations/twitch-chat', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.botConfigured).toBe(true);
-    expect(body.botLogin).toBe('entrophybot');
+    expect(body.botLogin).toBe('pavisiebot');
     expect(body.envConfigured).toBe(true);
     expect(body.channels).toHaveLength(1);
     expect(body.channels[0]).toMatchObject({
@@ -1656,7 +1656,7 @@ describe('owner /owner/twitch-bot', () => {
       botIdentityDefaults({
         id: 'bot1',
         botUserId: 'bot-uid',
-        botLogin: 'entrophybot',
+        botLogin: 'pavisiebot',
         accessTokenEnc: 'enc-a',
         refreshTokenEnc: 'enc-r',
         scopes: ['user:bot'],
@@ -1673,7 +1673,7 @@ describe('owner /owner/twitch-bot', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body).toMatchObject({
-      botLogin: 'entrophybot',
+      botLogin: 'pavisiebot',
       botUserId: 'bot-uid',
       status: 'connected',
       scopes: ['user:bot'],
@@ -1718,7 +1718,7 @@ describe('owner /owner/twitch-bot', () => {
     const fixture = twitchChatFixture();
     fixture.botIdentities.set(
       'bot1',
-      botIdentityDefaults({ id: 'bot1', botUserId: 'bot-uid', botLogin: 'entrophybot' }),
+      botIdentityDefaults({ id: 'bot1', botUserId: 'bot-uid', botLogin: 'pavisiebot' }),
     );
     const { app, redis, queues } = await buildTestApp(fixture.overrides);
     const { cookieHeader, session } = await loginAs(app, redis, { userId: OWNER_ID });
@@ -1958,7 +1958,7 @@ describe('GET /integrations/twitch/callback — twitch_chat / twitch_bot purpose
         token_type: 'bearer',
         scope: ['user:read:chat', 'user:write:chat', 'user:bot'],
       },
-      usersBody: { data: [{ id: 'bot-uid', login: 'entrophybot', display_name: 'EntrophyBot' }] },
+      usersBody: { data: [{ id: 'bot-uid', login: 'pavisiebot', display_name: 'PavisieBot' }] },
     });
 
     const res = await app.inject({
@@ -1969,14 +1969,14 @@ describe('GET /integrations/twitch/callback — twitch_chat / twitch_bot purpose
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
-    expect(res.body).toContain('entrophybot');
+    expect(res.body).toContain('pavisiebot');
 
     expect(fixture.botIdentities.size).toBe(1);
     const identity = [...fixture.botIdentities.values()][0];
     expect(identity).toMatchObject({
       id: 'twitch-bot-identity',
       botUserId: 'bot-uid',
-      botLogin: 'entrophybot',
+      botLogin: 'pavisiebot',
       status: 'CONNECTED',
       scopes: ['user:read:chat', 'user:write:chat', 'user:bot'],
     });
@@ -2011,7 +2011,7 @@ describe('GET /integrations/twitch/callback — twitch_chat / twitch_bot purpose
     const { cookieHeader } = await loginAs(app, redis, { userId: OWNER_ID });
     await seedState(redis, 'state-bot-2', { provider: 'twitch', userId: OWNER_ID, kind: 'twitch_bot' });
     stubTwitchFetch({
-      usersBody: { data: [{ id: 'bot-uid', login: 'entrophybot', display_name: 'EntrophyBot' }] },
+      usersBody: { data: [{ id: 'bot-uid', login: 'pavisiebot', display_name: 'PavisieBot' }] },
     });
 
     const res = await app.inject({
@@ -2023,7 +2023,7 @@ describe('GET /integrations/twitch/callback — twitch_chat / twitch_bot purpose
 
     expect(fixture.botIdentities.size).toBe(1);
     const identity = fixture.botIdentities.get('twitch-bot-identity');
-    expect(identity).toMatchObject({ botUserId: 'bot-uid', botLogin: 'entrophybot' });
+    expect(identity).toMatchObject({ botUserId: 'bot-uid', botLogin: 'pavisiebot' });
 
     // The bot identity is global, not guild-scoped — the nudge still fires, with no guildId.
     expect(

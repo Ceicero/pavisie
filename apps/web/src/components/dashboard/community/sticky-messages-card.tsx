@@ -10,8 +10,8 @@ import {
   CardHeader,
   CardTitle,
   useToast,
-} from '@entrophy/ui';
-import type { StickyMessageDto } from '@entrophy/types/community';
+} from '@pavisie/ui';
+import type { StickyMessageDto } from '@pavisie/types/community';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useCommunityStickies, useDeleteSticky } from '@/lib/dashboard/community-queries';
 import { useGuildChannels } from '@/lib/dashboard/queries';

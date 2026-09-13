@@ -22,7 +22,7 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useGuildConfig, useUpdateGuildConfig, type GuildConfigPatch } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
 import { MultiRolePicker } from '@/components/dashboard/multi-role-picker';

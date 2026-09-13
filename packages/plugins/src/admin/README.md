@@ -24,13 +24,13 @@ disabled per guild, since it's what lets staff configure and manage every other 
   (hierarchy risk), and if a plugin needing a privileged intent (e.g. Message Content) is enabled without it.
 - **`/health`** — gateway ping, uptime, guild count, memory, Redis ping, a `SELECT 1` database check, and each
   loaded plugin's `health()` result. Available to moderators, not just admins.
-- **`/entrophy report kind:<bug|feedback|question>`** — the developer support channel: sends a message straight
-  to the Entrophy developer. Two-step flow (Discord interactions can only be acknowledged once, so the privacy
+- **`/pavisie report kind:<bug|feedback|question>`** — the developer support channel: sends a message straight
+  to the Pavisie developer. Two-step flow (Discord interactions can only be acknowledged once, so the privacy
   disclosure and the subject/body modal can't both ride the same interaction): the command replies ephemerally
   with a plain-language disclosure of what leaves the server plus a "Write report" button; clicking it opens a
   modal (subject + body). See "Developer reports" below for exactly what's stored/sent and the rate limits.
 
-## Developer reports (`/entrophy report`)
+## Developer reports (`/pavisie report`)
 
 - **What leaves the server**: only what the admin types into the modal (subject, body) plus unavoidable routing
   metadata — this server's id and name, the sender's user id and tag, a timestamp, and the running bot version.
@@ -77,7 +77,7 @@ over the interaction token, not a regular channel send. `manifest.permissions` i
 
 Every configuration change — the setup wizard, `/config set`/`reset`, plugin enable/disable — is written to the
 audit log with the actor, timestamp, and a redacted before/after diff (secrets/tokens/keys are never written in
-plain text; see `redactForAudit` in `@entrophy/database`).
+plain text; see `redactForAudit` in `@pavisie/database`).
 
 ## Staff level requirements
 
@@ -88,7 +88,7 @@ plain text; see `redactForAudit` in `@entrophy/database`).
 | `/plugin enable\|disable\|status\|list` | admin               |
 | `/permissions audit`                    | admin               |
 | `/health`                               | moderator           |
-| `/entrophy report`                      | admin               |
+| `/pavisie report`                      | admin               |
 
 ## Files
 
@@ -97,7 +97,7 @@ manifest.ts             PluginManifest (alwaysEnabled, defaultConfig, dashboard 
 config-keys.ts           /config set|reset key introspection + value parsing (pure, unit-tested)
 format.ts                 shared embed-formatting helpers (bot permission diffing, uptime/memory formatting)
 wizard.ts                 /setup wizard session store + per-step render logic + Finish persistence
-report-shared.ts           /entrophy report: kind validation, length validation, rate limiting, bot version (pure, unit-tested)
+report-shared.ts           /pavisie report: kind validation, length validation, rate limiting, bot version (pure, unit-tested)
 index.ts                   wires manifest + commands + components, registers locales
 commands/
   setup.ts                 /setup wizard|status
@@ -105,13 +105,13 @@ commands/
   plugin.ts                 /plugin enable|disable|status|list
   permissions.ts             /permissions audit
   health.ts                   /health
-  report.ts                    /entrophy report kind:<bug|feedback|question> (step 1: disclosure + button)
+  report.ts                    /pavisie report kind:<bug|feedback|question> (step 1: disclosure + button)
 components/
   wizard.ts                 all /setup wizard button + select-menu handlers
   report.ts                  report-continue (opens modal) + report-modal (persists + audits) handlers
 locales/en.json            admin namespace strings
 __tests__/config-keys.test.ts   unit tests for config-keys.ts
-__tests__/report.test.ts        unit tests for /entrophy report (permission gate, rate limit, stored-field regression, audit)
+__tests__/report.test.ts        unit tests for /pavisie report (permission gate, rate limit, stored-field regression, audit)
 ```
 
 ## Notes for the bot-host implementation

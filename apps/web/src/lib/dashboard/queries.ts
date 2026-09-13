@@ -11,8 +11,8 @@ import type {
   Paginated,
   PluginSummary,
   RetentionPolicyDto,
-} from '@entrophy/types';
-import type { ChannelPickerOption, RolePickerOption } from '@entrophy/ui';
+} from '@pavisie/types';
+import type { ChannelPickerOption, RolePickerOption } from '@pavisie/ui';
 import { apiFetch, toQueryString } from './api';
 import type { JsonSchema } from './json-schema';
 
@@ -44,7 +44,7 @@ export function useGuilds() {
   });
 }
 
-/** `GET /guilds/:guildId` — overview stats for a guild's dashboard home page (shared shape: `@entrophy/types`'s `GuildOverviewDto`). */
+/** `GET /guilds/:guildId` — overview stats for a guild's dashboard home page (shared shape: `@pavisie/types`'s `GuildOverviewDto`). */
 export function useGuild(guildId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.guild(guildId ?? ''),

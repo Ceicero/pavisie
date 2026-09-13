@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SessionUser } from '@entrophy/types';
+import type { SessionUser } from '@pavisie/types';
 import { apiFetch, ApiClientError, setCsrfToken } from './api';
 
 interface MeResponse {

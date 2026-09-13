@@ -1,7 +1,7 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { buildPaginated, paginate } from '@entrophy/core';
-import type { AuditLogEntryDto, Paginated } from '@entrophy/types';
+import { buildPaginated, paginate } from '@pavisie/core';
+import type { AuditLogEntryDto, Paginated } from '@pavisie/types';
 import { toCsv } from '../lib/csv';
 import { toAuditLogEntryDto } from '../lib/dto';
 import { requireGuildAccess } from '../lib/guild-access';

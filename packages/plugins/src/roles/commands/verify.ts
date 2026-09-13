@@ -1,5 +1,5 @@
 import { ModalBuilder, SlashCommandBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
-import { redisKey, shortId } from '@entrophy/core';
+import { redisKey, shortId } from '@pavisie/core';
 import { buildCustomId, errorEmbed, infoEmbed, successEmbed, type PluginCommand } from '../../sdk';
 import type { RolesConfig } from '../manifest';
 

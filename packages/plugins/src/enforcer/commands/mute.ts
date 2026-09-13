@@ -1,4 +1,4 @@
-import { parseDuration } from '@entrophy/core';
+import { parseDuration } from '@pavisie/core';
 import type { SlashCommandBuilder } from 'discord.js';
 import { assertStaffLevel, errorEmbed, successEmbed, type CommandContext } from '../../sdk';
 import { flagRecord } from '../service';

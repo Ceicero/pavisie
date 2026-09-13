@@ -1,6 +1,6 @@
 // Formula-injection-safe CSV encoding, mirroring `apps/api/src/lib/csv.ts` (SPEC.md's CSV-export requirement).
 // Duplicated rather than imported across the app/package boundary — packages must not depend on apps.
-import type { EnforcerRecord } from '@entrophy/database';
+import type { EnforcerRecord } from '@pavisie/database';
 
 const FORMULA_TRIGGER_CHARS = new Set(['=', '+', '-', '@']);
 

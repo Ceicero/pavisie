@@ -1,5 +1,5 @@
 {
-  "name": "@entrophy/database",
+  "name": "@pavisie/database",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -26,8 +26,8 @@
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
-    "@entrophy/types": "workspace:*",
-    "@entrophy/core": "workspace:*"
+    "@pavisie/types": "workspace:*",
+    "@pavisie/core": "workspace:*"
   },
   "devDependencies": {
     "prisma": "^6.2.1",

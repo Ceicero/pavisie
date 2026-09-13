@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IntegrationConnection } from '@entrophy/database';
+import type { IntegrationConnection } from '@pavisie/database';
 
 // `postAlert` (embeds.ts) talks to real discord.js Guild/Channel objects — mocking it at the module boundary
 // (same pattern as twitch-chat-manager-rewards.test.ts) lets this file assert "did an alert go out" without
@@ -9,16 +9,16 @@ import type { IntegrationConnection } from '@entrophy/database';
 const mocks = vi.hoisted(() => ({ postAlert: vi.fn() }));
 vi.mock('../embeds', () => ({ postAlert: mocks.postAlert }));
 
-// See twitch-chat-helix.test.ts for why this file has no static imports of its own: `@entrophy/core`'s `env`
+// See twitch-chat-helix.test.ts for why this file has no static imports of its own: `@pavisie/core`'s `env`
 // (read by `encryptSecret`/`decryptSecret`'s key derivation) is computed once, at that module's first import,
 // so `ENCRYPTION_KEY` must be set in `process.env` before it loads.
-let encryptSecret: typeof import('@entrophy/core').encryptSecret;
+let encryptSecret: typeof import('@pavisie/core').encryptSecret;
 let createTestContext: typeof import('../../sdk/testing').createTestContext;
 let instagramProvider: typeof import('../providers/instagram').instagramProvider;
 
 beforeAll(async () => {
   process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? randomBytes(32).toString('base64');
-  ({ encryptSecret } = await import('@entrophy/core'));
+  ({ encryptSecret } = await import('@pavisie/core'));
   ({ createTestContext } = await import('../../sdk/testing'));
   ({ instagramProvider } = await import('../providers/instagram'));
 });

@@ -14,11 +14,11 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { auditExportCsvUrl, useAuditLog, type AuditLogFilters } from '@/lib/dashboard/queries';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
 import { formatDateTime, humanizeAction } from '@/lib/dashboard/format';
-import type { AuditLogEntryDto } from '@entrophy/types';
+import type { AuditLogEntryDto } from '@pavisie/types';
 
 const SOURCE_BADGE: Record<AuditLogEntryDto['source'], 'default' | 'secondary' | 'outline'> = {
   bot: 'outline',

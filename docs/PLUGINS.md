@@ -1,6 +1,6 @@
 # Plugin configuration guide
 
-Entrophy is modular: every feature area is a self-contained plugin (`packages/plugins/src/<id>`)
+Pavisie is modular: every feature area is a self-contained plugin (`packages/plugins/src/<id>`)
 that a server administrator turns on or off per Discord server (guild), independently of every
 other server the bot is in. This guide is the map — how enable/disable works, how per-guild config
 works, the full plugin table, and a click-path walkthrough for the one plugin (`enforcer`) with a

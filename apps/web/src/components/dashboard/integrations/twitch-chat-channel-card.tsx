@@ -12,8 +12,8 @@ import {
   Input,
   Switch,
   useToast,
-} from '@entrophy/ui';
-import type { TwitchChatChannelDto } from '@entrophy/types/integrations';
+} from '@pavisie/ui';
+import type { TwitchChatChannelDto } from '@pavisie/types/integrations';
 import { useDeleteTwitchChatChannel, useUpdateTwitchChatChannel } from '@/lib/dashboard/integrations-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ConfirmDialog } from '../confirm-dialog';
@@ -145,7 +145,7 @@ export function TwitchChatChannelCard({ guildId, channel }: TwitchChatChannelCar
         open={deleting}
         onOpenChange={setDeleting}
         title={`Disconnect ${channel.broadcasterLogin}?`}
-        description="Entrophy leaves this channel's chat right away, and all its commands and timers are deleted. This can't be undone."
+        description="Pavisie leaves this channel's chat right away, and all its commands and timers are deleted. This can't be undone."
         variant="destructive"
         confirmLabel="Disconnect"
         loading={del.isPending}

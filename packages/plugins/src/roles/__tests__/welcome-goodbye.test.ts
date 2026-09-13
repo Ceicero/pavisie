@@ -8,7 +8,7 @@ import { formatEmbedColorHex, normalizeEmbedColor, normalizeStoredEmbed } from '
 import type { RolesConfig, WelcomeGoodbyeConfig } from '../manifest';
 import { renderWelcomeGoodbye } from '../service';
 
-const guild = { name: 'Entrophy', memberCount: 42 } as unknown as Guild;
+const guild = { name: 'Pavisie', memberCount: 42 } as unknown as Guild;
 const member = { id: 'u1', user: { tag: 'alex', username: 'alex' } };
 
 function welcomeSection(patch: Partial<WelcomeGoodbyeConfig>): WelcomeGoodbyeConfig {
@@ -99,7 +99,7 @@ describe('/welcome embed modal', () => {
       title: 'Welcome!',
       description: 'Hey {mention}',
       color: '#5865f2',
-      footer: 'entrophy',
+      footer: 'pavisie',
     };
     const c = {
       ctx,
@@ -118,7 +118,7 @@ describe('/welcome embed modal', () => {
       title: 'Welcome!',
       description: 'Hey {mention}',
       color: 0x5865f2,
-      footer: { text: 'entrophy' },
+      footer: { text: 'pavisie' },
     });
   });
 
@@ -140,7 +140,7 @@ describe('/welcome embed modal', () => {
       config: () =>
         Promise.resolve({
           welcome: welcomeSection({
-            embed: { title: 'Hi', color: 0x5865f2, footer: { text: 'entrophy' } },
+            embed: { title: 'Hi', color: 0x5865f2, footer: { text: 'pavisie' } },
           }),
         }),
     } as unknown as CommandContext;
@@ -148,7 +148,7 @@ describe('/welcome embed modal', () => {
     await buildSectionExecute('welcome')(c);
 
     const byId = Object.fromEntries(shown.map((input) => [input.custom_id, input.value]));
-    expect(byId.footer).toBe('entrophy');
+    expect(byId.footer).toBe('pavisie');
     expect(byId.color).toBe('#5865f2');
     expect(byId.title).toBe('Hi');
   });

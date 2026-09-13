@@ -1,9 +1,9 @@
-// CLI: `pnpm --filter @entrophy/bot register [--global | --guild <id> | --clear]`
+// CLI: `pnpm --filter @pavisie/bot register [--global | --guild <id> | --clear]`
 // Registers (or clears) this platform's slash/context-menu commands with Discord via the bulk-overwrite REST
 // endpoint (ARCHITECTURE.md §9). Run this whenever commands are added, renamed, or removed — Discord does not
 // pick up command changes automatically.
-import { loadEnv, requireEnv, env, createLogger } from '@entrophy/core';
-import { allPlugins, PluginRegistry } from '@entrophy/plugins';
+import { loadEnv, requireEnv, env, createLogger } from '@pavisie/core';
+import { allPlugins, PluginRegistry } from '@pavisie/plugins';
 import { describeTarget, registerCommands } from './host/register-commands';
 
 interface ParsedArgs {

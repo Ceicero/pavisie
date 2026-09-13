@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { env as coreEnv, redisKey } from '@entrophy/core';
+import { env as coreEnv, redisKey } from '@pavisie/core';
 import { createTestContext } from '../../sdk/testing';
 import type { PluginContext } from '../../sdk';
 import { getGameStats, getPlayerSummary, resolveSteamId } from '../steam';

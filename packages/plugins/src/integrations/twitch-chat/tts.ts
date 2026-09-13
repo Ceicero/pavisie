@@ -10,7 +10,7 @@
 // `ai` `PluginConfig` row itself and runs it through the exact same `configSchema`/`resolveApiKey` the `ai`
 // plugin uses internally (see packages/plugins/src/ai/manifest.ts, packages/plugins/src/ai/resolve-key.ts).
 import { randomUUID } from 'node:crypto';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import type { PluginContext } from '../../sdk';
 import { configSchema as aiConfigSchema, type AiConfig } from '../../ai/manifest';
 import { resolveApiKey } from '../../ai/resolve-key';
@@ -78,7 +78,7 @@ async function requestSpeech(params: { apiKey: string; model: string; text: stri
 
 /**
  * Synthesizes `text` to speech for `guildId` and caches the resulting mp3 bytes (base64-encoded) in Redis at
- * `entrophy:overlay:tts:<channelId>:<audioId>` with a 300s TTL, returning the opaque `audioId` the overlay's
+ * `pavisie:overlay:tts:<channelId>:<audioId>` with a 300s TTL, returning the opaque `audioId` the overlay's
  * `GET /overlay/:token/tts/:audioId` route resolves back to bytes.
  *
  * The key is scoped by `channelId` deliberately: that route authenticates a capability token to ONE channel,

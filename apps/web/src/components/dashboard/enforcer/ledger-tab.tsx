@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Download } from 'lucide-react';
-import type { EnforcerRecordDto } from '@entrophy/types';
+import type { EnforcerRecordDto } from '@pavisie/types';
 import {
   Badge,
   Button,
@@ -18,7 +18,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import {
   enforcerRecordsExportCsvUrl,
   useEnforcerRecords,

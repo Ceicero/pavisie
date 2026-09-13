@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { env, redisKey } from '@entrophy/core';
+import { env, redisKey } from '@pavisie/core';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
 const USER_ID = '888888888888888888';

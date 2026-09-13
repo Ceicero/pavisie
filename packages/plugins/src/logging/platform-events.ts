@@ -1,4 +1,4 @@
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import type { PluginContext } from '../sdk';
 
 const MODERATION_DEDUPE_TTL_SECONDS = 60;

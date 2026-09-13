@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { AppError, NotFoundError, PermissionError } from '@entrophy/core';
+import { AppError, NotFoundError, PermissionError } from '@pavisie/core';
 import { decryptAccessToken } from './session';
 import { getCachedUserGuilds, hasManageAccess } from './discord';
 
@@ -49,7 +49,7 @@ export function requireGuildAccess(options: RequireGuildAccessOptions = {}) {
     if (!options.allowBotAbsent) {
       const guild = await request.server.prisma.guild.findUnique({ where: { id: guildId } });
       if (!guild || !guild.botPresent) {
-        throw new NotFoundError('Entrophy is not in this server.');
+        throw new NotFoundError('Pavisie is not in this server.');
       }
     }
 

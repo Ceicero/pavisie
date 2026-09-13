@@ -11,7 +11,7 @@ import {
   DialogTitle,
   Input,
   Label,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 
 export interface ConfirmDialogProps {
   open: boolean;

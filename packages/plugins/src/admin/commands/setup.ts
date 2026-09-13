@@ -1,6 +1,6 @@
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
-import { discordTimestamp } from '@entrophy/core';
-import type { PluginId } from '@entrophy/types';
+import { discordTimestamp } from '@pavisie/core';
+import type { PluginId } from '@pavisie/types';
 import { assertStaffLevel, listEmbed, type PluginCommand } from '../../sdk';
 import { createWizardSession, renderWizardStep, WizardSessionStore } from '../wizard';
 import { deriveSetupState, describeMissingBotPermissions, describeRoleHierarchyWarnings, describeIntentWarnings, type SetupState } from '../format';

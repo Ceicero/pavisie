@@ -24,8 +24,8 @@ import {
   isProduction,
   redisKey,
   toPublicError,
-} from '@entrophy/core';
-import { prisma as sharedPrisma, type PrismaClient } from '@entrophy/database';
+} from '@pavisie/core';
+import { prisma as sharedPrisma, type PrismaClient } from '@pavisie/database';
 import { createGuildConfigStore } from './lib/config-store';
 import { csrfProtection } from './lib/csrf';
 import { describeFastifyClientError, isFastifyRateLimitError } from './lib/fastify-errors';
@@ -197,7 +197,7 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   if (env.NODE_ENV !== 'production') {
     await app.register(swagger, {
       openapi: {
-        info: { title: 'Entrophy API', version: '0.1.0' },
+        info: { title: 'Pavisie API', version: '0.1.0' },
         servers: [{ url: env.API_BASE_URL ?? 'http://localhost:3001' }],
       },
       transform: jsonSchemaTransform,

@@ -7,8 +7,8 @@ export interface SignedOutboundRequest {
 }
 
 /** Builds the signed JSON body + headers for an outbound webhook POST (SPEC.md §J / ARCHITECTURE.md's
- * integrations connector spec): `X-Entrophy-Event`, `X-Entrophy-Signature` (HMAC-SHA256 hex of the body,
- * verifiable with core's `verifyHmacSha256`), `X-Entrophy-Delivery` (a fresh id per attempt-set). */
+ * integrations connector spec): `X-Pavisie-Event`, `X-Pavisie-Signature` (HMAC-SHA256 hex of the body,
+ * verifiable with core's `verifyHmacSha256`), `X-Pavisie-Delivery` (a fresh id per attempt-set). */
 export function signOutboundPayload(
   payload: unknown,
   secret: string,
@@ -22,10 +22,10 @@ export function signOutboundPayload(
     deliveryId,
     headers: {
       'Content-Type': 'application/json',
-      'User-Agent': 'Entrophy-Webhooks/1.0',
-      'X-Entrophy-Event': eventType,
-      'X-Entrophy-Signature': signature,
-      'X-Entrophy-Delivery': deliveryId,
+      'User-Agent': 'Pavisie-Webhooks/1.0',
+      'X-Pavisie-Event': eventType,
+      'X-Pavisie-Signature': signature,
+      'X-Pavisie-Delivery': deliveryId,
     },
   };
 }

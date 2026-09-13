@@ -9,10 +9,10 @@ import {
   env,
   isProduction,
   redisKey,
-} from '@entrophy/core';
-import { ensureGuild } from '@entrophy/database';
+} from '@pavisie/core';
+import { ensureGuild } from '@pavisie/database';
 import { snowflakeSchema } from '../lib/schemas';
-import type { SessionUser } from '@entrophy/types';
+import type { SessionUser } from '@pavisie/types';
 import { buildAuthorizeUrl, buildAvatarUrl, exchangeCode, fetchDiscordUser } from '../lib/discord';
 import { requireAuth } from '../lib/guild-access';
 import {
@@ -90,7 +90,7 @@ export default async function authRoutes(app: ZodFastifyInstance): Promise<void>
     reply.redirect(buildAuthorizeUrl(state));
   });
 
-  // The dashboard's "Add Entrophy" / "Add to a server" links point here (never Administrator — buildInviteUrl
+  // The dashboard's "Add Pavisie" / "Add to a server" links point here (never Administrator — buildInviteUrl
   // always strips it). Optional `guild_id` pre-selects the target server and locks the Discord picker to it.
   app.get(
     '/invite',
@@ -169,7 +169,7 @@ export default async function authRoutes(app: ZodFastifyInstance): Promise<void>
     app.post('/test-login', AUTH_ROUTE_RATE_LIMIT, async (request, reply) => {
       await ensureGuild(app.prisma, {
         id: E2E_DEMO_GUILD_ID,
-        name: 'Entrophy Demo (seed)',
+        name: 'Pavisie Demo (seed)',
         ownerId: E2E_DEMO_USER_ID,
       });
 
@@ -177,7 +177,7 @@ export default async function authRoutes(app: ZodFastifyInstance): Promise<void>
       await app.redis.set(
         redisKey('userguilds', E2E_DEMO_USER_ID),
         JSON.stringify([
-          { id: E2E_DEMO_GUILD_ID, name: 'Entrophy Demo (seed)', icon: null, owner: true, permissions: '8' },
+          { id: E2E_DEMO_GUILD_ID, name: 'Pavisie Demo (seed)', icon: null, owner: true, permissions: '8' },
         ]),
         'EX',
         OAUTH_STATE_TTL_SECONDS,

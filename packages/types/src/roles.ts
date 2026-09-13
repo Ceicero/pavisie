@@ -1,5 +1,5 @@
 // DTOs for the `roles` plugin's dashboard-facing endpoints that aren't already covered by `api.ts`'s
-// `RolePanelDto`/`RolePanelOptionDto` (ARCHITECTURE.md §10). Imported via the `@entrophy/types/roles` subpath
+// `RolePanelDto`/`RolePanelOptionDto` (ARCHITECTURE.md §10). Imported via the `@pavisie/types/roles` subpath
 // per this build's ownership constraints (packages/types/src/index.ts is not edited by this build).
 
 export interface RoleGroupDto {

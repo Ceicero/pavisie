@@ -1,5 +1,5 @@
 {
-  "name": "@entrophy/plugins",
+  "name": "@pavisie/plugins",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -28,9 +28,9 @@
     "pino": "^9.6.0",
     "luxon": "^3.5.0",
     "cron-parser": "^4.9.0",
-    "@entrophy/core": "workspace:*",
-    "@entrophy/database": "workspace:*",
-    "@entrophy/types": "workspace:*"
+    "@pavisie/core": "workspace:*",
+    "@pavisie/database": "workspace:*",
+    "@pavisie/types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

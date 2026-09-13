@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Folder, Hash, Megaphone, MessagesSquare, Volume2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 
-/** Minimal channel shape needed for the picker — deliberately not coupled to `@entrophy/types` so `@entrophy/ui` has no runtime dependency on it. Structurally compatible with `DiscordChannelOption`. */
+/** Minimal channel shape needed for the picker — deliberately not coupled to `@pavisie/types` so `@pavisie/ui` has no runtime dependency on it. Structurally compatible with `DiscordChannelOption`. */
 export interface ChannelPickerOption {
   id: string;
   name: string;

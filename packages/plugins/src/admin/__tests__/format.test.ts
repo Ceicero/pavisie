@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Guild, Role } from 'discord.js';
 import { deriveSetupState, describeRoleHierarchyWarnings, describeIntentWarnings, formatMemoryMb, formatUptime } from '../format';
 import type { PluginManifest } from '../../sdk';
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 
 const base = {
   setupCompletedAt: null as string | null,

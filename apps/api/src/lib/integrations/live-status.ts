@@ -7,8 +7,8 @@
 // `null`, never a guessed `false`).
 import type Redis from 'ioredis';
 import type { Logger } from 'pino';
-import { env, redisKey } from '@entrophy/core';
-import { getTwitchAppToken, type TwitchAppTokenContext } from '@entrophy/plugins/integrations/providers/twitch';
+import { env, redisKey } from '@pavisie/core';
+import { getTwitchAppToken, type TwitchAppTokenContext } from '@pavisie/plugins/integrations/providers/twitch';
 
 /** Helix documents a 100-`user_login`-per-request limit on `GET /streams` — batch any larger set into chunks
  * of this size rather than one call per login. */

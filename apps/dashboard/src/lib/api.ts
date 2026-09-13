@@ -1,6 +1,6 @@
-import type { ApiError } from '@entrophy/types';
+import type { ApiError } from '@pavisie/types';
 
-/** Base URL of the Entrophy API. Falls back to the local dev default (see docs/ARCHITECTURE.md §4). */
+/** Base URL of the Pavisie API. Falls back to the local dev default (see docs/ARCHITECTURE.md §4). */
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 /**
@@ -51,7 +51,7 @@ function isBodyInit(value: unknown): value is BodyInit {
 }
 
 /**
- * Fetch wrapper for the Entrophy API: sends cookies, JSON-encodes plain object bodies, attaches
+ * Fetch wrapper for the Pavisie API: sends cookies, JSON-encodes plain object bodies, attaches
  * `X-CSRF-Token` on mutating requests, parses JSON responses, and throws `ApiClientError` on failure.
  */
 export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {}): Promise<T> {
@@ -78,7 +78,7 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {
   try {
     response = await fetch(url, { ...init, method, headers, body, credentials: 'include' });
   } catch (err) {
-    throw new ApiClientError('Could not reach the Entrophy API. Check your connection and try again.', {
+    throw new ApiClientError('Could not reach the Pavisie API. Check your connection and try again.', {
       code: 'network_error',
       status: 0,
       details: err instanceof Error ? err.message : err,

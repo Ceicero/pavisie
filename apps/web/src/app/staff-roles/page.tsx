@@ -7,7 +7,7 @@ import { siteCopy } from '../../content/site';
 export const metadata: Metadata = {
   title: 'Staff roles & permissions',
   description:
-    "Entrophy's four permission tiers, what each tier can do, and how to attach your own Discord roles to each tier.",
+    "Pavisie's four permission tiers, what each tier can do, and how to attach your own Discord roles to each tier.",
 };
 
 export default function StaffRolesPage() {
@@ -91,7 +91,7 @@ export default function StaffRolesPage() {
       <Section eyebrow="Remember" title="A few key points">
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {[
-            'Roles are your own. Entrophy does not create roles — it points your existing Discord roles at permission tiers.',
+            'Roles are your own. Pavisie does not create roles — it points your existing Discord roles at permission tiers.',
             'No role = member tier. Until you attach a role to a tier, only the server owner has staff powers.',
             'Least privilege. Members can only affect themselves or things they own. Managers must hold a staff role to affect other users.',
             'Every command, both ways. Every command works as +command in chat or /command in the slash menu.',

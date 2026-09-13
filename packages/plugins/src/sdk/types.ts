@@ -17,11 +17,11 @@ import type {
   Locale,
 } from 'discord.js';
 import type { Job, Queue } from 'bullmq';
-import type { PrismaClient } from '@entrophy/database';
+import type { PrismaClient } from '@pavisie/database';
 import type Redis from 'ioredis';
 import type { Logger } from 'pino';
-import type { PluginId, StaffLevel } from '@entrophy/types';
-import type { PlatformEvents, RateLimiterLike, AuditEntry, env as coreEnv } from '@entrophy/core';
+import type { PluginId, StaffLevel } from '@pavisie/types';
+import type { PlatformEvents, RateLimiterLike, AuditEntry, env as coreEnv } from '@pavisie/core';
 import type { ServiceRegistry } from './services';
 
 export type PluginCategory =

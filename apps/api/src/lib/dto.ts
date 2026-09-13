@@ -1,4 +1,4 @@
-// Maps Prisma rows to the shared response DTOs in `@entrophy/types` (ARCHITECTURE.md §10: "responses MUST
+// Maps Prisma rows to the shared response DTOs in `@pavisie/types` (ARCHITECTURE.md §10: "responses MUST
 // match those DTO shapes"). One function per model, kept boring and explicit on purpose.
 import type {
   AuditLog,
@@ -14,7 +14,7 @@ import type {
   RolePanelOption,
   Ticket,
   WebhookEndpoint,
-} from '@entrophy/database';
+} from '@pavisie/database';
 import type {
   AuditLogEntryDto,
   AutomodEventDto,
@@ -29,7 +29,7 @@ import type {
   RolePanelOptionDto,
   TicketDto,
   WebhookEndpointDto,
-} from '@entrophy/types';
+} from '@pavisie/types';
 
 const ACTOR_TYPE_MAP: Record<AuditLog['actorType'], AuditLogEntryDto['actorType']> = {
   USER: 'user',

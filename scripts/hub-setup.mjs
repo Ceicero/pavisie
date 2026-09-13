@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Declaratively reconciles Brandon's Entrophy community hub Discord server against a plan JSON
+// Declaratively reconciles Brandon's Pavisie community hub Discord server against a plan JSON
 // (infra/hub/hub-plan.json by default). Full usage, the plan schema, and idempotency notes live in
 // infra/hub/README.md — read that first if you're changing this file or the plan.
 //
@@ -23,16 +23,16 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.join(SCRIPT_DIR, '..');
 
 // ---------------------------------------------------------------------------------------------------------
-// Env loading — prefer @entrophy/core's loadEnv when this happens to run under a loader that can parse
+// Env loading — prefer @pavisie/core's loadEnv when this happens to run under a loader that can parse
 // TypeScript workspace packages (e.g. tsx); under plain `node` that import always fails (workspace packages
 // export raw .ts source with no build step, per docs/ARCHITECTURE.md §3, and root package.json intentionally
-// does not depend on @entrophy/core), so we fall back to loading the repo-root .env with `dotenv` directly.
+// does not depend on @pavisie/core), so we fall back to loading the repo-root .env with `dotenv` directly.
 // Both paths are idempotent and never override a variable already present in process.env.
 // ---------------------------------------------------------------------------------------------------------
 
 async function tryLoadCoreEnv() {
   try {
-    await import('@entrophy/core/env');
+    await import('@pavisie/core/env');
     return true;
   } catch {
     return false;

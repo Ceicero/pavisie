@@ -1,4 +1,4 @@
-import { AuditAction, NotFoundError, ValidationError } from '@entrophy/core';
+import { AuditAction, NotFoundError, ValidationError } from '@pavisie/core';
 import { assertStaffLevel, errorEmbed, infoEmbed, successEmbed, type CommandContext } from '../../sdk';
 
 type ExemptKind = 'role' | 'channel' | 'user' | 'domain';

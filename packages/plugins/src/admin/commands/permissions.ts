@@ -1,6 +1,6 @@
 import { PermissionFlagsBits, PermissionsBitField, SlashCommandBuilder } from 'discord.js';
-import { describePermission, missingPermissions } from '@entrophy/core';
-import type { PluginId } from '@entrophy/types';
+import { describePermission, missingPermissions } from '@pavisie/core';
+import type { PluginId } from '@pavisie/types';
 import { assertStaffLevel, brandEmbed, type PluginCommand } from '../../sdk';
 import { describeIntentWarnings, describeRoleHierarchyWarnings } from '../format';
 

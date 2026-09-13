@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { Message } from 'discord.js';
-import { Cooldowns, MemoryRateLimiter, createPlatformEvents } from '@entrophy/core';
+import { Cooldowns, MemoryRateLimiter, createPlatformEvents } from '@pavisie/core';
 import {
   DEFAULT_GUILD_CONFIG,
   ServiceRegistry,
@@ -10,8 +10,8 @@ import {
   type PluginContext,
   type PluginManifest,
   type PluginRegistry,
-} from '@entrophy/plugins';
-import type { PluginId } from '@entrophy/types';
+} from '@pavisie/plugins';
+import type { PluginId } from '@pavisie/types';
 import { handleMessageCommand } from '../prefix';
 import type { LoadedHost } from '../loader';
 

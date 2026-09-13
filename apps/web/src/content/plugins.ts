@@ -2,7 +2,7 @@
 // everything else (command names, descriptions, permissions) is generated from the plugin registry so it can
 // never drift from what the bot actually does. Keyed by the real `PluginId` union so a missing entry is a
 // compile error, not a silent gap.
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 
 export interface PluginCopy {
   /** One sentence, used as the card/section headline. */

@@ -4,11 +4,11 @@ export const siteCopy = {
   tagline: 'The modular, compliance-first Discord bot for gaming communities.',
   heroTitle: 'Moderation your server can actually trust.',
   heroSubtitle:
-    'Entrophy is an all-in-one Discord bot: moderation, automod, a policy-driven Enforcer, tickets, roles, leveling, and more — every module opt-in, every action logged, never Administrator. Start with +help.',
+    'Pavisie is an all-in-one Discord bot: moderation, automod, a policy-driven Enforcer, tickets, roles, leveling, and more — every module opt-in, every action logged, never Administrator. Start with +help.',
   whyGaming: {
     title: 'Built for gaming communities',
     intro:
-      'Raids, toxic lobbies, tournament brackets, LFG spam, streamer alerts, and a leaderboard everyone actually checks — Entrophy is shaped around what a game server deals with every single day.',
+      'Raids, toxic lobbies, tournament brackets, LFG spam, streamer alerts, and a leaderboard everyone actually checks — Pavisie is shaped around what a game server deals with every single day.',
     points: [
       {
         title: 'Raids & toxicity',
@@ -39,7 +39,7 @@ export const siteCopy = {
   trust: {
     title: 'Trust & compliance',
     intro:
-      'The moat here is trust, not features. Entrophy is built so a server owner never has to just take our word for it.',
+      'The moat here is trust, not features. Pavisie is built so a server owner never has to just take our word for it.',
     points: [
       {
         title: 'Never Administrator',
@@ -68,7 +68,7 @@ export const siteCopy = {
     helpCommand: '+help',
     eyebrow: 'Getting started',
     title: 'Type +help. That is the whole tutorial.',
-    body: 'Every Entrophy command works two ways: type it in chat with a + prefix (like +help, +mod ban @user spam) or use the / slash-command menu. The + prefix exists because a busy server\'s slash menu is crowded with other bots — you can type faster, and the command reference is always a single +help away. Every command, every time, both ways.',
+    body: 'Every Pavisie command works two ways: type it in chat with a + prefix (like +help, +mod ban @user spam) or use the / slash-command menu. The + prefix exists because a busy server\'s slash menu is crowded with other bots — you can type faster, and the command reference is always a single +help away. Every command, every time, both ways.',
     examples: [
       { command: '+help', label: 'Lists every command and plugin' },
       { command: '+mod ban @user spam', label: 'Moderation with context' },
@@ -80,7 +80,7 @@ export const siteCopy = {
     eyebrow: 'Staff roles & permissions',
     title: 'Control who can run what. Never give a bot Administrator.',
     intro:
-      'Entrophy has four staff tiers you assign — member, helper, moderator and admin — plus the server owner, who always has everything. Each tier controls what commands a user can run. A member can only affect themselves or things they own. Every tier is optional, and every role is one of your server\'s own Discord roles attached to one of these tiers.',
+      'Pavisie has four staff tiers you assign — member, helper, moderator and admin — plus the server owner, who always has everything. Each tier controls what commands a user can run. A member can only affect themselves or things they own. Every tier is optional, and every role is one of your server\'s own Discord roles attached to one of these tiers.',
     tiers: [
       {
         name: 'Member',
@@ -134,10 +134,10 @@ export const siteCopy = {
       {
         name: 'Admin',
         label: 'Bot configuration',
-        description: 'Everything moderator can do, plus the power to configure Entrophy itself.',
+        description: 'Everything moderator can do, plus the power to configure Pavisie itself.',
         commands: [
           'All moderator commands',
-          '+setup, +config, +plugin, +permissions, +entrophy, +ai',
+          '+setup, +config, +plugin, +permissions, +pavisie, +ai',
           '+starboard, +statschannel, +channelauto',
           '+integration, +twitch (also accept Manage Server permission as an alternative)',
           '+tag trigger, +tempvoice setup, +birthday config',
@@ -147,7 +147,7 @@ export const siteCopy = {
     ],
     setupTitle: 'How to attach a role to a tier',
     setupIntro:
-      'Entrophy does not create roles — you use your server\'s own existing Discord roles. Attach a role to a tier, and every user with that role gets those powers.',
+      'Pavisie does not create roles — you use your server\'s own existing Discord roles. Attach a role to a tier, and every user with that role gets those powers.',
     setupMethods: [
       {
         method: 'Guided (recommended)',
@@ -169,8 +169,8 @@ export const siteCopy = {
     ownerNote: 'The Discord server owner is always the Owner tier and cannot be locked out.',
   },
   donateCta: {
-    title: 'Help keep Entrophy running',
-    body: 'Entrophy is community-run. Donations fund hosting and development — they\'re one-time, non-refundable, and grant no perks or in-game advantages.',
+    title: 'Help keep Pavisie running',
+    body: 'Pavisie is community-run. Donations fund hosting and development — they\'re one-time, non-refundable, and grant no perks or in-game advantages.',
   },
   footer: {
     tagline: 'Community-run Discord moderation, built in the open.',

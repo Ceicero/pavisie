@@ -13,7 +13,7 @@ import {
   type EmbedBuilder,
   type ModalSubmitInteraction,
 } from 'discord.js';
-import { assertPublicHttpUrl, SsrfError } from '@entrophy/core';
+import { assertPublicHttpUrl, SsrfError } from '@pavisie/core';
 import {
   assertBotPermissions,
   brandEmbed,

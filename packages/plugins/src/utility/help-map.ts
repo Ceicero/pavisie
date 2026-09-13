@@ -5,7 +5,7 @@
 // command name resolves to its true owning plugin via this map, which will keep passing as long as new
 // commands use the names already listed in §7.1. Context-menu command names are included too (they show up
 // in `application.commands` alongside slash commands with their own top-level name).
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 
 /** Sentinel plugin id used when a command name isn't recognized by this map. Not a real `PluginId`. */
 export const OTHER_GROUP = 'other' as const;
@@ -17,7 +17,7 @@ export const HELP_MAP: Record<string, PluginId> = {
   plugin: 'admin',
   permissions: 'admin',
   health: 'admin',
-  entrophy: 'admin',
+  pavisie: 'admin',
 
   // moderation
   mod: 'moderation',

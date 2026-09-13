@@ -1,18 +1,18 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// `@entrophy/core`'s `env` singleton is computed once, at that module's first import, from `process.env` — so
-// `ENCRYPTION_KEY` must be set *before* anything (transitively) imports `@entrophy/core`. This file has no
+// `@pavisie/core`'s `env` singleton is computed once, at that module's first import, from `process.env` — so
+// `ENCRYPTION_KEY` must be set *before* anything (transitively) imports `@pavisie/core`. This file has no
 // static imports of its own for that reason (matching `src/ai/__tests__/resolve-key.test.ts`'s pattern):
 // everything it needs is imported dynamically inside `beforeAll`, after the env var is set.
-let encryptSecret: typeof import('@entrophy/core').encryptSecret;
+let encryptSecret: typeof import('@pavisie/core').encryptSecret;
 let createTestContext: typeof import('../../sdk/testing').createTestContext;
 let attemptOutboundDelivery: typeof import('../delivery').attemptOutboundDelivery;
 let OUTBOUND_AUTO_DISABLE_THRESHOLD: number;
 
 beforeAll(async () => {
   process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? randomBytes(32).toString('base64');
-  ({ encryptSecret } = await import('@entrophy/core'));
+  ({ encryptSecret } = await import('@pavisie/core'));
   ({ createTestContext } = await import('../../sdk/testing'));
   ({ attemptOutboundDelivery } = await import('../delivery'));
   ({ OUTBOUND_AUTO_DISABLE_THRESHOLD } = await import('../signing'));
@@ -110,8 +110,8 @@ describe('attemptOutboundDelivery', () => {
     expect(deliveryCreates).toHaveLength(1);
     expect(endpointUpdates).toHaveLength(1);
     const headers = capturedInit?.headers as Record<string, string>;
-    expect(headers['X-Entrophy-Signature']).toBeTruthy();
-    expect(headers['X-Entrophy-Event']).toBe('moderation.caseCreated');
+    expect(headers['X-Pavisie-Signature']).toBeTruthy();
+    expect(headers['X-Pavisie-Event']).toBe('moderation.caseCreated');
   });
 
   it('auto-disables the endpoint once failureCount reaches the threshold', async () => {

@@ -1,15 +1,15 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { Prisma } from '@entrophy/database';
+import { Prisma } from '@pavisie/database';
 // Pure logic import (no discord.js runtime touched) via the plugins package's `./*` subpath export — see
-// ARCHITECTURE.md §3/§10: the API already depends on `@entrophy/plugins` for manifests/sdk, so reusing its
+// ARCHITECTURE.md §3/§10: the API already depends on `@pavisie/plugins` for manifests/sdk, so reusing its
 // redaction module here avoids maintaining a second copy of the default patterns in the API layer.
-import { testRedactionPatterns } from '@entrophy/plugins/logging/redaction';
-import type { LogEventDto, Paginated } from '@entrophy/types';
-// `@entrophy/types`'s barrel (`src/index.ts`) doesn't export these — this task's ownership rules put new DTOs in
+import { testRedactionPatterns } from '@pavisie/plugins/logging/redaction';
+import type { LogEventDto, Paginated } from '@pavisie/types';
+// `@pavisie/types`'s barrel (`src/index.ts`) doesn't export these — this task's ownership rules put new DTOs in
 // `src/logging.ts` and require importing them via the subpath export instead of editing the barrel (the wiring
 // stage adds that later).
-import type { RedactionTestRequestDto, RedactionTestResponseDto } from '@entrophy/types/logging';
+import type { RedactionTestRequestDto, RedactionTestResponseDto } from '@pavisie/types/logging';
 import { toCsv } from '../lib/csv';
 import { toLogEventDto } from '../lib/dto';
 import { requireGuildAccess } from '../lib/guild-access';

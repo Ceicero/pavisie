@@ -1,11 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// No static imports of `@entrophy/core`: its `env` is computed once at first import from `process.env`, so
+// No static imports of `@pavisie/core`: its `env` is computed once at first import from `process.env`, so
 // `ENCRYPTION_KEY` (and the operator key these tests deliberately probe for) must be set first. Same pattern as
 // `twitch-chat-broadcaster-token.test.ts`.
-let encryptSecret: typeof import('@entrophy/core').encryptSecret;
-let redisKey: typeof import('@entrophy/core').redisKey;
+let encryptSecret: typeof import('@pavisie/core').encryptSecret;
+let redisKey: typeof import('@pavisie/core').redisKey;
 let createTestContext: typeof import('../../sdk/testing').createTestContext;
 let synthesizeTts: typeof import('../twitch-chat/tts').synthesizeTts;
 
@@ -17,7 +17,7 @@ beforeAll(async () => {
   // The operator's platform key is set for EVERY test in this file on purpose: the headline guarantee is that
   // TTS never spends it, so it must be present and reachable for that assertion to mean anything.
   process.env.OPENAI_API_KEY = 'sk-operator-platform-key-must-never-be-used';
-  ({ encryptSecret, redisKey } = await import('@entrophy/core'));
+  ({ encryptSecret, redisKey } = await import('@pavisie/core'));
   ({ createTestContext } = await import('../../sdk/testing'));
   ({ synthesizeTts } = await import('../twitch-chat/tts'));
 });

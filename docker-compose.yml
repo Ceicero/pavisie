@@ -1,19 +1,19 @@
-name: entrophy
+name: pavisie
 
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: entrophy
-      POSTGRES_PASSWORD: entrophy
-      POSTGRES_DB: entrophy
+      POSTGRES_USER: pavisie
+      POSTGRES_PASSWORD: pavisie
+      POSTGRES_DB: pavisie
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
       - '5432:5432'
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U entrophy -d entrophy']
+      test: ['CMD-SHELL', 'pg_isready -U pavisie -d pavisie']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -35,7 +35,7 @@ services:
       dockerfile: infra/docker/Dockerfile.api
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://entrophy:entrophy@postgres:5432/entrophy
+      DATABASE_URL: postgresql://pavisie:pavisie@postgres:5432/pavisie
     command: ['pnpm', 'db:migrate']
     depends_on:
       postgres:
@@ -48,7 +48,7 @@ services:
       dockerfile: infra/docker/Dockerfile.bot
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://entrophy:entrophy@postgres:5432/entrophy
+      DATABASE_URL: postgresql://pavisie:pavisie@postgres:5432/pavisie
       REDIS_URL: redis://redis:6379
     depends_on:
       migrate:
@@ -69,7 +69,7 @@ services:
       dockerfile: infra/docker/Dockerfile.api
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://entrophy:entrophy@postgres:5432/entrophy
+      DATABASE_URL: postgresql://pavisie:pavisie@postgres:5432/pavisie
       REDIS_URL: redis://redis:6379
     ports:
       - '3001:3001'

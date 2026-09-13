@@ -12,7 +12,7 @@ import type {
   TwitchRewardActionKind,
   WebhookDelivery,
   WebhookEndpoint,
-} from '@entrophy/database';
+} from '@pavisie/database';
 import type {
   IntegrationConnectionDetailDto,
   TwitchBotIdentityDto,
@@ -24,7 +24,7 @@ import type {
   TwitchRewardActionKindId,
   WebhookDeliveryDto,
   WebhookEndpointDetailDto,
-} from '@entrophy/types/integrations';
+} from '@pavisie/types/integrations';
 import { CONNECTION_STATUS_MAP, toIntegrationConnectionDto, toWebhookEndpointDto } from '../dto';
 
 export function toIntegrationConnectionDetailDto(row: IntegrationConnection): IntegrationConnectionDetailDto {

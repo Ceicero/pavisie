@@ -310,7 +310,7 @@ export function createMessageCommandInteraction(params: {
 
     showModal: async () => {
       // Modals are not supported in message commands; throw an exposed error
-      const { AppError } = await import('@entrophy/core');
+      const { AppError } = await import('@pavisie/core');
       throw new AppError(
         'modal_not_supported',
         `This command needs a pop-up form, so it only works as a slash command. Use \`/${commandName}\` instead.`,

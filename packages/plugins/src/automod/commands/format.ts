@@ -1,5 +1,5 @@
 import type { EmbedBuilder } from 'discord.js';
-import type { AutomodEvent, AutomodRule } from '@entrophy/database';
+import type { AutomodEvent, AutomodRule } from '@pavisie/database';
 import { infoEmbed } from '../../sdk';
 import { RULE_TYPE_REQUIRED_INTENTS, isRuleTypeActive, type IntentsEnabledLike } from '../engine';
 import { automodActionsSchema, automodRuleConfigSchema } from '../schemas';

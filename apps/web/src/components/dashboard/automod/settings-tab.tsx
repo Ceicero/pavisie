@@ -18,13 +18,13 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { usePluginConfig, useUpdatePluginConfig } from '@/lib/dashboard/queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ErrorState } from '../error-state';
 import { DiscordChannelSelect, DiscordRoleSelect } from '../discord-selects';
 
-/** Mirrors `packages/plugins/src/automod/manifest.ts`'s `configSchema` (hand-kept in sync; the dashboard doesn't depend on `@entrophy/plugins`). */
+/** Mirrors `packages/plugins/src/automod/manifest.ts`'s `configSchema` (hand-kept in sync; the dashboard doesn't depend on `@pavisie/plugins`). */
 export interface AutomodPluginConfig {
   dryRun: boolean;
   alertChannelId: string | null;

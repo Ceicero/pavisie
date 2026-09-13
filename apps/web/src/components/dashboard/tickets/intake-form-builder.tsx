@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus, Trash2 } from 'lucide-react';
-import type { TicketIntakeFieldDto } from '@entrophy/types/tickets';
+import type { TicketIntakeFieldDto } from '@pavisie/types/tickets';
 import {
   Button,
   Checkbox,
@@ -12,7 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 
 export interface IntakeFormBuilderProps {
   value: TicketIntakeFieldDto[];

@@ -1,5 +1,5 @@
-import type { IntegrationConnection } from '@entrophy/database';
-import { redisKey } from '@entrophy/core';
+import type { IntegrationConnection } from '@pavisie/database';
+import { redisKey } from '@pavisie/core';
 import { roleMention } from '../../sdk';
 import type { PluginContext } from '../../sdk';
 import { postAlert, type AlertTarget } from '../embeds';

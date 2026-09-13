@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useCreateInboundWebhook, type CreateInboundWebhookResult } from '@/lib/dashboard/integrations-queries';
 import { DiscordChannelSelect } from '../discord-selects';

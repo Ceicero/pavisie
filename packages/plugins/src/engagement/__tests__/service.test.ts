@@ -1,7 +1,7 @@
 import RedisMock from 'ioredis-mock';
 import type Redis from 'ioredis';
 import { describe, expect, it } from 'vitest';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import {
   MAX_VOICE_SESSION_MINUTES,
   MAX_VOICE_SESSION_SECONDS,

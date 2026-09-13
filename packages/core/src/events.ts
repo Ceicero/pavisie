@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { PlatformEventMap, PlatformEventName } from '@entrophy/types';
+import type { PlatformEventMap, PlatformEventName } from '@pavisie/types';
 import type { Logger } from 'pino';
 
 type PlatformListener<K extends PlatformEventName> = (payload: PlatformEventMap[K]) => void | Promise<void>;

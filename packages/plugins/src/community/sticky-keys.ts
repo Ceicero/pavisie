@@ -1,7 +1,7 @@
 // Pure helpers shared by the bot-side sticky service (`./sticky.ts`) and the API (`apps/api/src/routes/community.ts`),
 // which must invalidate the same Redis cache when a sticky is deleted from the dashboard. Kept free of discord.js
 // so the API can import it cheaply.
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 
 /** Seconds the per-guild "channels that have a sticky" set stays cached in Redis. */
 export const STICKY_CHANNELS_TTL_SECONDS = 300;

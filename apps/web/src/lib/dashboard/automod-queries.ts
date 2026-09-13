@@ -1,8 +1,8 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AutomodEventDto, AutomodRuleDto, Paginated } from '@entrophy/types';
-import type { AutomodRuleInput, AutomodRuleTestResult } from '@entrophy/types/automod';
+import type { AutomodEventDto, AutomodRuleDto, Paginated } from '@pavisie/types';
+import type { AutomodRuleInput, AutomodRuleTestResult } from '@pavisie/types/automod';
 import { apiFetch, toQueryString } from './api';
 
 export const automodQueryKeys = {

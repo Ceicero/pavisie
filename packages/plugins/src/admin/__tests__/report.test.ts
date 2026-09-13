@@ -1,4 +1,4 @@
-import { PermissionError, RateLimitError, ValidationError } from '@entrophy/core';
+import { PermissionError, RateLimitError, ValidationError } from '@pavisie/core';
 import { describe, expect, it, vi } from 'vitest';
 import type { CommandContext, ComponentContext } from '../../sdk';
 import { createTestContext } from '../../sdk/testing';
@@ -99,7 +99,7 @@ function buildModalHarness(opts: BuildModalHarnessOptions = {}) {
   return { c, created, auditCalls, reply };
 }
 
-describe('/entrophy report command', () => {
+describe('/pavisie report command', () => {
   it('rejects non-admin staff levels', async () => {
     const c = buildCommandContext({ staffLevel: 'moderator' });
     await expect(reportCommand.execute(c)).rejects.toThrow(PermissionError);

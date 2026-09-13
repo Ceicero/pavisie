@@ -1,4 +1,4 @@
-// Maps Prisma rows to the community/economy DTOs in `@entrophy/types/community` (same pattern as
+// Maps Prisma rows to the community/economy DTOs in `@pavisie/types/community` (same pattern as
 // apps/api/src/lib/dto.ts, kept in this new file per the community build stage's ownership).
 import type {
   CommunityEvent,
@@ -11,7 +11,7 @@ import type {
   StickyMessage,
   Suggestion,
   Tag,
-} from '@entrophy/database';
+} from '@pavisie/database';
 import type {
   AnnouncementContentDto,
   AnnouncementDto,
@@ -24,9 +24,9 @@ import type {
   SuggestionDto,
   TagDto,
   TagEmbedDto,
-} from '@entrophy/types/community';
+} from '@pavisie/types/community';
 import { isTagEmbedEmpty, tagEmbedSchema } from './tag-schemas';
-import { parseStickyEmbed } from '@entrophy/plugins/community/sticky-keys';
+import { parseStickyEmbed } from '@pavisie/plugins/community/sticky-keys';
 
 export function toPollOptionDto(row: PollOption, votes: PollVote[], anonymous: boolean): PollOptionDto {
   const optionVotes = votes.filter((v) => v.optionId === row.id);

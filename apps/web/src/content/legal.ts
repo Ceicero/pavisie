@@ -2,8 +2,8 @@
 // `/privacy` and `/terms` pages render this content with a visible banner saying so, because a generic policy is
 // not a substitute for one an operator has actually reviewed for their deployment and jurisdiction.
 
-export const DEFAULT_OPERATOR = 'Entrophy';
-export const DEFAULT_CONTACT_EMAIL = 'entrophybot@gmail.com';
+export const DEFAULT_OPERATOR = 'Pavisie';
+export const DEFAULT_CONTACT_EMAIL = 'contact@pavisie.com';
 
 export interface LegalSection {
   title: string;
@@ -15,13 +15,13 @@ export function privacyPolicy(operator: string, contactEmail: string): LegalSect
     {
       title: '1. What this covers',
       paragraphs: [
-        `This Privacy Policy explains what ${operator} collects when you use the Entrophy Discord bot, its dashboard, and this website, and why. It does not cover Discord itself — see Discord's own Privacy Policy for that.`,
+        `This Privacy Policy explains what ${operator} collects when you use the Pavisie Discord bot, its dashboard, and this website, and why. It does not cover Discord itself — see Discord's own Privacy Policy for that.`,
       ],
     },
     {
       title: '2. Data collected by the bot',
       paragraphs: [
-        'By default, Entrophy stores only what a feature needs to function: Discord IDs (server, user, channel, role, message) tied to the feature that used them — for example a moderation case, a ticket, or a level profile.',
+        'By default, Pavisie stores only what a feature needs to function: Discord IDs (server, user, channel, role, message) tied to the feature that used them — for example a moderation case, a ticket, or a level profile.',
         "Message content is never stored unless a specific feature explicitly requires it and a server administrator turns that feature on (for example, the Enforcer plugin's context capture, which can be disabled per server). Deleted-message and edited-message logging captures that an event happened, not the message text, unless a server enables content capture.",
         "Server administrators control which plugins are enabled and can review, export, or request deletion of their server's data at any time from the dashboard's privacy settings.",
       ],
@@ -66,7 +66,7 @@ export function privacyPolicy(operator: string, contactEmail: string): LegalSect
     {
       title: '9. Children',
       paragraphs: [
-        `Entrophy runs on Discord, which requires users to be at least 13 years old under Discord's own Terms of Service. ${operator} does not knowingly collect data from anyone below that age, and relies on Discord's own age requirements rather than collecting separate age verification.`,
+        `Pavisie runs on Discord, which requires users to be at least 13 years old under Discord's own Terms of Service. ${operator} does not knowingly collect data from anyone below that age, and relies on Discord's own age requirements rather than collecting separate age verification.`,
       ],
     },
     {
@@ -87,19 +87,19 @@ export function termsOfService(operator: string, contactEmail: string): LegalSec
     {
       title: '1. Acceptance',
       paragraphs: [
-        `By inviting the Entrophy bot to a Discord server, using its dashboard, or using this website, you agree to these Terms and to Discord's own Terms of Service and Community Guidelines.`,
+        `By inviting the Pavisie bot to a Discord server, using its dashboard, or using this website, you agree to these Terms and to Discord's own Terms of Service and Community Guidelines.`,
       ],
     },
     {
       title: '2. The service',
       paragraphs: [
-        `${operator} provides Entrophy, a modular Discord bot (moderation, automod, tickets, roles, leveling, and other optional plugins) and its companion dashboard and website, provided "as is" without warranty of any kind. Features may be added, changed, or removed at any time.`,
+        `${operator} provides Pavisie, a modular Discord bot (moderation, automod, tickets, roles, leveling, and other optional plugins) and its companion dashboard and website, provided "as is" without warranty of any kind. Features may be added, changed, or removed at any time.`,
       ],
     },
     {
       title: '3. Acceptable use',
       paragraphs: [
-        "You may not use Entrophy to violate Discord's Terms of Service or Developer Policy, to harass or dox others, to evade a ban or moderation action, to spam, or for any unlawful purpose. Server administrators are responsible for how they configure moderation and automation features on their own server.",
+        "You may not use Pavisie to violate Discord's Terms of Service or Developer Policy, to harass or dox others, to evade a ban or moderation action, to spam, or for any unlawful purpose. Server administrators are responsible for how they configure moderation and automation features on their own server.",
       ],
     },
     {

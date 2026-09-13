@@ -1,5 +1,5 @@
 import { ChannelType, SlashCommandBuilder, type VoiceBasedChannel } from 'discord.js';
-import type { TempVoiceChannel } from '@entrophy/database';
+import type { TempVoiceChannel } from '@pavisie/database';
 import {
   assertStaffLevel,
   errorEmbed,

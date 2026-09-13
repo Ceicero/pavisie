@@ -21,8 +21,8 @@ import {
   Switch,
   Textarea,
   useToast,
-} from '@entrophy/ui';
-import type { EngagementConfigDto, LevelProfileDto } from '@entrophy/types/engagement';
+} from '@pavisie/ui';
+import type { EngagementConfigDto, LevelProfileDto } from '@pavisie/types/engagement';
 import {
   useEngagementConfig,
   useLevelLeaderboard,

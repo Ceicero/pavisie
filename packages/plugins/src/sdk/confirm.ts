@@ -8,8 +8,8 @@ import {
   type EmbedBuilder,
   type Message,
 } from 'discord.js';
-import { PermissionError } from '@entrophy/core';
-import type { PluginId } from '@entrophy/types';
+import { PermissionError } from '@pavisie/core';
+import type { PluginId } from '@pavisie/types';
 import { buildCustomId } from './custom-id';
 import { PendingStore } from './pending';
 import type { ComponentContext, ComponentHandler, PluginContext } from './types';

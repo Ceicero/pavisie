@@ -10,7 +10,7 @@ import { pluginCopy } from '../../content/plugins';
 export const metadata: Metadata = {
   title: 'Features & commands',
   description:
-    'Every Entrophy plugin, why gaming communities use it, and the full command reference — generated straight from the plugin registry.',
+    'Every Pavisie plugin, why gaming communities use it, and the full command reference — generated straight from the plugin registry.',
 };
 
 export default function FeaturesPage() {

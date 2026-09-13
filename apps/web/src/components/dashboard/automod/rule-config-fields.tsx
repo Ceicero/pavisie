@@ -1,7 +1,7 @@
 'use client';
 
-import type { AutomodRuleTypeValue } from '@entrophy/types/automod';
-import { FormField, Input, Switch } from '@entrophy/ui';
+import type { AutomodRuleTypeValue } from '@pavisie/types/automod';
+import { FormField, Input, Switch } from '@pavisie/ui';
 import { TagInput } from './tag-input';
 
 export interface RuleConfigFieldsProps {

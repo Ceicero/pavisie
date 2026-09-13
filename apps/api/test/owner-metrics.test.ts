@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildTestApp, loginAs } from './helpers/build-test-app';
 
-// See bot-owner.test.ts for why setting this directly (rather than mutating `@entrophy/core`'s `env`) is safe
+// See bot-owner.test.ts for why setting this directly (rather than mutating `@pavisie/core`'s `env`) is safe
 // and sufficient — `requireBotOwner` re-reads `process.env.BOT_OWNER_IDS` on every request.
 process.env.BOT_OWNER_IDS = 'owner-1';
 

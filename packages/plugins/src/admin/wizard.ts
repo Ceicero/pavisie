@@ -9,8 +9,8 @@ import {
   type EmbedBuilder,
 } from 'discord.js';
 import type Redis from 'ioredis';
-import { redisKey } from '@entrophy/core';
-import type { PluginId } from '@entrophy/types';
+import { redisKey } from '@pavisie/core';
+import type { PluginId } from '@pavisie/types';
 import {
   brandEmbed,
   buildCustomId,

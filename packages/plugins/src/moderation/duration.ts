@@ -1,4 +1,4 @@
-import { parseDuration } from '@entrophy/core';
+import { parseDuration } from '@pavisie/core';
 
 /** Discord's hard limit on member timeout duration (28 days). */
 export const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000;

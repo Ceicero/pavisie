@@ -1,14 +1,14 @@
 import type Redis from 'ioredis';
 import { z } from 'zod';
-import { AuditAction, redisKey, ValidationError, type PlatformEvents } from '@entrophy/core';
+import { AuditAction, redisKey, ValidationError, type PlatformEvents } from '@pavisie/core';
 import {
   writeAudit,
   redactForAudit,
   type GuildConfig,
   type Prisma,
   type PrismaClient,
-} from '@entrophy/database';
-import type { PluginId } from '@entrophy/types';
+} from '@pavisie/database';
+import type { PluginId } from '@pavisie/types';
 import type { PluginRegistry } from './registry';
 
 const CACHE_TTL_SECONDS = 300;

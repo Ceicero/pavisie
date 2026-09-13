@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { middleware } from '../src/middleware';
 
 function makeRequest(path: string, opts: { cookie?: string } = {}): NextRequest {
-  return new NextRequest(`https://entrophybot.com${path}`, {
+  return new NextRequest(`https://pavisie.com${path}`, {
     headers: opts.cookie ? { cookie: opts.cookie } : {},
   });
 }
@@ -38,19 +38,19 @@ describe('web middleware (dashboard fast-redirect)', () => {
 
   describe('when COOKIE_DOMAIN is configured (production — sid is trustworthy here)', () => {
     it('redirects a cookie-less /dashboard/* visit to /', () => {
-      process.env.COOKIE_DOMAIN = '.entrophybot.com';
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
       const res = middleware(makeRequest('/dashboard/123'));
-      expect(res.headers.get('location')).toBe('https://entrophybot.com/');
+      expect(res.headers.get('location')).toBe('https://pavisie.com/');
     });
 
     it('does NOT redirect /dashboard/* when a sid cookie is present, even though the session behind it is unverified here', () => {
-      process.env.COOKIE_DOMAIN = '.entrophybot.com';
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
       const res = middleware(makeRequest('/dashboard/123', { cookie: 'sid=abc' }));
       expect(res.headers.get('location')).toBeNull();
     });
 
     it('never touches marketing routes like / — it is not a login gate here', () => {
-      process.env.COOKIE_DOMAIN = '.entrophybot.com';
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
       const res = middleware(makeRequest('/'));
       expect(res.headers.get('location')).toBeNull();
     });

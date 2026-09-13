@@ -8,9 +8,9 @@
 // the BROADCASTER's own token) — so the bookkeeping below tracks them separately per channel rather than
 // assuming 1:1, and `forgetSubscription`/the reconcile diff operate per subscription type: a channel can lose
 // its rewards subscription (rewards turned off, scope revoked) while chat keeps running, and vice versa.
-import type { TwitchChatChannel, TwitchChatCommand, TwitchChatReward } from '@entrophy/database';
+import type { TwitchChatChannel, TwitchChatCommand, TwitchChatReward } from '@pavisie/database';
 import { randomUUID } from 'node:crypto';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import type { PluginContext, TwitchChatRuntimeStatus, TwitchChatService } from '../../sdk';
 import { postAlert } from '../embeds';
 import {
@@ -250,7 +250,7 @@ export class TwitchChatManager {
     if (!identity || identity.status === 'ERROR') {
       this.botConfigured = false;
       this.idleReason = !identity
-        ? "Entrophy's Twitch bot account has not been connected yet (owner setup pending)."
+        ? "Pavisie's Twitch bot account has not been connected yet (owner setup pending)."
         : 'Twitch bot identity needs to be reconnected (owner re-auth required).';
       this.closeSocketAndGoIdle();
       return;
@@ -464,7 +464,7 @@ export class TwitchChatManager {
       if (this.stopped || this.socket) return; // stop()/another connect raced us while we were awaiting
       this.botConfigured = Boolean(identity);
       if (!identity) {
-        this.idleReason = "Entrophy's Twitch bot account has not been connected yet (owner setup pending).";
+        this.idleReason = "Pavisie's Twitch bot account has not been connected yet (owner setup pending).";
         return;
       }
 

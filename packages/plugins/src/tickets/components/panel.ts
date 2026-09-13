@@ -8,7 +8,7 @@ import {
   type ButtonInteraction,
   type ModalSubmitInteraction,
 } from 'discord.js';
-import { ValidationError } from '@entrophy/core';
+import { ValidationError } from '@pavisie/core';
 import {
   PendingStore,
   buildCustomId,

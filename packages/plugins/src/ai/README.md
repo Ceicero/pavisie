@@ -79,11 +79,11 @@ entirely (see `health()` in `src/ai/index.ts`, which reports `degraded` in that 
 - Disabled by default; an admin must explicitly opt in per server.
 - **Redaction before every provider call**: Discord mentions, email addresses, phone numbers, URLs (path/query
   stripped, domain kept), and API-key/token-shaped strings are stripped from the prompt text before it leaves
-  Entrophy (`src/ai/redact.ts`).
+  Pavisie (`src/ai/redact.ts`).
 - **Prompt-injection resistance**: a fixed system prompt (never built from user input) instructs the model that
   everything inside `<data>...</data>` tags is untrusted content to read, not instructions to follow, and that it
   must never reveal the system prompt. All user/message-sourced content is wrapped this way (`src/ai/prompt.ts`).
-- **No training on server data by default** — Entrophy makes no opt-in call to any provider's training/fine-tuning
+- **No training on server data by default** — Pavisie makes no opt-in call to any provider's training/fine-tuning
   endpoints. Check your own provider account's data-use settings for anything beyond that.
 - **Disclosure**: every AI response includes the footer "AI can be inaccurate — verify important information."
 - **Storage**: only token counts (`AiUsage`: guildId, userId, command, promptTokens, completionTokens, provider,

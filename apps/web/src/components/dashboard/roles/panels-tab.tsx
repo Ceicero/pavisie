@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 import { Plus, Send, Trash2 } from 'lucide-react';
-import type { RolePanelDto } from '@entrophy/types';
-import type { RoleGroupDto } from '@entrophy/types/roles';
+import type { RolePanelDto } from '@pavisie/types';
+import type { RoleGroupDto } from '@pavisie/types/roles';
 import {
   Badge,
   Button,
@@ -30,7 +30,7 @@ import {
   TableRow,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import {
   useRolePanels,
   useCreateRolePanel,

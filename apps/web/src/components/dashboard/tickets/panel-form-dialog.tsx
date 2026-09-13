@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { TicketIntakeFieldDto, TicketPanelDto } from '@entrophy/types/tickets';
+import type { TicketIntakeFieldDto, TicketPanelDto } from '@pavisie/types/tickets';
 import {
   Button,
   Dialog,
@@ -19,7 +19,7 @@ import {
   Switch,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { ApiClientError } from '@/lib/dashboard/api';
 import {
   useCreateTicketPanel,

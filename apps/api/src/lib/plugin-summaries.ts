@@ -1,5 +1,5 @@
-import { env as coreEnv } from '@entrophy/core';
-import type { PluginSummary } from '@entrophy/types';
+import { env as coreEnv } from '@pavisie/core';
+import type { PluginSummary } from '@pavisie/types';
 import type { ZodFastifyInstance } from './http';
 
 /** Which privileged Discord gateway intents this host has enabled, keyed the way `PluginRegistry.availability` expects. */

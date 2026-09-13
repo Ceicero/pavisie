@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Client } from 'discord.js';
-import type { PrismaClient } from '@entrophy/database';
+import type { PrismaClient } from '@pavisie/database';
 import { createTestContext } from '../../sdk/testing';
 import { createEnforcerService, flagRecord, parseAiAssistResponse } from '../service';
 import type { AiService } from '../../sdk/services';

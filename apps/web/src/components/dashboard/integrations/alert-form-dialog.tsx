@@ -16,8 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
   useToast,
-} from '@entrophy/ui';
-import type { AlertProviderId } from '@entrophy/types/integrations';
+} from '@pavisie/ui';
+import type { AlertProviderId } from '@pavisie/types/integrations';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useCreateAlertConnection } from '@/lib/dashboard/integrations-queries';
 import { DiscordChannelSelect, DiscordRoleSelect } from '../discord-selects';

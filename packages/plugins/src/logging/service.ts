@@ -1,5 +1,5 @@
 import type { EmbedBuilder } from 'discord.js';
-import { Prisma, defaultRetentionPolicy } from '@entrophy/database';
+import { Prisma, defaultRetentionPolicy } from '@pavisie/database';
 import type { LogKind, LogPayload, LoggingService, PluginContext } from '../sdk';
 import { LogBatcher } from './batcher';
 import { LOG_KIND_LABELS } from './constants';

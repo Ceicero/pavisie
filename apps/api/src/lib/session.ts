@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type Redis from 'ioredis';
 import type { FastifyReply } from 'fastify';
-import { decryptSecret, encryptSecret, env, isProduction, redisKey } from '@entrophy/core';
+import { decryptSecret, encryptSecret, env, isProduction, redisKey } from '@pavisie/core';
 
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days, sliding
 export const SESSION_COOKIE_NAME = 'sid';

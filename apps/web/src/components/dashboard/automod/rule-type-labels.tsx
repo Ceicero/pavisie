@@ -1,6 +1,6 @@
-import type { AutomodRuleTypeValue } from '@entrophy/types/automod';
+import type { AutomodRuleTypeValue } from '@pavisie/types/automod';
 
-/** Human-friendly labels for `AutomodRuleType` — mirrors `packages/plugins/src/automod/commands/rule-labels.ts` (kept in sync by hand; the dashboard doesn't depend on `@entrophy/plugins`). */
+/** Human-friendly labels for `AutomodRuleType` — mirrors `packages/plugins/src/automod/commands/rule-labels.ts` (kept in sync by hand; the dashboard doesn't depend on `@pavisie/plugins`). */
 export const RULE_TYPE_LABELS: Record<AutomodRuleTypeValue, string> = {
   MESSAGE_FREQUENCY: 'Message frequency (spam)',
   DUPLICATE_MESSAGES: 'Duplicate messages',

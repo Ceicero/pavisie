@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@entrophy/ui';
+import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@pavisie/ui';
 import { LevelingTab } from '@/components/dashboard/engagement/leveling-tab';
 import { ReputationTab } from '@/components/dashboard/engagement/reputation-tab';
 import { StarboardTab } from '@/components/dashboard/engagement/starboard-tab';

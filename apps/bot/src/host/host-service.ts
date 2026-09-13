@@ -1,5 +1,5 @@
 import type { Client } from 'discord.js';
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 import type {
   GuildConfigData,
   GuildConfigPatch,
@@ -13,7 +13,7 @@ import type {
   PluginHealth,
   PluginManifest,
   PluginRegistry,
-} from '@entrophy/plugins';
+} from '@pavisie/plugins';
 
 export interface CreateHostServiceDeps {
   registry: PluginRegistry;

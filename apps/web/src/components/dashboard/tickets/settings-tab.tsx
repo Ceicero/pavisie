@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { TicketsSettingsDto } from '@entrophy/types/tickets';
+import type { TicketsSettingsDto } from '@pavisie/types/tickets';
 import {
   Button,
   Card,
@@ -18,7 +18,7 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useTicketSettings, useUpdateTicketSettings } from '@/lib/dashboard/tickets-queries';
 import { DiscordChannelSelect } from '../discord-selects';

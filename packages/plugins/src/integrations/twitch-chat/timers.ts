@@ -5,7 +5,7 @@ import type { TwitchChatManager } from './manager';
 
 /**
  * Sends any enabled timer whose interval has elapsed, for channels the manager currently has a live EventSub
- * subscription for (a timer firing into a channel Entrophy isn't actually connected to would just fail the
+ * subscription for (a timer firing into a channel Pavisie isn't actually connected to would just fail the
  * Helix send and waste a rate-limit slot). A timer that has never fired (`lastFiredAt: null`) is due immediately
  * on the first tick after its channel connects.
  */

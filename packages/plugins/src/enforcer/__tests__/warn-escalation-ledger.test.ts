@@ -1,7 +1,7 @@
 import { ChannelType } from 'discord.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { Client } from 'discord.js';
-import type { PrismaClient } from '@entrophy/database';
+import type { PrismaClient } from '@pavisie/database';
 import { createTestContext } from '../../sdk/testing';
 import { createEnforcerService } from '../service';
 import type { EnforcerConfig } from '../manifest';

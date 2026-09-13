@@ -2,8 +2,8 @@ import { Worker, type Job } from 'bullmq';
 import type { RedisOptions } from 'ioredis';
 import type { Client } from 'discord.js';
 import type { Logger } from 'pino';
-import { env } from '@entrophy/core';
-import { ensureGuild, markGuildLeft, type PrismaClient } from '@entrophy/database';
+import { env } from '@pavisie/core';
+import { ensureGuild, markGuildLeft, type PrismaClient } from '@pavisie/database';
 
 export const DATA_REQUESTS_QUEUE_NAME = 'data-requests';
 

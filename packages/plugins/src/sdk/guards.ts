@@ -13,8 +13,8 @@ import {
   checkModerationTarget,
   t as coreT,
   type HierarchyMemberLike,
-} from '@entrophy/core';
-import type { StaffLevel } from '@entrophy/types';
+} from '@pavisie/core';
+import type { StaffLevel } from '@pavisie/types';
 
 export type TFunction = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -70,7 +70,7 @@ export interface HierarchyGuardInteraction {
 /**
  * Throws `PermissionError` (message `errors.hierarchy.<reason>`) if `interaction.member` may not take a
  * moderation action against `targetMember` — self, the bot, the guild owner, a bot owner, or an
- * equal-or-higher role position than the actor or the bot (see `@entrophy/core` `checkModerationTarget`).
+ * equal-or-higher role position than the actor or the bot (see `@pavisie/core` `checkModerationTarget`).
  */
 export function hierarchyGuard(
   interaction: HierarchyGuardInteraction,

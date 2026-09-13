@@ -8,7 +8,7 @@ export interface WorkflowStep {
 export const enforcerWorkflow: WorkflowStep[] = [
   {
     title: '1. Policy',
-    body: 'A server admin writes a policy: what it matches (keywords, regex, link domains, invites, mention counts, attachment types), which channels it watches, who is exempt, and a suggested action. No slur lists ship with Entrophy — servers bring their own.',
+    body: 'A server admin writes a policy: what it matches (keywords, regex, link domains, invites, mention counts, attachment types), which channels it watches, who is exempt, and a suggested action. No slur lists ship with Pavisie — servers bring their own.',
   },
   {
     title: '2. Flag',

@@ -1,7 +1,7 @@
 // Automod-specific DTOs not already covered by `AutomodRuleDto`/`AutomodEventDto` in `./api.ts` (those are the
-// wiring stage's barrel-exported shapes; this file is a new subpath — import via `@entrophy/types/automod` —
+// wiring stage's barrel-exported shapes; this file is a new subpath — import via `@pavisie/types/automod` —
 // per this task's ownership: "do NOT edit packages/types/src/index.ts"). Deliberately hand-written (not derived
-// from `@entrophy/plugins`'s zod schemas) so `@entrophy/types` keeps its "no runtime deps" contract and its
+// from `@pavisie/plugins`'s zod schemas) so `@pavisie/types` keeps its "no runtime deps" contract and its
 // place as the most primitive package in the dependency graph.
 
 /** Mirrors `packages/plugins/src/automod/schemas.ts`'s `automodActionTypeSchema` (single source of truth there). */

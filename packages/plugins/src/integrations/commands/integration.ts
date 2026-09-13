@@ -1,6 +1,6 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
-import { AuditAction, discordTimestamp } from '@entrophy/core';
-import type { AlertProviderId } from '@entrophy/types/integrations';
+import { AuditAction, discordTimestamp } from '@pavisie/core';
+import type { AlertProviderId } from '@pavisie/types/integrations';
 import {
   assertStaffLevel,
   brandEmbed,
@@ -19,7 +19,7 @@ import {
   deleteWebhookEndpoint,
   disconnectConnection,
 } from '../connections';
-import { INTEGRATION_PROVIDER_IDS, ALERT_PROVIDER_IDS } from '@entrophy/types/integrations';
+import { INTEGRATION_PROVIDER_IDS, ALERT_PROVIDER_IDS } from '@pavisie/types/integrations';
 import { getProvider, PROVIDER_ENUM_MAP, providerIdFromEnum } from '../providers';
 import { readAlertConfig } from '../providers/util';
 import { OUTBOUND_PLATFORM_EVENTS } from '../service';

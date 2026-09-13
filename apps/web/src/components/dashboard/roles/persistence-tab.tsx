@@ -16,7 +16,7 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useRolePersistence, useSetRolePersistence } from '@/lib/dashboard/roles-queries';
 import { ErrorState } from '../error-state';
 import { ApiClientError } from '@/lib/dashboard/api';

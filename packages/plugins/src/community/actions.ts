@@ -4,7 +4,7 @@
 // never duplicated between the manual (slash command) and automatic (job) paths).
 import { randomInt } from 'node:crypto';
 import type { GuildMember } from 'discord.js';
-import type { CommunityEvent, Giveaway, Poll, Suggestion } from '@entrophy/database';
+import type { CommunityEvent, Giveaway, Poll, Suggestion } from '@pavisie/database';
 import { fetchMemberSafe, resolveTextChannel, safeDm, type PluginContext } from '../sdk';
 import {
   buildEventComponents,

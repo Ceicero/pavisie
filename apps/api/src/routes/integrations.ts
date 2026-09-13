@@ -10,15 +10,15 @@ import {
   encryptSecret,
   env,
   redisKey,
-} from '@entrophy/core';
-import type { WebhookEndpointDto } from '@entrophy/types';
+} from '@pavisie/core';
+import type { WebhookEndpointDto } from '@pavisie/types';
 import type {
   IntegrationConnectionDetailDto,
   IntegrationLiveStatusDto,
   IntegrationProviderInfoDto,
   WebhookDeliveryDto,
   WebhookEndpointDetailDto,
-} from '@entrophy/types/integrations';
+} from '@pavisie/types/integrations';
 import { writeDashboardAudit } from '../lib/audit';
 import { toIntegrationConnectionDto, toWebhookEndpointDto } from '../lib/dto';
 import {

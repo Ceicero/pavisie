@@ -1,4 +1,4 @@
-import { assertPublicHttpUrl, SsrfError } from '@entrophy/core';
+import { assertPublicHttpUrl, SsrfError } from '@pavisie/core';
 import { TranslateAdapterError, type TranslateAdapter, type TranslateResult } from './types';
 
 interface LibreTranslateResponse {

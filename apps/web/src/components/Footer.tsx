@@ -75,7 +75,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-10 border-t border-white/10 pt-6 text-xs text-grey-2">
-          © {year} Entrophy. All rights reserved.
+          © {year} Pavisie. All rights reserved.
         </div>
       </div>
     </footer>

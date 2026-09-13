@@ -1,5 +1,5 @@
-import type { IntegrationConnection, OAuthToken } from '@entrophy/database';
-import { decryptSecret, encryptSecret } from '@entrophy/core';
+import type { IntegrationConnection, OAuthToken } from '@pavisie/database';
+import { decryptSecret, encryptSecret } from '@pavisie/core';
 import type { PluginContext } from '../../sdk';
 
 /** Provider ids whose bot-side jobs need to refresh a user-authorized OAuth token at all (twitch/reddit poll

@@ -1,4 +1,4 @@
-import { createLogger, env, loadEnv, requireEnv } from '@entrophy/core';
+import { createLogger, env, loadEnv, requireEnv } from '@pavisie/core';
 import { buildApp } from './app';
 
 loadEnv();
@@ -21,7 +21,7 @@ async function main(): Promise<void> {
 
   try {
     await app.listen({ port, host: '0.0.0.0' });
-    log.info({ port }, 'Entrophy API listening');
+    log.info({ port }, 'Pavisie API listening');
   } catch (err) {
     app.log.error({ err }, 'Failed to start API');
     process.exit(1);

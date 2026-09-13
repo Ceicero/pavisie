@@ -1,7 +1,7 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { AppError } from '@entrophy/core';
-import type { AnalyticsDto } from '@entrophy/types';
+import { AppError } from '@pavisie/core';
+import type { AnalyticsDto } from '@pavisie/types';
 import { requireGuildAccess } from '../lib/guild-access';
 import { guildIdParamSchema } from '../lib/schemas';
 

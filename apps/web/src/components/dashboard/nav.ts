@@ -17,7 +17,7 @@ import {
   Settings,
   type LucideIcon,
 } from 'lucide-react';
-import type { PluginId, PluginSummary } from '@entrophy/types';
+import type { PluginId, PluginSummary } from '@pavisie/types';
 
 export interface NavItem {
   href: (guildId: string) => string;

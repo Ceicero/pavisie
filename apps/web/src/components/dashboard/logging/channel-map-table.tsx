@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Info } from 'lucide-react';
-import { LOG_KINDS, LOG_KIND_LABELS, type LoggingConfigDto } from '@entrophy/types/logging';
+import { LOG_KINDS, LOG_KIND_LABELS, type LoggingConfigDto } from '@pavisie/types/logging';
 import {
   Alert,
   AlertDescription,
@@ -20,7 +20,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { DiscordChannelSelect } from '../discord-selects';
 
 export interface ChannelMapTableProps {

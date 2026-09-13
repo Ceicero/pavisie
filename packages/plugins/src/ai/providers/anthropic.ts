@@ -1,4 +1,4 @@
-import { ExternalServiceError } from '@entrophy/core';
+import { ExternalServiceError } from '@pavisie/core';
 import { fetchWithTimeout } from './fetch-with-timeout';
 import type { AiCompleteRequest, AiCompleteResponse, AiProvider } from './types';
 

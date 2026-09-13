@@ -1,7 +1,7 @@
 import { PermissionsBitField, type Guild } from 'discord.js';
-import { describePermission, missingPermissions } from '@entrophy/core';
+import { describePermission, missingPermissions } from '@pavisie/core';
 import type { PluginManifest } from '../sdk';
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 
 /**
  * For every loaded plugin's declared `manifest.permissions`, checks the bot's guild-level permissions and

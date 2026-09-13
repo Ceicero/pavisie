@@ -17,13 +17,13 @@ import {
   SelectValue,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import {
   TWITCH_CHAT_LEVELS,
   TWITCH_CHAT_RESERVED_COMMAND_NAMES,
   type TwitchChatCommandDto,
   type TwitchChatLevelId,
-} from '@entrophy/types/integrations';
+} from '@pavisie/types/integrations';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useCreateTwitchChatCommand, useUpdateTwitchChatCommand } from '@/lib/dashboard/integrations-queries';
 import { TWITCH_CHAT_LEVEL_LABEL } from './twitch-chat-commands-table';

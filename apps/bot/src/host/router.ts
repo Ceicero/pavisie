@@ -12,7 +12,7 @@ import type {
   RepliableInteraction,
 } from 'discord.js';
 import type { Logger } from 'pino';
-import { isAppError, resolveLocale, t as coreT } from '@entrophy/core';
+import { isAppError, resolveLocale, t as coreT } from '@pavisie/core';
 import {
   assertBotPermissions,
   errorEmbed,
@@ -24,8 +24,8 @@ import {
   type ComponentContext,
   type ContextMenuContext,
   type PluginContext,
-} from '@entrophy/plugins';
-import type { PluginId } from '@entrophy/types';
+} from '@pavisie/plugins';
+import type { PluginId } from '@pavisie/types';
 import type { LoadedHost } from './loader';
 import {
   cooldownKey,

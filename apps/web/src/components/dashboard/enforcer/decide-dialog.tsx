@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { EnforcerRecordDto } from '@entrophy/types';
+import type { EnforcerRecordDto } from '@pavisie/types';
 import {
   Button,
   Dialog,
@@ -14,7 +14,7 @@ import {
   Input,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useDecideEnforcerRecord, type DecideInput } from '@/lib/dashboard/enforcer-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 
@@ -138,7 +138,7 @@ export function DecideDialog({ guildId, record, decision, onOpenChange }: Decide
   );
 }
 
-/** Minimal duration parser mirroring `@entrophy/core`'s `parseDuration` (dashboard has no dependency on core). */
+/** Minimal duration parser mirroring `@pavisie/core`'s `parseDuration` (dashboard has no dependency on core). */
 function parseDurationLoose(input: string): number | undefined {
   const match = /^(\d+)\s*(s|m|h|d|w)$/i.exec(input.trim());
   if (!match) return undefined;

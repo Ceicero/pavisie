@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Badge, Card, CardContent, Pagination } from '@entrophy/ui';
-import type { GiveawayDto } from '@entrophy/types/community';
+import { Badge, Card, CardContent, Pagination } from '@pavisie/ui';
+import type { GiveawayDto } from '@pavisie/types/community';
 import { useCommunityGiveaways } from '@/lib/dashboard/community-queries';
 import { DataTable, type DataTableColumn } from '../data-table';
 

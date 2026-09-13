@@ -554,7 +554,7 @@ describe('parseArgs', () => {
 
 function buildMockGuildState(plan: any): { existingRoles: ExistingRole[]; existingChannels: ExistingChannel[] } {
   const everyoneRole = { id: plan.guildId, name: '@everyone', position: 0, color: 0, hoist: false, mentionable: false, permissions: '0' };
-  const botRole = { id: 'bot-role-id', name: 'Entrophy', position: 10, color: 0, hoist: false, mentionable: false, permissions: '0' };
+  const botRole = { id: 'bot-role-id', name: 'Pavisie', position: 10, color: 0, hoist: false, mentionable: false, permissions: '0' };
   const existingRoles = [
     everyoneRole,
     botRole,

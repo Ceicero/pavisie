@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { Badge, Input, RolePicker } from '@entrophy/ui';
+import { Badge, Input, RolePicker } from '@pavisie/ui';
 import { useGuildRoles } from '@/lib/dashboard/queries';
 
 export interface MultiRolePickerProps {

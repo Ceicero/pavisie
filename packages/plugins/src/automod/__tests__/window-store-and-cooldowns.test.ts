@@ -1,7 +1,7 @@
 import RedisMock from 'ioredis-mock';
 import type Redis from 'ioredis';
 import { describe, expect, it } from 'vitest';
-import { Cooldowns } from '@entrophy/core';
+import { Cooldowns } from '@pavisie/core';
 import { MemoryWindowStore, RedisWindowStore, scopedWindowStore } from '../engine/window-store';
 
 describe('RedisWindowStore (ioredis-mock)', () => {

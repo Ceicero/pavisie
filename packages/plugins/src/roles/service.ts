@@ -2,7 +2,7 @@
 // welcome/goodbye messages and post panels. Business logic only — discord.js/Prisma objects are fetched here,
 // but the decisions (is this role safe to assign? what should the message say?) come from engine.ts.
 import type { Guild, GuildMember, Role, TextBasedChannel } from 'discord.js';
-import { AppError, NotFoundError, truncate } from '@entrophy/core';
+import { AppError, NotFoundError, truncate } from '@pavisie/core';
 import type {
   RolesService,
   VerificationDecisionInput as SdkVerificationDecisionInput,

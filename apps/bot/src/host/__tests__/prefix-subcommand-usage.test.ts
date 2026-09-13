@@ -58,7 +58,7 @@ describe('a command needing a subcommand explains itself instead of throwing', (
 });
 
 describe('a command with exactly one subcommand selects it automatically', () => {
-  // Regression: the "needs a subcommand" guard broke +permissions, +entrophy and +embed, which each have a
+  // Regression: the "needs a subcommand" guard broke +permissions, +pavisie and +embed, which each have a
   // single subcommand and had been working. There is nothing to choose, so choosing is the bot's job.
   const permissions = { options: [{ type: 1, name: 'audit', description: 'Audit permissions.' }] };
 

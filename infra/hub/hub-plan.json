@@ -147,7 +147,7 @@
         {
           "name": "welcome",
           "type": "text",
-          "topic": "Say hi! Entrophy welcomes every new member here.",
+          "topic": "Say hi! Pavisie welcomes every new member here.",
           "everyone": {
             "deny": [
               "SendMessages",
@@ -174,7 +174,7 @@
           "name": "announcements",
           "type": "announcement",
           "existingKey": "announcements",
-          "topic": "Official Entrophy hub announcements.",
+          "topic": "Official Pavisie hub announcements.",
           "everyone": {
             "deny": [
               "SendMessages"
@@ -185,7 +185,7 @@
           "name": "updates",
           "type": "announcement",
           "existingName": "updates",
-          "topic": "Entrophy bot changelog and release notes (auto-published).",
+          "topic": "Pavisie bot changelog and release notes (auto-published).",
           "everyone": {
             "deny": [
               "SendMessages"
@@ -223,7 +223,7 @@
         {
           "name": "showcase",
           "type": "text",
-          "topic": "Show off your server running Entrophy: setups, automations, ledgers.",
+          "topic": "Show off your server running Pavisie: setups, automations, ledgers.",
           "slowmode": 30
         },
         {
@@ -241,7 +241,7 @@
         {
           "name": "ai-chat",
           "type": "text",
-          "topic": "Chat with Entrophy AI: @mention the bot to talk to it. 30s cooldown per person.",
+          "topic": "Chat with Pavisie AI: @mention the bot to talk to it. 30s cooldown per person.",
           "slowmode": 5
         },
         {
@@ -282,7 +282,7 @@
       ]
     },
     {
-      "name": "🛠 ENTROPHY SUPPORT",
+      "name": "🛠 PAVISIE SUPPORT",
       "channels": [
         {
           "name": "support",
@@ -303,7 +303,7 @@
         {
           "name": "feature-requests",
           "type": "text",
-          "topic": "Server owners: what should Entrophy do next?",
+          "topic": "Server owners: what should Pavisie do next?",
           "roleOnly": [
             "Server Owner",
             "Helper",
@@ -315,7 +315,7 @@
         {
           "name": "server-owners",
           "type": "text",
-          "topic": "Lounge for people running Entrophy on their own servers.",
+          "topic": "Lounge for people running Pavisie on their own servers.",
           "roleOnly": [
             "Server Owner",
             "Helper",
@@ -448,7 +448,7 @@
   },
   "messages": {
     "rules": [
-      "**Welcome to the Entrophy hub.** This is the home for the Entrophy Discord bot: support, updates, and a community of server owners and players.",
+      "**Welcome to the Pavisie hub.** This is the home for the Pavisie Discord bot: support, updates, and a community of server owners and players.",
       "**1. Be respectful.** No harassment, hate speech, slurs, or targeted drama.",
       "**2. Keep it SFW.** No NSFW content, gore, or shock media anywhere.",
       "**3. No spam or unsolicited advertising.** No invite links, self-promo, or DM advertising. Share your server in #showcase only.",
@@ -458,8 +458,8 @@
       "**7. Staff decisions are logged, not hidden.** Enforcer actions land in a read-only ledger and can be appealed with /enforcer appeal.",
       "By participating you agree to these rules. Moderators may act on anything that harms the community, listed here or not."
     ],
-    "faqSticky": "**Entrophy FAQ** - Add the bot: <https://entrophybot.com> | Dashboard: <https://app.entrophybot.com> | Commands: <https://entrophybot.com/features> | Need help? Open a ticket in #support. Use /tag <name> for quick answers.",
-    "aiChatIntro": "**AI chat** - @mention **Entrophy** in this channel to talk to it (it never replies unless mentioned). Keep it friendly; 30-second cooldown per person. Do not paste secrets.",
+    "faqSticky": "**Pavisie FAQ** - Add the bot: <https://pavisie.com> | Dashboard: <https://app.pavisie.com> | Commands: <https://pavisie.com/features> | Need help? Open a ticket in #support. Use /tag <name> for quick answers.",
+    "aiChatIntro": "**AI chat** - @mention **Pavisie** in this channel to talk to it (it never replies unless mentioned). Keep it friendly; 30-second cooldown per person. Do not paste secrets.",
     "boosterThanks": "**Thank you for boosting!** Boosters get this lounge, a custom color on request, early looks at bot updates, and priority support. Your boost keeps the hub perks unlocked."
   },
   "emojis": {

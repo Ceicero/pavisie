@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { Prisma, type PrismaClient, type Suggestion } from '@entrophy/database';
+import { Prisma, type PrismaClient, type Suggestion } from '@pavisie/database';
 import { errorEmbed, resolveTextChannel, successEmbed, type PluginCommand } from '../../sdk';
 import type { CommunityConfig } from '../manifest';
 import { buildSuggestionComponents, buildSuggestionEmbed } from '../render';
@@ -9,7 +9,7 @@ const NUMBER_MAX_ATTEMPTS = 3;
 /**
  * Creates a Suggestion with the next per-guild `number` (`MAX(number) + 1`), retrying on a `[guildId, number]`
  * unique-constraint violation (Prisma P2002) — same race-window caveat and retry pattern as
- * `@entrophy/database`'s `withNextCaseNumber`/`nextCaseNumber` for ModerationCase, reimplemented here for
+ * `@pavisie/database`'s `withNextCaseNumber`/`nextCaseNumber` for ModerationCase, reimplemented here for
  * Suggestion since that helper is case-specific and lives in a package this plugin doesn't own.
  */
 async function createSuggestionWithNextNumber(

@@ -31,6 +31,6 @@ export const manifest = defineManifest({
   dashboard: { path: '/dashboard/[guildId]/settings', label: 'Settings', icon: 'settings' },
   privacyNotes: [
     'Every configuration change (setup wizard, /config set, plugin enable/disable) is written to the audit log with the actor, timestamp, and a redacted before/after diff.',
-    "/entrophy report sends a message to the Entrophy developer, shown before submission: only the kind/subject/body you type in that command, plus this server's id and name, your user id and tag, a timestamp, and the bot version leave this server. Nothing else is captured (no surrounding messages, channel history, or member lists). A record is written to this server's own audit log so other admins can see a report was sent. Hard per-user/per-guild rate limits apply.",
+    "/pavisie report sends a message to the Pavisie developer, shown before submission: only the kind/subject/body you type in that command, plus this server's id and name, your user id and tag, a timestamp, and the bot version leave this server. Nothing else is captured (no surrounding messages, channel history, or member lists). A record is written to this server's own audit log so other admins can see a report was sent. Hard per-user/per-guild rate limits apply.",
   ],
 });

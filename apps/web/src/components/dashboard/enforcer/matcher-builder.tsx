@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus, X } from 'lucide-react';
-import type { EnforcerMatcherDto } from '@entrophy/types';
+import type { EnforcerMatcherDto } from '@pavisie/types';
 import {
   Button,
   Checkbox,
@@ -11,7 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 
 const MATCHER_TYPES: { value: EnforcerMatcherDto['type']; label: string }[] = [
   { value: 'keyword', label: 'Keyword (word match)' },

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Paginated } from '@entrophy/types';
+import type { Paginated } from '@pavisie/types';
 import type {
   AnnouncementDto,
   BirthdayConfigDto,
@@ -16,7 +16,7 @@ import type {
   SuggestionDto,
   TagBodyDto,
   TagDto,
-} from '@entrophy/types/community';
+} from '@pavisie/types/community';
 import { apiFetch, toQueryString } from './api';
 
 /** Own query-key namespace for the community plugin, kept separate from the shared `queryKeys` in `./queries.ts` (which this app must not edit). */

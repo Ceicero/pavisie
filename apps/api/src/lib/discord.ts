@@ -1,6 +1,6 @@
 import type Redis from 'ioredis';
-import { AppError, ExternalServiceError, env, redisKey } from '@entrophy/core';
-import type { DiscordChannelOption, DiscordRoleOption } from '@entrophy/types';
+import { AppError, ExternalServiceError, env, redisKey } from '@pavisie/core';
+import type { DiscordChannelOption, DiscordRoleOption } from '@pavisie/types';
 
 const DISCORD_AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';
 const DISCORD_API_BASE = 'https://discord.com/api/v10';

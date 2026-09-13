@@ -13,7 +13,7 @@ import {
   Skeleton,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useOnboardingConfig, useUpdateOnboardingConfig } from '@/lib/dashboard/roles-queries';
 import { DiscordRoleSelect } from '../discord-selects';
 import { ErrorState } from '../error-state';

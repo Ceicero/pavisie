@@ -1,4 +1,4 @@
-// Maps Prisma rows to `@entrophy/types` `OwnerMetrics*` DTOs, mirroring the convention in
+// Maps Prisma rows to `@pavisie/types` `OwnerMetrics*` DTOs, mirroring the convention in
 // `apps/api/src/lib/developer-reports/dto.ts`.
 import type {
   DataRequest,
@@ -7,8 +7,8 @@ import type {
   ScheduledJob,
   WebhookDelivery,
   WebhookEndpoint,
-} from '@entrophy/database';
-import type { OwnerMetricsErrorDto, OwnerMetricsGuildDto } from '@entrophy/types';
+} from '@pavisie/database';
+import type { OwnerMetricsErrorDto, OwnerMetricsGuildDto } from '@pavisie/types';
 import { buildGuildIconUrl } from '../discord';
 
 /** Defensive cap — an error/status message from an integration provider or job payload could be arbitrarily long. */

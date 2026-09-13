@@ -12,13 +12,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: entrophy
-          POSTGRES_PASSWORD: entrophy
-          POSTGRES_DB: entrophy
+          POSTGRES_USER: pavisie
+          POSTGRES_PASSWORD: pavisie
+          POSTGRES_DB: pavisie
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U entrophy -d entrophy"
+          --health-cmd "pg_isready -U pavisie -d pavisie"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -34,7 +34,7 @@ jobs:
 
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://entrophy:entrophy@localhost:5432/entrophy
+      DATABASE_URL: postgresql://pavisie:pavisie@localhost:5432/pavisie
       REDIS_URL: redis://localhost:6379
 
     steps:
@@ -59,7 +59,7 @@ jobs:
         run: pnpm db:generate
 
       - name: Validate Prisma schema
-        run: pnpm --filter @entrophy/database validate
+        run: pnpm --filter @pavisie/database validate
 
       - name: Lint
         run: pnpm lint
@@ -71,7 +71,7 @@ jobs:
         run: pnpm test
 
       - name: Check plugin i18n coverage (every plugin registers locales/en.json; every t()/c.t() key resolves)
-        run: pnpm --filter @entrophy/plugins check:i18n
+        run: pnpm --filter @pavisie/plugins check:i18n
 
       - name: Export commands (fails if docs/commands.json is stale)
         run: |
@@ -85,7 +85,7 @@ jobs:
 
       - name: Run migrations against service database
         env:
-          DATABASE_URL: postgresql://entrophy:entrophy@localhost:5432/entrophy
+          DATABASE_URL: postgresql://pavisie:pavisie@localhost:5432/pavisie
         run: pnpm db:migrate
 
       - name: Build
@@ -106,13 +106,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: entrophy
-          POSTGRES_PASSWORD: entrophy
-          POSTGRES_DB: entrophy
+          POSTGRES_USER: pavisie
+          POSTGRES_PASSWORD: pavisie
+          POSTGRES_DB: pavisie
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U entrophy -d entrophy"
+          --health-cmd "pg_isready -U pavisie -d pavisie"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -128,7 +128,7 @@ jobs:
 
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://entrophy:entrophy@localhost:5432/entrophy
+      DATABASE_URL: postgresql://pavisie:pavisie@localhost:5432/pavisie
       REDIS_URL: redis://localhost:6379
       E2E_TEST_MODE: true
       API_PORT: 3001
@@ -163,11 +163,11 @@ jobs:
         run: pnpm db:migrate
 
       - name: Install Playwright browsers
-        run: pnpm --filter @entrophy/web exec playwright install --with-deps chromium
+        run: pnpm --filter @pavisie/web exec playwright install --with-deps chromium
 
       - name: Start API in E2E test mode
         run: |
-          pnpm --filter @entrophy/api run start &
+          pnpm --filter @pavisie/api run start &
           echo $! > api.pid
 
       - name: Wait for API health
@@ -183,7 +183,7 @@ jobs:
           exit 1
 
       - name: Build web
-        run: pnpm --filter @entrophy/web build
+        run: pnpm --filter @pavisie/web build
 
       - name: Run e2e tests
         run: pnpm test:e2e

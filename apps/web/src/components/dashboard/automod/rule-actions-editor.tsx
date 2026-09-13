@@ -1,8 +1,8 @@
 'use client';
 
 import { Plus, X } from 'lucide-react';
-import type { AutomodActionInput, AutomodActionType } from '@entrophy/types/automod';
-import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@entrophy/ui';
+import type { AutomodActionInput, AutomodActionType } from '@pavisie/types/automod';
+import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@pavisie/ui';
 
 const ACTION_OPTIONS: { value: AutomodActionType; label: string }[] = [
   { value: 'warn', label: 'Warn' },

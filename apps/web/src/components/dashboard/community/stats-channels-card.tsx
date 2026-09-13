@@ -23,12 +23,12 @@ import {
   TableHeader,
   TableRow,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useGuildChannels, usePluginConfig, useUpdatePluginConfig } from '@/lib/dashboard/queries';
 import { ErrorState } from '../error-state';
 
-/** Mirrors the stats-channel part of `packages/plugins/src/community/manifest.ts`'s `configSchema` (hand-kept in sync; the dashboard doesn't depend on `@entrophy/plugins`). */
+/** Mirrors the stats-channel part of `packages/plugins/src/community/manifest.ts`'s `configSchema` (hand-kept in sync; the dashboard doesn't depend on `@pavisie/plugins`). */
 export interface StatsChannelEntry {
   channelId: string;
   template: string;

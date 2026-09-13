@@ -1,6 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
-import { BRAND, brandIconUrl, discordTimestamp, env, sanitizeEmbedText } from '@entrophy/core';
-import type { Ticket, TicketPanel } from '@entrophy/database';
+import { BRAND, brandIconUrl, discordTimestamp, env, sanitizeEmbedText } from '@pavisie/core';
+import type { Ticket, TicketPanel } from '@pavisie/database';
 import { buildCustomId } from '../sdk';
 
 /** The panel's posted embed (button-driven ticket creation, ARCHITECTURE.md §7.1 `tickets` row). */

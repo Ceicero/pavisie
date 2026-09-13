@@ -1,5 +1,5 @@
 import type Redis from 'ioredis';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 
 export interface InviteUseSnapshot {
   code: string;

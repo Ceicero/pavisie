@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import type { WebhookEndpoint } from '@entrophy/database';
-import { assertPublicHttpUrl, decryptSecret, SsrfError } from '@entrophy/core';
+import type { WebhookEndpoint } from '@pavisie/database';
+import { assertPublicHttpUrl, decryptSecret, SsrfError } from '@pavisie/core';
 import type { PluginContext } from '../sdk';
 import { OUTBOUND_AUTO_DISABLE_THRESHOLD, signOutboundPayload } from './signing';
 

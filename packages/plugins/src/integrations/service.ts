@@ -1,4 +1,4 @@
-import { OUTBOUND_PLATFORM_EVENTS, type OutboundPlatformEvent } from '@entrophy/types/integrations';
+import { OUTBOUND_PLATFORM_EVENTS, type OutboundPlatformEvent } from '@pavisie/types/integrations';
 import type { IntegrationsService } from '../sdk';
 import type { PluginContext } from '../sdk';
 import { attemptOutboundDelivery } from './delivery';
@@ -122,7 +122,7 @@ export function createIntegrationsService(ctx: PluginContext): IntegrationsServi
         event: 'integration.test',
         guildId,
         timestamp: new Date().toISOString(),
-        message: 'This is a test delivery from Entrophy.',
+        message: 'This is a test delivery from Pavisie.',
       };
       const result = await attemptOutboundDelivery(ctx, endpoint, payload, 1);
       return { delivered: result.delivered, error: result.error };

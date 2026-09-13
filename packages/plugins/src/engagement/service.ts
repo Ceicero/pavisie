@@ -4,7 +4,7 @@
 // directly unit-testable (ARCHITECTURE.md §7.1 "service.ts — business logic ... this is what unit
 // tests target").
 import type Redis from 'ioredis';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import type { EngagementLevelingConfig, EngagementRewardMode } from './manifest';
 
 // ---------------------------------------------------------------------------

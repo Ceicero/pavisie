@@ -15,7 +15,7 @@ import {
   Textarea,
   CHANNEL_KIND_TYPES,
   type ChannelKind,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { defaultForSchema, type JsonSchemaNode } from '@/lib/dashboard/json-schema';
 import { DiscordChannelSelect, DiscordRoleSelect } from './discord-selects';
 

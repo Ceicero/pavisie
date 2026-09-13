@@ -1,9 +1,9 @@
 // Discord gateway bot process bootstrap (ARCHITECTURE.md §9).
 import type { Client } from 'discord.js';
 import { GatewayIntentBits } from 'discord.js';
-import { createLogger, createRedis, loadEnv, listFromCsv, requireEnv, env } from '@entrophy/core';
-import { ensureGuild, markGuildLeft, prisma } from '@entrophy/database';
-import { allPlugins, PluginRegistry, type PrivilegedIntentsEnabled } from '@entrophy/plugins';
+import { createLogger, createRedis, loadEnv, listFromCsv, requireEnv, env } from '@pavisie/core';
+import { ensureGuild, markGuildLeft, prisma } from '@pavisie/database';
+import { allPlugins, PluginRegistry, type PrivilegedIntentsEnabled } from '@pavisie/plugins';
 import { createClient } from './client';
 import { bullConnectionOptionsFromUrl } from './lib/redis-options';
 import { createBotActionsWorker } from './host/bot-actions';

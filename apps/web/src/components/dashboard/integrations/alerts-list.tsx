@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useAlertConnections, useDeleteAlertConnection } from '@/lib/dashboard/integrations-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ConfirmDialog } from '../confirm-dialog';

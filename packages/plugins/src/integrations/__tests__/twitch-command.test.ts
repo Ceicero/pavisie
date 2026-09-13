@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
-import { env } from '@entrophy/core';
-import * as crypto from '@entrophy/core';
+import { env } from '@pavisie/core';
+import * as crypto from '@pavisie/core';
 import { createTestContext } from '../../sdk/testing';
 import type { CommandContext, ServiceRegistry } from '../../sdk';
 import { command as twitchCommand, twitchConfirmComponents } from '../commands/twitch';
@@ -145,7 +145,7 @@ describe('/twitch status', () => {
       { sub: 'status' },
       {
         prismaOverrides: {
-          twitchBotIdentity: { findFirst: async () => ({ botLogin: 'entrophy_bot' }) },
+          twitchBotIdentity: { findFirst: async () => ({ botLogin: 'pavisie_bot' }) },
           twitchChatChannel: { findMany: async () => [CHANNEL_1] },
           twitchChatCommand: { count: async () => 3 },
           twitchChatTimer: { count: async () => 1 },
@@ -156,7 +156,7 @@ describe('/twitch status', () => {
     await twitchCommand.execute(c);
 
     const desc = descriptionOf(replies);
-    expect(desc).toContain(realT('twitch.status.botConfigured', { login: 'entrophy_bot' }));
+    expect(desc).toContain(realT('twitch.status.botConfigured', { login: 'pavisie_bot' }));
     expect(desc).toContain(
       realT('twitch.status.channelLine', {
         status: '🟢 Connected',
@@ -188,7 +188,7 @@ describe('/twitch setup', () => {
   it('omits the caveat once the bot identity is connected', async () => {
     const { c, replies } = buildContext(
       { sub: 'setup' },
-      { prismaOverrides: { twitchBotIdentity: { findFirst: async () => ({ botLogin: 'entrophy_bot' }) } } },
+      { prismaOverrides: { twitchBotIdentity: { findFirst: async () => ({ botLogin: 'pavisie_bot' }) } } },
     );
 
     await twitchCommand.execute(c);
@@ -592,7 +592,7 @@ describe('/twitch setup — channel points', () => {
   it('includes the dashboard click-path for rewards + the overlay/OBS step', async () => {
     const { c, replies } = buildContext(
       { sub: 'setup' },
-      { prismaOverrides: { twitchBotIdentity: { findFirst: async () => ({ botLogin: 'entrophy_bot' }) } } },
+      { prismaOverrides: { twitchBotIdentity: { findFirst: async () => ({ botLogin: 'pavisie_bot' }) } } },
     );
 
     await twitchCommand.execute(c);

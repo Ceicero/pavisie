@@ -1,8 +1,8 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { AuditAction, NotFoundError, buildPaginated, paginate } from '@entrophy/core';
-import { testRuleWithText } from '@entrophy/plugins/automod/test-rule';
-import type { AutomodEventDto, AutomodRuleDto, Paginated } from '@entrophy/types';
+import { AuditAction, NotFoundError, buildPaginated, paginate } from '@pavisie/core';
+import { testRuleWithText } from '@pavisie/plugins/automod/test-rule';
+import type { AutomodEventDto, AutomodRuleDto, Paginated } from '@pavisie/types';
 import { automodActionsSchema, automodRuleConfigSchema } from '../lib/automod-schemas';
 import { writeDashboardAudit } from '../lib/audit';
 import { toAutomodEventDto, toAutomodRuleDto } from '../lib/dto';

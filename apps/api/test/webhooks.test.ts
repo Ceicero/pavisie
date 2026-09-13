@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { encryptSecret } from '@entrophy/core';
+import { encryptSecret } from '@pavisie/core';
 import { buildTestApp } from './helpers/build-test-app';
 
 const GITHUB_SECRET = 'github-endpoint-secret';
@@ -104,8 +104,8 @@ describe('webhook signature verification', () => {
       url: '/webhooks/generic/endpoint-1',
       headers: {
         'content-type': 'application/json',
-        'x-entrophy-signature': genericSignature(GENERIC_SECRET, body),
-        'x-entrophy-event-type': 'test.event',
+        'x-pavisie-signature': genericSignature(GENERIC_SECRET, body),
+        'x-pavisie-event-type': 'test.event',
       },
       payload: body,
     });
@@ -124,7 +124,7 @@ describe('webhook signature verification', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/webhooks/generic/endpoint-1',
-      headers: { 'content-type': 'application/json', 'x-entrophy-signature': 'not-a-valid-signature' },
+      headers: { 'content-type': 'application/json', 'x-pavisie-signature': 'not-a-valid-signature' },
       payload: body,
     });
 
@@ -141,7 +141,7 @@ describe('webhook signature verification', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/webhooks/generic/does-not-exist',
-      headers: { 'content-type': 'application/json', 'x-entrophy-signature': 'anything' },
+      headers: { 'content-type': 'application/json', 'x-pavisie-signature': 'anything' },
       payload: body,
     });
 

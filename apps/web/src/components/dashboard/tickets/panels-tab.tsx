@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 import { MessageSquarePlus, Pencil, Send, Trash2 } from 'lucide-react';
-import type { TicketPanelDto } from '@entrophy/types/tickets';
-import { Badge, Button, Card, CardContent, EmptyState, Skeleton, useToast } from '@entrophy/ui';
+import type { TicketPanelDto } from '@pavisie/types/tickets';
+import { Badge, Button, Card, CardContent, EmptyState, Skeleton, useToast } from '@pavisie/ui';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { useDeleteTicketPanel, usePostTicketPanel, useTicketPanels } from '@/lib/dashboard/tickets-queries';
 import { ConfirmDialog } from '../confirm-dialog';

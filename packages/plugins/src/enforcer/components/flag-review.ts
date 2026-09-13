@@ -6,7 +6,7 @@ import {
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
 } from 'discord.js';
-import { AuditAction } from '@entrophy/core';
+import { AuditAction } from '@pavisie/core';
 import { buildCustomId, errorEmbed, successEmbed, PendingStore, type ComponentHandler } from '../../sdk';
 import { flagRecord } from '../service';
 

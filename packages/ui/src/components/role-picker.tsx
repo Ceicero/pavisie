@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Shield } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 
-/** Minimal role shape needed for the picker — deliberately not coupled to `@entrophy/types` so `@entrophy/ui` has no runtime dependency on it. Structurally compatible with `DiscordRoleOption`. */
+/** Minimal role shape needed for the picker — deliberately not coupled to `@pavisie/types` so `@pavisie/ui` has no runtime dependency on it. Structurally compatible with `DiscordRoleOption`. */
 export interface RolePickerOption {
   id: string;
   name: string;

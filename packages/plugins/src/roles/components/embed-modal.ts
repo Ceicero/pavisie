@@ -1,5 +1,5 @@
 import type { ModalSubmitInteraction } from 'discord.js';
-import { AuditAction } from '@entrophy/core';
+import { AuditAction } from '@pavisie/core';
 import { errorEmbed, successEmbed, type ComponentHandler } from '../../sdk';
 import { normalizeEmbedColor } from '../engine';
 import type { RolesConfig } from '../manifest';

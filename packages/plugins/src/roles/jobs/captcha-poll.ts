@@ -1,4 +1,4 @@
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import type { PluginJob } from '../../sdk';
 
 interface VerifyTokenContext {
@@ -20,10 +20,10 @@ function parseTokenContext(raw: string | null): VerifyTokenContext | null {
 }
 
 /**
- * Every 15s: scans for `entrophy:verify:done:<token>` keys (written by the CAPTCHA completion page — the
+ * Every 15s: scans for `pavisie:verify:done:<token>` keys (written by the CAPTCHA completion page — the
  * wiring stage adds the actual `/verify/:token` page; this job only implements the polling side of the
  * Redis contract documented in README.md), resolves the `{guildId, userId}` context from the matching
- * `entrophy:verify:pending:<token>` key (or the done key's own value as a fallback), grants the verified
+ * `pavisie:verify:pending:<token>` key (or the done key's own value as a fallback), grants the verified
  * role via the `roles` service, and deletes both keys so a token can't be replayed.
  */
 export const captchaPollJob: PluginJob = {

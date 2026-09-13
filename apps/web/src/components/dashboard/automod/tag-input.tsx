@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { X } from 'lucide-react';
-import { Badge, Input } from '@entrophy/ui';
+import { Badge, Input } from '@pavisie/ui';
 
 export interface TagInputProps {
   value: string[];

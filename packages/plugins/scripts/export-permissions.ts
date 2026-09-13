@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-// `pnpm --filter @entrophy/plugins export:permissions` (root alias: `pnpm docs:permissions`) — walks
+// `pnpm --filter @pavisie/plugins export:permissions` (root alias: `pnpm docs:permissions`) — walks
 // `allManifests` and renders `docs/PERMISSIONS.md` deterministically, so the permissions matrix in the README
 // (and the doc itself) can never drift from what each plugin's `manifest.ts` actually declares. Mirrors
 // `export-commands.ts`'s shape (ARCHITECTURE.md §17): CI runs this and fails on `git diff --exit-code`.
@@ -8,12 +8,12 @@
 // `PluginManifest.privilegedIntents` is just a list of intent names with no per-intent "what degrades" text
 // field (ARCHITECTURE.md §7.2): `INTENT_DEGRADATION` and the plugin dependency note under Enforcer. Everything
 // else — every permission row, every optional/fallback string, every intent-needing-plugin list, the invite
-// scopes and permission integer — comes straight from `allManifests` / `@entrophy/core`.
+// scopes and permission integer — comes straight from `allManifests` / `@pavisie/core`.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PermissionFlagsBits, PermissionsBitField, type PermissionResolvable } from 'discord.js';
-import { describePermission, INVITE_PERMISSIONS_BITFIELD, buildInviteUrl } from '@entrophy/core';
+import { describePermission, INVITE_PERMISSIONS_BITFIELD, buildInviteUrl } from '@pavisie/core';
 import { allManifests } from '../src/manifests';
 import type { PluginManifest, PrivilegedIntent } from '../src/sdk';
 
@@ -132,7 +132,7 @@ async function main(): Promise<void> {
 
 # Permissions matrix
 
-Every Discord permission Entrophy's plugins can use, why each one is needed, whether it's optional, and what
+Every Discord permission Pavisie's plugins can use, why each one is needed, whether it's optional, and what
 happens when it's missing. Generated from \`packages/plugins/src/*/manifest.ts\` via \`allManifests\` — this file
 can never drift from what the bot actually declares. See also \`/permissions audit\` in Discord, which diffs this
 same data against the bot's real permissions in your server.
@@ -148,7 +148,7 @@ ${pluginSections.join('\n\n')}
 
 Discord gates a few event categories behind "privileged intents" that must be turned on for the bot application
 in the [Discord Developer Portal](https://discord.com/developers/applications) (Bot tab → Privileged Gateway
-Intents) **and** in Entrophy's own \`.env\` (\`ENABLE_MESSAGE_CONTENT_INTENT\`, \`ENABLE_GUILD_MEMBERS_INTENT\`,
+Intents) **and** in Pavisie's own \`.env\` (\`ENABLE_MESSAGE_CONTENT_INTENT\`, \`ENABLE_GUILD_MEMBERS_INTENT\`,
 \`ENABLE_GUILD_PRESENCES_INTENT\`) before the features that need them come alive. Every plugin below degrades
 gracefully (never crashes, never silently misbehaves) when a privileged intent it lists is off — see each row for
 exactly what stops working.

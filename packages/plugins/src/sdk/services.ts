@@ -1,5 +1,5 @@
-import type { ActionSource, ModerationCase, ModerationCaseType } from '@entrophy/database';
-import type { PluginId } from '@entrophy/types';
+import type { ActionSource, ModerationCase, ModerationCaseType } from '@pavisie/database';
+import type { PluginId } from '@pavisie/types';
 import type { GuildConfigData, GuildConfigPatch } from './config-store';
 import type { PluginAvailability } from './registry';
 import type { PluginHealth, PluginManifest } from './types';

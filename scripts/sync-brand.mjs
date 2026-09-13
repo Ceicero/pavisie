@@ -5,13 +5,13 @@
 // can never fail a build.
 //
 // Two logos are synced:
-//  - The SHARED logo — EVERY existing shared candidate (`entrophy-skull.png` AND `entrophy-skull.jpg`, not just
+//  - The SHARED logo — EVERY existing shared candidate (`pavisie-skull.png` AND `pavisie-skull.jpg`, not just
 //    the preferred one) is copied into BOTH apps/web/public/brand/ and apps/dashboard/public/brand/. Both files
 //    must be served even though the manifests' `logo` points at the preferred one (PNG): the bot's embed icon
-//    URL (`${WEB_URL}/brand/entrophy-skull.jpg`, served from the web app's public/brand/) and any previously
+//    URL (`${WEB_URL}/brand/pavisie-skull.jpg`, served from the web app's public/brand/) and any previously
 //    cached links may still name the `.jpg` file specifically, and the dashboard sidebar and bot avatar depend on
 //    this copy too — it must never be repointed at the web-only variant below.
-//  - The WEB-only logo (`entrophy-skull-web.png`/`.jpg`, an optional brighter/cleaner variant) is what the public
+//  - The WEB-only logo (`pavisie-skull-web.png`/`.jpg`, an optional brighter/cleaner variant) is what the public
 //    website displays (header/hero/apple-icon) *only*, when present. It's resolved from web-specific candidates
 //    first, falling back to the shared candidates when no web-specific file is present. On fallback nothing extra
 //    is copied — the website just displays the shared file(s) already synced above. As of the skull.png/.jpg
@@ -24,9 +24,9 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE_DIR = join(REPO_ROOT, 'assets', 'brand');
 // PNG (lossless) takes precedence over JPG if both exist, per ARCHITECTURE.md §22.
-const SHARED_CANDIDATES = ['entrophy-skull.png', 'entrophy-skull.jpg'];
+const SHARED_CANDIDATES = ['pavisie-skull.png', 'pavisie-skull.jpg'];
 // Website-only variant, checked before falling back to SHARED_CANDIDATES.
-const WEB_CANDIDATES = ['entrophy-skull-web.png', 'entrophy-skull-web.jpg'];
+const WEB_CANDIDATES = ['pavisie-skull-web.png', 'pavisie-skull-web.jpg'];
 const WEB_TARGET_DIR = join(REPO_ROOT, 'apps', 'web', 'public', 'brand');
 const DASHBOARD_TARGET_DIR = join(REPO_ROOT, 'apps', 'dashboard', 'public', 'brand');
 const TARGET_DIRS = [WEB_TARGET_DIR, DASHBOARD_TARGET_DIR];
@@ -38,7 +38,7 @@ const TARGET_DIRS = [WEB_TARGET_DIR, DASHBOARD_TARGET_DIR];
 // the web app can reference it explicitly if it ever needs to (e.g. linking to the canonical/bot-avatar image).
 const WEB_DATA_MANIFEST = join(REPO_ROOT, 'apps', 'web', 'src', 'data', 'brand.json');
 // Same pattern as WEB_DATA_MANIFEST, for the dashboard's `BrandWordmark` component: a build-time copy of the
-// dashboard's shared-logo manifest (`{ "logo": "/brand/entrophy-skull.png" }`), kept byte-identical to
+// dashboard's shared-logo manifest (`{ "logo": "/brand/pavisie-skull.png" }`), kept byte-identical to
 // `apps/dashboard/public/brand/manifest.json`.
 const DASHBOARD_DATA_MANIFEST = join(REPO_ROOT, 'apps', 'dashboard', 'src', 'data', 'brand.json');
 // Next's `apple-icon` static-file convention (ARCHITECTURE.md §22) — written with whatever extension the source

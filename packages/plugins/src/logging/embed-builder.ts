@@ -1,5 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import { BRAND, EMBED_LIMITS, brandIconUrl, env, truncate } from '@entrophy/core';
+import { BRAND, EMBED_LIMITS, brandIconUrl, env, truncate } from '@pavisie/core';
 import { channelMention, userMention } from '../sdk';
 import type { LogKind, LogPayload } from '../sdk';
 import { LOG_KIND_LABELS } from './constants';

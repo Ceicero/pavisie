@@ -1,5 +1,5 @@
 /**
- * Design tokens + Tailwind entrypoint for @entrophy/ui, consumed by packages/ui/src/tailwind.preset.ts.
+ * Design tokens + Tailwind entrypoint for @pavisie/ui, consumed by packages/ui/src/tailwind.preset.ts.
  * Monochrome brand (docs/ARCHITECTURE.md §20): black/grey/white surfaces and primary action;
  * success/warning/destructive stay semantic colors for dashboard usability.
  * Values are HSL triples (no `hsl()` wrapper) so Tailwind can compose them as `hsl(var(--x) / <alpha-value>)`.

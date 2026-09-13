@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@entrophy/ui';
+import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@pavisie/ui';
 import { OverviewTab } from '@/components/dashboard/enforcer/overview-tab';
 import { PoliciesTab } from '@/components/dashboard/enforcer/policies-tab';
 import { QueueTab } from '@/components/dashboard/enforcer/queue-tab';

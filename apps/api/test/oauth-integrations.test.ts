@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { env, redisKey } from '@entrophy/core';
+import { env, redisKey } from '@pavisie/core';
 import { buildTestApp, loginAs } from './helpers/build-test-app';
 import { exchangeProviderCode } from '../src/lib/integrations/providers';
 

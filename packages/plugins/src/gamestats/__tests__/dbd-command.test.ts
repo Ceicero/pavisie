@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ButtonInteraction, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
-import { Prisma } from '@entrophy/database';
+import { Prisma } from '@pavisie/database';
 import { createTestContext } from '../../sdk/testing';
 import type { CommandContext, ComponentContext, PluginContext } from '../../sdk';
 import en from '../locales/en.json';

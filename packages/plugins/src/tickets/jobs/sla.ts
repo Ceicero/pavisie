@@ -1,7 +1,7 @@
 // Runs every minute: alerts support roles (in the ticket + the configured alert channel) once per ticket whose
 // SLA is overdue and has had no first staff response yet. Dedupe via a Redis `NX` flag (ARCHITECTURE.md-adjacent
 // TASK spec: "job 'tickets:sla' every minute ... alert support roles ... once").
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import { infoEmbed, resolveTextChannel, type PluginJob } from '../../sdk';
 import type { TicketsConfig } from '../manifest';
 

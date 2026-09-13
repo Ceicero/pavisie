@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ContextMenuCommandBuilder, ApplicationCommandType } from 'discord.js';
 import { describe, expect, it } from 'vitest';
-import type { PluginId } from '@entrophy/types';
+import type { PluginId } from '@pavisie/types';
 import { PluginRegistry } from '../registry';
 import type { Plugin } from '../types';
 

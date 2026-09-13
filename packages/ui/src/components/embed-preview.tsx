@@ -109,7 +109,7 @@ function formatTimestamp(ts: string | Date): string {
 export function EmbedPreview({
   embed,
   content,
-  botName = 'Entrophy',
+  botName = 'Pavisie',
   botAvatarUrl,
   className,
 }: EmbedPreviewProps) {

@@ -1,5 +1,5 @@
-import { AuditAction, NotFoundError, ValidationError } from '@entrophy/core';
-import type { Prisma } from '@entrophy/database';
+import { AuditAction, NotFoundError, ValidationError } from '@pavisie/core';
+import type { Prisma } from '@pavisie/database';
 import {
   PendingStore,
   assertStaffLevel,

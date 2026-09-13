@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['test/**/*.test.ts', 'src/**/__tests__/*.test.ts'],
-    // A handful of files can't statically import `@entrophy/core` (its `env` is computed once at first import,
+    // A handful of files can't statically import `@pavisie/core` (its `env` is computed once at first import,
     // so `process.env` must be populated before it loads) and pull it in via `await import(...)` inside
     // `beforeAll`, which makes those hooks transform the module graph at hook time. `pnpm test` runs every
     // workspace in parallel, and under that contention this suite's cumulative collect time roughly doubles

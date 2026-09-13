@@ -1,4 +1,4 @@
-import type { IntegrationProviderId } from '@entrophy/types/integrations';
+import type { IntegrationProviderId } from '@pavisie/types/integrations';
 import type { PluginJob } from '../../sdk';
 import { getProvider, isProviderEnvSatisfied, PROVIDER_ENUM_MAP } from '../providers';
 import { markConnectionError } from '../providers/util';

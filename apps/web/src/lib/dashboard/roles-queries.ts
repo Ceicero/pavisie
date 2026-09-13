@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Paginated, RolePanelDto } from '@entrophy/types';
+import type { Paginated, RolePanelDto } from '@pavisie/types';
 import type {
   AutoRolesDto,
   OnboardingConfigDto,
@@ -10,7 +10,7 @@ import type {
   VerificationRequestDto,
   VerificationSettingsDto,
   WelcomeGoodbyeDto,
-} from '@entrophy/types/roles';
+} from '@pavisie/types/roles';
 import { apiFetch } from './api';
 
 export const rolesQueryKeys = {

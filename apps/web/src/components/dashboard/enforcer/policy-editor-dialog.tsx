@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { EnforcerPolicyDto } from '@entrophy/types';
+import type { EnforcerPolicyDto } from '@pavisie/types';
 import {
   Button,
   Dialog,
@@ -18,7 +18,7 @@ import {
   SelectValue,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { MatcherBuilder } from './matcher-builder';
 import { MultiRolePicker } from '../multi-role-picker';
 import {

@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-// `@entrophy/core`'s `env` (and the `isProduction` flag derived from it) is parsed once, the moment the module
+// `@pavisie/core`'s `env` (and the `isProduction` flag derived from it) is parsed once, the moment the module
 // is first imported, from whatever `process.env` holds at that instant. Vitest gives every test *file* an
 // isolated module registry (default `pool: 'threads'`, `isolate: true`), so setting `process.env.NODE_ENV` here
-// only affects this file — but only if we avoid any *static* import that transitively pulls in `@entrophy/core`
+// only affects this file — but only if we avoid any *static* import that transitively pulls in `@pavisie/core`
 // (ES module imports are always evaluated before the importing module's own top-level statements run,
-// regardless of where the `import` appears in the file). `vitest` itself doesn't import `@entrophy/core`, so
+// regardless of where the `import` appears in the file). `vitest` itself doesn't import `@pavisie/core`, so
 // it's safe to import statically; `./helpers/build-test-app` (which does, via `../../src/app`) is imported
 // dynamically in `beforeAll`, after the env var below is set. Same pattern as donations-enabled.test.ts.
 process.env.NODE_ENV = 'production';

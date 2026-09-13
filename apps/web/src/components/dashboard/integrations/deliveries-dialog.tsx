@@ -13,7 +13,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { useOutboundDeliveries } from '@/lib/dashboard/integrations-queries';
 import { ErrorState } from '../error-state';
 

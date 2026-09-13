@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { FlaskConical, Pencil, Plus, Trash2 } from 'lucide-react';
-import type { EnforcerPolicyDto } from '@entrophy/types';
+import type { EnforcerPolicyDto } from '@pavisie/types';
 import {
   Badge,
   Button,
@@ -14,7 +14,7 @@ import {
   PageHeader,
   Switch,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import {
   useDeleteEnforcerPolicy,
   useEnforcerPolicies,

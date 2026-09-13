@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/brand/entrophy-skull.png" width="120" alt="Entrophy" />
+  <img src="assets/brand/pavisie-skull.png" width="120" alt="Pavisie" />
 </p>
 
-<h1 align="center">Entrophy</h1>
+<h1 align="center">Pavisie</h1>
 
 <p align="center">A modular, compliance-first Discord bot platform.</p>
 
@@ -10,7 +10,7 @@
 
 ## Table of contents
 
-1. [What Entrophy is](#what-entrophy-is)
+1. [What Pavisie is](#what-pavisie-is)
 2. [Feature overview](#feature-overview)
 3. [Architecture at a glance](#architecture-at-a-glance)
 4. [Prerequisites](#prerequisites)
@@ -32,13 +32,13 @@
 
 ---
 
-## What Entrophy is
+## What Pavisie is
 
-Entrophy is a production-ready, modular "all-in-one" Discord bot platform: moderation, automod,
+Pavisie is a production-ready, modular "all-in-one" Discord bot platform: moderation, automod,
 logging, tickets, roles and onboarding, leveling and community features, integrations, an optional
 AI assistant, and a full admin dashboard, all built as independently enable/disable-able plugins per
 server. The brand is deliberately **monochrome** — black, grey, and white, everywhere from the bot's
-avatar (a pixel-art skull) to the dashboard to the public marketing site — because Entrophy's pitch
+avatar (a pixel-art skull) to the dashboard to the public marketing site — because Pavisie's pitch
 isn't a flashy feature list, it's trust: every action the bot takes is logged, every permission it
 asks for is least-privilege and explained, and nothing about how it moderates your server is hidden
 from you.
@@ -57,7 +57,7 @@ platform, not just Enforcer. Compliance isn't a checkbox here; it's the product'
 
 ## Using the bot: the + prefix
 
-Every Entrophy command works two ways: type it in chat with a `+` prefix (e.g. `+help`, `+mod ban @user spam`) or use the `/` slash-command menu. The `+` prefix is there because a busy server's slash menu is crowded with other bots — with `+`, you type faster and the command reference is always one `+help` away. Start with **`+help`** to see every command. Both forms work identically; use whichever feels natural.
+Every Pavisie command works two ways: type it in chat with a `+` prefix (e.g. `+help`, `+mod ban @user spam`) or use the `/` slash-command menu. The `+` prefix is there because a busy server's slash menu is crowded with other bots — with `+`, you type faster and the command reference is always one `+help` away. Start with **`+help`** to see every command. Both forms work identically; use whichever feels natural.
 
 ## Feature overview
 
@@ -90,12 +90,12 @@ Full command list per plugin: `docs/commands.json` (generated, always current) o
 ## Architecture at a glance
 
 ```
-entrophy/
+pavisie/
 ├── apps/
 │   ├── bot/            Discord gateway process + BullMQ workers
 │   ├── api/             Fastify REST API, Discord OAuth, webhook receivers, OpenAPI
-│   ├── dashboard/       Next.js app; legacy app.entrophybot.com redirector today, owner-only ops console next
-│   └── web/             Next.js public marketing site + donations + the per-guild config dashboard (entrophybot.com, incl. /dashboard/**)
+│   ├── dashboard/       Next.js app; legacy app.pavisie.com redirector today, owner-only ops console next
+│   └── web/             Next.js public marketing site + donations + the per-guild config dashboard (pavisie.com, incl. /dashboard/**)
 ├── packages/
 │   ├── types/           Shared TypeScript types (no runtime deps)
 │   ├── core/             env config, logger, errors, encryption, permissions, rate limiting, i18n
@@ -105,7 +105,7 @@ entrophy/
 ├── infra/
 │   ├── docker/           Dockerfile.bot, Dockerfile.api, Dockerfile.dashboard, Dockerfile.web
 │   └── DEPLOYMENT.md
-├── assets/brand/         Logo source (entrophy-skull.png / .jpg)
+├── assets/brand/         Logo source (pavisie-skull.png / .jpg)
 ├── docs/                 SPEC, ARCHITECTURE, PERMISSIONS, TROUBLESHOOTING, and more
 ├── .github/workflows/ci.yml
 ├── docker-compose.yml
@@ -136,10 +136,10 @@ See `docs/ARCHITECTURE.md` for the full binding design and `docs/SPEC.md` for pr
 ## Discord Developer Portal setup
 
 1. Go to <https://discord.com/developers/applications> and click **New Application**.
-2. Name it (e.g. "Entrophy") and click **Create**.
+2. Name it (e.g. "Pavisie") and click **Create**.
 3. On the **General Information** page, click the app icon and upload
-   `assets/brand/entrophy-skull.png` as the application icon. Click **Save Changes**.
-4. Click **Bot** in the left sidebar. Upload the same `assets/brand/entrophy-skull.png` as the bot's
+   `assets/brand/pavisie-skull.png` as the application icon. Click **Save Changes**.
+4. Click **Bot** in the left sidebar. Upload the same `assets/brand/pavisie-skull.png` as the bot's
    avatar.
 5. Still on the **Bot** page, click **Reset Token** → confirm → **Copy**. This is your
    `DISCORD_TOKEN` — treat it like a password; it's shown only once per reset.
@@ -154,12 +154,12 @@ See `docs/ARCHITECTURE.md` for the full binding design and `docs/SPEC.md` for pr
      [Privileged Intent FAQ](https://support-dev.discord.com/hc/en-us/articles/4404772028055) for
      the eligibility/verification process. Below that threshold it works immediately when you flip
      the toggle.
-   - **Presence Intent** — leave off; nothing in Entrophy uses it by default.
+   - **Presence Intent** — leave off; nothing in Pavisie uses it by default.
 7. Click **OAuth2** in the sidebar → **General**. Under **Redirects**, click **Add Redirect** and
    add **both** of these (one for local development, one for production):
    ```
    http://localhost:3001/auth/discord/callback
-   https://api.entrophybot.com/auth/discord/callback
+   https://api.pavisie.com/auth/discord/callback
    ```
    Click **Save Changes**.
 8. On the same page, copy the **Client ID** (also shown on General Information as **Application
@@ -185,7 +185,7 @@ is requested is in `docs/PERMISSIONS.md` → "Invite permissions".
 
 ```bash
 git clone <this repo>
-cd entrophy
+cd pavisie
 cp .env.example .env
 ```
 
@@ -205,7 +205,7 @@ Then:
 ```bash
 docker compose up -d          # postgres, redis, migrate (runs once), bot, api, dashboard, web
 pnpm install                  # only needed once, so you can run pnpm scripts on your host below
-pnpm --filter @entrophy/bot register --guild YOUR_TEST_SERVER_ID   # instant command registration
+pnpm --filter @pavisie/bot register --guild YOUR_TEST_SERVER_ID   # instant command registration
 ```
 
 The `migrate` service in `docker-compose.yml` runs `pnpm db:migrate` automatically before `bot`,
@@ -258,24 +258,24 @@ managed Postgres/Redis, deploy straight from GitHub). Render (via `render.yaml`)
 updating, rollback, rough cost guidance) — this README only summarizes the shape of it so it isn't
 duplicated in two places.
 
-Canonical production layout on `entrophybot.com`:
+Canonical production layout on `pavisie.com`:
 
 | Surface                        | URL                                                   | Key env var(s)                                                   |
 | ------------------------------ | ----------------------------------------------------- | ---------------------------------------------------------------- |
-| Website + config dashboard     | `https://entrophybot.com` (+ `www` redirects to apex), dashboard at `/dashboard/**` | `WEB_URL`                                    |
-| Legacy dashboard redirect / ops console | `https://app.entrophybot.com`                | `DASHBOARD_URL` (same value as `WEB_URL` now)                    |
-| API                            | `https://api.entrophybot.com`                         | `API_BASE_URL`, `NEXT_PUBLIC_API_URL`, `PUBLIC_WEBHOOK_BASE_URL` |
-| Cookies                        | shared apex domain                                    | `COOKIE_DOMAIN=.entrophybot.com`, `SESSION_COOKIE_SAMESITE=lax`  |
-| Discord OAuth redirect         | `https://api.entrophybot.com/auth/discord/callback`   | `DISCORD_OAUTH_REDIRECT_URI`                                     |
-| Twitch/GitHub/generic webhooks | `https://api.entrophybot.com/webhooks/...`            | —                                                                |
+| Website + config dashboard     | `https://pavisie.com` (+ `www` redirects to apex), dashboard at `/dashboard/**` | `WEB_URL`                                    |
+| Legacy dashboard redirect / ops console | `https://app.pavisie.com`                | `DASHBOARD_URL` (same value as `WEB_URL` now)                    |
+| API                            | `https://api.pavisie.com`                         | `API_BASE_URL`, `NEXT_PUBLIC_API_URL`, `PUBLIC_WEBHOOK_BASE_URL` |
+| Cookies                        | shared apex domain                                    | `COOKIE_DOMAIN=.pavisie.com`, `SESSION_COOKIE_SAMESITE=lax`  |
+| Discord OAuth redirect         | `https://api.pavisie.com/auth/discord/callback`   | `DISCORD_OAUTH_REDIRECT_URI`                                     |
+| Twitch/GitHub/generic webhooks | `https://api.pavisie.com/webhooks/...`            | —                                                                |
 
-`.env.production.example` is pre-filled with every one of these values for `entrophybot.com` —
+`.env.production.example` is pre-filled with every one of these values for `pavisie.com` —
 copy it and fill in only the blank secrets (`DATABASE_URL`, `REDIS_URL`, `DISCORD_TOKEN`,
 `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `ENCRYPTION_KEY`, `SESSION_SECRET`, and whichever
 optional integrations you're turning on).
 
 **DNS**: at your registrar, create `CNAME app`, `CNAME api`, `CNAME www` pointed at your host's
-per-service targets, and an apex `entrophybot.com` record via ALIAS/ANAME (or your host's specific
+per-service targets, and an apex `pavisie.com` record via ALIAS/ANAME (or your host's specific
 apex-domain instructions). TLS is provisioned automatically by the host once DNS resolves.
 
 Not a developer, or want the exact Railway click-path with no jargon? See
@@ -305,7 +305,7 @@ Defaults, out of the box, before any admin changes a setting:
 - **Data retention is configurable per server**, with sensible defaults (e.g. 90 days for logs and
   ticket transcripts) enforced by an automatic retention job.
 - **Export and delete** are self-serve from the dashboard's **Privacy** page — an admin can export
-  everything Entrophy holds for their server as JSON, or request full deletion (guild data cascades
+  everything Pavisie holds for their server as JSON, or request full deletion (guild data cascades
   from a single `Guild` row deletion).
 - **OAuth tokens and webhook secrets are encrypted at rest** (AES-256-GCM) and only decrypted
   in-process to make the one API call that needs them.
@@ -315,12 +315,12 @@ advice): **`docs/PRIVACY_POLICY_TEMPLATE.md`**.
 
 ## Website & donations
 
-`apps/web` (`@entrophy/web`) is the public marketing site at `entrophybot.com` — separate from the
+`apps/web` (`@pavisie/web`) is the public marketing site at `pavisie.com` — separate from the
 admin dashboard, monochrome "smoky UI" theme, and its command documentation is generated from the
 real plugin registry so it can never hand-drift from what the bot registers (see
 [Development](#development)).
 
-Donations are handled entirely by **Ko-fi** (a third-party donation platform) — Entrophy no longer processes
+Donations are handled entirely by **Ko-fi** (a third-party donation platform) — Pavisie no longer processes
 payments at all. The Donate page links to the operator's Ko-fi page when configured, or shows a "not set up"
 notice when missing. See `docs/ARCHITECTURE.md` §18 for the full contract and `docs/SECURITY.md` for the
 incident history (Stripe account ban on 2026-08-26 → moved to Ko-fi). Required env: `KOFI_URL` (full Ko-fi
@@ -350,7 +350,7 @@ Root scripts (`package.json`), run from the repo root:
 | `pnpm db:generate`             | Regenerates the Prisma client                                                                                                                                           |
 | `pnpm db:migrate`              | Applies committed migrations (`prisma migrate deploy`) — safe for production                                                                                            |
 | `pnpm db:migrate:dev`          | Generates + applies a new migration from schema changes — dev only, never against prod                                                                                  |
-| `pnpm db:seed`                 | Seeds a clearly-labelled demo guild (`Entrophy Demo (seed)`) — never fake real-looking data                                                                             |
+| `pnpm db:seed`                 | Seeds a clearly-labelled demo guild (`Pavisie Demo (seed)`) — never fake real-looking data                                                                             |
 | `pnpm commands:register`       | Registers slash/context-menu commands with Discord (`DEV_GUILD_ID` if set, else global)                                                                                 |
 | `pnpm commands:export`         | Regenerates `docs/commands.json`, `docs/invite.json`, and the website's copies from the live plugin registry                                                            |
 | `pnpm docs:permissions`        | Regenerates `docs/PERMISSIONS.md` from the live plugin registry                                                                                                         |
@@ -384,7 +384,7 @@ MVP → v1 → future modules, in order: **`docs/ROADMAP.md`**.
 
 ## License
 
-Entrophy is open source under the **GNU Affero General Public License v3.0** — see [LICENSE](LICENSE).
+Pavisie is open source under the **GNU Affero General Public License v3.0** — see [LICENSE](LICENSE).
 In short: you are free to use, study, modify, and self-host it, but if you run a modified version as a
 network service you must make your modified source available to its users under the same license.
 

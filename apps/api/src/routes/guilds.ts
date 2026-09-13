@@ -1,6 +1,6 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import type { GuildConfigDto, GuildOverviewDto, GuildSummary } from '@entrophy/types';
+import type { GuildConfigDto, GuildOverviewDto, GuildSummary } from '@pavisie/types';
 import { decryptAccessToken } from '../lib/session';
 import { buildGuildIconUrl, getCachedUserGuilds, hasManageAccess } from '../lib/discord';
 import { requireAuth, requireGuildAccess } from '../lib/guild-access';
@@ -124,7 +124,7 @@ export default async function guildsRoutes(app: ZodFastifyInstance): Promise<voi
         setupIssues.push('No moderator roles configured (set them under Settings).');
       }
       if (!botPresent) {
-        setupIssues.push('Entrophy is not in this server yet — invite it from the server list.');
+        setupIssues.push('Pavisie is not in this server yet — invite it from the server list.');
       }
 
       return {

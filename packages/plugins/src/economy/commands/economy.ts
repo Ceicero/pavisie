@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { hasStaffLevel } from '@entrophy/core';
+import { hasStaffLevel } from '@pavisie/core';
 import {
   errorEmbed,
   infoEmbed,

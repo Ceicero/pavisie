@@ -1,4 +1,4 @@
-import { buildPaginated, paginate } from '@entrophy/core';
+import { buildPaginated, paginate } from '@pavisie/core';
 import type {
   OwnerMetricsErrorDto,
   OwnerMetricsGrowthDto,
@@ -6,7 +6,7 @@ import type {
   OwnerMetricsGuildDto,
   OwnerMetricsOverviewDto,
   Paginated,
-} from '@entrophy/types';
+} from '@pavisie/types';
 import { requireBotOwner } from '../lib/bot-owner';
 import type { ZodFastifyInstance } from '../lib/http';
 import {
@@ -46,7 +46,7 @@ function startOfUtcDay(date: Date): Date {
 }
 
 /**
- * `/owner/metrics` — read-only ops metrics backing the local "Entrophy Dev" desktop app (Electron, owner-only,
+ * `/owner/metrics` — read-only ops metrics backing the local "Pavisie Dev" desktop app (Electron, owner-only,
  * not part of the web dashboard). Every route here is gated on bot-owner identity (`requireBotOwner`), NOT
  * `requireGuildAccess` — same reasoning as `routes/developer-reports.ts`: this data is intentionally
  * cross-guild, which is exactly why it must never be reachable by a regular guild-managing dashboard session.

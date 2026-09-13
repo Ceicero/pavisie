@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { PermissionError, ValidationError, newId } from '@entrophy/core';
+import { PermissionError, ValidationError, newId } from '@pavisie/core';
 import { errorEmbed, listEmbed, successEmbed, type CommandContext, type PluginCommand } from '../../sdk';
 import { hasDjPermission } from '../dj-gate';
 import { MediaUnavailableError } from '../errors';

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PermissionFlagsBits, type Client, type Message } from 'discord.js';
-import type { PrismaClient } from '@entrophy/database';
+import type { PrismaClient } from '@pavisie/database';
 import { createTestContext } from '../../sdk/testing';
 import { messageCreateHandler } from '../events/message-create';
 import type { EnforcerConfig } from '../manifest';

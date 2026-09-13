@@ -1,7 +1,7 @@
 'use client';
 
-import type { PluginSummary } from '@entrophy/types';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Switch, useToast } from '@entrophy/ui';
+import type { PluginSummary } from '@pavisie/types';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Switch, useToast } from '@pavisie/ui';
 import { useTogglePlugin } from '@/lib/dashboard/queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 

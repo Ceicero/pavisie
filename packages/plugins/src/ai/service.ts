@@ -1,4 +1,4 @@
-import { AppError, Cooldowns, RateLimitError } from '@entrophy/core';
+import { AppError, Cooldowns, RateLimitError } from '@pavisie/core';
 import type { AiCompleteInput, AiCompleteResult, AiService, PluginContext } from '../sdk';
 import { checkBudget, recordUsage, reconcileUsage, releaseReservation, reserveBudget } from './budget';
 import { AI_MAX_OUTPUT_TOKENS } from './manifest';

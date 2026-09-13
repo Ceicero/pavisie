@@ -6,7 +6,7 @@ import {
   type GuildTextBasedChannel,
   type User,
 } from 'discord.js';
-import { NotFoundError, ValidationError, redisKey } from '@entrophy/core';
+import { NotFoundError, ValidationError, redisKey } from '@pavisie/core';
 import {
   nextCaseNumber,
   withNextCaseNumber,
@@ -16,7 +16,7 @@ import {
   type ModerationNote,
   type ModerationWarning,
   type Prisma,
-} from '@entrophy/database';
+} from '@pavisie/database';
 import {
   buildCustomId,
   resolveTextChannel,
@@ -1326,7 +1326,7 @@ export class ModerationServiceImpl implements ModerationService {
 }
 
 // -----------------------------------------------------------------------
-// Cursor helpers (offset-based, matching @entrophy/core's paginate() shape without importing an api-only dep)
+// Cursor helpers (offset-based, matching @pavisie/core's paginate() shape without importing an api-only dep)
 // -----------------------------------------------------------------------
 
 function decodeOffsetCursor(cursor: string | null | undefined): number {

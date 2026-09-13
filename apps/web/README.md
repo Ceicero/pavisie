@@ -1,16 +1,16 @@
-# @entrophy/web
+# @pavisie/web
 
-The public Entrophy marketing website **and, since the dashboard→web merge, the per-guild config
-dashboard** (`/dashboard/**` — formerly its own app, `@entrophy/dashboard`; that app is now a
+The public Pavisie marketing website **and, since the dashboard→web merge, the per-guild config
+dashboard** (`/dashboard/**` — formerly its own app, `@pavisie/dashboard`; that app is now a
 legacy-link redirector, see `apps/dashboard/README.md`). Next.js 15 App Router, Tailwind 3. Marketing
-pages use a monochrome (black/grey/white) "smoky UI" theme; dashboard pages use `@entrophy/ui`'s
+pages use a monochrome (black/grey/white) "smoky UI" theme; dashboard pages use `@pavisie/ui`'s
 shadcn-style tokens. See `docs/ARCHITECTURE.md` §17 (site) and §11 (dashboard) for the full design,
 and `docs/SPEC.md` §M for requirements.
 
-Marketing pages depend only on `@entrophy/types` and the site's own small monochrome component set
-under `src/components/` (not `@entrophy/ui`, not `@entrophy/core`) — they call the public API
+Marketing pages depend only on `@pavisie/types` and the site's own small monochrome component set
+under `src/components/` (not `@pavisie/ui`, not `@pavisie/core`) — they call the public API
 directly over `fetch`. The dashboard routes under `src/app/dashboard/**` (and their components/lib
-under `src/components/dashboard/**`, `src/lib/dashboard/**`) additionally depend on `@entrophy/ui`,
+under `src/components/dashboard/**`, `src/lib/dashboard/**`) additionally depend on `@pavisie/ui`,
 `@tanstack/react-query`, and `next-themes`; both component systems coexist via one Tailwind config
 (`tailwind.config.ts`'s `presets: [preset]` plus the site's own `ink`/`grey`/`paper` tokens). One
 top bar (`src/components/TopBar.tsx`) and one root `Providers` (`src/components/Providers.tsx`,
@@ -34,7 +34,7 @@ Command documentation is **generated, never hand-maintained** — see "Data" bel
 ## Local development
 
 ```
-pnpm --filter @entrophy/web dev
+pnpm --filter @pavisie/web dev
 ```
 
 Runs on <http://localhost:3003>. `predev`/`prebuild` run `scripts/sync-brand.mjs` first, which copies the brand
@@ -42,7 +42,7 @@ logo from `assets/brand/` into `public/brand/`, `src/data/brand.json`, and `src/
 never fails the build — if the source asset is missing; every consumer degrades to a text wordmark or plain
 Open Graph text instead).
 
-For the donate page to show the Ko-fi link-out, run `@entrophy/api` locally (`pnpm --filter @entrophy/api dev`)
+For the donate page to show the Ko-fi link-out, run `@pavisie/api` locally (`pnpm --filter @pavisie/api dev`)
 with `KOFI_URL` set — otherwise `/donate` correctly shows the "not configured" state.
 
 ## Environment
@@ -50,12 +50,12 @@ with `KOFI_URL` set — otherwise `/donate` correctly shows the "not configured"
 See the root `.env.example` for the full list. This app reads, all via `NEXT_PUBLIC_*` (inlined at build time into
 both server and client bundles):
 
-- `NEXT_PUBLIC_API_URL` — base URL of `@entrophy/api`, used for `GET /donations/config` and by every
+- `NEXT_PUBLIC_API_URL` — base URL of `@pavisie/api`, used for `GET /donations/config` and by every
   dashboard page's `apiFetch`/React Query hooks.
 - `NEXT_PUBLIC_DISCORD_CLIENT_ID` — builds the "Add to Discord" OAuth URL. When unset, the CTA falls back to
   "Explore features" instead of linking to a broken authorize URL.
 - `NEXT_PUBLIC_INVITE_PERMISSIONS` — invite permission bitfield (integer string). Defaults to the value baked
-  into `src/data/invite.json` (kept in sync with `INVITE_PERMISSIONS` in `@entrophy/core` by `pnpm commands:export`).
+  into `src/data/invite.json` (kept in sync with `INVITE_PERMISSIONS` in `@pavisie/core` by `pnpm commands:export`).
 - `NEXT_PUBLIC_SUPPORT_SERVER_URL` — optional; shows a "Support server" link in the footer and the dashboard
   sidebar/error states.
 
@@ -94,11 +94,11 @@ site — headlines, "why gaming communities love it" bullets, the Enforcer FAQ, 
 ## Testing & build
 
 ```
-pnpm --filter @entrophy/web typecheck
-pnpm --filter @entrophy/web lint
-pnpm --filter @entrophy/web test    # includes the moved dashboard-nav/brand-wordmark/middleware suites
-pnpm --filter @entrophy/web build   # standalone output is auto-skipped on win32; see next.config.ts
-pnpm --filter @entrophy/web test:e2e
+pnpm --filter @pavisie/web typecheck
+pnpm --filter @pavisie/web lint
+pnpm --filter @pavisie/web test    # includes the moved dashboard-nav/brand-wordmark/middleware suites
+pnpm --filter @pavisie/web build   # standalone output is auto-skipped on win32; see next.config.ts
+pnpm --filter @pavisie/web test:e2e
 ```
 
 `e2e/` has the marketing smoke specs (`home.spec.ts`, no API/auth needed) plus, since the merge,

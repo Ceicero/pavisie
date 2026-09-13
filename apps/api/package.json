@@ -1,5 +1,5 @@
 {
-  "name": "@entrophy/api",
+  "name": "@pavisie/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,10 +12,10 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@entrophy/core": "workspace:*",
-    "@entrophy/database": "workspace:*",
-    "@entrophy/plugins": "workspace:*",
-    "@entrophy/types": "workspace:*",
+    "@pavisie/core": "workspace:*",
+    "@pavisie/database": "workspace:*",
+    "@pavisie/plugins": "workspace:*",
+    "@pavisie/types": "workspace:*",
     "@fastify/cookie": "^11.0.1",
     "@fastify/cors": "^10.0.1",
     "@fastify/helmet": "^13.0.1",

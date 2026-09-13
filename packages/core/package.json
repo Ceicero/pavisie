@@ -1,5 +1,5 @@
 {
-  "name": "@entrophy/core",
+  "name": "@pavisie/core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@entrophy/types": "workspace:*",
+    "@pavisie/types": "workspace:*",
     "zod": "^3.24.1",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",

@@ -1,5 +1,5 @@
 import type { GuildMember, ModalSubmitInteraction } from 'discord.js';
-import { NotFoundError } from '@entrophy/core';
+import { NotFoundError } from '@pavisie/core';
 import { fetchMemberSafe, hierarchyGuard, type ComponentHandler } from '../../sdk';
 import { buildCaseLogEmbed } from '../embeds';
 import { moderationService } from '../commands/shared';

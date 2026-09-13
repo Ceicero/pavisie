@@ -7,7 +7,7 @@ import {
   type ButtonInteraction,
   type ModalSubmitInteraction,
 } from 'discord.js';
-import { PermissionError, ValidationError, hasStaffLevel } from '@entrophy/core';
+import { PermissionError, ValidationError, hasStaffLevel } from '@pavisie/core';
 import {
   buildCustomId,
   errorEmbed,

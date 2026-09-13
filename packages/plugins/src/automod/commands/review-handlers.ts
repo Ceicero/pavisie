@@ -6,7 +6,7 @@ import {
   type ButtonInteraction,
   type StringSelectMenuInteraction,
 } from 'discord.js';
-import { AuditAction } from '@entrophy/core';
+import { AuditAction } from '@pavisie/core';
 import {
   buildCustomId,
   errorEmbed,

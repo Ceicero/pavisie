@@ -1,13 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import type { ZodFastifyInstance } from '../lib/http';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import { registerOverlayConnection, unregisterOverlayConnection } from '../lib/overlay-registry';
 import { resolveOverlayChannelId } from '../lib/overlay-token';
 
 const tokenParamSchema = z.object({ token: z.string().min(1) });
 // audioId is generated server-side (uuid/cuid-shaped) and interpolated straight into a Redis key
-// (`entrophy:overlay:tts:<audioId>`) below — pin it to a safe id alphabet before it ever reaches Redis.
+// (`pavisie:overlay:tts:<audioId>`) below — pin it to a safe id alphabet before it ever reaches Redis.
 const ttsParamSchema = z.object({
   token: z.string().min(1),
   audioId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
@@ -40,7 +40,7 @@ function pageShell(body: string): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Entrophy Overlay</title>
+<title>Pavisie Overlay</title>
 <style>
   html, body { margin: 0; padding: 0; background: transparent; }
   body { width: 100vw; height: 100vh; overflow: hidden; }

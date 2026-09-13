@@ -1,4 +1,4 @@
-import { Prisma, type PrismaClient } from '@entrophy/database';
+import { Prisma, type PrismaClient } from '@pavisie/database';
 import { describe, expect, it } from 'vitest';
 import { withNextRecordNumber } from '../service';
 
@@ -10,7 +10,7 @@ function p2002(): Prisma.PrismaClientKnownRequestError {
 }
 
 /**
- * `withNextRecordNumber` calls `@entrophy/database`'s `nextEnforcerRecordNumber`, which wraps its `aggregate`
+ * `withNextRecordNumber` calls `@pavisie/database`'s `nextEnforcerRecordNumber`, which wraps its `aggregate`
  * read in `prisma.$transaction(async tx => ...)`. The SDK's generic `createPrismaStub` (sdk/testing.ts) can't
  * stub a directly-callable `prisma.$transaction` (every property access returns a nested method proxy, never a
  * callable function) — packages/plugins/src/tickets/number.ts hit the same limitation and worked around it by

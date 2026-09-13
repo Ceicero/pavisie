@@ -1,13 +1,13 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Paginated } from '@entrophy/types';
+import type { Paginated } from '@pavisie/types';
 import type {
   EngagementConfigDto,
   LevelProfileDto,
   LevelRewardDto,
   ReputationLeaderboardEntryDto,
-} from '@entrophy/types/engagement';
+} from '@pavisie/types/engagement';
 import { apiFetch, toQueryString } from './api';
 
 /** Own query-key namespace for the engagement plugin, kept separate from the shared `queryKeys` in `./queries.ts` (which this app must not edit). */

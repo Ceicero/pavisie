@@ -1,7 +1,7 @@
 // Typed access to `src/data/commands.json`, generated from the real plugin registry by
-// `pnpm --filter @entrophy/plugins export:commands` (ARCHITECTURE.md §17) — never hand-maintained, so the
+// `pnpm --filter @pavisie/plugins export:commands` (ARCHITECTURE.md §17) — never hand-maintained, so the
 // website's command documentation cannot drift from what the bot actually registers.
-import type { PluginId, StaffLevel } from '@entrophy/types';
+import type { PluginId, StaffLevel } from '@pavisie/types';
 import commandsData from '../data/commands.json';
 
 export interface CommandOption {

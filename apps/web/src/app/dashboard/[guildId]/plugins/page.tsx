@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import type { PluginSummary } from '@entrophy/types';
+import type { PluginSummary } from '@pavisie/types';
 import {
   Button,
   EmptyState,
@@ -15,7 +15,7 @@ import {
   SheetTitle,
   Skeleton,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { usePluginConfig, usePlugins, useUpdatePluginConfig } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
 import { PluginCard } from '@/components/dashboard/plugin-card';

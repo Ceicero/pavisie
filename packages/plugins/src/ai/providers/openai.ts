@@ -1,4 +1,4 @@
-import { assertPublicHttpUrl, ExternalServiceError, SsrfError } from '@entrophy/core';
+import { assertPublicHttpUrl, ExternalServiceError, SsrfError } from '@pavisie/core';
 import { fetchWithTimeout } from './fetch-with-timeout';
 import type { AiCompleteRequest, AiCompleteResponse, AiProvider } from './types';
 

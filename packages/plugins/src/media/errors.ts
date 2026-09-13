@@ -1,4 +1,4 @@
-import { AppError } from '@entrophy/core';
+import { AppError } from '@pavisie/core';
 
 /** 503, `expose: true` — the plugin/provider isn't usable right now, and the reason is meant to reach the user (SPEC.md §I: "explain why in /plugin status", and every command should say the same thing). */
 export class MediaUnavailableError extends AppError {

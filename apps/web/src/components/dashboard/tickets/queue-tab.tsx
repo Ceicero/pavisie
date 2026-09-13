@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import type { TicketQueueItemDto } from '@entrophy/types/tickets';
+import type { TicketQueueItemDto } from '@pavisie/types/tickets';
 import {
   Badge,
   Input,
@@ -11,7 +11,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import { formatRelativeTime } from '@/lib/dashboard/format';
 import { useTicketQueue, type TicketQueueFilters } from '@/lib/dashboard/tickets-queries';
 import { DataTable, type DataTableColumn } from '../data-table';

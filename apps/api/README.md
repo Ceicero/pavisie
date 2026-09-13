@@ -1,14 +1,14 @@
-# @entrophy/api
+# @pavisie/api
 
-Fastify 5 REST API for the Entrophy dashboard: Discord OAuth + sessions, guild/plugin config, moderation,
+Fastify 5 REST API for the Pavisie dashboard: Discord OAuth + sessions, guild/plugin config, moderation,
 automod, logging, tickets, roles, engagement, community, integrations (OAuth + inbound webhooks), AI settings,
 analytics, and privacy/data-retention endpoints. See `docs/ARCHITECTURE.md` §10 for the binding design.
 
 ## Running
 
 ```bash
-pnpm --filter @entrophy/api dev     # tsx watch src/index.ts
-pnpm --filter @entrophy/api start   # tsx src/index.ts (prod)
+pnpm --filter @pavisie/api dev     # tsx watch src/index.ts
+pnpm --filter @pavisie/api start   # tsx src/index.ts (prod)
 ```
 
 Requires `DATABASE_URL`, `REDIS_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `SESSION_SECRET`,
@@ -20,10 +20,10 @@ Swagger UI is served at `GET /docs` once the server is running; the raw OpenAPI 
 ## Scripts
 
 ```bash
-pnpm --filter @entrophy/api typecheck
-pnpm --filter @entrophy/api test
-pnpm --filter @entrophy/api lint
-pnpm --filter @entrophy/api openapi:export   # writes docs/openapi.json from a fake-backed app instance
+pnpm --filter @pavisie/api typecheck
+pnpm --filter @pavisie/api test
+pnpm --filter @pavisie/api lint
+pnpm --filter @pavisie/api openapi:export   # writes docs/openapi.json from a fake-backed app instance
 ```
 
 ## Architecture
@@ -59,7 +59,7 @@ pnpm --filter @entrophy/api openapi:export   # writes docs/openapi.json from a f
   present in that guild (404 otherwise) unless the route opts out.
 - **Webhooks**: raw-body signature verification (GitHub `X-Hub-Signature-256`, Stripe `Stripe-Signature`,
   Twitch EventSub HMAC + `webhook_callback_verification` challenge echo, and a generic
-  `X-Entrophy-Signature` HMAC for per-guild endpoints), idempotent via `ProcessedWebhookEvent`
+  `X-Pavisie-Signature` HMAC for per-guild endpoints), idempotent via `ProcessedWebhookEvent`
   (`@@unique([provider, eventId])`), 5MB body limit, then enqueued onto the `integrations.inbound` BullMQ
   queue for the bot host to process.
 - **Errors**: `setErrorHandler` never leaks stack traces or raw internal error messages — only `AppError`s

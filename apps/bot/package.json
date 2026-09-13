@@ -1,5 +1,5 @@
 {
-  "name": "@entrophy/bot",
+  "name": "@pavisie/bot",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,10 +18,10 @@
     "ioredis": "^5.4.2",
     "pino": "^9.6.0",
     "zod": "^3.24.1",
-    "@entrophy/core": "workspace:*",
-    "@entrophy/database": "workspace:*",
-    "@entrophy/plugins": "workspace:*",
-    "@entrophy/types": "workspace:*"
+    "@pavisie/core": "workspace:*",
+    "@pavisie/database": "workspace:*",
+    "@pavisie/plugins": "workspace:*",
+    "@pavisie/types": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.2",

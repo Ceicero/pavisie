@@ -15,7 +15,7 @@ import {
 
 const data = new SlashCommandBuilder()
   .setName('help')
-  .setDescription('Every Entrophy command. Tip: just type +help in chat.')
+  .setDescription('Every Pavisie command. Tip: just type +help in chat.')
   .setDMPermission(false);
 
 const MAX_SELECT_OPTIONS = 25;
@@ -26,7 +26,7 @@ const MAX_SELECT_OPTIONS = 25;
  * description even on the degraded paths where the plugin catalog itself is unavailable.
  */
 const PREFIX_LEAD =
-  `**Type \`${HELP_COMMAND_DISPLAY}\` in any channel.** Every Entrophy command works two ways — as a ` +
+  `**Type \`${HELP_COMMAND_DISPLAY}\` in any channel.** Every Pavisie command works two ways — as a ` +
   `\`${COMMAND_PREFIX_DISPLAY}\` message command or as a \`/\` slash command. Same command, same permissions.`;
 
 /** Brand-styled help embed (colour, footer and timestamp from `brandEmbed`) that always leads with the prefix. */
@@ -96,7 +96,7 @@ export const command: PluginCommand = {
         name: 'Getting started',
         value:
           `${c.t('help.intro')}\n\n` +
-          '[entrophybot.com](https://entrophybot.com) · [Open the dashboard](https://entrophybot.com/dashboard)',
+          '[pavisie.com](https://pavisie.com) · [Open the dashboard](https://pavisie.com/dashboard)',
       });
 
     await c.interaction.reply({ embeds: [embed], components: [row] });

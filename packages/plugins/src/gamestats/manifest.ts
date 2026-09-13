@@ -38,13 +38,13 @@ export const manifest = defineManifest({
   // Deliberately no `dashboard` entry yet: v1 has no per-guild config worth a dedicated page (matches
   // media/manifest.ts's reasoning) — members manage their own link with `/dbd link|unlink`.
   privacyNotes: [
-    'Linking is self-reported and unverified: a member pastes a SteamID64/profile URL/vanity name — there is no Steam sign-in, so Entrophy cannot confirm the account actually belongs to them.',
+    'Linking is self-reported and unverified: a member pastes a SteamID64/profile URL/vanity name — there is no Steam sign-in, so Pavisie cannot confirm the account actually belongs to them.',
     'The only guard against misuse is that the same Steam account cannot be linked by more than one member in the same server at once — linking an account already claimed there is rejected.',
     'Linking a Steam account stores only your SteamID64 and cached persona name — never your full Steam profile, friends list, or library.',
     "Stat snapshots store only the curated stat keys the linked game descriptor displays (e.g. escapes, kills, bloodpoints for Dead by Daylight) — never the provider's full stats payload.",
     "Latest snapshot only: refreshing a member's stats overwrites the previous snapshot, there is no history.",
     "Linking/unlinking is self-service (`/dbd link`, `/dbd unlink`) and is not audited, matching the community plugin's birthdays.",
     'Steam-only: console platforms have no public stats API, so this feature never claims to support them.',
-    'Your Steam profile and game details must be set to Public for stats to be fetchable — Entrophy never guesses or bypasses privacy settings.',
+    'Your Steam profile and game details must be set to Public for stats to be fetchable — Pavisie never guesses or bypasses privacy settings.',
   ],
 });

@@ -1,5 +1,5 @@
 // DTOs owned by the `integrations` build stage (ARCHITECTURE.md §7.1 row 'integrations', §10, SPEC.md §J).
-// Imported via the subpath '@entrophy/types/integrations' (packages/types exports "./*") so this file can be
+// Imported via the subpath '@pavisie/types/integrations' (packages/types exports "./*") so this file can be
 // added without touching the shared index.ts barrel (owned by the wiring stage).
 import type { IntegrationConnectionDto, WebhookEndpointDto } from './api';
 
@@ -127,7 +127,7 @@ export interface IntegrationLiveStatusDto {
 /** Platform events an outbound webhook can subscribe to. Single source of truth for this list — the `integrations`
  * plugin (packages/plugins/src/integrations/service.ts), the API's validation schema
  * (apps/api/src/lib/integrations/outbound-events.ts), and the dashboard's create-webhook form all reference this
- * instead of duplicating the literal (ARCHITECTURE.md §11: the dashboard never imports `@entrophy/plugins`, so this
+ * instead of duplicating the literal (ARCHITECTURE.md §11: the dashboard never imports `@pavisie/plugins`, so this
  * lives in the one package both sides already depend on). */
 export const OUTBOUND_PLATFORM_EVENTS = [
   'moderation.caseCreated',
@@ -142,7 +142,7 @@ export const OUTBOUND_PLATFORM_EVENTS = [
 export type OutboundPlatformEvent = (typeof OUTBOUND_PLATFORM_EVENTS)[number];
 
 // ---------------------------------------------------------------------------
-// Twitch chat bot — Entrophy joins a streamer's Twitch chat; lives inside the `integrations` plugin
+// Twitch chat bot — Pavisie joins a streamer's Twitch chat; lives inside the `integrations` plugin
 // rather than as its own 15th plugin. Runtime lives in packages/plugins/src/integrations/twitch-chat/;
 // API routes in apps/api/src/routes/twitch-chat.ts.
 // ---------------------------------------------------------------------------
@@ -171,7 +171,7 @@ export interface TwitchChatChannelDto {
 
 /** `GET /guilds/:guildId/integrations/twitch-chat` — overall chat-bot availability + this guild's channels. */
 export interface TwitchChatStatusDto {
-  /** Whether Entrophy's own Twitch bot account (`TwitchBotIdentity`) has been authorized by the bot owner. */
+  /** Whether Pavisie's own Twitch bot account (`TwitchBotIdentity`) has been authorized by the bot owner. */
   botConfigured: boolean;
   botLogin: string | null;
   /** Whether TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET are set on this deployment at all. */
@@ -235,7 +235,7 @@ export interface UpdateTwitchChatTimerInput {
   enabled?: boolean;
 }
 
-/** Owner-only (`/owner/twitch-bot`): Entrophy's own Twitch bot account status. */
+/** Owner-only (`/owner/twitch-bot`): Pavisie's own Twitch bot account status. */
 export interface TwitchBotIdentityDto {
   botLogin: string;
   botUserId: string;

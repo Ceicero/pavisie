@@ -1,6 +1,6 @@
 # Hub setup — declarative Discord server configuration
 
-`scripts/hub-setup.mjs` configures a real Discord server (Entrophy's own community hub, or any
+`scripts/hub-setup.mjs` configures a real Discord server (Pavisie's own community hub, or any
 other server you point it at) from a plan JSON, instead of clicking through Discord's UI by hand.
 It reconciles: roles (create/update, hierarchy order, assigning the Owner role), categories and
 channels (create/update, moves into the right category, text↔announcement conversion where
@@ -45,7 +45,7 @@ node scripts/hub-setup.mjs --plan infra/hub/hub-plan.json --apply     # actually
 
 ## The plan JSON
 
-See `infra/hub/hub-plan.json` for the real one (Entrophy's hub). Top-level shape:
+See `infra/hub/hub-plan.json` for the real one (Pavisie's hub). Top-level shape:
 
 ```jsonc
 {

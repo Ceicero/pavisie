@@ -1,5 +1,5 @@
 import type Redis from 'ioredis';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 
 const KEY_TTL_SECONDS = 2 * 24 * 60 * 60; // 2 days — comfortably covers the current UTC day plus clock skew.
 

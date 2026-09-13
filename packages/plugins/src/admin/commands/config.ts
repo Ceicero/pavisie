@@ -1,5 +1,5 @@
 import { PermissionFlagsBits, SlashCommandBuilder, type EmbedBuilder } from 'discord.js';
-import { ValidationError } from '@entrophy/core';
+import { ValidationError } from '@pavisie/core';
 import {
   assertStaffLevel,
   errorEmbed,

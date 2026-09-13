@@ -1,5 +1,5 @@
 import type Redis from 'ioredis';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import type { WindowStore } from './types';
 
 const MAX_WINDOW_MEMBERS = 500;

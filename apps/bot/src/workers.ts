@@ -1,7 +1,7 @@
 import { Worker, type Job } from 'bullmq';
 import type { RedisOptions } from 'ioredis';
 import type { Logger } from 'pino';
-import type { Plugin, PluginContext } from '@entrophy/plugins';
+import type { Plugin, PluginContext } from '@pavisie/plugins';
 
 export interface StartWorkersDeps {
   plugins: Plugin[];

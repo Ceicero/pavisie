@@ -1,4 +1,4 @@
-import { AuditAction } from '@entrophy/core';
+import { AuditAction } from '@pavisie/core';
 import { errorEmbed, PendingStore, successEmbed, type ComponentHandler } from '../../sdk';
 
 interface PendingPanelCreate {

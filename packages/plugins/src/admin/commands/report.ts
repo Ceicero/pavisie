@@ -9,14 +9,14 @@ import { assertStaffLevel, brandEmbed, buildCustomId, type PluginCommand } from 
 import { REPORT_KIND_CHOICES } from '../report-shared';
 
 const data = new SlashCommandBuilder()
-  .setName('entrophy')
-  .setDescription('Bot-level tools for talking to the Entrophy developer.')
+  .setName('pavisie')
+  .setDescription('Bot-level tools for talking to the Pavisie developer.')
   .setDMPermission(false)
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((sub) =>
     sub
       .setName('report')
-      .setDescription('Send a bug report, feedback, or question to the Entrophy developer.')
+      .setDescription('Send a bug report, feedback, or question to the Pavisie developer.')
       .addStringOption((opt) =>
         opt
           .setName('kind')
@@ -27,7 +27,7 @@ const data = new SlashCommandBuilder()
   );
 
 /**
- * `/entrophy report kind:<bug|feedback|question>` — step 1 of 2. Admin-only for now (Brandon's explicit call:
+ * `/pavisie report kind:<bug|feedback|question>` — step 1 of 2. Admin-only for now (Brandon's explicit call:
  * start narrow, widen once real volume is known — see the `admin` README's "Developer reports" section). Never
  * opens the modal directly off the slash command: Discord interactions can only be acknowledged once, so
  * showing the privacy disclosure *and* the subject/body modal both requires an intermediate step — this replies

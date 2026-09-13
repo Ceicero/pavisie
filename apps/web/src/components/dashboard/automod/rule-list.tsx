@@ -3,8 +3,8 @@
 import * as React from 'react';
 import { useParams } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import type { AutomodRuleDto } from '@entrophy/types';
-import { Badge, Button, PageHeader, Switch, useToast } from '@entrophy/ui';
+import type { AutomodRuleDto } from '@pavisie/types';
+import { Badge, Button, PageHeader, Switch, useToast } from '@pavisie/ui';
 import {
   useAutomodRules,
   useDeleteAutomodRule,

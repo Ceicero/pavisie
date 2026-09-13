@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Job } from 'bullmq';
-import type { PrismaClient } from '@entrophy/database';
+import type { PrismaClient } from '@pavisie/database';
 import {
   collectGuildExport,
   processDelete,

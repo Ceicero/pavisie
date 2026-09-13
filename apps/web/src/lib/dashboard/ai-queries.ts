@@ -6,7 +6,7 @@ import type {
   AiSettingsPatchDto,
   AiTestResultDto,
   AiUsageSummaryDto,
-} from '@entrophy/types/ai';
+} from '@pavisie/types/ai';
 import { apiFetch, toQueryString } from './api';
 
 /** Query keys for the `ai` plugin's dashboard page — kept separate from the shared `queryKeys` in `queries.ts` (not editing that shared file per ownership). */

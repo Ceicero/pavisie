@@ -3,9 +3,9 @@ import type { Queue } from 'bullmq';
 import type { RedisOptions } from 'ioredis';
 import type Redis from 'ioredis';
 import type { Logger } from 'pino';
-import { Cooldowns, RateLimiter, createPlatformEvents, type RateLimiterLike } from '@entrophy/core';
-import type { PrismaClient } from '@entrophy/database';
-import type { PluginId } from '@entrophy/types';
+import { Cooldowns, RateLimiter, createPlatformEvents, type RateLimiterLike } from '@pavisie/core';
+import type { PrismaClient } from '@pavisie/database';
+import type { PluginId } from '@pavisie/types';
 import {
   GuildConfigStore,
   PluginRegistry,
@@ -17,7 +17,7 @@ import {
   type PluginCommand,
   type PluginContext,
   type PrivilegedIntentsEnabled,
-} from '@entrophy/plugins';
+} from '@pavisie/plugins';
 import { buildPluginContext } from './context';
 import { createHostService } from './host-service';
 

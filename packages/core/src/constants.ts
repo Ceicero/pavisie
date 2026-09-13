@@ -1,10 +1,10 @@
 /** Product branding constants used across embeds, dashboard, and README generation. */
 export const BRAND = {
-  name: 'Entrophy',
+  name: 'Pavisie',
   color: 0xe5e5e5,
   tagline: 'The modular, compliance-first Discord bot',
   docsUrl: 'https://github.com/',
-  siteUrl: 'https://entrophybot.com',
+  siteUrl: 'https://pavisie.com',
 } as const;
 
 /**
@@ -14,7 +14,7 @@ export const BRAND = {
  */
 export function brandIconUrl(env: { WEB_URL?: string; BRAND_LOGO_PATH?: string }): string | undefined {
   if (!env.WEB_URL) return undefined;
-  return `${env.WEB_URL}${env.BRAND_LOGO_PATH ?? '/brand/entrophy-skull.png'}`;
+  return `${env.WEB_URL}${env.BRAND_LOGO_PATH ?? '/brand/pavisie-skull.png'}`;
 }
 
 /** Discord embed field/content limits (bytes are UTF-16 code units per Discord's API docs). */

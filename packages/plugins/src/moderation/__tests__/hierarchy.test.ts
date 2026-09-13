@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Guild, GuildMember } from 'discord.js';
-import { PermissionError } from '@entrophy/core';
+import { PermissionError } from '@pavisie/core';
 import { hierarchyGuard, type HierarchyGuardInteraction } from '../../sdk';
 
 /** Minimal fake `GuildMember` — only the fields `hierarchyGuard`/`checkModerationTarget` read. */

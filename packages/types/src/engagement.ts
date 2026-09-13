@@ -1,7 +1,7 @@
 // DTOs for the `engagement` plugin (leveling/XP, reputation, starboard, temp voice).
 // Owned by the engagement build agent (ARCHITECTURE.md §7.1). Kept independent of
 // `packages/plugins`' zod schema (which must stay structurally compatible with this file)
-// so `apps/api` and `apps/dashboard` never need to depend on `@entrophy/plugins` (discord.js).
+// so `apps/api` and `apps/dashboard` never need to depend on `@pavisie/plugins` (discord.js).
 
 /** `rewardMode` governs whether level-role rewards stack (keep every earned role) or replace (keep only the highest earned). */
 export type EngagementRewardMode = 'stack' | 'replace';

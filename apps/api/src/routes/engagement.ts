@@ -1,12 +1,12 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { NotFoundError, ValidationError, buildPaginated, paginate } from '@entrophy/core';
-import { levelFromXp } from '@entrophy/plugins/engagement/service';
+import { NotFoundError, ValidationError, buildPaginated, paginate } from '@pavisie/core';
+import { levelFromXp } from '@pavisie/plugins/engagement/service';
 import type {
   LevelProfileDto,
   LevelRewardDto,
   ReputationLeaderboardEntryDto,
-} from '@entrophy/types/engagement';
+} from '@pavisie/types/engagement';
 import { requireGuildAccess } from '../lib/guild-access';
 import { guildIdParamSchema, paginationQuerySchema, snowflakeSchema } from '../lib/schemas';
 import { writeDashboardAudit } from '../lib/audit';

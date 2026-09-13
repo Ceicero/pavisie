@@ -17,14 +17,14 @@ import {
   SelectValue,
   Textarea,
   useToast,
-} from '@entrophy/ui';
+} from '@pavisie/ui';
 import type {
   CreateTwitchChatRewardInput,
   TwitchChatRewardDto,
   TwitchRewardActionKindId,
   UpdateTwitchChatRewardInput,
-} from '@entrophy/types/integrations';
-import { TWITCH_REWARD_ACTION_KINDS } from '@entrophy/types/integrations';
+} from '@pavisie/types/integrations';
+import { TWITCH_REWARD_ACTION_KINDS } from '@pavisie/types/integrations';
 import { ApiClientError } from '@/lib/dashboard/api';
 import {
   useCreateTwitchChatReward,

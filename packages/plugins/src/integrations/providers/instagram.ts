@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EMBED_LIMITS, truncate } from '@entrophy/core';
+import { EMBED_LIMITS, truncate } from '@pavisie/core';
 import { getValidAccessToken } from './oauth-tokens';
 import { claimAlertOnce, markConnectionError, markConnectionSynced, sendConnectionAlert } from './util';
 import type { IntegrationProviderDef } from './types';

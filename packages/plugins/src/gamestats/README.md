@@ -1,7 +1,7 @@
 # `gamestats` — Game Stats
 
 Per-guild leaderboards comparing members' game stats. Members opt in by pasting a Steam account (self-reported,
-not verified via Steam sign-in — see "Self-reported linking" below); Entrophy fetches public stats via the Steam
+not verified via Steam sign-in — see "Self-reported linking" below); Pavisie fetches public stats via the Steam
 Web API and renders leaderboards/stat cards. First (only) game: **Dead by Daylight** (Steam appid `381210`).
 Built game-pluggable — the next game is a new descriptor under `games/`, not a new architecture. Disabled by
 default.
@@ -19,7 +19,7 @@ operational prerequisite is `STEAM_API_KEY` (see below).
 ## Self-reported linking, not verified
 
 `/dbd link` accepts whatever SteamID64, profile URL, or vanity name a member types — there is no Steam sign-in
-(OAuth or otherwise), so Entrophy has no way to confirm the account actually belongs to the person linking it.
+(OAuth or otherwise), so Pavisie has no way to confirm the account actually belongs to the person linking it.
 The only enforcement against misuse is a same-guild duplicate guard: one Steam account can be linked by at most
 one member per server at a time (`GameAccountLink`'s `@@unique([guildId, provider, externalId])`). Linking an
 account someone else in the guild already has linked is rejected with a friendly error rather than silently

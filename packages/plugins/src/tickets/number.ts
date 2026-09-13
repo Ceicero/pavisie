@@ -1,7 +1,7 @@
-// Ticket number allocation, mirroring `@entrophy/database`'s `nextCaseNumber`/`withNextCaseNumber` pattern
+// Ticket number allocation, mirroring `@pavisie/database`'s `nextCaseNumber`/`withNextCaseNumber` pattern
 // (packages/database/src/guild.ts) for `Ticket.number` — kept local since that helper is specific to
 // `ModerationCase`/`EnforcerRecord` and this plugin doesn't own the database package.
-import { Prisma, type PrismaClient } from '@entrophy/database';
+import { Prisma, type PrismaClient } from '@pavisie/database';
 
 /**
  * Computes the next `Ticket.number` for a guild as `MAX(number) + 1`. A single `aggregate` read needs no

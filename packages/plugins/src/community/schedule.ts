@@ -9,7 +9,7 @@
 // `pnpm commands:export`). Importing the default and destructuring off it works under every runtime.
 import cronParser from 'cron-parser';
 import { DateTime } from 'luxon';
-import { parseDuration } from '@entrophy/core';
+import { parseDuration } from '@pavisie/core';
 
 export type ParsedSchedule =
   | { kind: 'cron'; cron: string; nextRunAt: Date }

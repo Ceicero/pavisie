@@ -1,6 +1,6 @@
 'use client';
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@entrophy/ui';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@pavisie/ui';
 import { ReviewQueueTab } from '@/components/dashboard/automod/review-queue-tab';
 import { RuleListTab } from '@/components/dashboard/automod/rule-list';
 import { SettingsTab } from '@/components/dashboard/automod/settings-tab';

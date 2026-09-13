@@ -9,7 +9,7 @@ import { TopBar } from './TopBar';
 /**
  * The whole app shell: `TopBar` on every page, plus the marketing-only smoke/grain background
  * effects and footer, gated on route. Dashboard pages get neither: their own opaque
- * `@entrophy/ui` surfaces (`bg-background`, sidebar `bg-card`, ...) aren't designed to sit over
+ * `@pavisie/ui` surfaces (`bg-background`, sidebar `bg-card`, ...) aren't designed to sit over
  * the smoky/grainy marketing background, and the dashboard has no use for the marketing footer.
  *
  * Smoke/Grain stay outside `.site-content` and Footer stays inside it (after `<main>`), matching

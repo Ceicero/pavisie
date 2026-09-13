@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import RedisMock from 'ioredis-mock';
 import type Redis from 'ioredis';
-import { createPrismaStub } from '@entrophy/plugins/sdk/testing';
+import { createPrismaStub } from '@pavisie/plugins/sdk/testing';
 import type { QueueRegistryLike } from './lib/queues';
 import { buildApp } from './app';
 

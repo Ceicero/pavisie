@@ -1,7 +1,7 @@
 // Pure sanitisation/validation logic for `/embed builder` (kept free of discord.js interaction types so it's
 // directly unit-testable — the Discord-facing wiring, including the async `assertPublicHttpUrl` image check,
 // lives in `components/embed-builder.ts`).
-import { EMBED_LIMITS, sanitizeEmbedText } from '@entrophy/core';
+import { EMBED_LIMITS, sanitizeEmbedText } from '@pavisie/core';
 
 export class EmbedPayloadError extends Error {
   constructor(message: string) {

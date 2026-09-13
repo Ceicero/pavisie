@@ -191,7 +191,7 @@ async function cleanupIfOrphaned(ctx: PluginContext, guild: Guild, channelId: st
   if (!isOrphanTempVoiceChannel(memberCount)) return;
 
   if (channel)
-    await channel.delete('Entrophy engagement: temp voice channel is empty').catch(() => undefined);
+    await channel.delete('Pavisie engagement: temp voice channel is empty').catch(() => undefined);
   await ctx.prisma.tempVoiceChannel.delete({ where: { id: row.id } }).catch(() => undefined);
 }
 

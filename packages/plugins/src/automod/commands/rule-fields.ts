@@ -1,7 +1,7 @@
 // Drives the "modal for type-specific fields" step of `/automod rule create` and `/automod rule edit` (TASK).
 // One small declarative field list per `AutomodRuleType`, so the modal builder/parser stays generic instead of
 // needing 13 near-duplicate command files.
-import { ValidationError } from '@entrophy/core';
+import { ValidationError } from '@pavisie/core';
 import {
   attachmentsConfigSchema,
   automodRuleConfigSchema,

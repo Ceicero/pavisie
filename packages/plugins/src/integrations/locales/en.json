@@ -50,8 +50,8 @@
   "twitch": {
     "status": {
       "title": "Twitch chat status",
-      "botConfigured": "🟢 Entrophy's Twitch bot account is connected — `{login}`.",
-      "botNotConfigured": "🔴 Entrophy's Twitch bot account hasn't been connected yet (owner setup pending).",
+      "botConfigured": "🟢 Pavisie's Twitch bot account is connected — `{login}`.",
+      "botNotConfigured": "🔴 Pavisie's Twitch bot account hasn't been connected yet (owner setup pending).",
       "runtimeConnected": "🟢 Connected to Twitch chat — {count} channel(s) joined.",
       "runtimeIdle": "🟡 Idle — {reason}",
       "runtimeReconnecting": "🔴 Reconnecting — {reason}",
@@ -67,11 +67,11 @@
     "setup": {
       "instructions": "Connect a Twitch channel from the dashboard: **Dashboard → this server → Integrations → \"Twitch chat\" tab → Connect a Twitch channel**.\n{url}",
       "rewardsInstructions": "\n\nTo run channel-point reward actions (sound/TTS/chat/Discord): **Dashboard → this server → Integrations → \"Twitch chat\" tab → the channel's Rewards section → enable → copy the overlay URL**, then add that URL as a Browser Source in OBS. Configure the rewards themselves with `/twitch reward add`.",
-      "botNotConfiguredNote": "\n\nNote: Entrophy's Twitch bot account isn't set up yet — ask the bot owner to finish that first."
+      "botNotConfiguredNote": "\n\nNote: Pavisie's Twitch bot account isn't set up yet — ask the bot owner to finish that first."
     },
     "off": {
       "confirmTitle": "Turn off Twitch chat?",
-      "confirmBody": "This disables Entrophy in every linked Twitch channel for this server. You can turn a channel back on from the dashboard.",
+      "confirmBody": "This disables Pavisie in every linked Twitch channel for this server. You can turn a channel back on from the dashboard.",
       "done": "Twitch chat turned off for this server.",
       "noChannels": "No Twitch channels are linked for this server."
     },

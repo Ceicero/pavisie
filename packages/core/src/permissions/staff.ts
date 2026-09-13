@@ -1,4 +1,4 @@
-import { STAFF_LEVEL_RANK, type StaffLevel } from '@entrophy/types';
+import { STAFF_LEVEL_RANK, type StaffLevel } from '@pavisie/types';
 import { PermissionFlagsBits } from 'discord-api-types/v10';
 
 /** Minimal plain-data shape of a guild member needed to resolve staff level — no discord.js dependency. */

@@ -1,4 +1,4 @@
-import type { PrismaStubOverrides } from '@entrophy/plugins/sdk/testing';
+import type { PrismaStubOverrides } from '@pavisie/plugins/sdk/testing';
 import { describe, expect, it } from 'vitest';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
@@ -103,7 +103,7 @@ describe('GET /guilds/:guildId overview', () => {
     );
     // Bot is present, so the "not in this server" issue must not appear.
     expect(body.setupIssues).not.toEqual(
-      expect.arrayContaining(['Entrophy is not in this server yet — invite it from the server list.']),
+      expect.arrayContaining(['Pavisie is not in this server yet — invite it from the server list.']),
     );
 
     await app.close();
@@ -163,7 +163,7 @@ describe('GET /guilds/:guildId overview', () => {
     expect(body.guild.owner).toBe(false);
     expect(body.setupIncomplete).toBe(true);
     expect(body.setupIssues).toEqual(
-      expect.arrayContaining(['Entrophy is not in this server yet — invite it from the server list.']),
+      expect.arrayContaining(['Pavisie is not in this server yet — invite it from the server list.']),
     );
 
     await app.close();

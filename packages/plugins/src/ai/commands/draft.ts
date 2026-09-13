@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { EMBED_LIMITS, truncate } from '@entrophy/core';
+import { EMBED_LIMITS, truncate } from '@pavisie/core';
 import { infoEmbed, type PluginCommand } from '../../sdk';
 import { AiUnavailableError, enforceCooldown } from '../service';
 import { AI_DISCLOSURE } from '../manifest';

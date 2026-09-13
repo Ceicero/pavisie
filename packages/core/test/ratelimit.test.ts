@@ -61,9 +61,9 @@ describe('RateLimiter (Redis via ioredis-mock)', () => {
     const limiter = new RateLimiter(redis);
 
     await limiter.consume('guild-2:cmd', 5, 60_000);
-    const ttlAfterFirst = await redis.pttl('entrophy:ratelimit:guild-2:cmd');
+    const ttlAfterFirst = await redis.pttl('pavisie:ratelimit:guild-2:cmd');
     await limiter.consume('guild-2:cmd', 5, 60_000);
-    const ttlAfterSecond = await redis.pttl('entrophy:ratelimit:guild-2:cmd');
+    const ttlAfterSecond = await redis.pttl('pavisie:ratelimit:guild-2:cmd');
 
     expect(ttlAfterFirst).toBeGreaterThan(0);
     expect(ttlAfterSecond).toBeLessThanOrEqual(ttlAfterFirst);

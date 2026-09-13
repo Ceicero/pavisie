@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { env } from '@entrophy/core';
+import { env } from '@pavisie/core';
 import { buildTestApp } from './helpers/build-test-app';
 
 function eventSubSignature(secret: string, messageId: string, timestamp: string, body: string): string {

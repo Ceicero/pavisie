@@ -1,5 +1,5 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
-import type { Prisma } from '@entrophy/database';
+import type { Prisma } from '@pavisie/database';
 import {
   errorEmbed,
   infoEmbed,

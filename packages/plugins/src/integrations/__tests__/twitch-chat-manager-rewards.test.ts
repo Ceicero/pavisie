@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { redisKey } from '@entrophy/core';
+import { redisKey } from '@pavisie/core';
 import { createTestContext } from '../../sdk/testing';
 import type { PluginContext } from '../../sdk';
 import { TwitchChatManager } from '../twitch-chat/manager';
@@ -149,7 +149,7 @@ function welcomePayload(sessionId = 'sess-1') {
 beforeEach(() => {
   FakeWebSocket.instances = [];
   vi.clearAllMocks();
-  mocks.getBotIdentityRow.mockResolvedValue({ botUserId: 'bot-1', botLogin: 'entrophybot' });
+  mocks.getBotIdentityRow.mockResolvedValue({ botUserId: 'bot-1', botLogin: 'pavisiebot' });
   mocks.createChatSubscription.mockImplementation(async (_ctx: unknown, _sessionId: string, broadcasterUserId: string) => ({
     ok: true,
     subscriptionId: `sub-chat-${broadcasterUserId}`,

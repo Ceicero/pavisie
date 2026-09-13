@@ -1,7 +1,7 @@
 import RedisMock from 'ioredis-mock';
 import type Redis from 'ioredis';
 import pino from 'pino';
-import { createPrismaStub, type PrismaStubOverrides } from '@entrophy/plugins/sdk/testing';
+import { createPrismaStub, type PrismaStubOverrides } from '@pavisie/plugins/sdk/testing';
 import { buildApp } from '../../src/app';
 import type { ZodFastifyInstance } from '../../src/lib/http';
 import type { QueueRegistryLike } from '../../src/lib/queues';
@@ -95,7 +95,7 @@ export async function seedUserGuilds(
   userId: string,
   guilds: { id: string; name?: string; icon?: string | null; owner: boolean; permissions: string }[],
 ): Promise<void> {
-  const { redisKey } = await import('@entrophy/core');
+  const { redisKey } = await import('@pavisie/core');
   await redis.set(
     redisKey('userguilds', userId),
     JSON.stringify(

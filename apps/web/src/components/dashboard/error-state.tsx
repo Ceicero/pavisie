@@ -1,5 +1,5 @@
 import { AlertTriangle, MessageCircle } from 'lucide-react';
-import { Button, EmptyState } from '@entrophy/ui';
+import { Button, EmptyState } from '@pavisie/ui';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { supportServerUrl } from '@/lib/site';
 

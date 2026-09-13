@@ -1,22 +1,22 @@
 import { randomBytes } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-// `@entrophy/core`'s `env` singleton is computed once, at that module's first import, from `process.env` — so
-// `ENCRYPTION_KEY` must be set *before* anything (transitively) imports `@entrophy/core`. This file has no
+// `@pavisie/core`'s `env` singleton is computed once, at that module's first import, from `process.env` — so
+// `ENCRYPTION_KEY` must be set *before* anything (transitively) imports `@pavisie/core`. This file has no
 // static imports of its own for that reason; everything it needs is imported dynamically inside `beforeAll`,
 // after the env var is set, so `resolveApiKey`'s real (env-key-implicit) `decryptSecret()` call succeeds.
-let encryptSecret: typeof import('@entrophy/core').encryptSecret;
+let encryptSecret: typeof import('@pavisie/core').encryptSecret;
 let resolveApiKey: typeof import('../resolve-key').resolveApiKey;
 let describeAvailability: typeof import('../service').describeAvailability;
 let configSchema: typeof import('../manifest').configSchema;
 
 beforeAll(async () => {
   process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? randomBytes(32).toString('base64');
-  ({ encryptSecret } = await import('@entrophy/core'));
+  ({ encryptSecret } = await import('@pavisie/core'));
   ({ resolveApiKey } = await import('../resolve-key'));
   ({ describeAvailability } = await import('../service'));
   ({ configSchema } = await import('../manifest'));
-  // The dynamic imports above transform `@entrophy/core` + the ai plugin on first use, which can take well over
+  // The dynamic imports above transform `@pavisie/core` + the ai plugin on first use, which can take well over
   // vitest's default 10s hook timeout when the whole plugins suite runs in parallel — give the hook room.
 }, 30_000);
 

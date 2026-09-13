@@ -17,8 +17,8 @@ import {
   Skeleton,
   Switch,
   useToast,
-} from '@entrophy/ui';
-import type { BirthdayConfigDto } from '@entrophy/types/community';
+} from '@pavisie/ui';
+import type { BirthdayConfigDto } from '@pavisie/types/community';
 import { useBirthdaySummary, useRemoveBirthday, useUpdateBirthdayConfig } from '@/lib/dashboard/community-queries';
 import { useGuildConfig } from '@/lib/dashboard/queries';
 import { ApiClientError } from '@/lib/dashboard/api';
