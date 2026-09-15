@@ -25,8 +25,22 @@ import { NextResponse, type NextRequest } from 'next/server';
  * only `dashboard/layout.tsx`'s `useSession()` is authoritative for that direction.
  */
 export function middleware(request: NextRequest) {
-  const cookieDomainConfigured = Boolean(process.env.COOKIE_DOMAIN);
-  if (!cookieDomainConfigured) {
+  const cookieDomain = process.env.COOKIE_DOMAIN;
+  if (!cookieDomain) {
+    return NextResponse.next();
+  }
+
+  // The `sid` cookie is only visible to this middleware when THIS origin sits inside COOKIE_DOMAIN.
+  // Where it does not, the cookie is missing from the *request* rather than from the browser, so a
+  // `sid` check would read "signed out" for every visitor and bounce them all into a login loop.
+  // That is precisely the state a domain move passes through — the site served from pavisie.com
+  // while the session cookie is still scoped to .entrophybot.com — and it holds for any preview
+  // host outside COOKIE_DOMAIN too. Defer to the client-side gate, which asks the API directly and
+  // is authoritative either way.
+  const host = request.nextUrl.hostname;
+  const bare = cookieDomain.startsWith('.') ? cookieDomain.slice(1) : cookieDomain;
+  const cookieVisibleHere = host === bare || host.endsWith(`.${bare}`);
+  if (!cookieVisibleHere) {
     return NextResponse.next();
   }
 

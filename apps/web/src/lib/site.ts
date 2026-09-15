@@ -50,17 +50,19 @@ export function inviteUrl(): string | null {
 
 /**
  * Canonical origin for this deployment. Drives `metadataBase`, Open Graph URLs, robots.txt and
- * sitemap.xml — so it MUST match the domain actually being served, not the brand's eventual
- * home. During the Entrophy -> Pavisie rename those differ: the brand is Pavisie, but
- * pavisie.com is not registered yet and the site is still served from entrophybot.com.
- * Emitting pavisie.com canonicals now would point search engines at a domain that does not
- * resolve, which is worse than not shipping at all.
+ * sitemap.xml — so it MUST match the domain actually being served.
+ *
+ * pavisie.com is registered and serving now, so the fallback is the new domain. entrophybot.com
+ * is a legacy host being let go in 2027; pointing canonicals or the sitemap at a domain scheduled
+ * for deletion would hand search engines links with an expiry date on them. Leaving the old
+ * literal here was not harmless in the meantime: with neither env var set in production,
+ * pavisie.com was advertising `og:url` and its sitemap on entrophybot.com.
  *
  * Set `NEXT_PUBLIC_SITE_URL` (or `WEB_URL`) at build time to control this. The literal below is
- * only a safety net for when neither is set; flip it to pavisie.com at cutover.
+ * only a safety net for when neither is set.
  */
 export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? process.env.WEB_URL ?? 'https://entrophybot.com';
+  process.env.NEXT_PUBLIC_SITE_URL ?? process.env.WEB_URL ?? 'https://pavisie.com';
 
 /** Public source repository (AGPL-3.0). Pavisie is open source — linked from the footer. */
 export const GITHUB_URL = 'https://github.com/Ceicero/pavisie';

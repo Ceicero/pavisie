@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
 import { middleware } from '../src/middleware';
 
-function makeRequest(path: string, opts: { cookie?: string } = {}): NextRequest {
-  return new NextRequest(`https://pavisie.com${path}`, {
+function makeRequest(path: string, opts: { cookie?: string; host?: string } = {}): NextRequest {
+  return new NextRequest(`https://${opts.host ?? 'pavisie.com'}${path}`, {
     headers: opts.cookie ? { cookie: opts.cookie } : {},
   });
 }
@@ -67,6 +67,46 @@ describe('web middleware (dashboard fast-redirect)', () => {
       process.env.COOKIE_DOMAIN = '.pavisie.com';
       const res = middleware(makeRequest('/'));
       expect(res.headers.get('location')).toBeNull();
+    });
+  });
+
+  /**
+   * The guard that keeps a domain move from locking everyone out. `sid` reaches this middleware
+   * only when the serving origin is inside COOKIE_DOMAIN; anywhere else its absence means "not
+   * sent", not "not signed in", and acting on that would redirect every visitor — including
+   * signed-in ones — straight back into the login flow.
+   */
+  describe('when this origin is outside COOKIE_DOMAIN (mid-move, or a preview host)', () => {
+    it('does not redirect a signed-in visitor whose cookie is scoped to the old domain', () => {
+      // The entrophybot.com -> pavisie.com cutover state: the browser holds a valid `.entrophybot.com`
+      // sid, but it is never sent to pavisie.com, so a naive check reads "signed out" for everyone.
+      process.env.COOKIE_DOMAIN = '.entrophybot.com';
+      process.env.NEXT_PUBLIC_API_URL = 'https://api.pavisie.com';
+      const res = middleware(makeRequest('/dashboard/123', { host: 'pavisie.com' }));
+      expect(res.headers.get('location')).toBeNull();
+    });
+
+    it('does not treat a lookalike domain as being inside COOKIE_DOMAIN', () => {
+      // notpavisie.com ends with "pavisie.com" as a raw string but is a different registrable
+      // domain that never receives the cookie — the match must be on the dot boundary.
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
+      process.env.NEXT_PUBLIC_API_URL = 'https://api.pavisie.com';
+      const res = middleware(makeRequest('/dashboard/123', { host: 'notpavisie.com' }));
+      expect(res.headers.get('location')).toBeNull();
+    });
+
+    it('still redirects on a subdomain that is genuinely inside COOKIE_DOMAIN', () => {
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
+      process.env.NEXT_PUBLIC_API_URL = 'https://api.pavisie.com';
+      const res = middleware(makeRequest('/dashboard/123', { host: 'app.pavisie.com' }));
+      expect(res.headers.get('location')).toBe('https://api.pavisie.com/auth/discord/login');
+    });
+
+    it('still redirects when COOKIE_DOMAIN is written without a leading dot', () => {
+      process.env.COOKIE_DOMAIN = 'pavisie.com';
+      process.env.NEXT_PUBLIC_API_URL = 'https://api.pavisie.com';
+      const res = middleware(makeRequest('/dashboard/123', { host: 'pavisie.com' }));
+      expect(res.headers.get('location')).toBe('https://api.pavisie.com/auth/discord/login');
     });
   });
 });

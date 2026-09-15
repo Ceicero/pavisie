@@ -11,10 +11,9 @@ export const BRAND = {
  * The public site URL to show users. Reads `env.WEB_URL` first so the value always matches the
  * domain actually being served, and only falls back to `BRAND.siteUrl` when it is unset.
  *
- * This matters during the Entrophy -> Pavisie rename: the brand is Pavisie, but until
- * pavisie.com is registered the live deployment is still served from the old domain. Linking
- * users at `BRAND.siteUrl` unconditionally would hand them a dead link, so the deployed
- * WEB_URL always wins.
+ * The indirection still earns its place now that pavisie.com is live: a deployment served from
+ * any other host — a preview environment, or the legacy entrophybot.com host until it is let go
+ * in 2027 — must link users at the domain they are actually on, so the deployed WEB_URL wins.
  */
 export function brandSiteUrl(env: { WEB_URL?: string }): string {
   return env.WEB_URL ?? BRAND.siteUrl;

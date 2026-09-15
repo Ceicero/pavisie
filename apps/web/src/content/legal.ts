@@ -5,9 +5,11 @@
 export const DEFAULT_OPERATOR = 'Pavisie';
 /**
  * Published contact address in the privacy policy, terms and security page. `contact@pavisie.com`
- * is the intended destination, but it cannot receive mail until pavisie.com is registered and
- * its MX records exist — and a privacy policy listing an address that bounces is worse than an
- * off-brand one that works. So this stays on the monitored inbox until then, overridable by env.
+ * is the intended destination, but pavisie.com still publishes no MX records (checked
+ * 2026-09-14), so mail sent there would bounce — and a privacy policy listing a bouncing address
+ * is worse than an off-brand one that works. This deliberately stays on the monitored Gmail
+ * inbox, which is unaffected by entrophybot.com being let go: the domain is going away, that
+ * mailbox is not. Set NEXT_PUBLIC_CONTACT_EMAIL once pavisie.com can actually receive mail.
  */
 export const DEFAULT_CONTACT_EMAIL =
   process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? 'entrophybot@gmail.com';
