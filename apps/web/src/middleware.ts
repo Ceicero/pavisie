@@ -24,6 +24,21 @@ import { NextResponse, type NextRequest } from 'next/server';
  * browser still holds it), so this never redirects `/` → `/dashboard` on cookie presence alone;
  * only `dashboard/layout.tsx`'s `useSession()` is authoritative for that direction.
  */
+/**
+ * The public hostname this request was made to, lowercased and without any port.
+ *
+ * NOT `request.nextUrl.hostname`: behind Railway's edge proxy that is the internal address the
+ * container was reached on, not the domain the visitor typed. Using it made the COOKIE_DOMAIN
+ * check below fail closed on every request — the fast-redirect silently stopped firing in
+ * production while still passing tests that construct requests directly. The forwarded headers
+ * carry the real host; `x-forwarded-host` may be a comma-separated chain, so take the first.
+ */
+function publicHostname(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  const raw = forwarded?.split(',')[0]?.trim();
+  return (raw && raw.length > 0 ? raw : request.nextUrl.hostname).replace(/:\d+$/, '').toLowerCase();
+}
+
 export function middleware(request: NextRequest) {
   const cookieDomain = process.env.COOKIE_DOMAIN;
   if (!cookieDomain) {
@@ -37,8 +52,8 @@ export function middleware(request: NextRequest) {
   // while the session cookie is still scoped to .entrophybot.com — and it holds for any preview
   // host outside COOKIE_DOMAIN too. Defer to the client-side gate, which asks the API directly and
   // is authoritative either way.
-  const host = request.nextUrl.hostname;
-  const bare = cookieDomain.startsWith('.') ? cookieDomain.slice(1) : cookieDomain;
+  const host = publicHostname(request);
+  const bare = (cookieDomain.startsWith('.') ? cookieDomain.slice(1) : cookieDomain).toLowerCase();
   const cookieVisibleHere = host === bare || host.endsWith(`.${bare}`);
   if (!cookieVisibleHere) {
     return NextResponse.next();

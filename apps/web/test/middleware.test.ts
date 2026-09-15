@@ -2,10 +2,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
 import { middleware } from '../src/middleware';
 
-function makeRequest(path: string, opts: { cookie?: string; host?: string } = {}): NextRequest {
-  return new NextRequest(`https://${opts.host ?? 'pavisie.com'}${path}`, {
-    headers: opts.cookie ? { cookie: opts.cookie } : {},
-  });
+function makeRequest(
+  path: string,
+  opts: { cookie?: string; host?: string; forwardedHost?: string; url?: string } = {},
+): NextRequest {
+  const host = opts.host ?? 'pavisie.com';
+  const headers: Record<string, string> = { host };
+  if (opts.cookie) headers.cookie = opts.cookie;
+  if (opts.forwardedHost) headers['x-forwarded-host'] = opts.forwardedHost;
+  return new NextRequest(opts.url ?? `https://${host}${path}`, { headers });
 }
 
 /**
@@ -100,6 +105,49 @@ describe('web middleware (dashboard fast-redirect)', () => {
       process.env.NEXT_PUBLIC_API_URL = 'https://api.pavisie.com';
       const res = middleware(makeRequest('/dashboard/123', { host: 'app.pavisie.com' }));
       expect(res.headers.get('location')).toBe('https://api.pavisie.com/auth/discord/login');
+    });
+
+    /**
+     * Regression: the guard originally read `request.nextUrl.hostname`, which behind Railway's
+     * edge proxy is the internal address the container was reached on — not the domain the
+     * visitor typed. That made the check fail closed on every production request and silently
+     * killed the redirect, while tests that build a request straight from the public URL still
+     * passed. The public host has to come from the forwarded headers.
+     */
+    it('reads the public host from x-forwarded-host, not the proxied URL', () => {
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
+      process.env.NEXT_PUBLIC_API_URL = 'https://api.pavisie.com';
+      const res = middleware(
+        makeRequest('/dashboard/123', {
+          url: 'http://10.0.1.7:8080/dashboard/123',
+          forwardedHost: 'pavisie.com',
+        }),
+      );
+      expect(res.headers.get('location')).toBe('https://api.pavisie.com/auth/discord/login');
+    });
+
+    it('takes the first entry of a chained x-forwarded-host and ignores the port', () => {
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
+      process.env.NEXT_PUBLIC_API_URL = 'https://api.pavisie.com';
+      const res = middleware(
+        makeRequest('/dashboard/123', {
+          url: 'http://10.0.1.7:8080/dashboard/123',
+          forwardedHost: 'pavisie.com:443, inner.railway.internal',
+        }),
+      );
+      expect(res.headers.get('location')).toBe('https://api.pavisie.com/auth/discord/login');
+    });
+
+    it('still refuses a forwarded host outside COOKIE_DOMAIN', () => {
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
+      process.env.NEXT_PUBLIC_API_URL = 'https://api.pavisie.com';
+      const res = middleware(
+        makeRequest('/dashboard/123', {
+          url: 'http://10.0.1.7:8080/dashboard/123',
+          forwardedHost: 'entrophybot.com',
+        }),
+      );
+      expect(res.headers.get('location')).toBeNull();
     });
 
     it('still redirects when COOKIE_DOMAIN is written without a leading dot', () => {
