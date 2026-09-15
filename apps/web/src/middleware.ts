@@ -39,7 +39,35 @@ function publicHostname(request: NextRequest): string {
   return (raw && raw.length > 0 ? raw : request.nextUrl.hostname).replace(/:\d+$/, '').toLowerCase();
 }
 
+/**
+ * Hosts kept resolving only so existing links survive. entrophybot.com is being let go in 2027, so
+ * every request to it is answered with a permanent redirect to the same path on pavisie.com rather
+ * than serving a second copy of the site: that consolidates search traffic onto the new domain and
+ * stops anyone settling back onto the one with an expiry date.
+ *
+ * Done here rather than as a Cloudflare redirect rule because entrophybot.com's DNS record is
+ * DNS-only — it points straight at Railway, so an edge rule never sees the traffic — and proxying
+ * the record purely to redirect it would put Cloudflare's TLS termination in front of a domain that
+ * currently works. `api.entrophybot.com` is a different service and is deliberately NOT covered:
+ * Twitch EventSub callbacks and user-configured webhooks still point at it and must keep resolving
+ * until they are migrated.
+ */
+const LEGACY_HOSTS = new Set(['entrophybot.com', 'www.entrophybot.com']);
+const CANONICAL_ORIGIN = 'https://pavisie.com';
+
 export function middleware(request: NextRequest) {
+  const host = publicHostname(request);
+
+  if (LEGACY_HOSTS.has(host)) {
+    // 301: the conventional permanent redirect, and what search engines consolidate on. Its one
+    // wrinkle — clients may turn a POST into a GET — costs nothing here, because nothing POSTs to
+    // the marketing host: the dashboard's writes all go to api.pavisie.com.
+    return NextResponse.redirect(
+      new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`, CANONICAL_ORIGIN),
+      301,
+    );
+  }
+
   const cookieDomain = process.env.COOKIE_DOMAIN;
   if (!cookieDomain) {
     return NextResponse.next();
@@ -52,7 +80,6 @@ export function middleware(request: NextRequest) {
   // while the session cookie is still scoped to .entrophybot.com — and it holds for any preview
   // host outside COOKIE_DOMAIN too. Defer to the client-side gate, which asks the API directly and
   // is authoritative either way.
-  const host = publicHostname(request);
   const bare = (cookieDomain.startsWith('.') ? cookieDomain.slice(1) : cookieDomain).toLowerCase();
   const cookieVisibleHere = host === bare || host.endsWith(`.${bare}`);
   if (!cookieVisibleHere) {
@@ -80,5 +107,8 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  // No longer scoped to /dashboard: the legacy-domain redirect above has to answer every URL on
+  // the old host, not just the dashboard ones. Next's build output and the favicon are excluded —
+  // they are never worth a middleware hop, and no person lands on them directly.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

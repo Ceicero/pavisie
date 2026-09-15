@@ -30,6 +30,58 @@ describe('web middleware (dashboard fast-redirect)', () => {
     else process.env.NEXT_PUBLIC_API_URL = originalApiUrl;
   });
 
+  /**
+   * entrophybot.com is kept resolving only so old links survive until the domain is let go in
+   * 2027. Every request to it is redirected permanently to the same path on pavisie.com, so search
+   * traffic consolidates on the new domain instead of two copies of the site competing.
+   */
+  describe('legacy domain', () => {
+    it('permanently redirects the old apex to the same path on pavisie.com', () => {
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
+      const res = middleware(makeRequest('/features', { host: 'entrophybot.com' }));
+      expect(res.status).toBe(301);
+      expect(res.headers.get('location')).toBe('https://pavisie.com/features');
+    });
+
+    it('preserves the query string', () => {
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
+      const res = middleware(
+        makeRequest('/dashboard/123?tab=automod&x=1', { host: 'entrophybot.com' }),
+      );
+      expect(res.headers.get('location')).toBe(
+        'https://pavisie.com/dashboard/123?tab=automod&x=1',
+      );
+    });
+
+    it('redirects www as well as the apex', () => {
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
+      const res = middleware(makeRequest('/', { host: 'www.entrophybot.com' }));
+      expect(res.headers.get('location')).toBe('https://pavisie.com/');
+    });
+
+    it('redirects even when COOKIE_DOMAIN is unset, since it does not depend on sessions', () => {
+      delete process.env.COOKIE_DOMAIN;
+      const res = middleware(makeRequest('/', { host: 'entrophybot.com' }));
+      expect(res.headers.get('location')).toBe('https://pavisie.com/');
+    });
+
+    it('leaves the canonical domain alone', () => {
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
+      const res = middleware(makeRequest('/', { host: 'pavisie.com' }));
+      expect(res.headers.get('location')).toBeNull();
+    });
+
+    it('does not touch other hosts on the old domain, which are different services', () => {
+      // api.entrophybot.com still serves Twitch EventSub callbacks and user-configured webhooks
+      // registered against that hostname; redirecting it would break them.
+      process.env.COOKIE_DOMAIN = '.pavisie.com';
+      for (const host of ['api.entrophybot.com', 'app.entrophybot.com']) {
+        const res = middleware(makeRequest('/', { host }));
+        expect(res.headers.get('location')).toBeNull();
+      }
+    });
+  });
+
   describe('when COOKIE_DOMAIN is unset (local dev — sid not trustworthy on this origin)', () => {
     it('never redirects, for any path or cookie state, leaving it to the client-side session gate', () => {
       delete process.env.COOKIE_DOMAIN;
@@ -139,12 +191,14 @@ describe('web middleware (dashboard fast-redirect)', () => {
     });
 
     it('still refuses a forwarded host outside COOKIE_DOMAIN', () => {
+      // Deliberately not entrophybot.com: that is a legacy host and would be caught by the
+      // permanent-redirect rule before this check is ever reached.
       process.env.COOKIE_DOMAIN = '.pavisie.com';
       process.env.NEXT_PUBLIC_API_URL = 'https://api.pavisie.com';
       const res = middleware(
         makeRequest('/dashboard/123', {
           url: 'http://10.0.1.7:8080/dashboard/123',
-          forwardedHost: 'entrophybot.com',
+          forwardedHost: 'staging.example.com',
         }),
       );
       expect(res.headers.get('location')).toBeNull();
