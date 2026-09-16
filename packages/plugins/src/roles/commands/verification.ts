@@ -8,7 +8,18 @@ const MODE_CHOICES = [
   { name: 'CAPTCHA (requires CAPTCHA_PROVIDER)', value: 'captcha' },
 ] as const;
 
-const UNDERAGE_ACTION_CHOICES = [
+/**
+ * Choices for what happens when the minimum-account-age gate rejects someone.
+ *
+ * Named "age gate" rather than "underage" on every surface Discord can read. Discord's App
+ * Directory check scans registered command and option names for "harmful or bad language" and
+ * flagged `/verification` on the word "underage" alone, which blocked discovery for the whole app
+ * — an automated filter catching a minor-safety feature because of the word it used to describe
+ * itself. The stored config key stays `underageAction` (see manifest.ts): it is persisted per
+ * guild and exposed in the dashboard API, Discord never sees it, and renaming it would mean a
+ * data migration for no benefit. Do not rename this option back.
+ */
+const AGE_GATE_ACTION_CHOICES = [
   { name: 'None', value: 'none' },
   { name: 'Quarantine', value: 'quarantine' },
   { name: 'Kick', value: 'kick' },
@@ -47,9 +58,9 @@ const data = new SlashCommandBuilder()
       )
       .addStringOption((opt) =>
         opt
-          .setName('underage-action')
+          .setName('age-gate-action')
           .setDescription('Action when the account-age gate fails')
-          .addChoices(...UNDERAGE_ACTION_CHOICES),
+          .addChoices(...AGE_GATE_ACTION_CHOICES),
       )
       .addRoleOption((opt) =>
         opt.setName('quarantine-role').setDescription('Role applied by the quarantine action'),
@@ -133,7 +144,7 @@ export const command: PluginCommand = {
         minAccountAgeDays:
           c.interaction.options.getInteger('min-account-age-days') ?? current.verification.minAccountAgeDays,
         underageAction:
-          (c.interaction.options.getString('underage-action') as
+          (c.interaction.options.getString('age-gate-action') as
             VerificationConfig['underageAction'] | null) ?? current.verification.underageAction,
         quarantineRoleId:
           c.interaction.options.getRole('quarantine-role')?.id ?? current.verification.quarantineRoleId,
@@ -168,7 +179,7 @@ export const command: PluginCommand = {
               `Verified role: ${after.verification.verifiedRoleId ? `<@&${after.verification.verifiedRoleId}>` : '_not set_'}`,
               `Staff queue channel: ${after.verification.staffChannelId ? `<#${after.verification.staffChannelId}>` : '_not set_'}`,
               `Min account age: ${after.verification.minAccountAgeDays} day(s)`,
-              `Underage action: ${after.verification.underageAction}`,
+              `Age-gate action: ${after.verification.underageAction}`,
               `Questions: ${after.verification.questions.length}`,
             ].join('\n'),
           ),

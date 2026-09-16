@@ -2271,7 +2271,7 @@
                   "type": "Integer"
                 },
                 {
-                  "name": "underage-action",
+                  "name": "age-gate-action",
                   "description": "Action when the account-age gate fails",
                   "required": false,
                   "type": "String"
