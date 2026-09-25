@@ -33,6 +33,7 @@ export function privacyPolicy(operator: string, contactEmail: string): LegalSect
         'By default, Pavisie stores only what a feature needs to function: Discord IDs (server, user, channel, role, message) tied to the feature that used them — for example a moderation case, a ticket, or a level profile.',
         "Message content is never stored unless a specific feature explicitly requires it and a server administrator turns that feature on (for example, the Enforcer plugin's context capture, which can be disabled per server). Deleted-message and edited-message logging captures that an event happened, not the message text, unless a server enables content capture.",
         "Server administrators control which plugins are enabled and can review, export, or request deletion of their server's data at any time from the dashboard's privacy settings.",
+        "When a server administrator turns on the Discord ↔ Twitch chat bridge for a linked channel, chat messages (text and display name) posted in the bridged Discord channel and/or the linked Twitch chat are shown on the other platform for as long as that direction stays on. Pavisie does not store or log that text. Once a message is relayed, it becomes an ordinary message on the destination platform and is stored there under that platform's own terms — deleting the original does not delete the relayed copy.",
       ],
     },
     {

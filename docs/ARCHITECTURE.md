@@ -904,9 +904,30 @@ No 15th plugin: lives in `packages/plugins/src/integrations/twitch-chat/` (`heli
   `/dashboard/[guildId]/integrations` (status banner, connect button, per-channel card with enable/prefix/delete,
   commands table + dialog, timers table + dialog).
 - **Privacy contract**: chat message text is parsed **in memory only**, to match a command, and is **never
-  persisted, logged, or sent to Discord**. Pino logs may include a channel login and a command *name*, never
-  message text or chatter identity. No Twitch-side moderation actions (ban/timeout/delete) ship in v1 — no
-  moderator scopes are requested.
+  persisted or logged**. Pino logs may include a channel login and a command *name*, never message text or
+  chatter identity. The one carve-out: an admin can opt a linked channel into the Discord <-> Twitch chat bridge
+  (below), which — only for the direction(s) they explicitly turn on, off by default — relays plain chat/message
+  text to the *other* platform. That relayed text is still never persisted or logged by Pavisie; it is only ever
+  held in memory for the length of one relay call. Once relayed, though, it becomes an ordinary message on the
+  destination platform and is stored there under that platform's own terms — deleting the original does not
+  delete the relayed copy. No Twitch-side moderation actions (ban/timeout/delete) ship in v1 — no moderator
+  scopes are requested.
+- **Discord <-> Twitch chat bridge** (`twitch-chat/bridge-format.ts`, `bridge-webhook.ts`, `bridge-metrics.ts`,
+  `bridge-discord-handler.ts`; `TwitchChatManager`'s `runBridgeReconcile`/`relayTwitchToDiscordIfBridged`; command
+  `/twitch bridge`): each linked `TwitchChatChannel` can point at ONE Discord text channel, with two independent
+  toggles, both **off by default**. **Discord -> Twitch**: a `messageCreate` handler formats the message as
+  `[Discord] <display name>: <text>` (mentions resolved to plain names, `@everyone`/`@here` neutralized, markdown
+  escaped, truncated to fit) and sends it via the existing bot-identity `sendChatMessage` Helix call/throttle. A
+  short delay-then-recheck (~2s) lets the independent `automod` plugin's own `messageCreate` handler delete the
+  message first if it's going to — there's no synchronous "automod is about to act" signal available, so this is
+  a best-effort gate, not a guarantee. **Twitch -> Discord**: the bot creates (once, lazily) a Discord channel
+  webhook named "Pavisie Twitch Bridge" in the bridge channel (webhook id + token persisted, token encrypted at
+  rest the same way `overlayTokenEnc` is) and posts through it as `<name> (Twitch)` — no Twitch avatar fetching.
+  Safety measures on both directions: self-ignore (never relay the bridge's own messages back), a command-prefix
+  skip (`+`/`/`-prefixed text isn't relayed), `allowedMentions: { parse: [] }` plus text-level `@everyone`/`@here`
+  neutralization, and reuse of the existing 1-send/sec/broadcaster Discord->Twitch throttle (drops are counted
+  in-memory via `bridge-metrics.ts`, never logged with content). A reconcile-pass access check
+  (View Channel/Send Messages/Manage Webhooks) surfaces failures via `TwitchChatChannel.bridgeLastError`.
 - **Degrades gracefully**: with `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` unset, or before a `TwitchBotIdentity`
   row exists, the manager stays idle and reports why (`TwitchChatService.status()`), surfaced in `/twitch
   status`, the dashboard, and the plugin's `health()` — no crash, no error spam. Every `twitch-chat-tick` tick

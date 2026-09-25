@@ -5139,6 +5139,76 @@
                   "type": "String"
                 }
               ]
+            },
+            {
+              "name": "channel",
+              "fullName": "/twitch bridge channel",
+              "description": "Set the bridge target Discord channel.",
+              "options": [
+                {
+                  "name": "channel",
+                  "description": "Twitch channel",
+                  "required": true,
+                  "type": "String"
+                },
+                {
+                  "name": "discord-channel",
+                  "description": "Discord channel to bridge with",
+                  "required": true,
+                  "type": "Channel"
+                }
+              ]
+            },
+            {
+              "name": "discord-to-twitch",
+              "fullName": "/twitch bridge discord-to-twitch",
+              "description": "Turn the Discord -> Twitch relay direction on or off.",
+              "options": [
+                {
+                  "name": "channel",
+                  "description": "Twitch channel",
+                  "required": true,
+                  "type": "String"
+                },
+                {
+                  "name": "enabled",
+                  "description": "Turn this relay direction on or off",
+                  "required": true,
+                  "type": "Boolean"
+                }
+              ]
+            },
+            {
+              "name": "twitch-to-discord",
+              "fullName": "/twitch bridge twitch-to-discord",
+              "description": "Turn the Twitch -> Discord relay direction on or off.",
+              "options": [
+                {
+                  "name": "channel",
+                  "description": "Twitch channel",
+                  "required": true,
+                  "type": "String"
+                },
+                {
+                  "name": "enabled",
+                  "description": "Turn this relay direction on or off",
+                  "required": true,
+                  "type": "Boolean"
+                }
+              ]
+            },
+            {
+              "name": "status",
+              "fullName": "/twitch bridge status",
+              "description": "Show the bridge configuration for a linked channel.",
+              "options": [
+                {
+                  "name": "channel",
+                  "description": "Twitch channel",
+                  "required": true,
+                  "type": "String"
+                }
+              ]
             }
           ]
         }

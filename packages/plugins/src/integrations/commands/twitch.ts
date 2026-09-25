@@ -17,6 +17,7 @@ import { SsrfError, assertPublicHttpUrl, decryptSecret, encryptSecret, redisKey 
 import {
   assertStaffLevel,
   brandEmbed,
+  channelMention,
   errorEmbed,
   listEmbed,
   registerConfirmHandlers,
@@ -426,6 +427,54 @@ const data = new SlashCommandBuilder()
               .setRequired(false)
               .setAutocomplete(true),
           ),
+      ),
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName('bridge')
+      .setDescription('Manage the Discord <-> Twitch chat bridge for a linked channel.')
+      .addSubcommand((sub) =>
+        sub
+          .setName('channel')
+          .setDescription('Set the bridge target Discord channel.')
+          .addStringOption((opt) =>
+            opt
+              .setName('channel')
+              .setDescription('Twitch channel')
+              .setRequired(true)
+              .setAutocomplete(true),
+          )
+          .addChannelOption((opt) =>
+            opt
+              .setName('discord-channel')
+              .setDescription('Discord channel to bridge with')
+              .setRequired(true)
+              .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('discord-to-twitch')
+          .setDescription('Turn the Discord -> Twitch relay direction on or off.')
+          .addStringOption((opt) => opt.setName('channel').setDescription('Twitch channel').setRequired(true).setAutocomplete(true))
+          .addBooleanOption((opt) =>
+            opt.setName('enabled').setDescription('Turn this relay direction on or off').setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('twitch-to-discord')
+          .setDescription('Turn the Twitch -> Discord relay direction on or off.')
+          .addStringOption((opt) => opt.setName('channel').setDescription('Twitch channel').setRequired(true).setAutocomplete(true))
+          .addBooleanOption((opt) =>
+            opt.setName('enabled').setDescription('Turn this relay direction on or off').setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('status')
+          .setDescription('Show the bridge configuration for a linked channel.')
+          .addStringOption((opt) => opt.setName('channel').setDescription('Twitch channel').setRequired(true).setAutocomplete(true)),
       ),
   );
 
@@ -1434,6 +1483,198 @@ async function handleRewardOverlayReset(c: Parameters<PluginCommand['execute']>[
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// Discord <-> Twitch chat bridge (opt-in, off by default per direction) — mirrors the reward handlers' exact
+// resolve-channel/reply/audit/nudge-reconcile pattern above.
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * Best-effort delete of a Discord <-> Twitch bridge webhook, called right before its stored credential is
+ * cleared because the bridge Discord channel is changing. Mirrors `apps/api/src/routes/twitch-chat.ts`'s PATCH
+ * handler's identically-named helper — this handler can't import from `apps/api`, so it's a small duplicate,
+ * not a shared import. Discord's `DELETE /webhooks/{id}/{token}` endpoint authenticates via the webhook's own
+ * token in the URL, so a plain `fetch` works here too even though the bot process also has a live discord.js
+ * client available — no need to resolve/authorize a bot-side webhook object just to delete it. Never throws: a
+ * failed delete must never block the field-clearing update that follows it.
+ */
+async function deleteBridgeWebhookBestEffort(webhookId: string, webhookTokenEnc: string): Promise<void> {
+  try {
+    const token = decryptSecret(webhookTokenEnc);
+    await fetch(`https://discord.com/api/v10/webhooks/${webhookId}/${token}`, { method: 'DELETE' });
+  } catch {
+    // Swallowed on purpose — see doc comment above.
+  }
+}
+
+async function handleBridgeChannel(c: Parameters<PluginCommand['execute']>[0]): Promise<void> {
+  const resolved = await resolveChannel(c);
+  if (!resolved.ok) {
+    await c.interaction.reply({ embeds: [errorEmbed(resolved.message)], ephemeral: true });
+    return;
+  }
+  const { channel } = resolved;
+
+  const discordChannel = c.interaction.options.getChannel('discord-channel', true);
+
+  // The channel is changing (or being set for the first time) — best-effort delete the OLD webhook from
+  // Discord's side (see the helper above) before clearing the stored credential, same rule as the API route's
+  // PATCH handler: not load-bearing (an orphaned webhook is harmless, same precedent as elsewhere), just
+  // tidiness — the bot creates a fresh webhook in the new channel on its next reconcile either way.
+  const channelIsChanging = channel.bridgeDiscordChannelId !== discordChannel.id;
+
+  if (channelIsChanging && channel.bridgeWebhookId && channel.bridgeWebhookTokenEnc) {
+    await deleteBridgeWebhookBestEffort(channel.bridgeWebhookId, channel.bridgeWebhookTokenEnc);
+  }
+
+  await c.ctx.prisma.twitchChatChannel.update({
+    where: { id: channel.id },
+    data: {
+      bridgeDiscordChannelId: discordChannel.id,
+      ...(channelIsChanging ? { bridgeWebhookId: null, bridgeWebhookTokenEnc: null, bridgeLastError: null } : {}),
+    },
+  });
+
+  await c.ctx.audit({
+    guildId: c.guildId,
+    actorId: c.interaction.user.id,
+    actorType: 'user',
+    action: 'integration.twitch_chat.bridge.channel',
+    targetType: 'twitch_chat_channel',
+    targetId: channel.id,
+    before: { bridgeDiscordChannelId: channel.bridgeDiscordChannelId },
+    after: { bridgeDiscordChannelId: discordChannel.id },
+    source: 'bot',
+  });
+  nudgeReconcile(c.ctx);
+
+  await c.interaction.reply({
+    embeds: [
+      successEmbed(
+        c.t('twitch.bridge.channelSet', {
+          channel: channel.broadcasterLogin,
+          discordChannel: channelMention(discordChannel.id),
+        }),
+      ),
+    ],
+    ephemeral: true,
+  });
+}
+
+async function handleBridgeDiscordToTwitch(c: Parameters<PluginCommand['execute']>[0]): Promise<void> {
+  const enabled = c.interaction.options.getBoolean('enabled', true);
+
+  const resolved = await resolveChannel(c);
+  if (!resolved.ok) {
+    await c.interaction.reply({ embeds: [errorEmbed(resolved.message)], ephemeral: true });
+    return;
+  }
+  const { channel } = resolved;
+
+  if (enabled && !channel.bridgeDiscordChannelId) {
+    await c.interaction.reply({ embeds: [errorEmbed(c.t('twitch.bridge.channelRequired'))], ephemeral: true });
+    return;
+  }
+
+  await c.ctx.prisma.twitchChatChannel.update({
+    where: { id: channel.id },
+    data: { bridgeDiscordToTwitch: enabled },
+  });
+  await c.ctx.audit({
+    guildId: c.guildId,
+    actorId: c.interaction.user.id,
+    actorType: 'user',
+    action: 'integration.twitch_chat.bridge.discordToTwitch',
+    targetType: 'twitch_chat_channel',
+    targetId: channel.id,
+    before: { bridgeDiscordToTwitch: channel.bridgeDiscordToTwitch },
+    after: { bridgeDiscordToTwitch: enabled },
+    source: 'bot',
+  });
+  nudgeReconcile(c.ctx);
+
+  await c.interaction.reply({
+    embeds: [
+      successEmbed(
+        enabled
+          ? c.t('twitch.bridge.discordToTwitchEnabled', { channel: channel.broadcasterLogin })
+          : c.t('twitch.bridge.discordToTwitchDisabled', { channel: channel.broadcasterLogin }),
+      ),
+    ],
+    ephemeral: true,
+  });
+}
+
+async function handleBridgeTwitchToDiscord(c: Parameters<PluginCommand['execute']>[0]): Promise<void> {
+  const enabled = c.interaction.options.getBoolean('enabled', true);
+
+  const resolved = await resolveChannel(c);
+  if (!resolved.ok) {
+    await c.interaction.reply({ embeds: [errorEmbed(resolved.message)], ephemeral: true });
+    return;
+  }
+  const { channel } = resolved;
+
+  if (enabled && !channel.bridgeDiscordChannelId) {
+    await c.interaction.reply({ embeds: [errorEmbed(c.t('twitch.bridge.channelRequired'))], ephemeral: true });
+    return;
+  }
+
+  await c.ctx.prisma.twitchChatChannel.update({
+    where: { id: channel.id },
+    data: { bridgeTwitchToDiscord: enabled },
+  });
+  await c.ctx.audit({
+    guildId: c.guildId,
+    actorId: c.interaction.user.id,
+    actorType: 'user',
+    action: 'integration.twitch_chat.bridge.twitchToDiscord',
+    targetType: 'twitch_chat_channel',
+    targetId: channel.id,
+    before: { bridgeTwitchToDiscord: channel.bridgeTwitchToDiscord },
+    after: { bridgeTwitchToDiscord: enabled },
+    source: 'bot',
+  });
+  nudgeReconcile(c.ctx);
+
+  await c.interaction.reply({
+    embeds: [
+      successEmbed(
+        enabled
+          ? c.t('twitch.bridge.twitchToDiscordEnabled', { channel: channel.broadcasterLogin })
+          : c.t('twitch.bridge.twitchToDiscordDisabled', { channel: channel.broadcasterLogin }),
+      ),
+    ],
+    ephemeral: true,
+  });
+}
+
+async function handleBridgeStatus(c: Parameters<PluginCommand['execute']>[0]): Promise<void> {
+  const resolved = await resolveChannel(c);
+  if (!resolved.ok) {
+    await c.interaction.reply({ embeds: [errorEmbed(resolved.message)], ephemeral: true });
+    return;
+  }
+  const { channel } = resolved;
+
+  const onOff = (v: boolean) => (v ? c.t('twitch.bridge.status.on') : c.t('twitch.bridge.status.off'));
+
+  const lines: string[] = [
+    channel.bridgeDiscordChannelId
+      ? c.t('twitch.bridge.status.channelLine', { channel: channelMention(channel.bridgeDiscordChannelId) })
+      : c.t('twitch.bridge.status.noChannel'),
+    c.t('twitch.bridge.status.discordToTwitchLine', { state: onOff(channel.bridgeDiscordToTwitch) }),
+    c.t('twitch.bridge.status.twitchToDiscordLine', { state: onOff(channel.bridgeTwitchToDiscord) }),
+  ];
+  if (channel.bridgeLastError) {
+    lines.push(c.t('twitch.bridge.status.lastError', { error: channel.bridgeLastError }));
+  }
+
+  await c.interaction.reply({
+    embeds: [listEmbed(c.t('twitch.bridge.status.title', { channel: channel.broadcasterLogin }), lines)],
+    ephemeral: true,
+  });
+}
+
 export const command: PluginCommand = {
   data,
   requirement: {
@@ -1472,6 +1713,13 @@ export const command: PluginCommand = {
       if (sub === 'disable') return handleRewardDisable(c);
       if (sub === 'overlay') return handleRewardOverlay(c);
       if (sub === 'overlay-reset') return handleRewardOverlayReset(c);
+    }
+
+    if (group === 'bridge') {
+      if (sub === 'channel') return handleBridgeChannel(c);
+      if (sub === 'discord-to-twitch') return handleBridgeDiscordToTwitch(c);
+      if (sub === 'twitch-to-discord') return handleBridgeTwitchToDiscord(c);
+      if (sub === 'status') return handleBridgeStatus(c);
     }
   },
   async autocomplete(c) {

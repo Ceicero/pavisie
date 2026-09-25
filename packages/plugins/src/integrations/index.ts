@@ -2,6 +2,7 @@ import { definePlugin, registerPluginLocales } from '../sdk';
 import { manifest } from './manifest';
 import { command as integrationCommand, integrationConfirmComponents } from './commands/integration';
 import { command as twitchCommand, twitchConfirmComponents } from './commands/twitch';
+import { twitchBridgeMessageCreateHandler } from './twitch-chat/bridge-discord-handler';
 import { inboundJob } from './jobs/inbound';
 import { outboundJob } from './jobs/outbound';
 import {
@@ -31,6 +32,7 @@ const twitchChatTickJob = createTwitchChatTickJob(twitchChatManager);
 export const plugin = definePlugin({
   manifest,
   commands: [integrationCommand, twitchCommand],
+  events: [twitchBridgeMessageCreateHandler],
   components: [...integrationConfirmComponents, ...twitchConfirmComponents],
   jobs: [
     inboundJob,
