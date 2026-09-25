@@ -42,6 +42,16 @@ interface HelixEventSubCreateResponse {
   data: { id: string }[];
 }
 
+/** True when `config` is the shape the twitch-chat OAuth callback stamps onto a connection (`{ kind: 'chat' }`)
+ * rather than an alert-watch connection created by `POST /:guildId/integrations/alerts`. Mirrors
+ * `isChatKindConnection` in `apps/api/src/routes/integrations.ts` — the plugin package can't import from
+ * `apps/api`, so this is a second, equally narrow copy of the same check. A chat-kind connection belongs
+ * entirely to the Twitch chat-bot feature (`../twitch-chat/manager.ts`) and carries no `target`/`channelId`
+ * alert config at all, so the alert poll must never touch it. */
+export function isTwitchChatConnection(config: unknown): boolean {
+  return Boolean(config && typeof config === 'object' && (config as Record<string, unknown>).kind === 'chat');
+}
+
 /** `getTwitchAppToken` only ever touches these three fields of `PluginContext` (env for the client
  * id/secret, redis to cache the token, logger to warn on failure) — narrowing the parameter to just that
  * slice, instead of requiring a full `PluginContext`, lets a caller with no discord.js client or bot-side
@@ -117,6 +127,10 @@ export async function ensureTwitchEventSub(
   if (!token) return;
 
   const config = readAlertConfig(connection);
+  // No target configured is a config state, not a Twitch failure — mirrors `pollStreamOnline`'s own
+  // `if (!config.target) return;` guard below. Bail before ever calling Helix (an empty `login` 400s).
+  if (!config.target.trim()) return;
+
   const broadcaster = await lookupBroadcasterId(ctx, token, config.target);
   if (!broadcaster) {
     await markConnectionError(ctx, connection.id, `Twitch user "${config.target}" not found.`);
@@ -242,6 +256,11 @@ export const twitchProvider: IntegrationProviderDef = {
   pollIntervalSeconds: 120,
   configSchema: twitchConfigSchema,
   async poll(ctx, connection) {
+    // Chat-kind connections (see `isTwitchChatConnection`) share the same `provider: TWITCH` row shape that
+    // `pollTwitchJob`'s query selects, but belong to the chat-bot feature and have no alert `target` at all.
+    // Skip silently — this is not a poll failure to record, just the wrong provider logic seeing the wrong rows.
+    if (isTwitchChatConnection(connection.config)) return;
+
     const usingEventSub = Boolean(
       (ctx.env.PUBLIC_WEBHOOK_BASE_URL ?? ctx.env.API_BASE_URL) && ctx.env.TWITCH_EVENTSUB_SECRET,
     );
