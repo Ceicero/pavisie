@@ -40,6 +40,7 @@ export function privacyPolicy(operator: string, contactEmail: string): LegalSect
       paragraphs: [
         "Signing into the dashboard uses Discord OAuth. We receive your Discord user id, username, avatar, and the list of servers you manage, only to determine which servers you're allowed to configure.",
         'A session cookie keeps you signed in; it is httpOnly, cannot be read by page scripts, and expires automatically. OAuth tokens are encrypted at rest and used only to call the Discord API on your behalf.',
+        "If you choose to link a Twitch account (Your account → Linked accounts), clicking \"Link Twitch\" asks Discord — with a separate consent screen you approve at that moment — for your verified Twitch connection. We store only your Twitch user id, your Twitch login (for display), and the date you linked it; the Discord access token used to read the connection is never stored, only used once for that request. This is opt-in, off by default, and exists so you can use and earn your Pavisie currency from Twitch chat. Unlink at any time from the same page to delete it; it is otherwise kept until you do.",
       ],
     },
     {

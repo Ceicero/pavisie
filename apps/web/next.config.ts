@@ -38,6 +38,15 @@ const nextConfig: NextConfig = {
         destination: '/features',
         permanent: true,
       },
+      // Short link the Twitch chat bot will tell viewers to use ("link at pavisie.com/link") once it can
+      // use their Pavisie balance from chat — ARCHITECTURE.md §19d. `/dashboard/account`'s own signed-out
+      // handling (middleware.ts + dashboard/layout.tsx) applies exactly as it does to any other
+      // `/dashboard/*` route, since this is a plain redirect, not a bypass of the dashboard tree.
+      {
+        source: '/link',
+        destination: '/dashboard/account',
+        permanent: true,
+      },
     ];
   },
 };

@@ -60,6 +60,7 @@ import overlayRoutes from './routes/overlay';
 import developerReportsRoutes from './routes/developer-reports';
 import ownerMetricsRoutes from './routes/owner-metrics';
 import twitchBotRoutes from './routes/twitch-bot';
+import twitchLinkRoutes from './routes/twitch-link';
 
 export interface BuildAppDeps {
   prisma?: PrismaClient;
@@ -340,6 +341,7 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   await app.register(developerReportsRoutes, { prefix: '/owner' });
   await app.register(ownerMetricsRoutes, { prefix: '/owner' });
   await app.register(twitchBotRoutes, { prefix: '/owner' });
+  await app.register(twitchLinkRoutes, { prefix: '/me' });
 
   app.addHook('onClose', async () => {
     if (!deps.queues) {

@@ -4,6 +4,11 @@
 // append-only log (createdAt only). Soft delete via `deletedAt DateTime?` on
 // ModerationCase, Ticket, RolePanel, AutomodRule, Suggestion, WebhookEndpoint,
 // IntegrationConnection (and a few related child tables, per model).
+//
+// Exceptions to "every table carries guildId": a handful of models are deliberately GLOBAL —
+// TwitchBotIdentity (the bot's own singleton Twitch account) and TwitchAccountLink (a Discord user's
+// verified Twitch identity, ARCHITECTURE.md §19d) — because what they store is true independent of any
+// guild, not scoped to one. See each model's own doc comment for why.
 
 generator client {
   provider = "prisma-client-js"
@@ -1661,4 +1666,34 @@ model GameStatSnapshot {
 
   @@unique([guildId, userId, game])
   @@index([guildId, game])
+}
+
+// ---------------------------------------------------------------------------
+// Twitch account linking (ARCHITECTURE.md §19d) — foundation for letting Twitch chat viewers use/earn
+// their Pavisie (Agis) virtual-economy balance from Twitch chat (future work; nothing reads this table
+// yet except the `findDiscordUserIdForTwitch` helper, added ahead of that bot-side lookup).
+//
+// Deliberately GLOBAL — no `guildId`, unlike every other model above (the "every tenant table has
+// guildId" convention at the top of this file). This is a user-owned identity fact ("this Discord
+// account owns this Twitch account"), not data scoped to any one guild: a person's Discord↔Twitch link
+// is the same fact everywhere they use Pavisie, exactly like `TwitchBotIdentity` (the bot's own account)
+// is a global singleton rather than a per-guild row. A guildId here would force the same person to
+// re-link once per server for no reason, and would let the same Twitch account be "owned" by different
+// Discord accounts depending on which guild asked.
+// ---------------------------------------------------------------------------
+
+/// A verified link from a Discord account to a Twitch account, proven via Discord OAuth2's `connections`
+/// scope (never typed in by the user — see `routes/twitch-link.ts` / `routes/auth.ts`'s callback
+/// branching). `twitchLogin` is display-only and can go stale if the user renames on Twitch;
+/// `twitchUserId` is the durable identity used for lookups. Both directions are unique: one Discord
+/// account links to at most one Twitch account, and one Twitch account is claimed by at most one Discord
+/// account (re-linking replaces the caller's own previous link; linking a Twitch account already claimed
+/// by someone else is rejected — no silent takeover).
+model TwitchAccountLink {
+  id            String   @id @default(cuid())
+  discordUserId String   @unique
+  twitchUserId  String   @unique
+  twitchLogin   String
+  linkedAt      DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

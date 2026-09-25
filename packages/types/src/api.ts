@@ -17,6 +17,12 @@ export interface SessionUser {
   avatarUrl: string | null;
 }
 
+/** `GET /me/twitch-link` — the caller's own Discord↔Twitch account link, if any (ARCHITECTURE.md §19d).
+ * Never carries `twitchUserId`: the dashboard has no reason to see it, only the login for display. */
+export type TwitchAccountLinkDto =
+  | { linked: false }
+  | { linked: true; twitchLogin: string; linkedAt: string };
+
 /** A guild the dashboard user can see, with bot presence and manage-permission info. */
 export interface GuildSummary {
   id: string;

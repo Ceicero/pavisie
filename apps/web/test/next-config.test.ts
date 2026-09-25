@@ -12,4 +12,15 @@ describe('redirects', () => {
       permanent: true,
     });
   });
+
+  it('permanently redirects /link to /dashboard/account — the short link the Twitch chat bot tells viewers to use', async () => {
+    expect(nextConfig.redirects).toBeDefined();
+    const redirects = await nextConfig.redirects!();
+    const linkRedirect = redirects.find((r) => r.source === '/link');
+    expect(linkRedirect).toEqual({
+      source: '/link',
+      destination: '/dashboard/account',
+      permanent: true,
+    });
+  });
 });

@@ -1,6 +1,6 @@
 import RedisMock from 'ioredis-mock';
 import type Redis from 'ioredis';
-import pino from 'pino';
+import pino, { type Logger } from 'pino';
 import { createPrismaStub, type PrismaStubOverrides } from '@pavisie/plugins/sdk/testing';
 import { buildApp } from '../../src/app';
 import type { ZodFastifyInstance } from '../../src/lib/http';
@@ -43,8 +43,13 @@ export interface TestApp {
   overlaySubscriber: Redis;
 }
 
-/** Builds a fully-wired `buildApp()` instance backed entirely by fakes (recording Prisma stub, `ioredis-mock`, fake queues). */
-export async function buildTestApp(prismaOverrides: PrismaStubOverrides = {}): Promise<TestApp> {
+/** Builds a fully-wired `buildApp()` instance backed entirely by fakes (recording Prisma stub, `ioredis-mock`, fake queues).
+ * `logger` defaults to a silent pino instance (no pino-pretty transport, which spins up a worker thread) —
+ * pass one explicitly (e.g. a capturing logger) for a test that needs to inspect what got logged. */
+export async function buildTestApp(
+  prismaOverrides: PrismaStubOverrides = {},
+  logger: Logger = pino({ enabled: false }),
+): Promise<TestApp> {
   const { prisma, calls: prismaCalls } = createPrismaStub(prismaOverrides);
   const redis = new RedisMock() as unknown as Redis;
   // A second ioredis-mock instance, constructed the same (default-options) way as `redis` above — ioredis-mock
@@ -52,9 +57,7 @@ export async function buildTestApp(prismaOverrides: PrismaStubOverrides = {}): P
   // this genuinely receives whatever `redis.publish(...)` sends, exactly like the real second client in app.ts.
   const overlaySubscriber = new RedisMock() as unknown as Redis;
   const queues = createFakeQueues();
-  // A silent logger (no pino-pretty transport, which spins up a worker thread) — real logging behavior is
-  // exercised by inspection in `app.ts` itself; tests only care about response bodies/status codes.
-  const app = await buildApp({ prisma, redis, queues, overlaySubscriber, logger: pino({ enabled: false }) });
+  const app = await buildApp({ prisma, redis, queues, overlaySubscriber, logger });
   await app.ready();
   return { app, prisma, prismaCalls, redis, queues, overlaySubscriber };
 }

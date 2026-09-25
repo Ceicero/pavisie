@@ -9,6 +9,15 @@ const GUILDS_CACHE_TTL_SECONDS = 60;
 /** Least-privilege OAuth scopes the dashboard login flow requests (ARCHITECTURE.md §10). */
 export const OAUTH_SCOPES = 'identify guilds';
 
+/**
+ * Scopes the Twitch account-linking flow requests instead of `OAUTH_SCOPES` (ARCHITECTURE.md §19d) —
+ * `connections` is only ever asked for here, never merged into the main login scope, so a regular
+ * dashboard sign-in never grants Pavisie read access to a user's connected accounts. `identify` is
+ * included (not just `connections`) because the callback needs the Discord user id back to bind the
+ * grant to the account that started the flow (`routes/twitch-link.ts` / `routes/auth.ts`'s callback).
+ */
+export const TWITCH_LINK_OAUTH_SCOPES = 'identify connections';
+
 export interface DiscordTokenResponse {
   access_token: string;
   refresh_token: string;
@@ -59,14 +68,15 @@ function requireOAuthEnv(): { clientId: string; clientSecret: string; redirectUr
   };
 }
 
-/** Builds the Discord OAuth2 authorize URL with the given anti-CSRF `state`. */
-export function buildAuthorizeUrl(state: string): string {
+/** Builds the Discord OAuth2 authorize URL with the given anti-CSRF `state`. `scope` defaults to the
+ * main login's `OAUTH_SCOPES`; the twitch-link connect flow passes `TWITCH_LINK_OAUTH_SCOPES` instead. */
+export function buildAuthorizeUrl(state: string, scope: string = OAUTH_SCOPES): string {
   const { clientId, redirectUri } = requireOAuthEnv();
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: OAUTH_SCOPES,
+    scope,
     state,
     prompt: 'consent',
   });
@@ -123,6 +133,32 @@ export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser
     throw new ExternalServiceError(`Failed to fetch Discord user (${res.status}).`);
   }
   return (await res.json()) as DiscordUser;
+}
+
+/** One item of `GET /users/@me/connections` (`connections` scope) — only the fields the twitch-link flow
+ * needs. `verified` is what proves the user actually owns the linked third-party account rather than
+ * having merely typed a name into a Discord field, which is the whole reason this flow reads it instead
+ * of taking a Twitch login as free-form input (see `routes/twitch-link.ts`). */
+export interface DiscordConnection {
+  id: string;
+  name: string;
+  type: string;
+  verified: boolean;
+}
+
+/**
+ * Fetches the authenticated user's third-party account connections (`connections` scope). Used only by
+ * the Twitch account-linking flow (`routes/auth.ts`'s callback, the twitch-link state branch) — the
+ * access token is read once for this call and then discarded; it is never persisted or logged.
+ */
+export async function fetchDiscordConnections(accessToken: string): Promise<DiscordConnection[]> {
+  const res = await fetch(`${DISCORD_API_BASE}/users/@me/connections`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    throw new ExternalServiceError(`Failed to fetch Discord connections (${res.status}).`);
+  }
+  return (await res.json()) as DiscordConnection[];
 }
 
 function sleep(ms: number): Promise<void> {

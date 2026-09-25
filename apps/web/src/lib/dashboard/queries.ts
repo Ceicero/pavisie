@@ -11,6 +11,7 @@ import type {
   Paginated,
   PluginSummary,
   RetentionPolicyDto,
+  TwitchAccountLinkDto,
 } from '@pavisie/types';
 import type { ChannelPickerOption, RolePickerOption } from '@pavisie/ui';
 import { apiFetch, toQueryString } from './api';
@@ -30,6 +31,7 @@ export const queryKeys = {
   dataRequests: (guildId: string) => ['guilds', guildId, 'data-requests'] as const,
   discordChannels: (guildId: string) => ['guilds', guildId, 'discord', 'channels'] as const,
   discordRoles: (guildId: string) => ['guilds', guildId, 'discord', 'roles'] as const,
+  twitchLink: ['me', 'twitch-link'] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -280,4 +282,32 @@ export function useGuildRoles(guildId: string | undefined) {
       Boolean(guildId),
     ),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Account: Twitch link (`/dashboard/account`, ARCHITECTURE.md §19d) — user-level, not guild-scoped.
+// ---------------------------------------------------------------------------
+
+export function useTwitchLink() {
+  return useQuery({
+    queryKey: queryKeys.twitchLink,
+    queryFn: () => apiFetch<TwitchAccountLinkDto>('/me/twitch-link'),
+  });
+}
+
+/** `POST /me/twitch-link/connect` — returns a Discord authorize URL; the caller navigates there. */
+export function useConnectTwitchLink() {
+  return useMutation({
+    mutationFn: () => apiFetch<{ url: string }>('/me/twitch-link/connect', { method: 'POST' }),
+  });
+}
+
+export function useUnlinkTwitchLink() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<void>('/me/twitch-link', { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.setQueryData<TwitchAccountLinkDto>(queryKeys.twitchLink, { linked: false });
+    },
+  });
 }

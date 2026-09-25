@@ -7,3 +7,4 @@ export { RETENTION_TARGETS, runRetentionForGuild, defaultRetentionPolicy } from 
 export type { RetentionTarget, RetentionPolicyDays } from './retention';
 export { ensureGuild, markGuildLeft, nextCaseNumber, withNextCaseNumber, withGuild } from './guild';
 export type { EnsureGuildInput } from './guild';
+export { findDiscordUserIdForTwitch } from './twitch-link';

@@ -135,6 +135,12 @@ function AccountMenu() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="truncate">{user?.globalName ?? user?.username ?? 'Account'}</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard/account">
+            <UserIcon className="h-4 w-4" />
+            Your account
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void logout()}>
           <LogOut className="h-4 w-4" />
           Log out

@@ -477,7 +477,7 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 - `prisma/schema.prisma` (postgres). Client singleton in `src/client.ts` (`export const prisma`, `export * from '@prisma/client'` types). `src/index.ts` also exports `writeAudit(prisma, entry)`, `withGuild(guildId)` helpers, and `retention.ts` helpers.
 - Migration: `prisma/migrations/0001_init/migration.sql` + `migration_lock.toml`, generated with `prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script` (no DB needed). Scripts: `generate`, `migrate:dev`, `migrate:deploy`, `migrate:diff`, `seed` (`tsx prisma/seed.ts`), `studio`.
 - Conventions: ids `String @id @default(cuid())` unless a Discord snowflake is natural (`Guild.id`, `UserProfile.id` = discord user id). Every tenant table has `guildId String` + `@@index([guildId])` (+ compound indexes for hot lookups). Timestamps `createdAt @default(now())`, `updatedAt @updatedAt`. Soft delete via `deletedAt DateTime?` on ModerationCase, Ticket, RolePanel, AutomodRule, Suggestion, WebhookEndpoint, IntegrationConnection. FK to `Guild` with `onDelete: Cascade` (guild data deletion = delete Guild row → cascades). Json config columns typed `Json`.
-- Models (minimum): Guild, GuildConfig (1:1; staff role ids, locale, timezone, fastActions, modLogChannelId, dataCollection flags), PluginState, PluginConfig, PluginMigration, UserProfile, ModerationCase (`caseNumber Int` per guild `@@unique([guildId, caseNumber])`, type enum WARN|TIMEOUT|UNTIMEOUT|KICK|BAN|UNBAN|SOFTBAN|PURGE|LOCK|UNLOCK|SLOWMODE|NICK|ROLE_ADD|ROLE_REMOVE|QUARANTINE|NOTE, targetId, moderatorId, reason, evidenceUrls String[], durationMs, expiresAt, expiredAt, dmSent Boolean, metadata Json, source), ModerationWarning, ModerationNote, ModerationAppeal, ModerationEscalationRule (or inside config Json), AutomodRule, AutomodEvent (with reviewStatus enum PENDING|APPROVED|FALSE_POSITIVE), AuditLog, LogEvent (logging plugin searchable store; content fields nullable), Ticket, TicketParticipant, TicketTranscript, TicketPanel, RolePanel, RolePanelOption, RoleGroup, MemberRoleSnapshot (role persistence), VerificationRequest, OnboardingProgress, ScheduledJob, Reminder, ScheduledAnnouncement, Giveaway, GiveawayEntry, Poll, PollOption, PollVote, Suggestion, SuggestionVote, StarboardEntry, TempVoiceChannel, CommunityEvent, EventRsvp, LevelProfile, LevelReward, ReputationEvent, EconomyAccount, EconomyTransaction, AfkStatus, IntegrationConnection, OAuthToken (encrypted fields `accessTokenEnc`, `refreshTokenEnc`, `expiresAt`, `scopes String[]`), WebhookEndpoint (inbound + outbound, `secretEnc`), WebhookDelivery, ProcessedWebhookEvent (idempotency: `@@unique([provider, eventId])`), DataRetentionPolicy, DataRequest (export/delete jobs), AiUsage, GuildAnalyticsDaily, TwitchBotIdentity (singleton — Pavisie's own Twitch chat-bot account), TwitchChatChannel (a guild's linked Twitch channel, with `overlayTokenEnc` + `rewardsEnabled` for channel-point rewards — §19b), TwitchChatCommand, TwitchChatTimer (enum `TwitchChatLevel` EVERYONE|SUBSCRIBER|VIP|MODERATOR|BROADCASTER — see §19a), TwitchChatReward (channel-point reward → action mapping, enum `TwitchRewardActionKind` SOUND|TTS|CHAT|DISCORD — see §19b), GameAccountLink, GameStatSnapshot (enum `GameAccountProvider` STEAM only in v1, per-guild opt-in link + latest curated stat snapshot — see §19c).
+- Models (minimum): Guild, GuildConfig (1:1; staff role ids, locale, timezone, fastActions, modLogChannelId, dataCollection flags), PluginState, PluginConfig, PluginMigration, UserProfile, ModerationCase (`caseNumber Int` per guild `@@unique([guildId, caseNumber])`, type enum WARN|TIMEOUT|UNTIMEOUT|KICK|BAN|UNBAN|SOFTBAN|PURGE|LOCK|UNLOCK|SLOWMODE|NICK|ROLE_ADD|ROLE_REMOVE|QUARANTINE|NOTE, targetId, moderatorId, reason, evidenceUrls String[], durationMs, expiresAt, expiredAt, dmSent Boolean, metadata Json, source), ModerationWarning, ModerationNote, ModerationAppeal, ModerationEscalationRule (or inside config Json), AutomodRule, AutomodEvent (with reviewStatus enum PENDING|APPROVED|FALSE_POSITIVE), AuditLog, LogEvent (logging plugin searchable store; content fields nullable), Ticket, TicketParticipant, TicketTranscript, TicketPanel, RolePanel, RolePanelOption, RoleGroup, MemberRoleSnapshot (role persistence), VerificationRequest, OnboardingProgress, ScheduledJob, Reminder, ScheduledAnnouncement, Giveaway, GiveawayEntry, Poll, PollOption, PollVote, Suggestion, SuggestionVote, StarboardEntry, TempVoiceChannel, CommunityEvent, EventRsvp, LevelProfile, LevelReward, ReputationEvent, EconomyAccount, EconomyTransaction, AfkStatus, IntegrationConnection, OAuthToken (encrypted fields `accessTokenEnc`, `refreshTokenEnc`, `expiresAt`, `scopes String[]`), WebhookEndpoint (inbound + outbound, `secretEnc`), WebhookDelivery, ProcessedWebhookEvent (idempotency: `@@unique([provider, eventId])`), DataRetentionPolicy, DataRequest (export/delete jobs), AiUsage, GuildAnalyticsDaily, TwitchBotIdentity (singleton — Pavisie's own Twitch chat-bot account), TwitchChatChannel (a guild's linked Twitch channel, with `overlayTokenEnc` + `rewardsEnabled` for channel-point rewards — §19b), TwitchChatCommand, TwitchChatTimer (enum `TwitchChatLevel` EVERYONE|SUBSCRIBER|VIP|MODERATOR|BROADCASTER — see §19a), TwitchChatReward (channel-point reward → action mapping, enum `TwitchRewardActionKind` SOUND|TTS|CHAT|DISCORD — see §19b), GameAccountLink, GameStatSnapshot (enum `GameAccountProvider` STEAM only in v1, per-guild opt-in link + latest curated stat snapshot — see §19c), TwitchAccountLink (global, no guildId — a Discord user's verified Twitch account link, proven via Discord OAuth2 `connections` scope — see §19d).
 - Seed (`prisma/seed.ts`): only creates a **demo guild clearly named `Pavisie Demo (seed)`** with id `000000000000000000`, sample plugin states, one sample automod rule in dry-run, sample retention policy. No fake users/messages.
 
 ## 9. Bot host (`apps/bot`)
@@ -558,6 +558,7 @@ with a configurable prefix, default `+`. For example: `/mod ban @user spam` can 
   - `routes/developer-reports.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner`) — ops-console backend for the guild → developer support channel written by the `admin` plugin's `/pavisie report`; intentionally cross-guild data, which is exactly why it is bot-owner-only rather than `requireGuildAccess`: `GET /owner/developer-reports` (cursor-paginated, newest-first, filters `?status=OPEN|HANDLED&kind=BUG|FEEDBACK|QUESTION&guildId=`), `GET /owner/developer-reports/:id`, `PATCH /owner/developer-reports/:id` (`status` and/or `notes`, at least one required — `notes` is internal-only triage text never shown to the reporting guild; flipping to `HANDLED` stamps `handledAt`/`handledBy` from the session, back to `OPEN` clears both)
   - `routes/owner-metrics.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner` like `routes/developer-reports.ts`) — read-only metrics for the local "Pavisie Dev" desktop app: `GET /owner/metrics/overview` (guild presence/growth, member totals + largest guild, developer-report counts, 7d activity), `GET /owner/metrics/guilds` (cursor-paginated, newest-joined first, `?query=&botPresent=`, per-guild plugin/case/ticket/last-activity aggregates), `GET /owner/metrics/errors` (cursor-paginated feed merged from the four models with an error column — `IntegrationConnection.lastError`, `ScheduledJob.lastError`, `WebhookDelivery.error`, `DataRequest.error`, `?source=&guildId=`), `GET /owner/metrics/growth?days=` (daily join/leave counts + running net, zero-filled, clamped 1–365)
   - `routes/twitch-bot.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner`) — Pavisie's own Twitch chat-bot account identity, the singleton `TwitchBotIdentity` row (§19a): `GET /owner/twitch-bot` → the DTO or `{ configured: false }`, `POST /owner/twitch-bot/connect` → OAuth authorize URL (scopes `user:read:chat user:write:chat user:bot`), `DELETE /owner/twitch-bot`. Never returns the encrypted access/refresh tokens.
+  - `routes/twitch-link.ts` (NOT under `/guilds`, prefix `/me`, session-gated, user-level not guild-scoped) — a Discord user's own verified Twitch account link, `TwitchAccountLink` (§19d): `GET /me/twitch-link` → `{ linked: false }` or `{ linked: true, twitchLogin, linkedAt }` (never `twitchUserId`), `POST /me/twitch-link/connect` → Discord OAuth authorize URL (scope `identify connections`, distinct Redis state namespace `oauthstate:twitchlink:*`), `DELETE /me/twitch-link`. The actual OAuth grant/identify exchange happens in `routes/auth.ts`'s shared `GET /discord/callback`, branching on which state namespace matched — see §19d.
 - Errors: `setErrorHandler` → `toPublicError` → `{ error: { code, message, details? } }`, zod errors → 400 with issues. Fastify `FST_ERR_*` client errors keep their own 4xx status with a fixed public message table (`empty_body`, `invalid_json`, `unsupported_media_type`, `payload_too_large`); `@fastify/rate-limit`'s 429 → `rate_limited`.
 - Tests: `vitest` with `app.inject()` for auth guard, csrf, guild access (mock Redis via `ioredis-mock`), signature verification.
 
@@ -1026,6 +1027,74 @@ same "declare it, degrade honestly" pattern as `media`'s `MEDIA_PROVIDER` gate. 
 - **Data export**: `GameAccountLink` and `GameStatSnapshot` rows are included in the guild data-export path
   (`apps/bot/src/host/data-requests.ts`) and deleted with the guild's data (cascade), same as every other
   guild-scoped model.
+
+## 19d. Twitch account linking — Discord ↔ Twitch identity (foundation only, no bot-side use yet)
+
+Step 1 of letting Twitch chat viewers use/earn their Pavisie (Agis) virtual-economy balance from Twitch
+chat. This section covers only the account-linking foundation: proving which Discord account owns which
+Twitch account, and storing that fact. Nothing in the bot reads it yet — that is later work, gated behind
+`@pavisie/database`'s `findDiscordUserIdForTwitch(prisma, twitchUserId)` helper, added ahead of it.
+
+- **Model**: `TwitchAccountLink` (`packages/database/prisma/schema.prisma`, migration
+  `0012_twitch_account_link`) — `discordUserId` (unique), `twitchUserId` (unique), `twitchLogin` (display
+  only, can go stale on a Twitch rename), `linkedAt`, `updatedAt`. Deliberately **global — no `guildId`**,
+  the one other deliberate exception to §8's "every tenant table has guildId" convention besides
+  `TwitchBotIdentity`: a person's Discord↔Twitch link is a user-owned identity fact, true everywhere they
+  use Pavisie, not scoped to any one guild. A guildId would force re-linking once per server for no reason
+  and would let the same Twitch account be "owned" by different Discord accounts depending on which guild
+  asked. Both directions are unique — one Discord account links to at most one Twitch account and vice
+  versa — enforced at the database layer, not just in application code.
+- **Proof of ownership**: the link is established only via Discord's own OAuth2 `connections` scope
+  (`GET /users/@me/connections`), never a typed-in Twitch username — that would let a user claim someone
+  else's Twitch handle. Only a connection with `type === 'twitch'` **and** `verified === true` counts.
+- **Least-privilege scope**: the flow requests `identify connections`
+  (`apps/api/src/lib/discord.ts`'s `TWITCH_LINK_OAUTH_SCOPES`) — never merged into the main dashboard
+  login's `OAUTH_SCOPES` (`identify guilds`). A regular dashboard sign-in never grants Pavisie read access
+  to a user's connected accounts; only clicking "Link Twitch" does.
+- **Routes** (`apps/api/src/routes/twitch-link.ts`, prefix `/me`):
+  - `GET /me/twitch-link` (session) → `{ linked: false }` or `{ linked: true, twitchLogin, linkedAt }`.
+    Never returns `twitchUserId` to the browser — the dashboard has no use for it, only the login for
+    display.
+  - `POST /me/twitch-link/connect` (session + CSRF) → `{ url }`, a Discord authorize URL. State is stored
+    in Redis under `redisKey('oauthstate', 'twitchlink', state)` — a namespace distinct from the plain
+    login state (`redisKey('oauthstate', state)`) and from the generic-integrations one
+    (`redisKey('oauthstate', 'integration', state)`) — with the same TTL as login (`OAUTH_STATE_TTL_SECONDS`,
+    exported from `routes/auth.ts`), payload `{ userId }` binding it to the initiating session. Also sets
+    the same browser-binding `oauth_state` cookie the login flow uses (`setOAuthStateCookie`, RFC 6749
+    §10.12), exported from `routes/auth.ts` for this reuse.
+  - `DELETE /me/twitch-link` (session + CSRF) → 204; 404 if the caller has no link.
+- **Callback reuse, not a new redirect URI**: the flow reuses the existing, already-registered
+  `GET /auth/discord/callback` (`routes/auth.ts`) instead of adding a second callback — a new redirect URI
+  would need a Discord Developer Portal change. After the existing cookie-vs-state check (unchanged), the
+  callback checks which Redis key the incoming `state` matches: the plain login key first (behavior
+  byte-for-byte unchanged from before this feature existed), else the twitchlink key. The twitchlink branch
+  never creates or modifies a login session — it requires one to already exist (set by `/connect`'s
+  `requireAuth`) and only reads it.
+  - Account-linking CSRF guard: the Discord id returned by `/users/@me` for this OAuth grant must equal
+    **both** the state's bound `userId` **and** the current session's `userId`, or the callback throws
+    `PermissionError` (403) and writes nothing — same reasoning as `routes/oauth-integrations.ts`'s
+    callback (an attacker handing a victim their own authorize URL to land the victim's Twitch connection
+    on the attacker's Discord account).
+  - Zero verified Twitch connections → redirect `?error=twitch-link-no-verified-connection`. More than one
+    → `?error=twitch-link-multiple-connections`. Exactly one, already claimed by a *different* Discord
+    account → `?error=twitch-link-already-claimed` (no silent takeover; a P2002 on the same unique
+    constraint from a concurrent claim is caught and redirects the same way). Otherwise: upsert by
+    `discordUserId` (a re-link replaces the caller's own previous link). Success redirects
+    `?linked=twitch`. Every redirect target is `${env.DASHBOARD_URL}/dashboard/account`.
+  - The Discord access token is used only within the callback request (to call `/users/@me` and
+    `/users/@me/connections`) and is **never persisted or logged** — only an outcome code
+    (`linked`/one of the error codes above) is logged, never the Twitch id/login.
+- **Web** (`apps/web`): `/dashboard/account` ("Your account") — a user-level page (not guild-scoped) with
+  a Linked accounts section: Twitch row (linked login + date, or a Link button that calls `POST /connect`
+  then navigates to the returned `url`), Unlink via the shared `ConfirmDialog`, and plain-language copy on
+  what's read/stored/why/how to remove it. Reachable from `TopBar`'s account-avatar dropdown ("Your
+  account"). Public short link `/link` → `/dashboard/account` (a `next.config.ts` redirect) for the future
+  Twitch bot to tell viewers ("link at pavisie.com/link"); the dashboard's existing signed-out handling
+  (`middleware.ts` + `dashboard/layout.tsx`) applies to it exactly as to any other `/dashboard/*` route,
+  since it's a plain redirect, not a bypass.
+- **Privacy policy** (`apps/web/src/content/legal.ts`, §3): documents the Twitch-linking data (Twitch user
+  id, login, link date), that it comes from Discord's connection data with the user's consent at the
+  moment they click Link, why (using/earning Agis from Twitch chat), and that unlinking deletes it.
 
 ## 20. Brand tokens: gold-and-black
 
