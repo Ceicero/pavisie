@@ -10,8 +10,9 @@
 // its rewards subscription (rewards turned off, scope revoked) while chat keeps running, and vice versa.
 import type { TwitchChatChannel, TwitchChatCommand, TwitchChatReward } from '@pavisie/database';
 import { randomUUID } from 'node:crypto';
-import { redisKey } from '@pavisie/core';
-import type { PluginContext, TwitchChatRuntimeStatus, TwitchChatService } from '../../sdk';
+import { MessageFlags, WebhookClient, type Guild } from 'discord.js';
+import { decryptSecret, redisKey } from '@pavisie/core';
+import { resolveTextChannel, type PluginContext, type TwitchChatRuntimeStatus, type TwitchChatService } from '../../sdk';
 import { postAlert } from '../embeds';
 import {
   EVENTSUB_WS_URL,
@@ -35,6 +36,15 @@ import {
 import { CommandCooldowns, handleChatMessage } from './engine';
 import { RewardCooldowns, matchRewardActions, type RewardAction } from './rewards';
 import { synthesizeTts } from './tts';
+import { formatTwitchToDiscord, toBridgeWebhookUsername } from './bridge-format';
+import { pruneBridgeDropCount, recordBridgeDrop } from './bridge-metrics';
+import { pruneBridgeSendBucket, takeBridgeSendToken } from './bridge-ratelimit';
+import {
+  checkBridgeChannelAccess,
+  clearBridgeWebhook,
+  ensureBridgeWebhook,
+  UNKNOWN_WEBHOOK_ERROR_CODE,
+} from './bridge-webhook';
 
 /** One WebSocket session supports up to 300 zero-cost EventSub subscriptions (SPEC.md). Each linked channel can
  * now cost up to TWO of those — a `channel.chat.message` subscription plus a `channel.channel_points_custom_
@@ -130,6 +140,14 @@ export class TwitchChatManager {
   private readonly subscriptionsByChannelId = new Map<string, ChannelSubscriptions>();
   private readonly channelIdByBroadcasterId = new Map<string, string>();
   private readonly channelCache = new Map<string, ChannelCacheEntry>();
+  /** Discord <-> Twitch chat bridge: which announce-once messages have already been sent for a channel, per
+   * direction independently. Module-instance-lifetime, not persisted — see `runBridgeReconcile`'s doc comment. */
+  private readonly bridgeAnnounced = new Map<string, { discordToTwitch: boolean; twitchToDiscord: boolean }>();
+  /** One cached `WebhookClient` per `TwitchChatChannel.id` for the Twitch -> Discord relay direction, so a busy
+   * Twitch chat reuses a single discord.js rate-limit bucket instead of building (and throwing away) a fresh
+   * client per message — see `relayTwitchToDiscordIfBridged`'s and `runBridgeReconcile`'s doc comments for the
+   * populate/invalidate points. Module-instance-lifetime, not persisted. */
+  private readonly bridgeWebhookClients = new Map<string, WebhookClient>();
 
   constructor(private readonly wsCtor: WebSocketConstructorLike = defaultWebSocketConstructor) {}
 
@@ -377,6 +395,143 @@ export class TwitchChatManager {
           .catch(() => undefined);
       }
     }
+
+    // Pass 3: Discord <-> Twitch chat bridge — fully independent of passes 1/2 (a channel's bridge can be
+    // configured whether or not chat/rewards subscriptions are currently healthy, though the Twitch->Discord
+    // relay itself only ever fires from `handleChatMessageNotification`, which needs the chat subscription).
+    await this.runBridgeReconcile(ctx, capped);
+  }
+
+  /**
+   * Discord <-> Twitch chat bridge reconcile pass: checks Discord-side channel access, provisions the bridge
+   * webhook (Twitch -> Discord direction) on first enable, refreshes the channel cache so a freshly-created
+   * webhook is visible to `relayTwitchToDiscordIfBridged` on the very next incoming chat message, and sends the
+   * one-time "this is now bridged" announcement per direction.
+   */
+  private async runBridgeReconcile(ctx: PluginContext, capped: TwitchChatChannel[]): Promise<void> {
+    for (const channel of capped) {
+      // Fast path closing the race between a bridge Discord channel change (which nulls `bridgeWebhookId`/
+      // `bridgeWebhookTokenEnc` in the DB immediately, in the API route/slash command) and this reconcile tick
+      // picking it up (nudged right after that mutation, but not necessarily instant): if the freshly-read row
+      // already has no stored webhook id but we're still holding a cached client for it, drop the cache entry
+      // now rather than waiting for the "bridge fully off" branch below (which wouldn't even run if the bridge
+      // is still on, just pointed at a different Discord channel).
+      if (!channel.bridgeWebhookId && this.bridgeWebhookClients.has(channel.id)) {
+        this.bridgeWebhookClients.delete(channel.id);
+      }
+
+      if (!channel.bridgeDiscordChannelId || (!channel.bridgeDiscordToTwitch && !channel.bridgeTwitchToDiscord)) {
+        this.bridgeAnnounced.delete(channel.id);
+        pruneBridgeDropCount(channel.id);
+        pruneBridgeSendBucket(channel.id);
+        this.bridgeWebhookClients.delete(channel.id);
+        continue;
+      }
+
+      const guild =
+        ctx.client.guilds.cache.get(channel.guildId) ??
+        (await ctx.client.guilds.fetch(channel.guildId).catch(() => null));
+      if (!guild) continue;
+
+      const access = await checkBridgeChannelAccess(guild, channel.bridgeDiscordChannelId);
+      if (!access.ok) {
+        await ctx.prisma.twitchChatChannel
+          .update({ where: { id: channel.id }, data: { bridgeLastError: access.error } })
+          .catch(() => undefined);
+        continue; // skip webhook/announce work for this channel this pass
+      }
+      if (channel.bridgeLastError) {
+        await ctx.prisma.twitchChatChannel
+          .update({ where: { id: channel.id }, data: { bridgeLastError: null } })
+          .catch(() => undefined);
+      }
+
+      if (channel.bridgeTwitchToDiscord && (!channel.bridgeWebhookId || !channel.bridgeWebhookTokenEnc)) {
+        const webhookResult = await ensureBridgeWebhook(ctx, guild, channel);
+        if (!webhookResult.ok) {
+          await ctx.prisma.twitchChatChannel
+            .update({ where: { id: channel.id }, data: { bridgeLastError: webhookResult.error } })
+            .catch(() => undefined);
+          continue; // skip announce this pass — better luck next tick
+        }
+        // Keep the cache fresh on every reconcile pass that actually touches the webhook (whether it just
+        // created a new one or decrypted/reused an existing stored credential) — this also populates the cache
+        // proactively so a Twitch chat message arriving right after enable/reconcile already has a warm client,
+        // rather than `relayTwitchToDiscordIfBridged` having to lazily build one on the first message.
+        this.bridgeWebhookClients.set(channel.id, webhookResult.client);
+      }
+
+      // Refresh the channel cache for this channel if it currently has a live chat subscription. Pass 1 (which
+      // normally refreshes the cache) already ran earlier in this same `runReconcileOnce` call, BEFORE this
+      // webhook was (possibly just) created — without this extra refresh, the very first Twitch chat message
+      // after enabling the bridge would silently find no webhook in the cache until the next reconcile tick.
+      if (this.subscriptionsByChannelId.get(channel.id)?.chat) {
+        const freshRow = await ctx.prisma.twitchChatChannel.findUnique({ where: { id: channel.id } });
+        if (freshRow) await this.refreshChannelCache(ctx, freshRow);
+      }
+
+      await this.announceBridgeIfNeeded(ctx, guild, channel);
+    }
+  }
+
+  /** Sends the one-time "this is now bridged" announcement for each direction that just turned on, and resets
+   * a direction's announced flag once it's turned back off (so re-enabling it later re-announces). Never
+   * throws — an announcement failing must never block the rest of reconcile. */
+  private async announceBridgeIfNeeded(ctx: PluginContext, guild: Guild, channel: TwitchChatChannel): Promise<void> {
+    const entry = this.bridgeAnnounced.get(channel.id) ?? { discordToTwitch: false, twitchToDiscord: false };
+
+    if (channel.bridgeDiscordToTwitch && !entry.discordToTwitch) {
+      try {
+        if (channel.bridgeDiscordChannelId) {
+          const textChannel = await resolveTextChannel(guild, channel.bridgeDiscordChannelId);
+          await textChannel?.send({
+            content:
+              'This channel is now bridged to Twitch chat — messages posted here will be shown there as "[Discord] name: text".',
+            allowedMentions: { parse: [] },
+          });
+        }
+        await sendChatMessage(
+          ctx,
+          channel.broadcasterUserId,
+          'This chat now shows messages posted in the linked Discord channel.',
+        );
+      } catch (err) {
+        ctx.logger.warn(
+          { err, channelId: channel.id },
+          'integrations/twitch-chat: bridge discordToTwitch announce failed',
+        );
+      }
+      entry.discordToTwitch = true;
+    } else if (!channel.bridgeDiscordToTwitch) {
+      entry.discordToTwitch = false;
+    }
+
+    if (channel.bridgeTwitchToDiscord && !entry.twitchToDiscord) {
+      try {
+        if (channel.bridgeDiscordChannelId) {
+          const textChannel = await resolveTextChannel(guild, channel.bridgeDiscordChannelId);
+          await textChannel?.send({
+            content: 'This channel now shows messages posted in the linked Twitch chat.',
+            allowedMentions: { parse: [] },
+          });
+        }
+        await sendChatMessage(
+          ctx,
+          channel.broadcasterUserId,
+          'This chat is now bridged to Discord — messages here will be shown there.',
+        );
+      } catch (err) {
+        ctx.logger.warn(
+          { err, channelId: channel.id },
+          'integrations/twitch-chat: bridge twitchToDiscord announce failed',
+        );
+      }
+      entry.twitchToDiscord = true;
+    } else if (!channel.bridgeTwitchToDiscord) {
+      entry.twitchToDiscord = false;
+    }
+
+    this.bridgeAnnounced.set(channel.id, entry);
   }
 
   private async refreshChannelCache(ctx: PluginContext, channel: TwitchChatChannel): Promise<void> {
@@ -415,6 +570,9 @@ export class TwitchChatManager {
       this.subscriptionsByChannelId.delete(channelId);
       this.channelIdByBroadcasterId.delete(broadcasterUserId);
       this.channelCache.delete(channelId);
+      // Also drops the bridge announce-once flags — can cause a harmless one-time re-announcement after a full
+      // manager idle->reconnect cycle (rare, acceptable; not worth solving fully here).
+      this.bridgeAnnounced.delete(channelId);
     }
   }
 
@@ -605,6 +763,78 @@ export class TwitchChatManager {
 
     if (reply) {
       await sendChatMessage(ctx, cached.channel.broadcasterUserId, reply);
+    }
+
+    // The method itself already catches its own errors internally (see its doc comment) — this outer catch is
+    // just the same defensive belt-and-suspenders style already used elsewhere in this file (e.g.
+    // `handleNotification`'s dispatch): a relay failure must never affect the command-reply path above, or
+    // vice versa.
+    await this.relayTwitchToDiscordIfBridged(ctx, cached.channel, {
+      chatterUserId: event.chatter_user_id,
+      chatterDisplayName: event.chatter_user_name,
+      messageText: event.message?.text ?? '',
+    }).catch((err: unknown) => {
+      ctx.logger.error({ err }, 'integrations/twitch-chat: bridge relay threw');
+    });
+  }
+
+  /** Discord <-> Twitch chat bridge, Twitch -> Discord direction: relays one chat message into the bridge
+   * Discord channel's webhook, if the bridge is configured and this message isn't excluded by a safety rule.
+   * NEVER logs `event.messageText`/`event.chatterDisplayName` — only the channel id and a Discord error code on
+   * failure. */
+  private async relayTwitchToDiscordIfBridged(
+    ctx: PluginContext,
+    channel: TwitchChatChannel,
+    event: { chatterUserId: string; chatterDisplayName: string; messageText: string },
+  ): Promise<void> {
+    if (!channel.bridgeTwitchToDiscord) return;
+    if (!channel.bridgeDiscordChannelId) return;
+    if (event.chatterUserId === this.botUserId) return; // self-ignore (safety rule 1) — never bounce our own relayed messages back
+    if (event.messageText.startsWith(channel.commandPrefix)) return; // safety rule 3
+    if (!channel.bridgeWebhookId || !channel.bridgeWebhookTokenEnc) return; // not provisioned yet; do nothing rather than guess
+
+    // Spend a token only for a message that was actually going to be relayed — everything above this line is a
+    // cheap early-out, so gating here (rather than at the top of the method) never wastes bucket capacity on a
+    // message that wouldn't have been sent anyway. A drop is recorded (channel id only, never message content)
+    // and the message is silently not relayed — same drop-and-count discipline `sendChatMessage`'s own Discord
+    // -> Twitch throttle already uses.
+    if (!takeBridgeSendToken(channel.id)) {
+      recordBridgeDrop(channel.id);
+      return;
+    }
+
+    try {
+      // Cached-first: reuse the single `WebhookClient` `runBridgeReconcile` already warmed for this channel, so
+      // a busy Twitch chat shares one discord.js rate-limit bucket instead of a fresh client (and no shared
+      // throttling) per message. Fall back to lazily building one — e.g. right after a bot restart, before the
+      // next reconcile tick has run — and cache it too, so every message after this one reuses it as well.
+      let client = this.bridgeWebhookClients.get(channel.id);
+      if (!client) {
+        const token = decryptSecret(channel.bridgeWebhookTokenEnc);
+        client = new WebhookClient({ id: channel.bridgeWebhookId, token });
+        this.bridgeWebhookClients.set(channel.id, client);
+      }
+      const formatted = formatTwitchToDiscord(event.messageText);
+      const username = toBridgeWebhookUsername(event.chatterDisplayName);
+      await client.send({
+        username,
+        content: formatted,
+        allowedMentions: { parse: [] },
+        flags: MessageFlags.SuppressEmbeds,
+      });
+    } catch (err) {
+      const code = (err as { code?: number } | undefined)?.code;
+      if (code === UNKNOWN_WEBHOOK_ERROR_CODE) {
+        // The webhook was deleted from Discord's side — self-heal by clearing the stored credential so the
+        // next reconcile recreates it, and drop the dead client from the cache so it isn't reused. Note: if the
+        // `channel` object passed into this call (read from the possibly-not-yet-refreshed cache) still carries
+        // the same dead `bridgeWebhookId`/token, the very next message could rebuild and cache that same dead
+        // client again, failing the same way until the next reconcile tick refreshes the row — an accepted,
+        // short-lived limitation (reconcile is nudged, not a new issue introduced by the cache).
+        await clearBridgeWebhook(ctx, channel.id);
+        this.bridgeWebhookClients.delete(channel.id);
+      }
+      ctx.logger.warn({ channelId: channel.id, code }, 'integrations/twitch-chat: bridge relay to Discord failed');
     }
   }
 

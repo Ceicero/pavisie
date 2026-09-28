@@ -1312,6 +1312,19 @@ model TwitchChatChannel {
   // capability token, encrypted at rest, and whether reward redemptions are turned on for this channel at all.
   overlayTokenEnc   String?
   rewardsEnabled    Boolean                @default(false)
+  // Discord <-> Twitch chat bridge (opt-in, off by default per direction; ARCHITECTURE.md §19a). At most one
+  // Discord text channel per TwitchChatChannel. `bridgeWebhookId`/`bridgeWebhookTokenEnc` are the bot-created
+  // Discord channel webhook used for the Twitch -> Discord direction, persisted (token encrypted at rest via
+  // @pavisie/core's encryptSecret/decryptSecret, same as `overlayTokenEnc` above) rather than re-fetched later,
+  // since Discord's "list channel webhooks" response doesn't reliably include `.token` for a webhook the bot
+  // didn't just create in that same call. `bridgeLastError` surfaces a permission/access failure the bot
+  // process finds during its reconcile pass (the API can only check as much as a cached channel list allows).
+  bridgeDiscordChannelId String?
+  bridgeDiscordToTwitch  Boolean            @default(false)
+  bridgeTwitchToDiscord  Boolean            @default(false)
+  bridgeWebhookId        String?
+  bridgeWebhookTokenEnc  String?
+  bridgeLastError        String?
   createdBy         String
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
@@ -1322,6 +1335,7 @@ model TwitchChatChannel {
 
   @@unique([guildId, broadcasterUserId])
   @@index([guildId])
+  @@index([guildId, bridgeDiscordChannelId])
 }
 
 /// Custom `!command` responses for a linked Twitch chat channel.

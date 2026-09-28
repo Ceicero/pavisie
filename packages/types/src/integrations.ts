@@ -166,6 +166,15 @@ export interface TwitchChatChannelDto {
   commandPrefix: string;
   /** Whether channel-point reward redemptions are turned on for this channel (channel-points spec v1). */
   rewardsEnabled: boolean;
+  /** Discord <-> Twitch chat bridge (opt-in, off by default per direction) — the linked Discord text channel,
+   * or null if none is set. Never accompanied by the bridge webhook id/token: those are internal/credential
+   * fields and are never exposed in any DTO. */
+  bridgeDiscordChannelId: string | null;
+  bridgeDiscordToTwitch: boolean;
+  bridgeTwitchToDiscord: boolean;
+  /** Set by the bot process's reconcile pass when it can't access/manage the bridge channel (missing
+   * permissions, channel deleted, etc.) — never a raw exception message. */
+  bridgeLastError: string | null;
   createdAt: string;
 }
 
@@ -205,6 +214,13 @@ export interface UpdateTwitchChatChannelInput {
   commandPrefix?: string;
   /** Turns channel-point reward redemptions on/off for this channel (channel-points spec v1). */
   rewardsEnabled?: boolean;
+  /** Sets (or, passed `null`, clears) the Discord <-> Twitch bridge's target Discord text channel. */
+  bridgeDiscordChannelId?: string | null;
+  /** Turns the Discord -> Twitch relay direction on/off. Requires `bridgeDiscordChannelId` to be set (either
+   * already on the row, or in the same request) — enforced at the route layer, since only it has the existing row. */
+  bridgeDiscordToTwitch?: boolean;
+  /** Turns the Twitch -> Discord relay direction on/off. Same `bridgeDiscordChannelId` requirement as above. */
+  bridgeTwitchToDiscord?: boolean;
 }
 
 export interface CreateTwitchChatCommandInput {

@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MessageFlags } from 'discord.js';
 import { createTestContext } from '../../sdk/testing';
 import type { PluginContext } from '../../sdk';
 import { TwitchChatManager } from '../twitch-chat/manager';
 import type { WebSocketConstructorLike, WebSocketLike } from '../twitch-chat/socket';
+import { getBridgeDropCount, pruneBridgeDropCount } from '../twitch-chat/bridge-metrics';
+import { pruneBridgeSendBucket } from '../twitch-chat/bridge-ratelimit';
 
 // `vi.mock` (and `vi.hoisted`) calls are hoisted by Vitest above every import in this file, however far below
 // them they're written — so `manager.ts`'s own `import ... from './helix'` resolves to this mock, and any
@@ -20,6 +23,53 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../twitch-chat/helix', () => mocks);
+
+// Discord <-> Twitch chat bridge mocks — same hoisting rationale as `mocks` above.
+const bridgeWebhookMocks = vi.hoisted(() => ({
+  checkBridgeChannelAccess: vi.fn(),
+  ensureBridgeWebhook: vi.fn(),
+  clearBridgeWebhook: vi.fn(),
+}));
+vi.mock('../twitch-chat/bridge-webhook', () => ({
+  ...bridgeWebhookMocks,
+  UNKNOWN_WEBHOOK_ERROR_CODE: 10015,
+}));
+
+/** `manager.ts` constructs `new WebhookClient(...)` directly as a lazy fallback for the Twitch->Discord relay
+ * send (outside `bridge-webhook.ts`, which is fully mocked above) — mocked here, preserving every other
+ * `discord.js` export via `importOriginal`, so `relayTwitchToDiscordIfBridged` tests can assert on the send
+ * without a live webhook. `ctorCalls` records every `new WebhookClient(...)` invocation (id/token used), which
+ * is exactly what the webhook-client caching tests assert on: a shared cached client should mean this stays at
+ * 1 across several relayed messages, and only grows when the cache is legitimately invalidated. */
+const webhookClientMocks = vi.hoisted(() => ({ send: vi.fn(), ctorCalls: [] as { id: string; token: string }[] }));
+vi.mock('discord.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('discord.js')>();
+  return {
+    ...actual,
+    WebhookClient: class {
+      id: string;
+      token: string;
+      constructor(opts: { id: string; token: string }) {
+        webhookClientMocks.ctorCalls.push(opts);
+        this.id = opts.id;
+        this.token = opts.token;
+      }
+      send(...args: unknown[]) {
+        return webhookClientMocks.send(...args);
+      }
+    },
+  };
+});
+
+/** `manager.ts`'s `relayTwitchToDiscordIfBridged` calls the real `decryptSecret` on `bridgeWebhookTokenEnc` —
+ * mocked here (preserving every other `@pavisie/core` export via `importOriginal`) so bridge tests don't need a
+ * real `ENCRYPTION_KEY`/`encryptSecret` round trip; the stored "encrypted" value in tests is just a plain
+ * placeholder string this stub strips a prefix from. */
+const coreMocks = vi.hoisted(() => ({ decryptSecret: vi.fn((enc: string) => enc.replace(/^enc:/, '')) }));
+vi.mock('@pavisie/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@pavisie/core')>();
+  return { ...actual, decryptSecret: coreMocks.decryptSecret };
+});
 
 class FakeWebSocket implements WebSocketLike {
   static instances: FakeWebSocket[] = [];
@@ -82,11 +132,38 @@ function makeChannelRow(overrides: Record<string, unknown> = {}) {
     lastConnectedAt: null,
     commandPrefix: '!',
     connectionId: null,
+    bridgeDiscordChannelId: null,
+    bridgeDiscordToTwitch: false,
+    bridgeTwitchToDiscord: false,
+    bridgeWebhookId: null,
+    bridgeWebhookTokenEnc: null,
+    bridgeLastError: null,
     createdBy: 'user-1',
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
   };
+}
+
+/** A minimal fake discord.js `Guild` — just enough for `resolveTextChannel` (real implementation, not mocked)
+ * to resolve a sendable text channel, and for `ctx.client.guilds.cache` lookups in `runBridgeReconcile`/
+ * `announceBridgeIfNeeded`. */
+function makeGuild(overrides: Record<string, unknown> = {}) {
+  const sendMock = vi.fn().mockResolvedValue({});
+  const fakeChannel = {
+    id: 'discord-chan-1',
+    isTextBased: () => true,
+    type: 0,
+    send: sendMock,
+    permissionsFor: () => ({ has: () => true }),
+  };
+  const guild = {
+    id: 'guild-1',
+    channels: { fetch: vi.fn().mockResolvedValue(fakeChannel) },
+    members: { me: { id: 'bot-member-1' } },
+    ...overrides,
+  };
+  return { guild, fakeChannel, sendMock };
 }
 
 function makeCommandRow(overrides: Record<string, unknown> = {}) {
@@ -132,6 +209,20 @@ beforeEach(() => {
   mocks.sendChatMessage.mockResolvedValue({ ok: true });
   mocks.getStream.mockResolvedValue({ ok: true, value: null });
   mocks.getChannelInfo.mockResolvedValue({ ok: true, value: null });
+
+  bridgeWebhookMocks.checkBridgeChannelAccess.mockResolvedValue({ ok: true });
+  bridgeWebhookMocks.ensureBridgeWebhook.mockResolvedValue({ ok: true, client: { send: vi.fn() } });
+  bridgeWebhookMocks.clearBridgeWebhook.mockResolvedValue(undefined);
+  webhookClientMocks.send.mockReset();
+  webhookClientMocks.send.mockResolvedValue({});
+  webhookClientMocks.ctorCalls.length = 0;
+  coreMocks.decryptSecret.mockClear();
+  // The Twitch -> Discord relay's per-channel send-rate token bucket (`bridge-ratelimit.ts`) and drop counter
+  // (`bridge-metrics.ts`) are real, unmocked module-level singletons keyed by `TwitchChatChannel.id` — reset the
+  // id every bridge test in this file actually uses so each test starts with a full bucket and a zeroed drop
+  // count, independent of what earlier tests did on the same channel id.
+  pruneBridgeSendBucket('channel-a');
+  pruneBridgeDropCount('channel-a');
 });
 
 describe('TwitchChatManager idle states', () => {
@@ -693,5 +784,449 @@ describe('TwitchChatManager chat message handling', () => {
     await flush();
 
     expect(mocks.sendChatMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// Discord <-> Twitch chat bridge (opt-in, off by default per direction)
+// ---------------------------------------------------------------------------------------------------------
+
+/** Connects one channel (chat subscription live) whose row can then be mutated in place via `setChannel` —
+ * `findMany`/`findUnique`/`update` all close over the same `let channel` so a test's PATCH-equivalent write is
+ * immediately visible to the next `reconcile()` tick's `computeDesiredChannels`/cache-refresh reads. */
+async function setupConnectedChannel(channelOverrides: Record<string, unknown> = {}) {
+  let channel: Record<string, unknown> = makeChannelRow(channelOverrides);
+  const updates: Record<string, unknown>[] = [];
+  const { guild, fakeChannel, sendMock } = makeGuild({ id: channel.guildId });
+
+  const manager = new TwitchChatManager(FakeWebSocketCtor);
+  const { ctx } = createTestContext({
+    overrides: {
+      env: makeEnv(),
+      client: {
+        guilds: { cache: new Map([[channel.guildId, guild]]), fetch: vi.fn() },
+      } as unknown as PluginContext['client'],
+    },
+    prismaOverrides: {
+      twitchChatChannel: {
+        findMany: async () => [channel],
+        findUnique: async () => channel,
+        update: async (args: unknown) => {
+          const data = (args as { data: Record<string, unknown> }).data;
+          updates.push(data);
+          channel = { ...channel, ...data };
+          return channel;
+        },
+      },
+      twitchChatCommand: { findMany: async () => [] },
+      twitchChatReward: { findMany: async () => [] },
+    },
+  });
+
+  await manager.start(ctx);
+  const ws = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+  ws.emit('session_welcome', {
+    session: { id: 'sess-1', status: 'connected', keepalive_timeout_seconds: 10, reconnect_url: null },
+  });
+  await flush();
+
+  return {
+    manager,
+    ctx,
+    ws,
+    guild,
+    fakeChannel,
+    sendMock,
+    updates,
+    getChannel: () => channel,
+    setChannel: (next: Record<string, unknown>) => {
+      channel = next;
+    },
+  };
+}
+
+/** Connects a channel with the Twitch -> Discord relay direction already fully provisioned (webhook credential
+ * stored) — shared by `relayTwitchToDiscordIfBridged` tests and the rate-limiting tests below them, both of
+ * which exercise the relay via an incoming chat notification. */
+function setupBridgedChatChannel(overrides: Record<string, unknown> = {}) {
+  return setupConnectedChannel({
+    bridgeDiscordChannelId: 'discord-chan-1',
+    bridgeTwitchToDiscord: true,
+    bridgeWebhookId: 'wh-1',
+    bridgeWebhookTokenEnc: 'enc:tok-1',
+    commandPrefix: '!',
+    ...overrides,
+  });
+}
+
+describe('TwitchChatManager Discord <-> Twitch chat bridge', () => {
+  describe('runBridgeReconcile', () => {
+    it('creates the bridge webhook once bridgeTwitchToDiscord turns on and no webhook exists yet', async () => {
+      const { manager, ctx } = await setupConnectedChannel({
+        bridgeDiscordChannelId: 'discord-chan-1',
+        bridgeTwitchToDiscord: true,
+      });
+      bridgeWebhookMocks.ensureBridgeWebhook.mockClear();
+
+      await manager.reconcile(ctx);
+
+      expect(bridgeWebhookMocks.ensureBridgeWebhook).toHaveBeenCalledTimes(1);
+      const call = bridgeWebhookMocks.ensureBridgeWebhook.mock.calls[0] as unknown[];
+      expect(call[2]).toMatchObject({ id: 'channel-a' });
+    });
+
+    it('does not try to recreate a webhook that already has stored credentials', async () => {
+      const { manager, ctx } = await setupConnectedChannel({
+        bridgeDiscordChannelId: 'discord-chan-1',
+        bridgeTwitchToDiscord: true,
+        bridgeWebhookId: 'wh-1',
+        bridgeWebhookTokenEnc: 'enc:tok-1',
+      });
+      bridgeWebhookMocks.ensureBridgeWebhook.mockClear();
+
+      await manager.reconcile(ctx);
+
+      expect(bridgeWebhookMocks.ensureBridgeWebhook).not.toHaveBeenCalled();
+    });
+
+    it('sets bridgeLastError on a Discord access-check failure, and clears it once access recovers', async () => {
+      const { manager, ctx, getChannel } = await setupConnectedChannel({
+        bridgeDiscordChannelId: 'discord-chan-1',
+        bridgeDiscordToTwitch: true,
+      });
+      bridgeWebhookMocks.checkBridgeChannelAccess.mockResolvedValueOnce({
+        ok: false,
+        error: 'Pavisie needs View Channel, Send Messages, and Manage Webhooks in the bridge Discord channel.',
+      });
+
+      await manager.reconcile(ctx);
+      expect(getChannel().bridgeLastError).toMatch(/Manage Webhooks/);
+
+      bridgeWebhookMocks.checkBridgeChannelAccess.mockResolvedValue({ ok: true });
+      await manager.reconcile(ctx);
+      expect(getChannel().bridgeLastError).toBeNull();
+    });
+
+    it('leaves the announce-once map and drop counter alone the moment the bridge is fully off', async () => {
+      const { manager, ctx } = await setupConnectedChannel({ bridgeDiscordChannelId: null });
+      bridgeWebhookMocks.checkBridgeChannelAccess.mockClear();
+
+      await manager.reconcile(ctx);
+
+      // No channel id configured — bridge reconcile bails out before ever checking Discord access.
+      expect(bridgeWebhookMocks.checkBridgeChannelAccess).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('announce-once behavior', () => {
+    it('announces once per direction on enable, not again while staying on, and again after an off/on cycle', async () => {
+      const { manager, ctx, sendMock, getChannel, setChannel } = await setupConnectedChannel({
+        bridgeDiscordChannelId: 'discord-chan-1',
+      });
+
+      setChannel({ ...getChannel(), bridgeDiscordToTwitch: true });
+      await manager.reconcile(ctx);
+      expect(sendMock).toHaveBeenCalledTimes(1); // Discord-side announcement
+      expect(mocks.sendChatMessage).toHaveBeenCalledTimes(1); // Twitch-side announcement
+
+      await manager.reconcile(ctx); // stays on — must not re-announce
+      expect(sendMock).toHaveBeenCalledTimes(1);
+      expect(mocks.sendChatMessage).toHaveBeenCalledTimes(1);
+
+      setChannel({ ...getChannel(), bridgeDiscordToTwitch: false });
+      await manager.reconcile(ctx);
+      setChannel({ ...getChannel(), bridgeDiscordToTwitch: true });
+      await manager.reconcile(ctx); // turned back on — announces again
+
+      expect(sendMock).toHaveBeenCalledTimes(2);
+      expect(mocks.sendChatMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it('announces each direction independently', async () => {
+      const { manager, ctx, sendMock, getChannel, setChannel } = await setupConnectedChannel({
+        bridgeDiscordChannelId: 'discord-chan-1',
+      });
+
+      setChannel({ ...getChannel(), bridgeTwitchToDiscord: true });
+      await manager.reconcile(ctx);
+      expect(sendMock).toHaveBeenCalledTimes(1);
+      expect(mocks.sendChatMessage).toHaveBeenCalledTimes(1);
+
+      setChannel({ ...getChannel(), bridgeDiscordToTwitch: true });
+      await manager.reconcile(ctx);
+      // The already-announced direction doesn't re-fire; only the newly-enabled direction adds one more of each.
+      expect(sendMock).toHaveBeenCalledTimes(2);
+      expect(mocks.sendChatMessage).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('relayTwitchToDiscordIfBridged (exercised via an incoming chat notification)', () => {
+
+    it('relays a Twitch chat message to the Discord bridge webhook', async () => {
+      const { ws } = await setupBridgedChatChannel();
+
+      ws.emit('notification', notificationFrame({ message: { text: 'gg well played' } }));
+      await flush();
+
+      expect(webhookClientMocks.send).toHaveBeenCalledTimes(1);
+      const [payload] = webhookClientMocks.send.mock.calls[0] as [Record<string, unknown>];
+      expect(payload.username).toBe('ViewerOne (Twitch)');
+      expect(payload.content).toBe('gg well played');
+      expect(payload.allowedMentions).toEqual({ parse: [] });
+    });
+
+    it('suppresses link-preview embeds on the relayed send', async () => {
+      const { ws } = await setupBridgedChatChannel();
+
+      ws.emit('notification', notificationFrame({ message: { text: 'check this out https://example.com' } }));
+      await flush();
+
+      expect(webhookClientMocks.send).toHaveBeenCalledTimes(1);
+      const [payload] = webhookClientMocks.send.mock.calls[0] as [Record<string, unknown>];
+      expect(payload.flags).toBe(MessageFlags.SuppressEmbeds);
+    });
+
+    it('reuses the same cached WebhookClient instance across multiple relayed messages for the same channel', async () => {
+      const { ws } = await setupBridgedChatChannel();
+
+      ws.emit('notification', notificationFrame({ message: { text: 'message one' } }));
+      await flush();
+      ws.emit('notification', notificationFrame({ message: { text: 'message two' } }));
+      await flush();
+      ws.emit('notification', notificationFrame({ message: { text: 'message three' } }));
+      await flush();
+
+      expect(webhookClientMocks.send).toHaveBeenCalledTimes(3);
+      // Only one `new WebhookClient(...)` was ever constructed — the other two messages reused the cached one.
+      expect(webhookClientMocks.ctorCalls).toHaveLength(1);
+    });
+
+    it('replaces the cached client once the channel bridge webhook credential changes (channel-change reconcile)', async () => {
+      const { manager, ctx, ws, getChannel, setChannel } = await setupBridgedChatChannel();
+
+      ws.emit('notification', notificationFrame({ message: { text: 'before the change' } }));
+      await flush();
+      expect(webhookClientMocks.send).toHaveBeenCalledTimes(1);
+      expect(webhookClientMocks.ctorCalls).toHaveLength(1);
+
+      // Simulate the bridge Discord channel changing: the API route/slash command immediately nulls the stored
+      // webhook credential, then nudges reconcile — which here provisions a brand-new webhook via
+      // `ensureBridgeWebhook` (mocked) and must drop the stale cached client rather than keep reusing it.
+      const newSend = vi.fn().mockResolvedValue({});
+      bridgeWebhookMocks.ensureBridgeWebhook.mockResolvedValueOnce({ ok: true, client: { send: newSend } });
+      setChannel({ ...getChannel(), bridgeWebhookId: null, bridgeWebhookTokenEnc: null });
+      await manager.reconcile(ctx);
+      // `ensureBridgeWebhook` is mocked, so (unlike the real implementation) it doesn't itself persist the new
+      // credential to the row — reflect what the real implementation would have written so the row is
+      // "provisioned" again for the next reconcile's cache refresh and for `relayTwitchToDiscordIfBridged`'s own
+      // provisioned-check.
+      setChannel({ ...getChannel(), bridgeWebhookId: 'wh-2', bridgeWebhookTokenEnc: 'enc:tok-2' });
+      await manager.reconcile(ctx); // refreshes the channel cache with the now-provisioned row
+
+      ws.emit('notification', notificationFrame({ message: { text: 'after the change' } }));
+      await flush();
+
+      // The second message went through the freshly-cached client, not the stale one, and no NEW
+      // `new WebhookClient(...)` was constructed either (the replacement came from `ensureBridgeWebhook`).
+      expect(newSend).toHaveBeenCalledTimes(1);
+      expect(webhookClientMocks.send).toHaveBeenCalledTimes(1); // unchanged — the old client never saw a 2nd send
+      expect(webhookClientMocks.ctorCalls).toHaveLength(1);
+    });
+
+    it('self-ignores a message from the bot identity itself (safety rule 1)', async () => {
+      const { ws } = await setupBridgedChatChannel();
+
+      ws.emit(
+        'notification',
+        notificationFrame({
+          chatter_user_id: 'bot-1',
+          chatter_user_name: 'pavisiebot',
+          message: { text: '[Discord] Someone: hi' },
+        }),
+      );
+      await flush();
+
+      expect(webhookClientMocks.send).not.toHaveBeenCalled();
+    });
+
+    it('skips a message that starts with the channel command prefix (safety rule 3)', async () => {
+      const { ws } = await setupBridgedChatChannel();
+
+      ws.emit('notification', notificationFrame({ message: { text: '!hello' } }));
+      await flush();
+
+      expect(webhookClientMocks.send).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the bridge webhook has not been provisioned yet', async () => {
+      const { ws } = await setupConnectedChannel({
+        bridgeDiscordChannelId: 'discord-chan-1',
+        bridgeTwitchToDiscord: true,
+      });
+
+      ws.emit('notification', notificationFrame({ message: { text: 'hi there' } }));
+      await flush();
+
+      expect(webhookClientMocks.send).not.toHaveBeenCalled();
+    });
+
+    it('clears the stored webhook credential on an Unknown Webhook (10015) failure, so the next reconcile recreates it', async () => {
+      webhookClientMocks.send.mockRejectedValueOnce(Object.assign(new Error('Unknown Webhook'), { code: 10015 }));
+      const { ws } = await setupBridgedChatChannel();
+
+      ws.emit('notification', notificationFrame({ message: { text: 'hi there' } }));
+      await flush();
+
+      expect(bridgeWebhookMocks.clearBridgeWebhook).toHaveBeenCalledWith(expect.anything(), 'channel-a');
+    });
+  });
+
+  describe('relayTwitchToDiscordIfBridged rate limiting (bridge-ratelimit.ts)', () => {
+    it('drops relayed messages once the per-channel token bucket is exhausted, and counts the drop', async () => {
+      const { ws } = await setupBridgedChatChannel();
+      expect(getBridgeDropCount('channel-a')).toBe(0);
+
+      // MAX_BURST_TOKENS is 5 — sent back-to-back with no real time elapsed between them (no meaningful refill),
+      // the first 5 should go through and every message beyond that should be dropped rather than sent.
+      for (let i = 0; i < 7; i++) {
+        ws.emit('notification', notificationFrame({ message: { text: `burst message ${i}` } }));
+        await flush();
+      }
+
+      expect(webhookClientMocks.send).toHaveBeenCalledTimes(5);
+      expect(getBridgeDropCount('channel-a')).toBe(2);
+    });
+
+    it('does not spend a token (or record a drop) for a message excluded by an earlier safety rule', async () => {
+      const { ws } = await setupBridgedChatChannel();
+
+      // A command-prefixed message is excluded before the token bucket is ever consulted (safety rule 3) — it
+      // must not eat into the budget available to real relayable messages.
+      for (let i = 0; i < 10; i++) {
+        ws.emit('notification', notificationFrame({ message: { text: '!not-relayed' } }));
+        await flush();
+      }
+      expect(webhookClientMocks.send).not.toHaveBeenCalled();
+      expect(getBridgeDropCount('channel-a')).toBe(0);
+
+      ws.emit('notification', notificationFrame({ message: { text: 'this one is relayed' } }));
+      await flush();
+      expect(webhookClientMocks.send).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('regression: both directions off relays nothing', () => {
+    it('does not relay in either direction, and does not announce, even with a bridge Discord channel configured', async () => {
+      const { manager, ctx, ws, sendMock } = await setupConnectedChannel({
+        bridgeDiscordChannelId: 'discord-chan-1',
+        bridgeDiscordToTwitch: false,
+        bridgeTwitchToDiscord: false,
+      });
+
+      await manager.reconcile(ctx);
+      expect(sendMock).not.toHaveBeenCalled();
+      expect(bridgeWebhookMocks.ensureBridgeWebhook).not.toHaveBeenCalled();
+
+      ws.emit('notification', notificationFrame({ message: { text: 'hello there' } }));
+      await flush();
+      expect(webhookClientMocks.send).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('privacy: the bridge relay never logs message text or chatter identity', () => {
+    it('no logger call contains the sentinel message text', async () => {
+      const SENTINEL_TEXT = 'sentinel-bridge-relay-text-should-never-be-logged';
+      const logger = {
+        warn: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
+      } as unknown as PluginContext['logger'];
+      webhookClientMocks.send.mockRejectedValueOnce(Object.assign(new Error('fail'), { code: 10015 }));
+
+      const { ctx, ws } = await setupConnectedChannel({
+        bridgeDiscordChannelId: 'discord-chan-1',
+        bridgeTwitchToDiscord: true,
+        bridgeWebhookId: 'wh-1',
+        bridgeWebhookTokenEnc: 'enc:tok-1',
+      });
+      // Swap in the spy logger after setup so the setup's own reconcile pass doesn't pollute assertions below.
+      (ctx as { logger: unknown }).logger = logger;
+
+      ws.emit('notification', notificationFrame({ message: { text: SENTINEL_TEXT } }));
+      await flush();
+
+      expect(bridgeWebhookMocks.clearBridgeWebhook).toHaveBeenCalled();
+      for (const fn of [logger.warn, logger.error, logger.info, logger.debug]) {
+        for (const call of (fn as unknown as ReturnType<typeof vi.fn>).mock.calls) {
+          expect(JSON.stringify(call)).not.toContain(SENTINEL_TEXT);
+        }
+      }
+    });
+
+    it('no logger call contains the sentinel text for a message dropped by the rate-limit bucket', async () => {
+      const SENTINEL_TEXT = 'sentinel-bridge-ratelimit-text-should-never-be-logged';
+      const logger = {
+        warn: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
+      } as unknown as PluginContext['logger'];
+
+      const { ctx, ws } = await setupConnectedChannel({
+        bridgeDiscordChannelId: 'discord-chan-1',
+        bridgeTwitchToDiscord: true,
+        bridgeWebhookId: 'wh-1',
+        bridgeWebhookTokenEnc: 'enc:tok-1',
+      });
+      (ctx as { logger: unknown }).logger = logger;
+
+      // Exhaust the bucket (MAX_BURST_TOKENS = 5), then one more to force a drop.
+      for (let i = 0; i < 6; i++) {
+        ws.emit('notification', notificationFrame({ message: { text: `${SENTINEL_TEXT}-${i}` } }));
+        await flush();
+      }
+
+      expect(getBridgeDropCount('channel-a')).toBeGreaterThan(0);
+      for (const fn of [logger.warn, logger.error, logger.info, logger.debug]) {
+        for (const call of (fn as unknown as ReturnType<typeof vi.fn>).mock.calls) {
+          expect(JSON.stringify(call)).not.toContain(SENTINEL_TEXT);
+        }
+      }
+    });
+
+    it('no logger call contains the chatter display name or the neutralized webhook username, even on a relay failure', async () => {
+      const SENTINEL_NAME = 'DiscordSentinelViewer';
+      const logger = {
+        warn: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
+      } as unknown as PluginContext['logger'];
+      webhookClientMocks.send.mockRejectedValueOnce(Object.assign(new Error('fail'), { code: 10015 }));
+
+      const { ctx, ws } = await setupConnectedChannel({
+        bridgeDiscordChannelId: 'discord-chan-1',
+        bridgeTwitchToDiscord: true,
+        bridgeWebhookId: 'wh-1',
+        bridgeWebhookTokenEnc: 'enc:tok-1',
+      });
+      (ctx as { logger: unknown }).logger = logger;
+
+      ws.emit(
+        'notification',
+        notificationFrame({ chatter_user_name: SENTINEL_NAME, message: { text: 'hi there' } }),
+      );
+      await flush();
+
+      expect(bridgeWebhookMocks.clearBridgeWebhook).toHaveBeenCalled();
+      for (const fn of [logger.warn, logger.error, logger.info, logger.debug]) {
+        for (const call of (fn as unknown as ReturnType<typeof vi.fn>).mock.calls) {
+          const serialized = JSON.stringify(call);
+          expect(serialized).not.toContain(SENTINEL_NAME);
+          expect(serialized.toLowerCase()).not.toContain('discordsentinelviewer'.toLowerCase());
+        }
+      }
+    });
   });
 });

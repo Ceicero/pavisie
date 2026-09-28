@@ -88,6 +88,12 @@ export function toTwitchChatChannelDto(row: TwitchChatChannel): TwitchChatChanne
     lastError: row.lastError,
     commandPrefix: row.commandPrefix,
     rewardsEnabled: row.rewardsEnabled,
+    // Discord <-> Twitch chat bridge — plain passthrough columns, no enum mapping needed. `bridgeWebhookId`/
+    // `bridgeWebhookTokenEnc` are deliberately never mapped here: those are internal/credential fields.
+    bridgeDiscordChannelId: row.bridgeDiscordChannelId,
+    bridgeDiscordToTwitch: row.bridgeDiscordToTwitch,
+    bridgeTwitchToDiscord: row.bridgeTwitchToDiscord,
+    bridgeLastError: row.bridgeLastError,
     createdAt: row.createdAt.toISOString(),
   };
 }

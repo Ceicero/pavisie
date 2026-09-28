@@ -129,6 +129,24 @@
       "overlayResetConfirmTitle": "Regenerate the overlay URL?",
       "overlayResetConfirmBody": "This creates a new URL and invalidates the previous one. Any OBS source using the old URL will stop working for **{channel}**.",
       "overlayResetDone": "Overlay URL regenerated for **{channel}**. Get the new URL with `/twitch reward overlay`."
+    },
+    "bridge": {
+      "channelSet": "Bridge channel set to {discordChannel} for **{channel}**.",
+      "channelRequired": "Set the bridge Discord channel first with `/twitch bridge channel`.",
+      "discordToTwitchEnabled": "Discord → Twitch relay is now **on** for **{channel}**.",
+      "discordToTwitchDisabled": "Discord → Twitch relay is now **off** for **{channel}**.",
+      "twitchToDiscordEnabled": "Twitch → Discord relay is now **on** for **{channel}**.",
+      "twitchToDiscordDisabled": "Twitch → Discord relay is now **off** for **{channel}**.",
+      "status": {
+        "title": "Chat bridge — {channel}",
+        "channelLine": "Bridge channel: {channel}",
+        "noChannel": "Bridge channel: not set",
+        "discordToTwitchLine": "Discord → Twitch: {state}",
+        "twitchToDiscordLine": "Twitch → Discord: {state}",
+        "on": "on",
+        "off": "off",
+        "lastError": "⚠️ {error}"
+      }
     }
   }
 }

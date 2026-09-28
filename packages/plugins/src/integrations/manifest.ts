@@ -65,5 +65,6 @@ export const manifest = defineManifest({
     "Instagram reads only the connected account's own media via the official Instagram API with Instagram Login (own-account OAuth connect, not the watched-target model above) — it cannot look up or read any other account's posts.",
     'Outbound webhook payloads are whatever the triggering platform event carries (case numbers, user ids, reasons) — never raw message content.',
     'Twitch chat bot: chat messages are parsed in memory only, to match a command — never persisted, logged, or sent to Discord.',
+    'Discord ↔ Twitch chat bridge (opt-in, off by default per direction): when a server turns a direction on, messages posted in the linked Discord channel and/or Twitch chat are shown on the other platform — text and display names are relayed in memory only, never stored or logged by Pavisie.',
   ],
 });

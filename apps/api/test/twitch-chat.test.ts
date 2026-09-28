@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { decryptSecret, env, redisKey } from '@pavisie/core';
+import { decryptSecret, encryptSecret, env, redisKey } from '@pavisie/core';
 import type { PrismaStubOverrides } from '@pavisie/plugins/sdk/testing';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
@@ -133,6 +133,12 @@ function channelDefaults(partial: any) {
     connectionId: null,
     overlayTokenEnc: null,
     rewardsEnabled: false,
+    bridgeDiscordChannelId: null,
+    bridgeDiscordToTwitch: false,
+    bridgeTwitchToDiscord: false,
+    bridgeWebhookId: null,
+    bridgeWebhookTokenEnc: null,
+    bridgeLastError: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...partial,
@@ -520,6 +526,264 @@ describe('channel PATCH/DELETE', () => {
         (c) => c.queue === 'bot-actions' && (c.data as { type: string }).type === 'twitchChat.reconcile',
       ),
     ).toBe(true);
+    await app.close();
+  });
+
+  // -------------------------------------------------------------------------------------------------------
+  // Discord <-> Twitch chat bridge fields (opt-in, off by default per direction)
+  // -------------------------------------------------------------------------------------------------------
+
+  it('sets a valid bridge channel + both toggles on PATCH, and the DTO round-trips without exposing webhook fields', async () => {
+    const fixture = twitchChatFixture();
+    fixture.channels.set(
+      'chan1',
+      channelDefaults({
+        id: 'chan1',
+        guildId: GUILD_ID,
+        broadcasterUserId: 's1',
+        broadcasterLogin: 'streamer',
+        createdBy: USER_ID,
+      }),
+    );
+    const { app, redis, cookieHeader, csrfToken } = await setupAuthedApp(fixture.overrides);
+    await redis.set(
+      redisKey('guildchannels', GUILD_ID),
+      JSON.stringify([{ id: '700000000000000001', name: 'general', type: 0 }]),
+    );
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/guilds/${GUILD_ID}/integrations/twitch-chat/channels/chan1`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: {
+        bridgeDiscordChannelId: '700000000000000001',
+        bridgeDiscordToTwitch: true,
+        bridgeTwitchToDiscord: true,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({
+      bridgeDiscordChannelId: '700000000000000001',
+      bridgeDiscordToTwitch: true,
+      bridgeTwitchToDiscord: true,
+      bridgeLastError: null,
+    });
+    // Internal/credential fields are never exposed in the DTO.
+    expect(body).not.toHaveProperty('bridgeWebhookId');
+    expect(body).not.toHaveProperty('bridgeWebhookTokenEnc');
+    await app.close();
+  });
+
+  it('rejects a bridge channel id that is not present in the guild channel list (400)', async () => {
+    const fixture = twitchChatFixture();
+    fixture.channels.set(
+      'chan1',
+      channelDefaults({
+        id: 'chan1',
+        guildId: GUILD_ID,
+        broadcasterUserId: 's1',
+        broadcasterLogin: 'streamer',
+        createdBy: USER_ID,
+      }),
+    );
+    const { app, redis, cookieHeader, csrfToken } = await setupAuthedApp(fixture.overrides);
+    await redis.set(
+      redisKey('guildchannels', GUILD_ID),
+      JSON.stringify([{ id: 'some-other-channel', name: 'general', type: 0 }]),
+    );
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/guilds/${GUILD_ID}/integrations/twitch-chat/channels/chan1`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: { bridgeDiscordChannelId: '700000000000000099' },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('rejects a bridge channel of a non-text channel type (400)', async () => {
+    const fixture = twitchChatFixture();
+    fixture.channels.set(
+      'chan1',
+      channelDefaults({
+        id: 'chan1',
+        guildId: GUILD_ID,
+        broadcasterUserId: 's1',
+        broadcasterLogin: 'streamer',
+        createdBy: USER_ID,
+      }),
+    );
+    const { app, redis, cookieHeader, csrfToken } = await setupAuthedApp(fixture.overrides);
+    await redis.set(
+      redisKey('guildchannels', GUILD_ID),
+      JSON.stringify([{ id: '700000000000000003', name: 'Voice', type: 2 }]),
+    );
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/guilds/${GUILD_ID}/integrations/twitch-chat/channels/chan1`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: { bridgeDiscordChannelId: '700000000000000003' },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('rejects turning a bridge direction on with no bridge channel set (400)', async () => {
+    const fixture = twitchChatFixture();
+    fixture.channels.set(
+      'chan1',
+      channelDefaults({
+        id: 'chan1',
+        guildId: GUILD_ID,
+        broadcasterUserId: 's1',
+        broadcasterLogin: 'streamer',
+        createdBy: USER_ID,
+      }),
+    );
+    const { app, cookieHeader, csrfToken } = await setupAuthedApp(fixture.overrides);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/guilds/${GUILD_ID}/integrations/twitch-chat/channels/chan1`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: { bridgeDiscordToTwitch: true },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('clears the stored bridge webhook credential when the bridge channel changes', async () => {
+    const fixture = twitchChatFixture();
+    fixture.channels.set(
+      'chan1',
+      channelDefaults({
+        id: 'chan1',
+        guildId: GUILD_ID,
+        broadcasterUserId: 's1',
+        broadcasterLogin: 'streamer',
+        createdBy: USER_ID,
+        bridgeDiscordChannelId: '700000000000000001',
+        bridgeWebhookId: 'old-webhook',
+        bridgeWebhookTokenEnc: 'old-token-enc',
+        bridgeLastError: 'some previous error',
+      }),
+    );
+    const { app, redis, cookieHeader, csrfToken, prisma } = await setupAuthedApp(fixture.overrides);
+    await redis.set(
+      redisKey('guildchannels', GUILD_ID),
+      JSON.stringify([
+        { id: '700000000000000001', name: 'general', type: 0 },
+        { id: '700000000000000002', name: 'other', type: 0 },
+      ]),
+    );
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/guilds/${GUILD_ID}/integrations/twitch-chat/channels/chan1`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: { bridgeDiscordChannelId: '700000000000000002' },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const updated = await prisma.twitchChatChannel.findUnique({ where: { id: 'chan1' } });
+    expect(updated).toMatchObject({
+      bridgeDiscordChannelId: '700000000000000002',
+      bridgeWebhookId: null,
+      bridgeWebhookTokenEnc: null,
+      bridgeLastError: null,
+    });
+    await app.close();
+  });
+
+  it('best-effort deletes the OLD webhook from Discord (plain fetch, webhook-token auth) when the bridge channel changes', async () => {
+    const fixture = twitchChatFixture();
+    fixture.channels.set(
+      'chan1',
+      channelDefaults({
+        id: 'chan1',
+        guildId: GUILD_ID,
+        broadcasterUserId: 's1',
+        broadcasterLogin: 'streamer',
+        createdBy: USER_ID,
+        bridgeDiscordChannelId: '700000000000000001',
+        bridgeWebhookId: 'wh-old',
+        bridgeWebhookTokenEnc: encryptSecret('old-real-webhook-token'),
+      }),
+    );
+    const { app, redis, cookieHeader, csrfToken, prisma } = await setupAuthedApp(fixture.overrides);
+    await redis.set(
+      redisKey('guildchannels', GUILD_ID),
+      JSON.stringify([
+        { id: '700000000000000001', name: 'general', type: 0 },
+        { id: '700000000000000002', name: 'other', type: 0 },
+      ]),
+    );
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/guilds/${GUILD_ID}/integrations/twitch-chat/channels/chan1`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: { bridgeDiscordChannelId: '700000000000000002' },
+    });
+    expect(res.statusCode).toBe(200);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://discord.com/api/v10/webhooks/wh-old/old-real-webhook-token');
+    expect(init).toMatchObject({ method: 'DELETE' });
+
+    const updated = await prisma.twitchChatChannel.findUnique({ where: { id: 'chan1' } });
+    expect(updated).toMatchObject({ bridgeWebhookId: null, bridgeWebhookTokenEnc: null });
+    vi.unstubAllGlobals();
+    await app.close();
+  });
+
+  it('still clears the stored webhook credential even when the best-effort Discord delete fails', async () => {
+    const fixture = twitchChatFixture();
+    fixture.channels.set(
+      'chan1',
+      channelDefaults({
+        id: 'chan1',
+        guildId: GUILD_ID,
+        broadcasterUserId: 's1',
+        broadcasterLogin: 'streamer',
+        createdBy: USER_ID,
+        bridgeDiscordChannelId: '700000000000000001',
+        bridgeWebhookId: 'wh-old',
+        bridgeWebhookTokenEnc: encryptSecret('old-real-webhook-token'),
+      }),
+    );
+    const { app, redis, cookieHeader, csrfToken, prisma } = await setupAuthedApp(fixture.overrides);
+    await redis.set(
+      redisKey('guildchannels', GUILD_ID),
+      JSON.stringify([
+        { id: '700000000000000001', name: 'general', type: 0 },
+        { id: '700000000000000002', name: 'other', type: 0 },
+      ]),
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network is down');
+      }),
+    );
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/guilds/${GUILD_ID}/integrations/twitch-chat/channels/chan1`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: { bridgeDiscordChannelId: '700000000000000002' },
+    });
+    expect(res.statusCode).toBe(200); // the failed delete never blocks the actual field-clearing update
+
+    const updated = await prisma.twitchChatChannel.findUnique({ where: { id: 'chan1' } });
+    expect(updated).toMatchObject({ bridgeWebhookId: null, bridgeWebhookTokenEnc: null });
+    vi.unstubAllGlobals();
     await app.close();
   });
 

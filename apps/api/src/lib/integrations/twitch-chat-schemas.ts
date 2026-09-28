@@ -43,6 +43,13 @@ export const twitchChatPrefixSchema = z
 export const updateTwitchChatChannelSchema = z.object({
   enabled: z.boolean().optional(),
   commandPrefix: twitchChatPrefixSchema.optional(),
+  // Discord <-> Twitch chat bridge (opt-in, off by default per direction). This schema only validates request
+  // body shape in isolation — whether the *resulting* state is valid (a toggle can't be turned on without a
+  // channel id existing) is validated at the route layer, which has the existing row to merge against (same
+  // division of labor as `updateTwitchChatRewardSchema`/the route's own reward-merge check).
+  bridgeDiscordChannelId: snowflakeSchema.nullable().optional(),
+  bridgeDiscordToTwitch: z.boolean().optional(),
+  bridgeTwitchToDiscord: z.boolean().optional(),
 });
 
 export const createTwitchChatCommandSchema = z.object({
