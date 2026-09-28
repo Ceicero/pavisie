@@ -4078,7 +4078,14 @@
               "name": "leaderboard",
               "fullName": "/economy leaderboard",
               "description": "Show the top balances.",
-              "options": []
+              "options": [
+                {
+                  "name": "platform",
+                  "description": "Which leaderboard to show (default: global)",
+                  "required": false,
+                  "type": "String"
+                }
+              ]
             },
             {
               "name": "config",

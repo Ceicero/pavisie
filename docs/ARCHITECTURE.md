@@ -747,6 +747,38 @@ degrades to a no-op (ARCHITECTURE.md's "safely degrade if an optional integratio
 `IntegrationConnection` rows keep reading correctly (schema.prisma) — do not drop them, and do not re-add a
 provider file/registry entry for one without deciding whether its enum value should come back into use.
 
+## 18b. `economy` plugin (per-platform wallets)
+
+Virtual currency feature: `/economy balance|daily|give|leaderboard|config` and `/economy admin add|remove`.
+**No real-money functionality** — currency is virtual-only, cannot be purchased, cashed out, or used for wagering.
+
+**Platform-aware wallets**: Every wallet is keyed by `(guildId, platform, userId)`. Platforms are `DISCORD`
+(user-keyed: snowflake id) and `TWITCH` (Twitch viewer-keyed: numeric user id). Wallets on different platforms
+are **never merged, linked, or transferred** — a Discord member has a separate wallet from a Twitch viewer with
+the same numeric id digits (hence platform is part of the unique key). Historical: every row existing before
+migration 0013 defaults to `platform=DISCORD`.
+
+**Ledger discipline**: Every balance change is an append-only `EconomyTransaction` row. The balance on
+`EconomyAccount` is a derived/cached total, never edited without a matching transaction. Ledger functions
+(`packages/plugins/src/economy/ledger.ts`): `getOrCreateWallet` (upsert by compound key; Twitch wallets store
+`displayName`), `claimDaily` (per-wallet cooldown & streak), `give` (same-platform only; cross-platform rejected),
+`credit` (earning; positive amounts only; sets transaction type), `adminAdjust` (add/remove; prevents negative).
+All use `prisma.$transaction` with conditional `updateMany` guards for concurrency safety (exactly one concurrent
+claim/give wins, others fail atomically with no ledger row). **Every transaction created anywhere explicitly sets
+`platform`** — never rely on the DB default in new code. Earned transaction types: `['daily', 'twitch_chat_earn',
+'twitch_watch_earn']` (last two reserved; Twitch runtime is separate, future task).
+
+**Leaderboards**: `/economy leaderboard [platform]` with choices `global` (default), `discord`, `twitch`.
+- `global`: top 10 by current `balance` across all platforms. Discord rows: `<@id>` mention. Twitch rows:
+  escaped `displayName` (fallback "Twitch viewer") + ` (Twitch)` marker.
+- `discord` / `twitch`: top 10 by **lifetime earned** on that platform (sum of transaction `amount` where
+  `platform` matches and `type ∈ EARNED_TRANSACTION_TYPES`). Wallets with zero earned excluded. Title clarifies
+  the board.
+
+Existing Discord commands keep their replies, cooldowns, streak maths and error messages; they call the ledger
+functions with `platform='DISCORD'`. The only visible change is the leaderboard title, which now names the board.
+Twitch-platform earning & commands are a later task — the data model and shared ledger functions are ready.
+
 ## 19. `enforcer` plugin
 
 - Plugin id `enforcer` (add to `PluginId` / `PLUGIN_IDS` in `@pavisie/types`, to `allPlugins` after `automod`, and to

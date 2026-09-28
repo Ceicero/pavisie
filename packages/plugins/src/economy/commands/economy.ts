@@ -10,21 +10,30 @@ import {
 } from '../../sdk';
 import type { EconomyConfig } from '../manifest';
 import {
-  DAILY_COOLDOWN_MS,
-  encodeStreakNote,
   formatCurrency,
-  parseStreakFromNote,
-  rollDaily,
   validateGive,
 } from '../service';
+import {
+  type EconomyPlatform,
+  type WalletKey,
+  EARNED_TRANSACTION_TYPES,
+  getOrCreateWallet,
+  claimDaily,
+  give as ledgerGive,
+  adminAdjust as ledgerAdminAdjust,
+} from '../ledger';
 
-// Sentinels thrown from inside `$transaction` callbacks to unwind out of a failed conditional guard (a
-// `updateMany` whose `where` re-checks the balance/cooldown at write time and affected zero rows) without
-// committing anything else the callback had already queued. Caught just outside the transaction, where the
-// existing user-facing message is sent. Never escape this module.
-class InsufficientBalanceError extends Error {}
-class BalanceWouldGoNegativeError extends Error {}
-class DailyAlreadyClaimedError extends Error {}
+// Escape markdown special characters in a string (for Twitch names in leaderboard display)
+function escapeMarkdown(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/\*/g, '\\*')
+    .replace(/_/g, '\\_')
+    .replace(/~/g, '\\~')
+    .replace(/`/g, '\\`')
+    .replace(/\|/g, '\\|')
+    .replace(/>/g, '\\>');
+}
 
 const data = new SlashCommandBuilder()
   .setName('economy')
@@ -48,7 +57,22 @@ const data = new SlashCommandBuilder()
         opt.setName('amount').setDescription('How much to give').setRequired(true).setMinValue(1),
       ),
   )
-  .addSubcommand((sub) => sub.setName('leaderboard').setDescription('Show the top balances.'))
+  .addSubcommand((sub) =>
+    sub
+      .setName('leaderboard')
+      .setDescription('Show the top balances.')
+      .addStringOption((opt) =>
+        opt
+          .setName('platform')
+          .setDescription('Which leaderboard to show (default: global)')
+          .setRequired(false)
+          .addChoices(
+            { name: 'Global (all platforms)', value: 'global' },
+            { name: 'Discord only', value: 'discord' },
+            { name: 'Twitch only', value: 'twitch' },
+          ),
+      ),
+  )
   .addSubcommand((sub) =>
     sub
       .setName('config')
@@ -126,18 +150,11 @@ const data = new SlashCommandBuilder()
       ),
   );
 
-async function getOrCreateAccount(c: CommandContext, userId: string) {
-  return c.ctx.prisma.economyAccount.upsert({
-    where: { guildId_userId: { guildId: c.guildId, userId } },
-    create: { guildId: c.guildId, userId },
-    update: {},
-  });
-}
-
 async function handleBalance(c: CommandContext): Promise<void> {
   const config = await c.config<EconomyConfig>();
   const target = c.interaction.options.getUser('user') ?? c.interaction.user;
-  const account = await getOrCreateAccount(c, target.id);
+  const key: WalletKey = { guildId: c.guildId, platform: 'DISCORD', userId: target.id };
+  const account = await getOrCreateWallet(c.ctx.prisma, key);
   await c.interaction.reply({
     embeds: [
       infoEmbed(
@@ -153,70 +170,21 @@ async function handleDaily(c: CommandContext): Promise<void> {
   const { ctx, guildId, t } = c;
   const config = await c.config<EconomyConfig>();
   const userId = c.interaction.user.id;
-
-  const account = await getOrCreateAccount(c, userId);
-  const lastDailyTx = await ctx.prisma.economyTransaction.findFirst({
-    where: { guildId, toUserId: userId, type: 'daily' },
-    orderBy: { createdAt: 'desc' },
-  });
-  const priorStreak = parseStreakFromNote(lastDailyTx?.note);
+  const key: WalletKey = { guildId, platform: 'DISCORD', userId };
 
   const now = new Date();
-  const result = rollDaily({
-    now,
-    lastDailyAt: account.lastDailyAt,
-    priorStreak,
-    config,
-    rng: Math.random,
-  });
+  const result = await claimDaily(ctx.prisma, key, config, now, Math.random);
+
   if (!result.ok) {
     const hours = Math.ceil(result.retryAfterMs / (60 * 60 * 1000));
     await c.interaction.reply({ embeds: [errorEmbed(t('dailyCooldown', { hours }))], ephemeral: true });
     return;
   }
 
-  // `account.lastDailyAt` above was read before this transaction, so two fast `/economy daily` calls can both
-  // pass the `rollDaily` cooldown check against the same stale timestamp. The conditional `updateMany` below
-  // re-checks the cooldown at write time — it only claims the daily (and only then writes the ledger row) when
-  // `lastDailyAt` is still null or past the cutoff — so only one of two racing calls can win.
-  const amount = BigInt(result.amount);
-  const cutoff = new Date(now.getTime() - DAILY_COOLDOWN_MS);
-  try {
-    await ctx.prisma.$transaction(async (tx) => {
-      const claimed = await tx.economyAccount.updateMany({
-        where: { id: account.id, OR: [{ lastDailyAt: null }, { lastDailyAt: { lte: cutoff } }] },
-        data: { balance: { increment: amount }, lastDailyAt: now },
-      });
-      if (claimed.count === 0) throw new DailyAlreadyClaimedError();
-
-      await tx.economyTransaction.create({
-        data: {
-          guildId,
-          accountId: account.id,
-          toUserId: userId,
-          amount,
-          type: 'daily',
-          note: encodeStreakNote(result.streak),
-        },
-      });
-    });
-  } catch (err) {
-    if (err instanceof DailyAlreadyClaimedError) {
-      // Recompute from a fresh read so the hours shown reflect the claim that actually won the race, not the
-      // stale `account.lastDailyAt` this handler started with.
-      const fresh = await ctx.prisma.economyAccount.findUniqueOrThrow({ where: { id: account.id } });
-      const elapsed = fresh.lastDailyAt ? Date.now() - fresh.lastDailyAt.getTime() : 0;
-      const hours = Math.ceil(Math.max(0, DAILY_COOLDOWN_MS - elapsed) / (60 * 60 * 1000));
-      await c.interaction.reply({ embeds: [errorEmbed(t('dailyCooldown', { hours }))], ephemeral: true });
-      return;
-    }
-    throw err;
-  }
-
   await c.interaction.reply({
     embeds: [
       successEmbed(
-        t('dailyClaimed', { amount: formatCurrency(amount, config.currencySymbol), streak: result.streak }),
+        t('dailyClaimed', { amount: formatCurrency(result.amount, config.currencySymbol), streak: result.streak }),
       ),
     ],
     ephemeral: true,
@@ -230,7 +198,11 @@ async function handleGive(c: CommandContext): Promise<void> {
   const amount = c.interaction.options.getInteger('amount', true);
   const senderId = c.interaction.user.id;
 
-  const senderAccount = await getOrCreateAccount(c, senderId);
+  const senderKey: WalletKey = { guildId, platform: 'DISCORD', userId: senderId };
+  const targetKey: WalletKey = { guildId, platform: 'DISCORD', userId: target.id };
+
+  // Validate before wallet operations
+  const senderAccount = await getOrCreateWallet(ctx.prisma, senderKey);
   const validation = validateGive({
     amount,
     senderBalance: senderAccount.balance,
@@ -248,53 +220,24 @@ async function handleGive(c: CommandContext): Promise<void> {
     return;
   }
 
-  const targetAccount = await getOrCreateAccount(c, target.id);
-  const bigAmount = BigInt(amount);
+  const result = await ledgerGive(ctx.prisma, senderKey, targetKey, amount, {
+    giveMinAmount: config.giveMinAmount,
+    giveMaxAmount: config.giveMaxAmount,
+  });
 
-  // `validateGive` above only checked `senderAccount.balance` as read before this transaction — two concurrent
-  // `/economy give` calls could both pass that check and both reach here. The conditional `updateMany` is the
-  // real guard: it only decrements (and only then does the rest of the transfer run) if the balance is still
-  // sufficient at write time, so a second racing call that would overdraw finds zero rows affected instead.
-  try {
-    await ctx.prisma.$transaction(async (tx) => {
-      const claimed = await tx.economyAccount.updateMany({
-        where: { id: senderAccount.id, balance: { gte: bigAmount } },
-        data: { balance: { decrement: bigAmount } },
-      });
-      if (claimed.count === 0) throw new InsufficientBalanceError();
-
-      await tx.economyAccount.update({
-        where: { id: targetAccount.id },
-        data: { balance: { increment: bigAmount } },
-      });
-      await tx.economyTransaction.create({
-        data: {
-          guildId,
-          accountId: senderAccount.id,
-          fromUserId: senderId,
-          toUserId: target.id,
-          amount: bigAmount,
-          type: 'give',
-        },
-      });
+  if (!result.ok) {
+    const key = `give.${result.reason}` as const;
+    await c.interaction.reply({
+      embeds: [errorEmbed(t(key, { min: config.giveMinAmount, max: config.giveMaxAmount }))],
+      ephemeral: true,
     });
-  } catch (err) {
-    if (err instanceof InsufficientBalanceError) {
-      await c.interaction.reply({
-        embeds: [
-          errorEmbed(t('give.insufficient_balance', { min: config.giveMinAmount, max: config.giveMaxAmount })),
-        ],
-        ephemeral: true,
-      });
-      return;
-    }
-    throw err;
+    return;
   }
 
   await c.interaction.reply({
     embeds: [
       successEmbed(
-        t('gave', { amount: formatCurrency(bigAmount, config.currencySymbol), user: target.username }),
+        t('gave', { amount: formatCurrency(BigInt(amount), config.currencySymbol), user: target.username }),
       ),
     ],
     ephemeral: true,
@@ -303,15 +246,68 @@ async function handleGive(c: CommandContext): Promise<void> {
 
 async function handleLeaderboard(c: CommandContext): Promise<void> {
   const config = await c.config<EconomyConfig>();
-  const rows = await c.ctx.prisma.economyAccount.findMany({
-    where: { guildId: c.guildId },
-    orderBy: { balance: 'desc' },
-    take: 10,
-  });
-  const lines = rows.map(
-    (row, i) => `**${i + 1}.** <@${row.userId}> — ${formatCurrency(row.balance, config.currencySymbol)}`,
-  );
-  await c.interaction.reply({ embeds: [listEmbed(c.t('leaderboardTitle'), lines)], ephemeral: true });
+  const platformOption = (c.interaction.options.getString('platform') ?? 'global') as 'global' | 'discord' | 'twitch';
+
+  if (platformOption === 'global') {
+    // Global leaderboard: top 10 by current balance across all platforms
+    const rows = await c.ctx.prisma.economyAccount.findMany({
+      where: { guildId: c.guildId },
+      orderBy: { balance: 'desc' },
+      take: 10,
+    });
+    const lines = rows.map((row, i) => {
+      const userStr =
+        row.platform === 'TWITCH'
+          ? `${escapeMarkdown(row.displayName || 'Twitch viewer')} (Twitch)`
+          : `<@${row.userId}>`;
+      return `**${i + 1}.** ${userStr} — ${formatCurrency(row.balance, config.currencySymbol)}`;
+    });
+    await c.interaction.reply({
+      embeds: [listEmbed(c.t('leaderboardTitle'), lines)],
+      ephemeral: true,
+    });
+  } else {
+    // Platform-specific leaderboard: top 10 by lifetime earned (sum of earned transaction types)
+    const platform: EconomyPlatform = platformOption === 'discord' ? 'DISCORD' : 'TWITCH';
+    const titleKey = platformOption === 'discord' ? 'leaderboardDiscordTitle' : 'leaderboardTwitchTitle';
+
+    const rows = await c.ctx.prisma.economyTransaction.groupBy({
+      by: ['accountId'],
+      where: {
+        guildId: c.guildId,
+        platform,
+        accountId: { not: null },
+        type: { in: [...EARNED_TRANSACTION_TYPES] },
+      },
+      _sum: { amount: true },
+      orderBy: { _sum: { amount: 'desc' } },
+      take: 10,
+    });
+
+    // Fetch the account details for each row
+    const accountIds = rows.map((r) => r.accountId).filter(Boolean) as string[];
+    const accounts = await c.ctx.prisma.economyAccount.findMany({
+      where: { id: { in: accountIds } },
+    });
+    const accountMap = new Map(accounts.map((a) => [a.id, a]));
+
+    const lines = rows.map((row, i) => {
+      const account = accountMap.get(row.accountId!);
+      if (!account) return null;
+      const amount = row._sum.amount || 0n;
+      const userStr =
+        account.platform === 'TWITCH'
+          ? `${escapeMarkdown(account.displayName || 'Twitch viewer')} (Twitch)`
+          : `<@${account.userId}>`;
+      return `**${i + 1}.** ${userStr} — ${formatCurrency(amount, config.currencySymbol)}`;
+    });
+
+    const filteredLines = lines.filter((line) => line !== null) as string[];
+    await c.interaction.reply({
+      embeds: [listEmbed(c.t(titleKey, { platform: platformOption }), filteredLines)],
+      ephemeral: true,
+    });
+  }
 }
 
 async function handleConfig(c: CommandContext): Promise<void> {
@@ -357,54 +353,16 @@ async function handleAdminAdjust(c: CommandContext, direction: 1 | -1): Promise<
   const amount = interaction.options.getInteger('amount', true);
   const reason = interaction.options.getString('reason') ?? undefined;
 
-  const account = await getOrCreateAccount(c, target.id);
-  const bigAmount = BigInt(amount);
+  const key: WalletKey = { guildId, platform: 'DISCORD', userId: target.id };
 
-  // Two concurrent admin adjustments used to both read the same stale `account.balance` and both write an
-  // absolute `nextBalance` computed from it — the loser's write clobbered the winner's, yet both still wrote a
-  // ledger row, overstating the movement. `increment`/`decrement` make each write relative instead of absolute,
-  // and the `remove` direction re-checks the never-negative rule at write time via a conditional `updateMany`
-  // (only writing the ledger row once that guard actually passes) rather than trusting the stale pre-read.
-  let afterBalance: bigint;
-  try {
-    afterBalance = await ctx.prisma.$transaction(async (tx) => {
-      if (direction === -1) {
-        const claimed = await tx.economyAccount.updateMany({
-          where: { id: account.id, balance: { gte: bigAmount } },
-          data: { balance: { decrement: bigAmount } },
-        });
-        if (claimed.count === 0) throw new BalanceWouldGoNegativeError();
-      } else {
-        await tx.economyAccount.update({
-          where: { id: account.id },
-          data: { balance: { increment: bigAmount } },
-        });
-      }
+  const result = await ledgerAdminAdjust(ctx.prisma, key, direction, amount, reason);
 
-      await tx.economyTransaction.create({
-        data: {
-          guildId,
-          accountId: account.id,
-          toUserId: direction === 1 ? target.id : undefined,
-          fromUserId: direction === -1 ? target.id : undefined,
-          amount: bigAmount,
-          type: direction === 1 ? 'admin_add' : 'admin_remove',
-          note: reason,
-        },
-      });
-
-      // Read the true post-write balance back inside the transaction rather than trusting a computed value —
-      // `updateMany` (used above for `remove`) only returns an affected-row count, not the row itself.
-      const updated = await tx.economyAccount.findUniqueOrThrow({ where: { id: account.id } });
-      return updated.balance;
-    });
-  } catch (err) {
-    if (err instanceof BalanceWouldGoNegativeError) {
-      await interaction.reply({ embeds: [errorEmbed(t('admin.wouldGoNegative'))], ephemeral: true });
-      return;
-    }
-    throw err;
+  if (!result.ok) {
+    await interaction.reply({ embeds: [errorEmbed(t('admin.wouldGoNegative'))], ephemeral: true });
+    return;
   }
+
+  const account = await getOrCreateWallet(ctx.prisma, key);
 
   await ctx.audit({
     guildId,
@@ -413,7 +371,7 @@ async function handleAdminAdjust(c: CommandContext, direction: 1 | -1): Promise<
     action: direction === 1 ? 'economy.admin.add' : 'economy.admin.remove',
     targetType: 'economy_account',
     targetId: account.id,
-    after: { balance: afterBalance.toString(), amount, reason },
+    after: { balance: result.newBalance.toString(), amount, reason },
     source: 'bot',
   });
 

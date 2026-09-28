@@ -260,6 +260,13 @@ enum GameAccountProvider {
   STEAM
 }
 
+/// Economy wallet platform: DISCORD for user-keyed wallets, TWITCH for Twitch viewer-keyed wallets.
+/// Wallets are never merged or transferred between platforms. Every existing row is DISCORD (historical).
+enum EconomyPlatform {
+  DISCORD
+  TWITCH
+}
+
 // ---------------------------------------------------------------------------
 // Guild + core config
 // ---------------------------------------------------------------------------
@@ -1138,37 +1145,48 @@ model ReputationEvent {
 
 /// Virtual currency only — no real-money functionality (SPEC.md §G). Balance is
 /// a derived/cached total; EconomyTransaction is the append-only ledger.
+/// Platform is part of the unique key: a Discord user id (snowflake) and a Twitch user id (integer digits)
+/// can be the same digits, so we must key off (guildId, platform, userId) to distinguish them.
+/// displayName is only set for TWITCH wallets (the viewer's Twitch display name, for leaderboard rendering).
+/// Every existing row is platform=DISCORD (historically accurate — Twitch wallets did not exist before this migration).
 model EconomyAccount {
-  id          String    @id @default(cuid())
+  id          String            @id @default(cuid())
   guildId     String
-  guild       Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  guild       Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  platform    EconomyPlatform   @default(DISCORD)
   userId      String
-  balance     BigInt    @default(0)
+  displayName String?
+  balance     BigInt            @default(0)
   lastDailyAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   transactions EconomyTransaction[]
 
-  @@unique([guildId, userId])
+  @@unique([guildId, platform, userId])
   @@index([guildId])
+  @@index([guildId, balance])
 }
 
+/// Append-only ledger of balance changes. Platform must be set explicitly on every write
+/// (never rely on the DB default in new code). Every existing row is platform=DISCORD (historical).
 model EconomyTransaction {
-  id         String          @id @default(cuid())
+  id         String            @id @default(cuid())
   guildId    String
-  guild      Guild           @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  guild      Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  platform   EconomyPlatform   @default(DISCORD)
   accountId  String?
-  account    EconomyAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  account    EconomyAccount?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
   fromUserId String?
   toUserId   String?
   amount     BigInt
   type       String
   note       String?
-  createdAt  DateTime        @default(now())
+  createdAt  DateTime          @default(now())
 
   @@index([guildId])
   @@index([guildId, createdAt])
+  @@index([guildId, platform, type])
 }
 
 model AfkStatus {

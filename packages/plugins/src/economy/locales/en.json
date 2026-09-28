@@ -3,7 +3,9 @@
   "dailyCooldown": "You've already claimed today. Try again in about {hours}h.",
   "dailyClaimed": "You claimed {amount}! Current streak: {streak} day(s).",
   "gave": "You gave {amount} to {user}.",
-  "leaderboardTitle": "Leaderboard",
+  "leaderboardTitle": "Global Leaderboard (All Platforms)",
+  "leaderboardDiscordTitle": "Discord Leaderboard (Lifetime Earned)",
+  "leaderboardTwitchTitle": "Twitch Leaderboard (Lifetime Earned)",
   "configTitle": "Economy settings",
   "give": {
     "self": "You can't give to yourself.",
