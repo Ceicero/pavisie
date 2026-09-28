@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { env } from '@pavisie/core';
 import * as crypto from '@pavisie/core';
+import { TWITCH_CHAT_RESERVED_COMMAND_NAMES } from '@pavisie/types/integrations';
 import { createTestContext } from '../../sdk/testing';
 import type { CommandContext, ServiceRegistry } from '../../sdk';
 import { command as twitchCommand, twitchConfirmComponents } from '../commands/twitch';
@@ -276,6 +277,18 @@ describe('/twitch command add — validation', () => {
     await twitchCommand.execute(c);
 
     expect(descriptionOf(replies)).toContain(realT('twitch.errors.reservedName', { name: 'uptime' }));
+  });
+
+  it.each(TWITCH_CHAT_RESERVED_COMMAND_NAMES)('rejects the economy/built-in reserved name "%s"', async (name) => {
+    const { c, replies } = buildContext({
+      group: 'command',
+      sub: 'add',
+      strings: { name, response: 'hi' },
+    });
+
+    await twitchCommand.execute(c);
+
+    expect(descriptionOf(replies)).toContain(realT('twitch.errors.reservedName', { name }));
   });
 
   it('rejects a response that is only whitespace', async () => {

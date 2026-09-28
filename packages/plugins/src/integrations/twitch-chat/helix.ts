@@ -61,6 +61,16 @@ interface HelixChannelsResponse {
   data: { title: string }[];
 }
 
+interface HelixUsersResponse {
+  data: { id: string; login: string; display_name: string }[];
+}
+
+export interface TwitchUserInfo {
+  id: string;
+  login: string;
+  displayName: string;
+}
+
 export interface StreamInfo {
   startedAt: string;
 }
@@ -458,6 +468,31 @@ export async function listCustomRewards(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     ctx.logger.warn({ err: message }, 'integrations/twitch-chat: list custom rewards request threw');
+    return { ok: false };
+  }
+}
+
+/** Looks up a Twitch user by login (case-insensitive) — used by the `!give` chat economy command to resolve its
+ * recipient argument to a stable Twitch user id (the economy wallet key, ARCHITECTURE.md §18b). Same
+ * `{ ok: false }` (lookup itself failed) vs `{ ok: true, value: null }` (lookup succeeded, no such user)
+ * distinction as `getStream`/`getChannelInfo` — a failed lookup must never be reported as "no such user". */
+export async function getUserByLogin(ctx: PluginContext, login: string): Promise<EngineHelixResult<TwitchUserInfo | null>> {
+  const token = await getBotAccessToken(ctx);
+  if (!token) return { ok: false };
+  const clientId = ctx.env.TWITCH_CLIENT_ID;
+  if (!clientId) return { ok: false };
+
+  try {
+    const res = await fetchWithReauth(ctx, clientId, token, (headers) =>
+      fetch(`${HELIX_BASE}/users?login=${encodeURIComponent(login)}`, { headers }),
+    );
+    if (!res.ok) return { ok: false };
+    const json = (await res.json()) as HelixUsersResponse;
+    const user = json.data[0];
+    return { ok: true, value: user ? { id: user.id, login: user.login, displayName: user.display_name } : null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.logger.warn({ err: message }, 'integrations/twitch-chat: get user by login failed');
     return { ok: false };
   }
 }

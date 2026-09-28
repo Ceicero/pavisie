@@ -152,8 +152,20 @@ export const TWITCH_CHAT_LEVELS = ['everyone', 'subscriber', 'vip', 'moderator',
 
 export type TwitchChatLevelId = (typeof TWITCH_CHAT_LEVELS)[number];
 
-/** Built-in command names every channel already answers; custom commands may not reuse them. */
-export const TWITCH_CHAT_RESERVED_COMMAND_NAMES = ['commands', 'uptime', 'title'] as const;
+/** Built-in command names every channel already answers, plus the economy plugin's Twitch chat commands
+ * (`balance`/`bal`/`daily`/`give`/`top`, ARCHITECTURE.md §18b) — custom commands may not reuse any of them. An
+ * EXISTING custom command created before this feature shipped still wins over the economy command with the
+ * same name (see `integrations/twitch-chat/economy-commands.ts`); only NEW commands are rejected here. */
+export const TWITCH_CHAT_RESERVED_COMMAND_NAMES = [
+  'commands',
+  'uptime',
+  'title',
+  'balance',
+  'bal',
+  'daily',
+  'give',
+  'top',
+] as const;
 
 /** One linked Twitch channel's chat-bot config, as returned to the dashboard/bot. */
 export interface TwitchChatChannelDto {

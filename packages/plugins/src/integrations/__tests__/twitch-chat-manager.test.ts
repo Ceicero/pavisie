@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageFlags } from 'discord.js';
+import RedisMock from 'ioredis-mock';
 import { createTestContext } from '../../sdk/testing';
-import type { PluginContext } from '../../sdk';
+import type { EconomyGetConfigResult, EconomyService, PluginContext } from '../../sdk';
 import { TwitchChatManager } from '../twitch-chat/manager';
 import type { WebSocketConstructorLike, WebSocketLike } from '../twitch-chat/socket';
 import { getBridgeDropCount, pruneBridgeDropCount } from '../twitch-chat/bridge-metrics';
 import { pruneBridgeSendBucket } from '../twitch-chat/bridge-ratelimit';
+import { EXCLUDED_CHAT_BOT_LOGINS } from '../twitch-chat/economy-earn';
 
 // `vi.mock` (and `vi.hoisted`) calls are hoisted by Vitest above every import in this file, however far below
 // them they're written — so `manager.ts`'s own `import ... from './helix'` resolves to this mock, and any
@@ -19,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   sendChatMessage: vi.fn(),
   getStream: vi.fn(),
   getChannelInfo: vi.fn(),
+  getUserByLogin: vi.fn(),
   pruneSendThrottle: vi.fn(),
 }));
 
@@ -189,6 +192,7 @@ function notificationFrame(overrides: Record<string, unknown> = {}) {
     event: {
       broadcaster_user_id: 'b-1',
       chatter_user_id: 'viewer-1',
+      chatter_user_login: 'viewerone',
       chatter_user_name: 'ViewerOne',
       message: { text: '!hello' },
       badges: [],
@@ -209,6 +213,7 @@ beforeEach(() => {
   mocks.sendChatMessage.mockResolvedValue({ ok: true });
   mocks.getStream.mockResolvedValue({ ok: true, value: null });
   mocks.getChannelInfo.mockResolvedValue({ ok: true, value: null });
+  mocks.getUserByLogin.mockResolvedValue({ ok: true, value: null });
 
   bridgeWebhookMocks.checkBridgeChannelAccess.mockResolvedValue({ ok: true });
   bridgeWebhookMocks.ensureBridgeWebhook.mockResolvedValue({ ok: true, client: { send: vi.fn() } });
@@ -1228,5 +1233,422 @@ describe('TwitchChatManager Discord <-> Twitch chat bridge', () => {
         }
       }
     });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// Economy: Twitch chat commands (!balance/!bal/!daily/!give/!top) and chat earning (ARCHITECTURE.md §18b/§19a)
+// ---------------------------------------------------------------------------------------------------------
+
+function makeEconomyConfig(overrides: Partial<EconomyGetConfigResult> = {}): EconomyGetConfigResult {
+  return {
+    currencyName: 'Agis',
+    currencySymbol: '♦️',
+    twitchEnabled: true,
+    twitchEarnEnabled: false,
+    twitchEarnPerMessage: 5,
+    twitchEarnCooldownSeconds: 60,
+    twitchEarnDailyCap: 200,
+    ...overrides,
+  };
+}
+
+function makeEconomyService(overrides: Partial<EconomyService> = {}): EconomyService {
+  return {
+    getConfig: vi.fn(async () => makeEconomyConfig()),
+    getOrCreateWallet: vi.fn(async () => ({ balance: 100n, lastDailyAt: null })),
+    claimDaily: vi.fn(async () => ({ ok: true as const, amount: 10n, streak: 1 })),
+    give: vi.fn(async () => ({ ok: true as const })),
+    credit: vi.fn(async () => ({ ok: true as const, newBalance: 0n })),
+    getLeaderboard: vi.fn(async () => []),
+    ...overrides,
+  };
+}
+
+/** Same shape as the file's own `setupWithOneChannel`, but also wires an `economy` service (unless
+ * `economyService` is explicitly `null`) and an `isEnabled` override so economy-plugin-enablement can be
+ * controlled independently of the `integrations` plugin's own enablement. */
+async function setupEconomyChannel(
+  opts: {
+    economyService?: EconomyService | null;
+    isEnabled?: PluginContext['isEnabled'];
+    channelOverrides?: Record<string, unknown>;
+    commands?: unknown[];
+    logger?: PluginContext['logger'];
+  } = {},
+) {
+  const channel = makeChannelRow(opts.channelOverrides);
+  const manager = new TwitchChatManager(FakeWebSocketCtor);
+  const { ctx } = createTestContext({
+    overrides: {
+      env: makeEnv(),
+      isEnabled: opts.isEnabled ?? (async () => true),
+      ...(opts.logger ? { logger: opts.logger } : {}),
+    },
+    prismaOverrides: {
+      twitchChatChannel: { findMany: async () => [channel], update: async () => ({}) },
+      twitchChatCommand: { findMany: async () => opts.commands ?? [] },
+    },
+  });
+  if (opts.economyService !== null) {
+    ctx.services.register('economy', opts.economyService ?? makeEconomyService());
+  }
+
+  await manager.start(ctx);
+  const ws = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+  ws.emit('session_welcome', {
+    session: { id: 'sess-1', status: 'connected', keepalive_timeout_seconds: 10, reconnect_url: null },
+  });
+  await flush();
+  return { manager, ctx, ws, channel };
+}
+
+describe('TwitchChatManager economy commands', () => {
+  // ioredis-mock shares one process-wide in-memory store by default (see ai/__tests__/budget.test.ts) — the
+  // economy earning tests below write real cooldown/daily-cap keys through `ctx.redis`, so start each test
+  // clean regardless of what an earlier test in this file left behind.
+  beforeEach(async () => {
+    await new RedisMock().flushall();
+  });
+
+  it('routes !balance to the economy service and sends its reply, never the engine', async () => {
+    const economyService = makeEconomyService({
+      getOrCreateWallet: vi.fn(async () => ({ balance: 1234n, lastDailyAt: null })),
+    });
+    const { ws, ctx } = await setupEconomyChannel({ economyService });
+
+    ws.emit('notification', notificationFrame({ message: { text: '!balance' } }));
+    await flush();
+
+    expect(economyService.getOrCreateWallet).toHaveBeenCalledWith('guild-1', 'TWITCH', 'viewer-1', 'ViewerOne');
+    expect(mocks.sendChatMessage).toHaveBeenCalledWith(ctx, 'b-1', '@ViewerOne, you have 1,234 ♦️');
+  });
+
+  it('an existing enabled custom command with a reserved name wins over the economy command', async () => {
+    const economyService = makeEconomyService();
+    const { ws, ctx } = await setupEconomyChannel({
+      economyService,
+      commands: [makeCommandRow({ name: 'balance', response: 'Custom balance reply for {user}' })],
+    });
+
+    ws.emit('notification', notificationFrame({ message: { text: '!balance' } }));
+    await flush();
+
+    expect(economyService.getOrCreateWallet).not.toHaveBeenCalled();
+    expect(mocks.sendChatMessage).toHaveBeenCalledWith(ctx, 'b-1', 'Custom balance reply for ViewerOne');
+  });
+
+  it('does nothing when the economy plugin is disabled for the guild', async () => {
+    const economyService = makeEconomyService();
+    const { ws } = await setupEconomyChannel({
+      economyService,
+      isEnabled: async (_guildId: string, pluginId?: string) => pluginId !== 'economy',
+    });
+
+    ws.emit('notification', notificationFrame({ message: { text: '!balance' } }));
+    await flush();
+
+    expect(economyService.getConfig).not.toHaveBeenCalled();
+    expect(economyService.getOrCreateWallet).not.toHaveBeenCalled();
+    expect(mocks.sendChatMessage).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when twitchEnabled is off, even though the economy plugin is enabled', async () => {
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEnabled: false })),
+    });
+    const { ws } = await setupEconomyChannel({ economyService });
+
+    ws.emit('notification', notificationFrame({ message: { text: '!balance' } }));
+    await flush();
+
+    expect(economyService.getOrCreateWallet).not.toHaveBeenCalled();
+    expect(mocks.sendChatMessage).not.toHaveBeenCalled();
+  });
+
+  it('commands work when twitchEnabled is true and twitchEarnEnabled is false', async () => {
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEnabled: true, twitchEarnEnabled: false })),
+    });
+    const { ws, ctx } = await setupEconomyChannel({ economyService });
+
+    ws.emit('notification', notificationFrame({ message: { text: '!top' } }));
+    await flush();
+
+    expect(mocks.sendChatMessage).toHaveBeenCalledWith(ctx, 'b-1', 'No one has earned anything from Twitch chat yet.');
+  });
+
+  it('!give resolves the login via Helix and gives, replying with the recipient name', async () => {
+    mocks.getUserByLogin.mockResolvedValueOnce({
+      ok: true,
+      value: { id: 'target-twitch-id', login: 'someone', displayName: 'Someone' },
+    });
+    const economyService = makeEconomyService({ give: vi.fn(async () => ({ ok: true as const })) });
+    const { ws, ctx } = await setupEconomyChannel({ economyService });
+
+    ws.emit('notification', notificationFrame({ message: { text: '!give someone 25' } }));
+    await flush();
+
+    expect(economyService.give).toHaveBeenCalledWith('guild-1', 'viewer-1', 'target-twitch-id', 25, 'TWITCH');
+    expect(mocks.sendChatMessage).toHaveBeenCalledWith(ctx, 'b-1', '@ViewerOne, gave 25 ♦️ to Someone.');
+  });
+
+  it('an unhandled/unrecognized message never posts a marker or internal string into chat', async () => {
+    const economyService = makeEconomyService();
+    const { ws, ctx } = await setupEconomyChannel({ economyService });
+
+    for (const text of ['!nope', '!balancex', 'balance no prefix', '!give', '!GIVE someone 5']) {
+      ws.emit('notification', notificationFrame({ message: { text } }));
+    }
+    await flush();
+
+    for (const call of mocks.sendChatMessage.mock.calls) {
+      const sentText = call[2] as string | undefined;
+      expect(sentText ?? '').not.toContain('__economy');
+      void ctx;
+    }
+  });
+
+  it('is silent, not an error, on the per-viewer cooldown (no duplicate reply within 10s)', async () => {
+    const economyService = makeEconomyService();
+    const { ws, ctx } = await setupEconomyChannel({ economyService });
+
+    ws.emit('notification', notificationFrame({ message: { text: '!balance' } }));
+    await flush();
+    ws.emit('notification', notificationFrame({ message: { text: '!balance' } }));
+    await flush();
+
+    expect(economyService.getOrCreateWallet).toHaveBeenCalledTimes(1);
+    expect(mocks.sendChatMessage).toHaveBeenCalledTimes(1);
+    void ctx;
+  });
+
+  it('no logger call contains chat text or the chatter display name on a normal economy command', async () => {
+    const SENTINEL_TEXT = 'sentinel-give-text-should-never-log';
+    const SENTINEL_NAME = 'SentinelEconomyViewer';
+    const logger = { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } as unknown as PluginContext['logger'];
+    const economyService = makeEconomyService();
+    const { ws } = await setupEconomyChannel({ economyService, logger });
+
+    ws.emit(
+      'notification',
+      notificationFrame({ chatter_user_name: SENTINEL_NAME, message: { text: `!balance ${SENTINEL_TEXT}` } }),
+    );
+    await flush();
+
+    for (const fn of [logger.warn, logger.error, logger.info, logger.debug]) {
+      for (const call of (fn as unknown as ReturnType<typeof vi.fn>).mock.calls) {
+        const serialized = JSON.stringify(call);
+        expect(serialized).not.toContain(SENTINEL_TEXT);
+        expect(serialized).not.toContain(SENTINEL_NAME);
+      }
+    }
+  });
+
+  it('an economy handling failure is logged without chat text/display name and the manager stays alive', async () => {
+    const SENTINEL_TEXT = 'sentinel-should-not-appear-in-logs';
+    const logger = { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } as unknown as PluginContext['logger'];
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => {
+        throw new Error('boom');
+      }),
+    });
+    const { ws, ctx } = await setupEconomyChannel({
+      economyService,
+      isEnabled: async (_guildId: string, pluginId?: string) => {
+        if (pluginId === 'economy') throw new Error(`isEnabled threw with ${SENTINEL_TEXT} nowhere near it`);
+        return true;
+      },
+      logger,
+      commands: [makeCommandRow()],
+    });
+
+    ws.emit('notification', notificationFrame({ message: { text: '!balance' } }));
+    await flush();
+
+    // The manager is still alive — a later, unrelated custom command still works.
+    ws.emit('notification', notificationFrame({ message: { text: '!hello' } }));
+    await flush();
+    expect(mocks.sendChatMessage).toHaveBeenCalledWith(ctx, 'b-1', 'Hi ViewerOne!');
+
+    for (const fn of [logger.warn, logger.error, logger.info, logger.debug]) {
+      for (const call of (fn as unknown as ReturnType<typeof vi.fn>).mock.calls) {
+        expect(JSON.stringify(call)).not.toContain(SENTINEL_TEXT);
+      }
+    }
+  });
+});
+
+describe('TwitchChatManager economy chat earning', () => {
+  beforeEach(async () => {
+    await new RedisMock().flushall();
+  });
+
+  it('credits nothing when the channel is not live', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: null }); // offline
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEarnEnabled: true })),
+    });
+    const { ws } = await setupEconomyChannel({ economyService });
+
+    ws.emit('notification', notificationFrame({ message: { text: 'just chatting, not a command' } }));
+    await flush();
+
+    expect(economyService.credit).not.toHaveBeenCalled();
+  });
+
+  it('credits nothing for a message from the bot itself', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { startedAt: new Date().toISOString() } }); // live
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEarnEnabled: true })),
+    });
+    const { ws } = await setupEconomyChannel({ economyService });
+
+    ws.emit(
+      'notification',
+      notificationFrame({ chatter_user_id: 'bot-1', chatter_user_name: 'pavisiebot', message: { text: 'hello chat' } }),
+    );
+    await flush();
+
+    expect(economyService.credit).not.toHaveBeenCalled();
+  });
+
+  it('credits nothing for a command-attempt message, even an unrecognized one', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { startedAt: new Date().toISOString() } }); // live
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEarnEnabled: true })),
+    });
+    const { ws } = await setupEconomyChannel({ economyService });
+
+    ws.emit('notification', notificationFrame({ message: { text: '!totally-unknown-command' } }));
+    await flush();
+
+    expect(economyService.credit).not.toHaveBeenCalled();
+  });
+
+  it('credits nothing for the broadcaster chatting in their own channel (no self-farming)', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { startedAt: new Date().toISOString() } }); // live
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEarnEnabled: true })),
+    });
+    // makeChannelRow()'s default broadcasterUserId is 'b-1' — send the chat message as that same user id.
+    const { ws } = await setupEconomyChannel({ economyService });
+
+    ws.emit(
+      'notification',
+      notificationFrame({
+        chatter_user_id: 'b-1',
+        chatter_user_login: 'somestreamer',
+        chatter_user_name: 'SomeStreamer',
+        message: { text: 'chatting in my own stream' },
+      }),
+    );
+    await flush();
+
+    expect(economyService.credit).not.toHaveBeenCalled();
+  });
+
+  it.each(EXCLUDED_CHAT_BOT_LOGINS)('credits nothing for the well-known chat bot login "%s" (any casing)', async (botLogin) => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { startedAt: new Date().toISOString() } }); // live
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEarnEnabled: true })),
+    });
+    const { ws } = await setupEconomyChannel({ economyService });
+
+    ws.emit(
+      'notification',
+      notificationFrame({
+        chatter_user_id: `bot-account-${botLogin}`,
+        chatter_user_login: botLogin.toUpperCase(), // case-insensitivity
+        chatter_user_name: botLogin,
+        message: { text: 'automated timer message' },
+      }),
+    );
+    await flush();
+
+    expect(economyService.credit).not.toHaveBeenCalled();
+  });
+
+  it('a normal viewer (not the broadcaster, not a listed bot) still earns', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { startedAt: new Date().toISOString() } }); // live
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEarnEnabled: true, twitchEarnPerMessage: 5 })),
+    });
+    const { ws } = await setupEconomyChannel({ economyService });
+
+    ws.emit(
+      'notification',
+      notificationFrame({
+        chatter_user_id: 'viewer-42',
+        chatter_user_login: 'a_regular_viewer',
+        chatter_user_name: 'ARegularViewer',
+        message: { text: 'hey everyone' },
+      }),
+    );
+    await flush();
+
+    expect(economyService.credit).toHaveBeenCalledWith('guild-1', 'TWITCH', 'viewer-42', 5, 'twitch_chat_earn', 'ARegularViewer');
+  });
+
+  it('credits nothing when twitchEarnEnabled is off, even though twitchEnabled is on', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { startedAt: new Date().toISOString() } }); // live
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEnabled: true, twitchEarnEnabled: false })),
+    });
+    const { ws } = await setupEconomyChannel({ economyService });
+
+    ws.emit('notification', notificationFrame({ message: { text: 'chatting away' } }));
+    await flush();
+
+    expect(economyService.credit).not.toHaveBeenCalled();
+  });
+
+  it('credits a live, eligible, non-command chat message exactly once, silently (no chat reply)', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { startedAt: new Date().toISOString() } }); // live
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEarnEnabled: true, twitchEarnPerMessage: 7 })),
+    });
+    const { ws, ctx } = await setupEconomyChannel({ economyService });
+
+    ws.emit('notification', notificationFrame({ message: { text: 'gg well played' } }));
+    await flush();
+
+    expect(economyService.credit).toHaveBeenCalledWith('guild-1', 'TWITCH', 'viewer-1', 7, 'twitch_chat_earn', 'ViewerOne');
+    expect(mocks.sendChatMessage).not.toHaveBeenCalled();
+    void ctx;
+  });
+
+  it('per-viewer earn cooldown blocks a second credit for the same viewer within the window', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { startedAt: new Date().toISOString() } }); // live
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEarnEnabled: true, twitchEarnCooldownSeconds: 3600 })),
+    });
+    const { ws } = await setupEconomyChannel({ economyService });
+
+    ws.emit('notification', notificationFrame({ message: { text: 'first message' } }));
+    await flush();
+    ws.emit('notification', notificationFrame({ message: { text: 'second message, still on cooldown' } }));
+    await flush();
+
+    expect(economyService.credit).toHaveBeenCalledTimes(1);
+  });
+
+  it('liveness is cached: many messages across viewers in one minute cost exactly one getStream call', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { startedAt: new Date().toISOString() } }); // live
+    const economyService = makeEconomyService({
+      getConfig: vi.fn(async () => makeEconomyConfig({ twitchEarnEnabled: true })),
+    });
+    const { ws } = await setupEconomyChannel({ economyService });
+
+    for (let i = 0; i < 5; i++) {
+      ws.emit(
+        'notification',
+        notificationFrame({ chatter_user_id: `viewer-${i}`, chatter_user_name: `Viewer${i}`, message: { text: `message ${i}` } }),
+      );
+      await flush();
+    }
+
+    expect(mocks.getStream).toHaveBeenCalledTimes(1);
+    expect(economyService.credit).toHaveBeenCalledTimes(5);
   });
 });

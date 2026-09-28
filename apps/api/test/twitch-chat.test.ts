@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decryptSecret, encryptSecret, env, redisKey } from '@pavisie/core';
+import { TWITCH_CHAT_RESERVED_COMMAND_NAMES } from '@pavisie/types/integrations';
 import type { PrismaStubOverrides } from '@pavisie/plugins/sdk/testing';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
@@ -931,11 +932,11 @@ describe('commands CRUD', () => {
     await app.close();
   });
 
-  it('rejects a reserved built-in command name (400)', async () => {
+  it('rejects a reserved built-in or economy command name (400)', async () => {
     const fixture = fixtureWithChannel();
     const { app, cookieHeader, csrfToken } = await setupAuthedApp(fixture.overrides);
 
-    for (const name of ['commands', 'uptime', 'title']) {
+    for (const name of TWITCH_CHAT_RESERVED_COMMAND_NAMES) {
       const res = await app.inject({
         method: 'POST',
         url: `/guilds/${GUILD_ID}/integrations/twitch-chat/channels/chan1/commands`,

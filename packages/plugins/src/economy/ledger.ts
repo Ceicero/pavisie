@@ -233,6 +233,55 @@ export async function credit(
   return { ok: true, newBalance: result };
 }
 
+export interface LeaderboardEntry {
+  userId: string;
+  platform: EconomyPlatform;
+  displayName: string | null;
+  earned: bigint;
+}
+
+/**
+ * Top wallets on `platform` ranked by lifetime earned (sum of `EARNED_TRANSACTION_TYPES` transactions) —
+ * shared by `/economy leaderboard platform:<x>` (commands/economy.ts) and the Twitch chat `!top` command
+ * (integrations/twitch-chat/economy-commands.ts) so this ranking query lives in exactly one place.
+ */
+export async function getPlatformLeaderboard(
+  prisma: PrismaClient,
+  guildId: string,
+  platform: EconomyPlatform,
+  limit: number,
+): Promise<LeaderboardEntry[]> {
+  const rows = await prisma.economyTransaction.groupBy({
+    by: ['accountId'],
+    where: {
+      guildId,
+      platform,
+      accountId: { not: null },
+      type: { in: [...EARNED_TRANSACTION_TYPES] },
+    },
+    _sum: { amount: true },
+    orderBy: { _sum: { amount: 'desc' } },
+    take: limit,
+  });
+
+  const accountIds = rows.map((r) => r.accountId).filter((id): id is string => Boolean(id));
+  const accounts = await prisma.economyAccount.findMany({ where: { id: { in: accountIds } } });
+  const accountMap = new Map(accounts.map((a) => [a.id, a]));
+
+  return rows
+    .map((row): LeaderboardEntry | null => {
+      const account = accountMap.get(row.accountId!);
+      if (!account) return null;
+      return {
+        userId: account.userId,
+        platform: account.platform as EconomyPlatform,
+        displayName: account.displayName ?? null,
+        earned: row._sum.amount ?? 0n,
+      };
+    })
+    .filter((row): row is LeaderboardEntry => row !== null);
+}
+
 export type AdminAdjustResult = { ok: true; newBalance: bigint } | { ok: false; reason: 'would_go_negative' };
 
 /**

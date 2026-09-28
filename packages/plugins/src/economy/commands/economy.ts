@@ -16,8 +16,8 @@ import {
 import {
   type EconomyPlatform,
   type WalletKey,
-  EARNED_TRANSACTION_TYPES,
   getOrCreateWallet,
+  getPlatformLeaderboard,
   claimDaily,
   give as ledgerGive,
   adminAdjust as ledgerAdminAdjust,
@@ -110,6 +110,42 @@ const data = new SlashCommandBuilder()
           .setDescription('Maximum /economy give amount')
           .setRequired(false)
           .setMinValue(1),
+      )
+      .addBooleanOption((opt) =>
+        opt
+          .setName('twitch-enabled')
+          .setDescription('Turn on !balance/!bal/!daily/!give/!top in the linked Twitch chat')
+          .setRequired(false),
+      )
+      .addBooleanOption((opt) =>
+        opt
+          .setName('twitch-earn-enabled')
+          .setDescription('Award currency for chatting on Twitch while the stream is live')
+          .setRequired(false),
+      )
+      .addIntegerOption((opt) =>
+        opt
+          .setName('twitch-earn-per-message')
+          .setDescription('Currency earned per eligible Twitch chat message')
+          .setRequired(false)
+          .setMinValue(1)
+          .setMaxValue(1000),
+      )
+      .addIntegerOption((opt) =>
+        opt
+          .setName('twitch-earn-cooldown-seconds')
+          .setDescription('Seconds between earn credits for the same Twitch viewer')
+          .setRequired(false)
+          .setMinValue(10)
+          .setMaxValue(3600),
+      )
+      .addIntegerOption((opt) =>
+        opt
+          .setName('twitch-earn-daily-cap')
+          .setDescription('Max currency a Twitch viewer can earn from chat per UTC day (0 = no earning)')
+          .setRequired(false)
+          .setMinValue(0)
+          .setMaxValue(1_000_000),
       ),
   )
   .addSubcommandGroup((group) =>
@@ -271,40 +307,18 @@ async function handleLeaderboard(c: CommandContext): Promise<void> {
     const platform: EconomyPlatform = platformOption === 'discord' ? 'DISCORD' : 'TWITCH';
     const titleKey = platformOption === 'discord' ? 'leaderboardDiscordTitle' : 'leaderboardTwitchTitle';
 
-    const rows = await c.ctx.prisma.economyTransaction.groupBy({
-      by: ['accountId'],
-      where: {
-        guildId: c.guildId,
-        platform,
-        accountId: { not: null },
-        type: { in: [...EARNED_TRANSACTION_TYPES] },
-      },
-      _sum: { amount: true },
-      orderBy: { _sum: { amount: 'desc' } },
-      take: 10,
-    });
-
-    // Fetch the account details for each row
-    const accountIds = rows.map((r) => r.accountId).filter(Boolean) as string[];
-    const accounts = await c.ctx.prisma.economyAccount.findMany({
-      where: { id: { in: accountIds } },
-    });
-    const accountMap = new Map(accounts.map((a) => [a.id, a]));
+    const rows = await getPlatformLeaderboard(c.ctx.prisma, c.guildId, platform, 10);
 
     const lines = rows.map((row, i) => {
-      const account = accountMap.get(row.accountId!);
-      if (!account) return null;
-      const amount = row._sum.amount || 0n;
       const userStr =
-        account.platform === 'TWITCH'
-          ? `${escapeMarkdown(account.displayName || 'Twitch viewer')} (Twitch)`
-          : `<@${account.userId}>`;
-      return `**${i + 1}.** ${userStr} — ${formatCurrency(amount, config.currencySymbol)}`;
+        row.platform === 'TWITCH'
+          ? `${escapeMarkdown(row.displayName || 'Twitch viewer')} (Twitch)`
+          : `<@${row.userId}>`;
+      return `**${i + 1}.** ${userStr} — ${formatCurrency(row.earned, config.currencySymbol)}`;
     });
 
-    const filteredLines = lines.filter((line) => line !== null) as string[];
     await c.interaction.reply({
-      embeds: [listEmbed(c.t(titleKey, { platform: platformOption }), filteredLines)],
+      embeds: [listEmbed(c.t(titleKey, { platform: platformOption }), lines)],
       ephemeral: true,
     });
   }
@@ -319,12 +333,22 @@ async function handleConfig(c: CommandContext): Promise<void> {
   const dailyMax = interaction.options.getInteger('daily-max');
   const giveMin = interaction.options.getInteger('give-min');
   const giveMax = interaction.options.getInteger('give-max');
+  const twitchEnabled = interaction.options.getBoolean('twitch-enabled');
+  const twitchEarnEnabled = interaction.options.getBoolean('twitch-earn-enabled');
+  const twitchEarnPerMessage = interaction.options.getInteger('twitch-earn-per-message');
+  const twitchEarnCooldownSeconds = interaction.options.getInteger('twitch-earn-cooldown-seconds');
+  const twitchEarnDailyCap = interaction.options.getInteger('twitch-earn-daily-cap');
   if (currencyName !== null) patch.currencyName = currencyName;
   if (currencySymbol !== null) patch.currencySymbol = currencySymbol;
   if (dailyMin !== null) patch.dailyMinAmount = dailyMin;
   if (dailyMax !== null) patch.dailyMaxAmount = dailyMax;
   if (giveMin !== null) patch.giveMinAmount = giveMin;
   if (giveMax !== null) patch.giveMaxAmount = giveMax;
+  if (twitchEnabled !== null) patch.twitchEnabled = twitchEnabled;
+  if (twitchEarnEnabled !== null) patch.twitchEarnEnabled = twitchEarnEnabled;
+  if (twitchEarnPerMessage !== null) patch.twitchEarnPerMessage = twitchEarnPerMessage;
+  if (twitchEarnCooldownSeconds !== null) patch.twitchEarnCooldownSeconds = twitchEarnCooldownSeconds;
+  if (twitchEarnDailyCap !== null) patch.twitchEarnDailyCap = twitchEarnDailyCap;
 
   const config =
     Object.keys(patch).length > 0
@@ -339,6 +363,12 @@ async function handleConfig(c: CommandContext): Promise<void> {
           `Currency: **${config.currencyName}** (${config.currencySymbol})`,
           `Daily reward: ${config.dailyMinAmount}-${config.dailyMaxAmount} (+streak bonus, ${config.streakBonusPerDay}/day up to ${config.streakBonusMax})`,
           `Give limits: ${config.giveMinAmount}-${config.giveMaxAmount}`,
+          `Twitch chat commands: ${config.twitchEnabled ? 'on' : 'off'}`,
+          `Twitch chat earning: ${
+            config.twitchEarnEnabled
+              ? `on — ${config.twitchEarnPerMessage}/message, ${config.twitchEarnCooldownSeconds}s cooldown, ${config.twitchEarnDailyCap}/day cap`
+              : 'off'
+          }`,
         ].join('\n'),
       ),
     ],

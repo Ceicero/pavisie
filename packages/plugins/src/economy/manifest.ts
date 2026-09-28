@@ -10,6 +10,11 @@ export const configSchema = z.object({
   streakBonusMax: z.number().int().min(0).max(1_000_000).default(200),
   giveMinAmount: z.number().int().min(1).max(1_000_000_000).default(1),
   giveMaxAmount: z.number().int().min(1).max(1_000_000_000).default(100_000),
+  twitchEnabled: z.boolean().default(false),
+  twitchEarnEnabled: z.boolean().default(false),
+  twitchEarnPerMessage: z.number().int().min(1).max(1000).default(5),
+  twitchEarnCooldownSeconds: z.number().int().min(10).max(3600).default(60),
+  twitchEarnDailyCap: z.number().int().min(0).max(1_000_000).default(200),
 });
 
 export type EconomyConfig = z.infer<typeof configSchema>;

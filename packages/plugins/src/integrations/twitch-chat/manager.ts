@@ -30,10 +30,13 @@ import {
   getBotIdentityRow,
   getChannelInfo,
   getStream,
+  getUserByLogin,
   pruneSendThrottle,
   sendChatMessage,
 } from './helix';
 import { CommandCooldowns, handleChatMessage } from './engine';
+import { handleEconomyChatCommand, type EconomyCommandResult } from './economy-commands';
+import { earnCooldownKey, isExcludedChatBotLogin, reserveDailyEarnBudget } from './economy-earn';
 import { RewardCooldowns, matchRewardActions, type RewardAction } from './rewards';
 import { synthesizeTts } from './tts';
 import { formatTwitchToDiscord, toBridgeWebhookUsername } from './bridge-format';
@@ -59,6 +62,9 @@ const NO_CHANNELS_IDLE_REASON = 'no linked Twitch channels yet';
  * `channel:read:redemptions` — surfaced in the dashboard and `/twitch status` rather than failing silently. */
 const REWARDS_SCOPE_MISSING_ERROR =
   'Channel-point rewards are on, but this channel needs to be re-linked to grant channel-point redemption permission (channel:read:redemptions).';
+/** How long a `getStream` liveness result is trusted for the Twitch chat-earning gate before it's re-checked —
+ * keeps a busy chat from costing one Helix call per message (ARCHITECTURE.md §18b/§19a). */
+const LIVENESS_CACHE_TTL_MS = 60_000;
 
 type SubscriptionKind = 'chat' | 'rewards';
 
@@ -85,6 +91,10 @@ interface ChannelCacheEntry {
 interface RawChatMessageEvent {
   broadcaster_user_id: string;
   chatter_user_id: string;
+  /** Chatter's Twitch LOGIN (lowercase, stable) — distinct from `chatter_user_name` (display name, which can
+   * carry different casing/charset). Used only to match `EXCLUDED_CHAT_BOT_LOGINS` for the chat-earning gate
+   * (`tryEconomyEarn`); never logged. */
+  chatter_user_login?: string;
   chatter_user_name: string;
   message?: { text?: string };
   badges?: { set_id: string }[];
@@ -148,6 +158,10 @@ export class TwitchChatManager {
    * client per message — see `relayTwitchToDiscordIfBridged`'s and `runBridgeReconcile`'s doc comments for the
    * populate/invalidate points. Module-instance-lifetime, not persisted. */
   private readonly bridgeWebhookClients = new Map<string, WebhookClient>();
+  /** Twitch chat earning's liveness gate: one cached `getStream` result per broadcaster user id, refreshed at
+   * most every `LIVENESS_CACHE_TTL_MS` (see `isChannelLive`) so a busy chat costs at most one Helix call per
+   * minute rather than one per message. */
+  private readonly livenessCache = new Map<string, { isLive: boolean; fetchedAtMs: number }>();
 
   constructor(private readonly wsCtor: WebSocketConstructorLike = defaultWebSocketConstructor) {}
 
@@ -562,6 +576,7 @@ export class TwitchChatManager {
     if (kind === 'chat') {
       this.cooldowns.pruneChannel(channelId);
       pruneSendThrottle(broadcasterUserId);
+      this.livenessCache.delete(broadcasterUserId);
     } else {
       this.rewardCooldowns.pruneChannel(channelId);
     }
@@ -739,43 +754,174 @@ export class TwitchChatManager {
     const cached = this.channelCache.get(channelId);
     if (!cached) return;
 
-    const reply = await handleChatMessage({
-      botUserId: this.botUserId ?? '',
-      channel: {
-        id: cached.channel.id,
-        commandPrefix: cached.channel.commandPrefix,
-        broadcasterLogin: cached.channel.broadcasterLogin,
-        broadcasterUserId: cached.channel.broadcasterUserId,
-      },
-      commands: cached.commands,
-      event: {
-        chatterUserId: event.chatter_user_id,
-        chatterDisplayName: event.chatter_user_name,
-        messageText: event.message?.text ?? '',
-        badgeSetIds: (event.badges ?? []).map((b) => b.set_id),
-      },
-      cooldowns: this.cooldowns,
-      helix: {
-        getStream: (id) => getStream(ctx, id),
-        getChannelInfo: (id) => getChannelInfo(ctx, id),
-      },
-    });
+    const chatEvent = {
+      chatterUserId: event.chatter_user_id,
+      chatterDisplayName: event.chatter_user_name,
+      messageText: event.message?.text ?? '',
+    };
 
-    if (reply) {
-      await sendChatMessage(ctx, cached.channel.broadcasterUserId, reply);
+    // Self-ignore, centralized: neither economy commands, economy earning, nor the custom-command engine ever
+    // run against the bot's own messages (the engine also self-checks internally, but economy handling lives
+    // entirely outside it, so this guard is the one place that covers all three).
+    if (chatEvent.chatterUserId !== this.botUserId) {
+      const prefix = cached.channel.commandPrefix;
+      const isCommandAttempt = Boolean(prefix) && chatEvent.messageText.startsWith(prefix);
+
+      let reply: string | null = null;
+      if (isCommandAttempt) {
+        // Economy commands are tried FIRST, before the engine — see `tryEconomyCommand`'s doc comment for the
+        // precedence rules (an existing custom command with a reserved name always wins).
+        const economyResult = await this.tryEconomyCommand(ctx, cached, chatEvent).catch((err: unknown) => {
+          ctx.logger.warn({ err }, 'integrations/twitch-chat: economy command handling threw');
+          return { handled: false } as const;
+        });
+
+        if (economyResult.handled) {
+          reply = economyResult.reply;
+        } else {
+          reply = await handleChatMessage({
+            botUserId: this.botUserId ?? '',
+            channel: {
+              id: cached.channel.id,
+              commandPrefix: cached.channel.commandPrefix,
+              broadcasterLogin: cached.channel.broadcasterLogin,
+              broadcasterUserId: cached.channel.broadcasterUserId,
+            },
+            commands: cached.commands,
+            event: { ...chatEvent, badgeSetIds: (event.badges ?? []).map((b) => b.set_id) },
+            cooldowns: this.cooldowns,
+            helix: {
+              getStream: (id) => getStream(ctx, id),
+              getChannelInfo: (id) => getChannelInfo(ctx, id),
+            },
+          });
+        }
+      } else {
+        // Only a genuine (non-command) chat message can earn currency. `chatterLogin` is carried separately
+        // from `chatEvent` (rather than added to it) so it never leaks into the engine call above, which is
+        // typed against `ChatMessageEvent` and has no such field.
+        await this.tryEconomyEarn(ctx, cached, { ...chatEvent, chatterLogin: event.chatter_user_login ?? '' }).catch(
+          (err: unknown) => {
+            ctx.logger.error({ err }, 'integrations/twitch-chat: economy earn handling threw');
+          },
+        );
+      }
+
+      if (reply) {
+        await sendChatMessage(ctx, cached.channel.broadcasterUserId, reply);
+      }
     }
 
     // The method itself already catches its own errors internally (see its doc comment) — this outer catch is
     // just the same defensive belt-and-suspenders style already used elsewhere in this file (e.g.
     // `handleNotification`'s dispatch): a relay failure must never affect the command-reply path above, or
     // vice versa.
-    await this.relayTwitchToDiscordIfBridged(ctx, cached.channel, {
-      chatterUserId: event.chatter_user_id,
-      chatterDisplayName: event.chatter_user_name,
-      messageText: event.message?.text ?? '',
-    }).catch((err: unknown) => {
+    await this.relayTwitchToDiscordIfBridged(ctx, cached.channel, chatEvent).catch((err: unknown) => {
       ctx.logger.error({ err }, 'integrations/twitch-chat: bridge relay threw');
     });
+  }
+
+  /** Routes one Twitch chat message to a reserved economy command (!balance/!bal/!daily/!give/!top), if
+   * eligible. Delegates all parsing/gating/dispatch to the pure `handleEconomyChatCommand`
+   * (economy-commands.ts) — this method's only job is resolving the ctx-backed dependencies that function
+   * needs: whether the `economy` plugin is enabled for this guild, the registered `economy` service, this
+   * guild's economy config, and this channel's currently-enabled custom command names (so an existing custom
+   * command with a reserved name still wins). Returns `{ handled: false }` whenever `economy` is
+   * disabled/unavailable/unconfigured, so the caller always falls through to the engine in that case. */
+  private async tryEconomyCommand(
+    ctx: PluginContext,
+    cached: ChannelCacheEntry,
+    event: { chatterUserId: string; chatterDisplayName: string; messageText: string },
+  ): Promise<EconomyCommandResult> {
+    const economyEnabled = await ctx.isEnabled(cached.channel.guildId, 'economy');
+    const economyService = ctx.services.get('economy');
+    if (!economyEnabled || !economyService) return { handled: false };
+
+    const config = await economyService.getConfig(cached.channel.guildId).catch(() => null);
+    if (!config) return { handled: false };
+
+    // `cached.commands` is already filtered to `enabled: true` rows (see `refreshChannelCache`'s query).
+    const customCommandNames = new Set(cached.commands.map((c) => c.name));
+
+    return handleEconomyChatCommand({
+      event,
+      commandPrefix: cached.channel.commandPrefix,
+      channelId: cached.channel.id,
+      guildId: cached.channel.guildId,
+      customCommandNames,
+      economyEnabled,
+      config,
+      economyService,
+      botTwitchUserId: this.botUserId,
+      helix: { getUserByLogin: (login) => getUserByLogin(ctx, login) },
+      cooldowns: this.cooldowns,
+    });
+  }
+
+  /** Twitch chat earning (ARCHITECTURE.md §18b/§19a): credits `twitchEarnPerMessage` (capped by the viewer's
+   * remaining daily budget) to a viewer's TWITCH wallet for one eligible non-command chat message while the
+   * channel is live — silently (no chat reply), never logged, and never throws into the caller (every awaited
+   * step here is itself best-effort; the caller's own `.catch` is still the last line of defense). */
+  private async tryEconomyEarn(
+    ctx: PluginContext,
+    cached: ChannelCacheEntry,
+    event: { chatterUserId: string; chatterDisplayName: string; chatterLogin: string },
+  ): Promise<void> {
+    // The broadcaster farming currency from their own channel, and well-known third-party chat bots (Nightbot,
+    // StreamElements, etc. — they post automated messages continuously all stream, which would otherwise max
+    // the daily cap every stream and dominate the leaderboard) never earn. Commands stay usable by everyone —
+    // this check is earning-only, checked first (cheap, synchronous) before any async/Redis work.
+    if (event.chatterUserId === cached.channel.broadcasterUserId) return;
+    if (isExcludedChatBotLogin(event.chatterLogin)) return;
+
+    const economyEnabled = await ctx.isEnabled(cached.channel.guildId, 'economy');
+    if (!economyEnabled) return;
+    const economyService = ctx.services.get('economy');
+    if (!economyService) return;
+
+    const config = await economyService.getConfig(cached.channel.guildId).catch(() => null);
+    if (!config || !config.twitchEnabled || !config.twitchEarnEnabled) return;
+
+    const now = Date.now();
+    const isLive = await this.isChannelLive(ctx, cached.channel.broadcasterUserId, now);
+    if (!isLive) return;
+
+    const cooldownAcquired = await ctx.redis
+      .set(earnCooldownKey(cached.channel.guildId, event.chatterUserId), '1', 'EX', config.twitchEarnCooldownSeconds, 'NX')
+      .catch(() => null);
+    if (cooldownAcquired !== 'OK') return;
+
+    const creditAmount = await reserveDailyEarnBudget(
+      ctx.redis,
+      cached.channel.guildId,
+      event.chatterUserId,
+      config.twitchEarnPerMessage,
+      config.twitchEarnDailyCap,
+    );
+    if (creditAmount <= 0) return;
+
+    await economyService.credit(
+      cached.channel.guildId,
+      'TWITCH',
+      event.chatterUserId,
+      creditAmount,
+      'twitch_chat_earn',
+      event.chatterDisplayName,
+    );
+  }
+
+  /** Whether `broadcasterUserId` is currently live, per a `getStream` lookup cached for `LIVENESS_CACHE_TTL_MS`
+   * — a busy chat costs at most one Helix call per minute, not one per message. A failed lookup is cached and
+   * treated as "not live" (same "don't assert something that might be false" discipline `getStream`'s own doc
+   * comment describes), so a Helix outage doesn't cost one call per message either. */
+  private async isChannelLive(ctx: PluginContext, broadcasterUserId: string, now: number): Promise<boolean> {
+    const cached = this.livenessCache.get(broadcasterUserId);
+    if (cached && now - cached.fetchedAtMs < LIVENESS_CACHE_TTL_MS) return cached.isLive;
+
+    const result = await getStream(ctx, broadcasterUserId);
+    const isLive = result.ok && result.value !== null;
+    this.livenessCache.set(broadcasterUserId, { isLive, fetchedAtMs: now });
+    return isLive;
   }
 
   /** Discord <-> Twitch chat bridge, Twitch -> Discord direction: relays one chat message into the bridge

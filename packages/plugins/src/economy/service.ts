@@ -103,3 +103,119 @@ export function validateGive(input: ValidateGiveInput): GiveValidationResult {
 export function formatCurrency(amount: bigint, symbol: string): string {
   return `${amount.toLocaleString('en-US')} ${symbol}`;
 }
+
+// Service implementation for cross-plugin access (ARCHITECTURE.md §7.5).
+import type { PrismaClient } from '@pavisie/database';
+import type { EconomyService, EconomyGetConfigResult, EconomyWalletInfo } from '../sdk';
+import type { EconomyConfig } from './manifest';
+import {
+  type ClaimDailyResult,
+  type GiveResult,
+  type CreditResult,
+  getOrCreateWallet,
+  getPlatformLeaderboard,
+  claimDaily as ledgerClaimDaily,
+  give as ledgerGive,
+  credit as ledgerCredit,
+} from './ledger';
+
+export class EconomyServiceImpl implements EconomyService {
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly getGuildConfig: (guildId: string) => Promise<EconomyConfig>,
+  ) {}
+
+  async getConfig(guildId: string): Promise<EconomyGetConfigResult> {
+    const config = await this.getGuildConfig(guildId);
+    return {
+      currencyName: config.currencyName,
+      currencySymbol: config.currencySymbol,
+      twitchEnabled: config.twitchEnabled,
+      twitchEarnEnabled: config.twitchEarnEnabled,
+      twitchEarnPerMessage: config.twitchEarnPerMessage,
+      twitchEarnCooldownSeconds: config.twitchEarnCooldownSeconds,
+      twitchEarnDailyCap: config.twitchEarnDailyCap,
+    };
+  }
+
+  async getOrCreateWallet(
+    guildId: string,
+    platform: 'DISCORD' | 'TWITCH',
+    userId: string,
+    displayName?: string,
+  ): Promise<EconomyWalletInfo> {
+    const wallet = await getOrCreateWallet(this.prisma, { guildId, platform, userId }, displayName);
+    return {
+      balance: wallet.balance,
+      lastDailyAt: wallet.lastDailyAt,
+    };
+  }
+
+  async claimDaily(guildId: string, platform: 'DISCORD' | 'TWITCH', userId: string): Promise<ClaimDailyResult> {
+    const config = await this.getGuildConfig(guildId);
+    const result = await ledgerClaimDaily(
+      this.prisma,
+      { guildId, platform, userId },
+      {
+        dailyMinAmount: config.dailyMinAmount,
+        dailyMaxAmount: config.dailyMaxAmount,
+        streakBonusPerDay: config.streakBonusPerDay,
+        streakBonusMax: config.streakBonusMax,
+      },
+      new Date(),
+      Math.random,
+    );
+    return result;
+  }
+
+  /** Transfers between two same-platform wallets. `toUserId` must already be resolved (a Discord snowflake, or
+   * a Twitch numeric user id resolved from a login via Helix by the caller) — this service never resolves a
+   * login itself. */
+  async give(
+    guildId: string,
+    fromUserId: string,
+    toUserId: string,
+    amount: number,
+    platform: 'DISCORD' | 'TWITCH',
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const config = await this.getGuildConfig(guildId);
+    const result: GiveResult = await ledgerGive(
+      this.prisma,
+      { guildId, platform, userId: fromUserId },
+      { guildId, platform, userId: toUserId },
+      amount,
+      { giveMinAmount: config.giveMinAmount, giveMaxAmount: config.giveMaxAmount },
+    );
+    if (result.ok) return { ok: true };
+    return { ok: false, reason: result.reason };
+  }
+
+  async credit(
+    guildId: string,
+    platform: 'DISCORD' | 'TWITCH',
+    userId: string,
+    amount: number,
+    type: string,
+    displayName?: string,
+  ): Promise<{ ok: true; newBalance: bigint } | { ok: false; reason: string }> {
+    const result: CreditResult = await ledgerCredit(this.prisma, { guildId, platform, userId }, amount, type);
+    if (result.ok) {
+      // Update displayName for Twitch wallets so leaderboards stay current.
+      if (platform === 'TWITCH' && displayName) {
+        await getOrCreateWallet(this.prisma, { guildId, platform, userId }, displayName);
+      }
+      return { ok: true, newBalance: result.newBalance };
+    }
+    return { ok: false, reason: result.reason };
+  }
+
+  /** Top TWITCH wallets by lifetime earned — shares `ledger.ts`'s `getPlatformLeaderboard` with
+   * `/economy leaderboard platform:twitch` (commands/economy.ts) rather than duplicating the query. */
+  async getLeaderboard(
+    guildId: string,
+    limit: number = 5,
+  ): Promise<Array<{ displayName: string; earned: bigint }>> {
+    const rows = await getPlatformLeaderboard(this.prisma, guildId, 'TWITCH', limit);
+    return rows.map((row) => ({ displayName: row.displayName ?? 'Twitch viewer', earned: row.earned }));
+  }
+}
