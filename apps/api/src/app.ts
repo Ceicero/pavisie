@@ -60,6 +60,7 @@ import overlayRoutes from './routes/overlay';
 import developerReportsRoutes from './routes/developer-reports';
 import ownerMetricsRoutes from './routes/owner-metrics';
 import twitchBotRoutes from './routes/twitch-bot';
+import twitchExtRoutes from './routes/twitch-ext';
 
 export interface BuildAppDeps {
   prisma?: PrismaClient;
@@ -340,6 +341,10 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   await app.register(developerReportsRoutes, { prefix: '/owner' });
   await app.register(ownerMetricsRoutes, { prefix: '/owner' });
   await app.register(twitchBotRoutes, { prefix: '/owner' });
+  // Its own encapsulation context (a plain async function, not `fastify-plugin`-wrapped) so the manual CORS
+  // hook it registers on itself (see routes/twitch-ext.ts) stays scoped to `/twitch-ext/*` and never widens
+  // the dashboard-only `cors` registered above for any other route.
+  await app.register(twitchExtRoutes, { prefix: '/twitch-ext' });
 
   app.addHook('onClose', async () => {
     if (!deps.queues) {

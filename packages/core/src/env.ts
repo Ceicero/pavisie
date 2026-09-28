@@ -114,6 +114,12 @@ const envSchema = z.object({
   TWITCH_CLIENT_ID: z.string().optional(),
   TWITCH_CLIENT_SECRET: z.string().optional(),
   TWITCH_EVENTSUB_SECRET: z.string().optional(),
+  // Twitch Extension (Agis panel, ARCHITECTURE.md §19d) — a DIFFERENT credential pair from the chat-bot
+  // TWITCH_CLIENT_ID/SECRET above: these belong to the Extension itself (Twitch dev console → Extensions →
+  // your extension → Extension Secrets), not to a Twitch application. Both optional; every /twitch-ext route
+  // 503s when either is unset.
+  TWITCH_EXTENSION_CLIENT_ID: z.string().optional(),
+  TWITCH_EXTENSION_SECRET: z.string().optional(),
   YOUTUBE_API_KEY: z.string().optional(),
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
   REDDIT_CLIENT_ID: z.string().optional(),

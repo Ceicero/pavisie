@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=318, initial-scale=1" />
+<title>Agis</title>
+<link rel="stylesheet" href="panel.css" />
+</head>
+<body data-theme="dark">
+<div id="app" class="panel">
+
+  <div id="state-loading" class="state">
+    <p class="muted">Loading…</p>
+  </div>
+
+  <div id="state-disabled" class="state hidden">
+    <p class="muted">Agis isn't enabled for this channel yet.</p>
+  </div>
+
+  <div id="state-main" class="state hidden">
+    <header class="panel-header">
+      <span class="currency-name" id="currency-name">Agis</span>
+    </header>
+
+    <section id="balance-shown" class="balance-section hidden">
+      <div class="balance-row">
+        <span class="balance-value" id="balance-value">0</span>
+        <span class="balance-symbol" id="balance-symbol"></span>
+      </div>
+      <div class="streak" id="streak-value"></div>
+      <button id="claim-button" type="button" class="claim-button">Claim daily</button>
+      <div id="cooldown" class="cooldown hidden"></div>
+    </section>
+
+    <section id="identity-gate" class="identity-gate hidden">
+      <p class="muted">Share your Twitch identity to see your balance.</p>
+      <button id="share-identity-button" type="button" class="claim-button">Share identity</button>
+    </section>
+
+    <section class="leaderboard">
+      <h2 class="leaderboard-title">Top earners</h2>
+      <ol id="leaderboard-list" class="leaderboard-list"></ol>
+    </section>
+  </div>
+
+</div>
+<script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+<script type="module" src="panel.js"></script>
+</body>
+</html>

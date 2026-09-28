@@ -50,18 +50,6 @@ importers:
 
   apps/api:
     dependencies:
-      '@pavisie/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@pavisie/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      '@pavisie/plugins':
-        specifier: workspace:*
-        version: link:../../packages/plugins
-      '@pavisie/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       '@fastify/cookie':
         specifier: ^11.0.1
         version: 11.1.2
@@ -83,6 +71,18 @@ importers:
       '@fastify/swagger-ui':
         specifier: ^5.2.0
         version: 5.2.6
+      '@pavisie/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@pavisie/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@pavisie/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
+      '@pavisie/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       bullmq:
         specifier: ^5.34.0
         version: 5.81.3
@@ -233,6 +233,18 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@22.20.1)(jiti@1.21.7)(jsdom@30.0.1)(tsx@4.23.12)(yaml@2.9.0)
+
+  apps/twitch-extension:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(jsdom@30.0.1)(tsx@4.23.12)(yaml@2.9.0)
 
   apps/web:
     dependencies:

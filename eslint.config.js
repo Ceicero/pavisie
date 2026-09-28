@@ -41,7 +41,14 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/dashboard/**/*.{ts,tsx}', 'apps/web/**/*.{ts,tsx}', 'packages/ui/**/*.{ts,tsx}'],
+    files: [
+      'apps/dashboard/**/*.{ts,tsx}',
+      'apps/web/**/*.{ts,tsx}',
+      'packages/ui/**/*.{ts,tsx}',
+      // Compiled directly to browser-loaded <script> files (Twitch Extension panel — no framework, no bundler
+      // per Twitch's review rules) rather than run through Next.js like the other browser-globals entries above.
+      'apps/twitch-extension/**/*.ts',
+    ],
     languageOptions: {
       globals: {
         ...globals.browser,

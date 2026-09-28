@@ -1152,6 +1152,83 @@ same "declare it, degrade honestly" pattern as `media`'s `MEDIA_PROVIDER` gate. 
   (`apps/bot/src/host/data-requests.ts`) and deleted with the guild's data (cascade), same as every other
   guild-scoped model.
 
+## 19d. Twitch Extension — the Agis panel (EBS in `apps/api`, front-end `apps/twitch-extension`)
+
+A Twitch panel extension shown under a streamer's video: the guild's currency name/symbol, the viewer's
+Twitch-wallet balance, a "Claim daily" button (same rules/streak as `!daily`), and the Twitch leaderboard
+(lifetime earned on Twitch, top 10). Reuses the `economy` plugin's existing per-platform wallets (§18b) — this
+is a second *client* of the same TWITCH-platform data the chat bot already reads/writes, not a new data model.
+A viewer's wallet is `{ guildId: <guild the channel is linked to>, platform: 'TWITCH', userId: <real Twitch
+user id> }`, exactly as in §18b — never linked to a Discord wallet, never linked across guilds.
+
+- **EBS routes** (`apps/api/src/routes/twitch-ext.ts`, prefix `/twitch-ext`): `GET /summary` (read-only —
+  `{ enabled, currencyName?, currencySymbol?, identityShared?, wallet?, leaderboard? }`, bigints as decimal
+  strings) and `POST /daily` (claims through the ledger, `{ ok, amount?, streak?, retryAfterMs? }`). Both 503
+  `extension_not_configured` while either `TWITCH_EXTENSION_CLIENT_ID`/`TWITCH_EXTENSION_SECRET` is unset —
+  same "declare it, degrade honestly" pattern as every other optional integration.
+- **Auth**: every request carries `Authorization: Bearer <Twitch Extension Helper JWT>`, verified HS256-only
+  (`apps/api/src/lib/twitch-ext/jwt.ts`, `verifyTwitchExtensionJwt` — a standalone, framework-free, hand-rolled
+  verifier over `node:crypto`, not a JWT library: the signing key is the extension's shared secret, base64-
+  decoded per Twitch's own spec). Rejects any `alg` other than `HS256` (including `none`) BEFORE ever comparing
+  a signature, a bad/tampered signature (constant-time `timingSafeEqual`), an expired `exp`, and any malformed
+  token — all as a generic 401 with no detail leakage (the verifier's specific rejection `reason` is for
+  logs/tests only, via `apps/api/src/lib/twitch-ext/auth.ts`'s `requireTwitchExtensionAuth`, never echoed to
+  the caller). Extracts `channel_id`, `opaque_user_id` (always present), `user_id` (present only once the
+  viewer has shared identity via `Twitch.ext.actions.requestIdShare()`), and `role`.
+- **Channel -> guild -> enablement** (`apps/api/src/lib/twitch-ext/context.ts`,
+  `resolveTwitchExtGuildContext`): `channel_id` looks up the enabled `TwitchChatChannel` row by
+  `broadcasterUserId` (a broadcaster links exactly one guild, §19a's identity model), then checks the guild's
+  `economy` plugin is enabled AND its `twitchEnabled` config flag. Any failure at any step (unlinked channel,
+  plugin disabled, `twitchEnabled` off) is `{ enabled: false }` — a normal 200, never an error — so the panel
+  shows a plain "not enabled for this channel" message instead of an error state.
+- **Never creates a wallet just for viewing**: `GET /summary` reads `EconomyAccount`/`EconomyTransaction`
+  directly (`apps/api/src/lib/twitch-ext/wallet-summary.ts`) rather than calling the ledger's
+  `getOrCreateWallet` (which upserts) — a viewer who never claims/earns/receives currency leaves no row behind
+  just from opening the panel. An absent wallet reads as a zero balance, claimable-now, streak 0. Balance
+  **writes** (`POST /daily`) go through `packages/plugins/src/economy/ledger.ts`'s `claimDaily` only, same as
+  every other economy mutation path in the codebase (CLAUDE.md: ledger.ts is the only module allowed to write a
+  balance) — the leaderboard read reuses `ledger.ts`'s existing `getPlatformLeaderboard` rather than a second
+  query.
+- **CORS**: `/twitch-ext/*` is served to `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv` — a different
+  origin than the dashboard's `@fastify/cors` registration in `app.ts` (which stays `[DASHBOARD_URL, WEB_URL]`,
+  unwidened) — with no `Access-Control-Allow-Credentials` (bearer-token auth only, no cookies ever sent).
+  Hand-rolled per-route (`twitch-ext.ts`'s own `onRequest` hook + explicit `OPTIONS` routes, each with
+  `config: { cors: false }` to opt out of the root `@fastify/cors` plugin) rather than a second
+  `@fastify/cors` registration: that plugin is wrapped with `fastify-plugin`, so a second registration's
+  auto-generated preflight route would still run the ROOT registration's hook first (parent hooks always run
+  before a child scope's) and that hook replies to every `OPTIONS` request itself before a nested instance gets
+  a turn — silently breaking the extension's preflight. See the long comment at the top of `twitch-ext.ts` for
+  the full reasoning.
+- **CSRF**: `/twitch-ext/` is in `lib/csrf.ts`'s `EXEMPT_PREFIXES` — bearer-JWT authenticated, no dashboard
+  session/cookie in play, so there is no CSRF token to check (belt-and-suspenders: `csrfProtection` already
+  no-ops on any request with no `request.session`, which a cross-origin bearer-only call always is).
+- **Rate limiting**: per `opaque_user_id` (`apps/api/src/lib/twitch-ext/auth.ts`'s `twitchExtensionRateLimitKey`,
+  wired via each route's `config.rateLimit.keyGenerator`), not per-IP — many viewers of the same stream can
+  share a broadcaster-adjacent CDN/proxy pool.
+- **Env**: `TWITCH_EXTENSION_CLIENT_ID` / `TWITCH_EXTENSION_SECRET` (`packages/core/src/env.ts`), both optional,
+  a different credential pair from `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` (those belong to the Twitch
+  *application* behind the chat bot/stream alerts; these belong to the Twitch *Extension* itself — Twitch dev
+  console -> Extensions -> your extension -> Extension Secrets). See `.env.example` and `infra/DEPLOYMENT.md` §6.
+- **Front-end** (`apps/twitch-extension`, workspace package `@pavisie/twitch-extension`): plain HTML/CSS +
+  TypeScript compiled straight to a browser-native ES module — no framework, no bundler (Twitch's review
+  rejects both a bundler-introduced pattern it can't statically verify and any third-party script host besides
+  Twitch's own `extension-files.twitch.tv/helper/v1/twitch-ext.min.js`, the one remote script this package
+  loads). `src/panel.ts`'s pure helpers (`formatCountdown`, `formatAmount`, `msUntil`) are unit-tested directly;
+  all `document`/`window`/`Twitch.ext` access is guarded behind `typeof window !== 'undefined'` so importing
+  the module under `vitest` never touches the DOM. States: loading; `enabled:false` -> "Agis isn't enabled for
+  this channel yet."; identity not shared -> the balance area is replaced with a "Share your Twitch identity"
+  button (`Twitch.ext.actions.requestIdShare()`), leaderboard still shown; normal -> balance, streak, claim
+  button (disabled with a live countdown while on cooldown), leaderboard. Text is always set via `textContent`,
+  never `innerHTML`. Brand: gold-and-black (§20), panel width fixed at 318px (Twitch's own panel constraint).
+  `scripts/build.mjs` compiles `src/*.ts` (via a dedicated `tsconfig.build.json`) and copies `public/*.{html,css}`
+  into `dist/` — exactly the files to zip and upload. `config.html` (the broadcaster-facing settings page) has
+  nothing to configure — it says setup happens in the Pavisie dashboard and links nowhere external.
+- **Review/hosting flow** (`apps/twitch-extension/README.md` has the click-by-click version): upload the zipped
+  `dist/` contents as a new Extension version in the Twitch dev console, set the Panel component's viewer path
+  to `panel.html` and config path to `config.html`, turn on **Request Identity Link**, add the API origin to
+  **Allowlist for URL Fetching Domains**, set the Extension Secret on the API's Railway env, run **Hosted Test**
+  against a real/test channel end-to-end, then submit for Twitch's review.
+
 ## 20. Brand tokens: gold-and-black
 
 The brand is gold-and-black (not monochrome — see §O): black/grey/white surfaces and structure, with a gold

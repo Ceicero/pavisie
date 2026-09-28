@@ -1,0 +1,215 @@
+/* Agis Twitch Extension panel — gold-and-black brand (ARCHITECTURE.md §20). Panel width is fixed by Twitch at
+   318px; this stylesheet assumes that width rather than trying to be responsive. `data-theme` on <body> is set
+   by panel.ts from Twitch's `onContext` theme, mirroring the dashboard's own light/dark gold-accent step-down
+   (gold-5 on dark, gold-4 on light — gold-5 fails contrast on a light background). */
+
+:root {
+  --ink-0: #050505;
+  --ink-1: #0a0a0a;
+  --ink-2: #171717;
+  --grey-3: #3f3f3f;
+  --grey-5: #a3a3a3;
+  --paper: #fafafa;
+  --gold-4: #8f5e20; /* light theme primary accent — AA on --paper */
+  --gold-5: #c7933d; /* dark theme primary accent — AAA on --ink-0 */
+  --gold-6: #eec66a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 318px;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body[data-theme="dark"] {
+  background: var(--ink-0);
+  color: var(--paper);
+}
+
+body[data-theme="light"] {
+  background: var(--paper);
+  color: var(--ink-0);
+}
+
+.panel {
+  padding: 12px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.muted {
+  color: var(--grey-5);
+  margin: 4px 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.currency-name {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+body[data-theme="dark"] .currency-name {
+  color: var(--gold-5);
+}
+
+body[data-theme="light"] .currency-name {
+  color: var(--gold-4);
+}
+
+.balance-section {
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+body[data-theme="dark"] .balance-section {
+  background: var(--ink-2);
+  border: 1px solid var(--grey-3);
+}
+
+body[data-theme="light"] .balance-section {
+  background: #f0f0f0;
+  border: 1px solid #d4d4d4;
+}
+
+.balance-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.balance-value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.balance-symbol {
+  font-size: 14px;
+}
+
+.streak {
+  min-height: 16px;
+  font-size: 11px;
+  color: var(--grey-5);
+  margin-top: 2px;
+}
+
+.claim-button {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--gold-5);
+  color: var(--ink-0);
+}
+
+body[data-theme="light"] .claim-button {
+  background: var(--gold-4);
+  color: var(--paper);
+}
+
+.claim-button:hover:not(:disabled) {
+  background: var(--gold-6);
+}
+
+.claim-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.cooldown {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--grey-5);
+  text-align: center;
+}
+
+.identity-gate {
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+body[data-theme="dark"] .identity-gate {
+  background: var(--ink-2);
+  border: 1px solid var(--grey-3);
+}
+
+body[data-theme="light"] .identity-gate {
+  background: #f0f0f0;
+  border: 1px solid #d4d4d4;
+}
+
+.leaderboard-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--grey-5);
+  margin: 0 0 6px;
+}
+
+.leaderboard-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.leaderboard-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+body[data-theme="dark"] .leaderboard-list li {
+  background: var(--ink-2);
+}
+
+body[data-theme="light"] .leaderboard-list li {
+  background: #f0f0f0;
+}
+
+.leaderboard-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.leaderboard-earned {
+  font-weight: 600;
+}
+
+body[data-theme="dark"] .leaderboard-earned {
+  color: var(--gold-5);
+}
+
+body[data-theme="light"] .leaderboard-earned {
+  color: var(--gold-4);
+}
+
+.leaderboard-empty {
+  color: var(--grey-5);
+}

@@ -6,7 +6,13 @@ const CSRF_HEADER = 'x-csrf-token';
 
 // Routes that legitimately have no session/csrf token yet when the mutating request arrives
 // (starting a login flow) or that aren't session-authenticated at all (external webhooks).
-const EXEMPT_PREFIXES = ['/webhooks/', '/verify/'];
+// `/twitch-ext/` (the Twitch Extension Backend Service, ARCHITECTURE.md §19d) is bearer-JWT authenticated —
+// there is no dashboard cookie/session in play, so there is no session csrf token to check. It's also served
+// to a different origin than the dashboard, with `credentials: false` (see routes/twitch-ext.ts's own CORS),
+// so it never carries the session cookie CSRF actually protects. Belt-and-suspenders: `csrfProtection` below
+// already no-ops on any request with no `request.session`, which a cross-origin bearer-only call always is —
+// this exemption just makes that explicit rather than relying on that fallthrough.
+const EXEMPT_PREFIXES = ['/webhooks/', '/verify/', '/twitch-ext/'];
 const EXEMPT_EXACT_PATHS = new Set(['/auth/test-login']);
 
 function isExempt(url: string): boolean {
