@@ -133,6 +133,7 @@ function channelDefaults(partial: any) {
     commandPrefix: '!',
     connectionId: null,
     overlayTokenEnc: null,
+    ttsOpenAiKeyEnc: null,
     rewardsEnabled: false,
     bridgeDiscordChannelId: null,
     bridgeDiscordToTwitch: false,
@@ -240,6 +241,8 @@ function twitchChatFixture(guildId: string = GUILD_ID) {
   const oauthTokens = new Map<string, any>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const botIdentities = new Map<string, any>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const broadcasterTokens = new Map<string, any>();
 
   const overrides: PrismaStubOverrides = {
     ...guildOverride(guildId),
@@ -250,9 +253,10 @@ function twitchChatFixture(guildId: string = GUILD_ID) {
     integrationConnection: makeModel(connections, 'conn', connectionDefaults),
     oAuthToken: makeModel(oauthTokens, 'token', tokenDefaults),
     twitchBotIdentity: makeModel(botIdentities, 'bot', botIdentityDefaults),
+    twitchBroadcasterToken: makeModel(broadcasterTokens, 'btok', tokenDefaults),
   };
 
-  return { channels, commands, timers, rewards, connections, oauthTokens, botIdentities, overrides };
+  return { channels, commands, timers, rewards, connections, oauthTokens, botIdentities, broadcasterTokens, overrides };
 }
 
 async function setupAuthedApp(overrides: PrismaStubOverrides, userId: string = USER_ID) {
@@ -2026,7 +2030,15 @@ describe('GET /integrations/twitch/callback — twitch_chat / twitch_bot purpose
     await redis.set(redisKey('oauthstate', 'integration', state), JSON.stringify(payload), 'EX', 600);
   }
 
-  it('twitch_chat: creates the connection + token and upserts a PENDING TwitchChatChannel, then redirects', async () => {
+  const CHANNEL_POINTS_TOKEN_BODY = {
+    access_token: 'new-access-token',
+    refresh_token: 'new-refresh-token',
+    expires_in: 14400,
+    token_type: 'bearer',
+    scope: ['channel:bot', 'channel:read:redemptions'],
+  };
+
+  it('twitch_chat: creates the connection, keeps the broadcaster token PER CHANNEL (not in OAuthToken) and upserts a PENDING TwitchChatChannel, then redirects', async () => {
     configureTwitchEnv();
     const fixture = twitchChatFixture();
     const { app, redis, queues } = await buildTestApp(fixture.overrides);
@@ -2037,7 +2049,7 @@ describe('GET /integrations/twitch/callback — twitch_chat / twitch_bot purpose
       userId: USER_ID,
       kind: 'twitch_chat',
     });
-    stubTwitchFetch();
+    stubTwitchFetch({ tokenBody: CHANNEL_POINTS_TOKEN_BODY });
 
     const res = await app.inject({
       method: 'GET',
@@ -2060,13 +2072,21 @@ describe('GET /integrations/twitch/callback — twitch_chat / twitch_bot purpose
     });
     expect(connection.config).toEqual({ kind: 'chat' });
 
-    expect(fixture.oauthTokens.size).toBe(1);
-    const token = [...fixture.oauthTokens.values()][0];
-    expect(token.connectionId).toBe(connection.id);
+    // The broadcaster token no longer goes into the guild-scoped OAuthToken: it lives with the CHANNEL.
+    expect(fixture.oauthTokens.size).toBe(0);
+    expect(fixture.channels.size).toBe(1);
+    const channelId = [...fixture.channels.values()][0].id;
+    expect(fixture.broadcasterTokens.size).toBe(1);
+    const token = [...fixture.broadcasterTokens.values()][0];
+    expect(token.channelId).toBe(channelId);
     expect(token.accessTokenEnc).not.toBe('new-access-token'); // stored encrypted, never plaintext
-    // Twitch's real token response sends `scope` as a JSON array (see `stubTwitchFetch`'s default), and it
-    // must land here as the same plain string[] a space-delimited-string provider would produce.
-    expect(token.scopes).toEqual(['channel:bot']);
+    expect(token.refreshTokenEnc).not.toBe('new-refresh-token');
+    expect(decryptSecret(token.accessTokenEnc)).toBe('new-access-token');
+    expect(decryptSecret(token.refreshTokenEnc)).toBe('new-refresh-token');
+    // Twitch's real token response sends `scope` as a JSON array (see `stubTwitchFetch`), and it must land as the
+    // same plain string[] a space-delimited-string provider would produce.
+    expect(token.scopes).toEqual(['channel:bot', 'channel:read:redemptions']);
+    expect(token.status).toBe('CONNECTED');
 
     expect(fixture.channels.size).toBe(1);
     const channel = [...fixture.channels.values()][0];
@@ -2150,6 +2170,71 @@ describe('GET /integrations/twitch/callback — twitch_chat / twitch_bot purpose
     // The channel now points at the new connection, not the retired one.
     expect(fixture.channels.size).toBe(1);
     expect(fixture.channels.get('chan1')?.connectionId).toBe(newConnection.id);
+    await app.close();
+  });
+
+  it('twitch_chat: a grant WITHOUT channel:read:redemptions stores no broadcaster token (useless for rewards)', async () => {
+    configureTwitchEnv();
+    const fixture = twitchChatFixture();
+    const { app, redis } = await buildTestApp(fixture.overrides);
+    const { cookieHeader } = await loginAs(app, redis, { userId: USER_ID });
+    await seedState(redis, 'state-chat-narrow', {
+      guildId: GUILD_ID,
+      provider: 'twitch',
+      userId: USER_ID,
+      kind: 'twitch_chat',
+    });
+    stubTwitchFetch(); // default grant: channel:bot only
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/integrations/twitch/callback?code=abc&state=state-chat-narrow`,
+      headers: { cookie: cookieHeader },
+    });
+
+    expect(res.statusCode).toBe(302);
+    expect(fixture.channels.size).toBe(1);
+    expect(fixture.broadcasterTokens.size).toBe(0);
+    expect(fixture.oauthTokens.size).toBe(0);
+    await app.close();
+  });
+
+  it('twitch_chat re-link: the new grant REPLACES the channel token wholesale; a narrower grant drops it', async () => {
+    configureTwitchEnv();
+    const fixture = twitchChatFixture();
+    fixture.channels.set(
+      'chan1',
+      channelDefaults({
+        id: 'chan1',
+        guildId: GUILD_ID,
+        broadcasterUserId: 'twitch-user-1',
+        broadcasterLogin: 'coolstreamer',
+        connectionId: null,
+        createdBy: USER_ID,
+      }),
+    );
+    fixture.broadcasterTokens.set(
+      'btok-old',
+      { id: 'btok-old', channelId: 'chan1', accessTokenEnc: encryptSecret('OLD-ACCESS'), refreshTokenEnc: encryptSecret('OLD-REFRESH'), scopes: ['channel:read:redemptions'], status: 'ERROR', lastError: 'dead' },
+    );
+    const { app, redis } = await buildTestApp(fixture.overrides);
+    const { cookieHeader } = await loginAs(app, redis, { userId: USER_ID });
+
+    // 1) re-link with the full grant: replaced (fresh secrets, ERROR cleared), still exactly one row for the channel.
+    await seedState(redis, 'state-relink-a', { guildId: GUILD_ID, provider: 'twitch', userId: USER_ID, kind: 'twitch_chat' });
+    stubTwitchFetch({ tokenBody: CHANNEL_POINTS_TOKEN_BODY });
+    await app.inject({ method: 'GET', url: `/integrations/twitch/callback?code=abc&state=state-relink-a`, headers: { cookie: cookieHeader } });
+    expect(fixture.broadcasterTokens.size).toBe(1);
+    const replaced = [...fixture.broadcasterTokens.values()][0];
+    expect(decryptSecret(replaced.accessTokenEnc)).toBe('new-access-token');
+    expect(decryptSecret(replaced.refreshTokenEnc)).toBe('new-refresh-token');
+    expect(replaced).toMatchObject({ channelId: 'chan1', status: 'CONNECTED', lastError: null });
+
+    // 2) re-link again with a chat-only grant: the previous (now superseded) token is dropped.
+    await seedState(redis, 'state-relink-b', { guildId: GUILD_ID, provider: 'twitch', userId: USER_ID, kind: 'twitch_chat' });
+    stubTwitchFetch();
+    await app.inject({ method: 'GET', url: `/integrations/twitch/callback?code=abc&state=state-relink-b`, headers: { cookie: cookieHeader } });
+    expect(fixture.broadcasterTokens.size).toBe(0);
     await app.close();
   });
 

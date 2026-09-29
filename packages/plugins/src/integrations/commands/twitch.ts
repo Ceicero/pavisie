@@ -577,8 +577,8 @@ async function deleteTwitchChatReward(
 /** Channel-point rewards line for `/twitch status` (channel-points spec v1): reports off/on, whether the
  * overlay browser-source URL has been generated, and — the case that must never be silent — a channel with
  * rewards turned on whose stored broadcaster token lacks `channel:read:redemptions` (never linked with the
- * scope, or the connection was replaced by a plain chat re-link). `token` is the channel's `OAuthToken` row
- * (via `connectionId`), or `null` when there is no connection/token at all — treated the same as missing scope. */
+ * scope, or the connection was replaced by a plain chat re-link). `token` is the channel's
+ * `TwitchBroadcasterToken` row, or `null` when there is none at all — treated the same as missing scope. */
 function rewardsStatusLabel(
   c: Parameters<PluginCommand['execute']>[0],
   channel: TwitchChatChannel,
@@ -605,12 +605,12 @@ async function handleStatus(c: Parameters<PluginCommand['execute']>[0]): Promise
       ]),
     ),
   );
-  // Only fetched for channels with rewards turned on — the common case (rewards off) needs no OAuthToken
+  // Only fetched for channels with rewards turned on — the common case (rewards off) needs no token
   // lookup at all, and `rewardsStatusLabel` treats a `null` token the same as a missing-scope one.
   const oauthTokens = await Promise.all(
     channels.map((channel) =>
-      channel.rewardsEnabled && channel.connectionId
-        ? c.ctx.prisma.oAuthToken.findUnique({ where: { connectionId: channel.connectionId } })
+      channel.rewardsEnabled
+        ? c.ctx.prisma.twitchBroadcasterToken.findUnique({ where: { channelId: channel.id } })
         : Promise.resolve(null),
     ),
   );
@@ -1328,10 +1328,7 @@ async function handleRewardEnable(c: Parameters<PluginCommand['execute']>[0]): P
   nudgeReconcile(c.ctx);
 
   // Check if the channel's broadcaster token has the required scope
-  const token =
-    channel.connectionId && !channel.connectionId.startsWith('_')
-      ? await c.ctx.prisma.oAuthToken.findUnique({ where: { connectionId: channel.connectionId } })
-      : null;
+  const token = await c.ctx.prisma.twitchBroadcasterToken.findUnique({ where: { channelId: channel.id } });
 
   const hasScope = token?.scopes.includes(TWITCH_REDEMPTIONS_SCOPE);
   const message = hasScope

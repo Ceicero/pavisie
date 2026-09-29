@@ -12,6 +12,11 @@ let synthesizeTts: typeof import('../twitch-chat/tts').synthesizeTts;
 const GUILD_ID = 'guild-1';
 const CHANNEL_ID = 'channel-a';
 
+/** The slice of a channel row TTS reads. Guild-linked with no channel key of its own unless overridden. */
+function guildChannel(overrides: Partial<{ guildId: string | null; ttsOpenAiKeyEnc: string | null }> = {}) {
+  return { id: CHANNEL_ID, guildId: GUILD_ID as string | null, ttsOpenAiKeyEnc: null as string | null, ...overrides };
+}
+
 beforeAll(async () => {
   process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? randomBytes(32).toString('base64');
   // The operator's platform key is set for EVERY test in this file on purpose: the headline guarantee is that
@@ -62,7 +67,7 @@ describe('synthesizeTts — bring-your-own-key billing guarantee', () => {
     // (`allowEnvKeys: true`) and no key of its own. TTS must decline rather than quietly bill the operator.
     const { ctx } = contextWith({ provider: 'openai', allowEnvKeys: true });
 
-    const result = await synthesizeTts(ctx, GUILD_ID, CHANNEL_ID, 'hello chat');
+    const result = await synthesizeTts(ctx, guildChannel(), 'hello chat');
 
     expect(result).toBeNull();
     // The strongest form of the assertion: OpenAI was never contacted at all, so no key could have been spent.
@@ -78,7 +83,7 @@ describe('synthesizeTts — bring-your-own-key billing guarantee', () => {
       apiKeyEnc: encryptSecret(guildKey),
     });
 
-    const result = await synthesizeTts(ctx, GUILD_ID, CHANNEL_ID, 'hello chat');
+    const result = await synthesizeTts(ctx, guildChannel(), 'hello chat');
 
     expect(result).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -93,14 +98,14 @@ describe('synthesizeTts — bring-your-own-key billing guarantee', () => {
   it('declines for a non-openai provider instead of trying to speak through it', async () => {
     const { ctx } = contextWith({ provider: 'anthropic', allowEnvKeys: true, apiKeyEnc: encryptSecret('sk-a') });
 
-    expect(await synthesizeTts(ctx, GUILD_ID, CHANNEL_ID, 'hello')).toBeNull();
+    expect(await synthesizeTts(ctx, guildChannel(), 'hello')).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('declines honestly when the guild has never configured the AI plugin at all', async () => {
     const { ctx } = contextWith(null);
 
-    expect(await synthesizeTts(ctx, GUILD_ID, CHANNEL_ID, 'hello')).toBeNull();
+    expect(await synthesizeTts(ctx, guildChannel(), 'hello')).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -120,8 +125,78 @@ describe('synthesizeTts — bring-your-own-key billing guarantee', () => {
     // the status code and nothing else — an API key in a log line is a leak wherever those logs are shipped.
     const warn = vi.spyOn(ctx.logger, 'warn');
 
-    expect(await synthesizeTts(ctx, GUILD_ID, CHANNEL_ID, 'hello')).toBeNull();
+    expect(await synthesizeTts(ctx, guildChannel(), 'hello')).toBeNull();
     expect(warn).toHaveBeenCalled();
     expect(JSON.stringify(warn.mock.calls)).not.toContain(guildKey);
+  });
+});
+
+describe('synthesizeTts — channel-owned key (creator dashboard, no Discord server needed)', () => {
+  it('a GUILDLESS channel with its own key speaks with that key, and never touches the ai plugin config', async () => {
+    fetchMock.mockResolvedValue(okSpeechResponse());
+    const channelKey = 'sk-the-streamer-pays-for-their-own-tts';
+    const findUnique = vi.fn(async () => null);
+    const { ctx } = createTestContext({ prismaOverrides: { pluginConfig: { findUnique } } });
+
+    const result = await synthesizeTts(
+      ctx,
+      guildChannel({ guildId: null, ttsOpenAiKeyEnc: encryptSecret(channelKey) }),
+      'hello chat',
+    );
+
+    expect(result).not.toBeNull();
+    const [, init] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(init.headers.authorization).toBe(`Bearer ${channelKey}`);
+    expect(init.headers.authorization).not.toContain('operator-platform-key');
+    expect(findUnique).not.toHaveBeenCalled();
+    const cached = await ctx.redis.get(redisKey('overlay', 'tts', CHANNEL_ID, result!.audioId));
+    expect(cached).toBe(Buffer.from('fake-mp3').toString('base64'));
+  });
+
+  it('a GUILDLESS channel WITHOUT a key has no TTS: nothing is spoken and OpenAI is never contacted', async () => {
+    const { ctx } = contextWith({ provider: 'openai', allowEnvKeys: true, apiKeyEnc: encryptSecret('sk-not-mine') });
+
+    expect(await synthesizeTts(ctx, guildChannel({ guildId: null }), 'hello')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("precedence: when BOTH exist the channel's key wins over the guild's", async () => {
+    fetchMock.mockResolvedValue(okSpeechResponse());
+    const { ctx } = contextWith({ provider: 'openai', allowEnvKeys: true, apiKeyEnc: encryptSecret('sk-the-guild-key') });
+
+    await synthesizeTts(ctx, guildChannel({ ttsOpenAiKeyEnc: encryptSecret('sk-the-channel-key') }), 'hello');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(init.headers.authorization).toBe('Bearer sk-the-channel-key');
+  });
+
+  it("a guild-linked channel with no key of its own still falls back to the guild's key", async () => {
+    fetchMock.mockResolvedValue(okSpeechResponse());
+    const { ctx } = contextWith({ provider: 'openai', allowEnvKeys: true, apiKeyEnc: encryptSecret('sk-the-guild-key') });
+
+    await synthesizeTts(ctx, guildChannel(), 'hello');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
+    expect(init.headers.authorization).toBe('Bearer sk-the-guild-key');
+  });
+
+  it("a channel key that cannot be decrypted means no TTS — it does NOT quietly spend the guild's key", async () => {
+    const { ctx } = contextWith({ provider: 'openai', allowEnvKeys: true, apiKeyEnc: encryptSecret('sk-the-guild-key') });
+
+    expect(await synthesizeTts(ctx, guildChannel({ ttsOpenAiKeyEnc: 'not-a-valid-ciphertext' }), 'hello')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('never logs the channel key when OpenAI rejects it', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: { message: 'bad key' } }) });
+    const channelKey = 'sk-channel-key-that-is-invalid';
+    const { ctx } = createTestContext({});
+    const warn = vi.spyOn(ctx.logger, 'warn');
+
+    expect(
+      await synthesizeTts(ctx, guildChannel({ guildId: null, ttsOpenAiKeyEnc: encryptSecret(channelKey) }), 'hello'),
+    ).toBeNull();
+    expect(warn).toHaveBeenCalled();
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(channelKey);
   });
 });

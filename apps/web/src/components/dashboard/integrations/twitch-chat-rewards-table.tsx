@@ -14,7 +14,7 @@ import {
   useToast,
 } from '@pavisie/ui';
 import type { TwitchChatRewardDto } from '@pavisie/types/integrations';
-import { useDeleteTwitchChatReward, useTwitchChatRewards } from '@/lib/dashboard/integrations-queries';
+import type { TwitchChatRewardsBackend } from '@/lib/dashboard/twitch-chat-backend';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ConfirmDialog } from '../confirm-dialog';
 import { ErrorState } from '../error-state';
@@ -25,13 +25,24 @@ import { TwitchChatRewardDialog } from './twitch-chat-reward-dialog';
 const MAX_REWARDS_PER_CHANNEL = 25;
 
 export interface TwitchChatRewardsTableProps {
-  guildId: string;
+  /** Where rewards are read/written - the Discord dashboard's guild routes or the creator dashboard's own. */
+  backend: TwitchChatRewardsBackend;
+  /** The linked Discord server, only when the caller may post into it (the Discord dashboard). Without it (the
+   * creator dashboard) "Send to Discord" is not offered, and existing Discord-post rewards are shown read-only. */
+  discordGuildId?: string | null;
   channelId: string;
+  /** The per-channel cap (the API reports it; falls back to the built-in default). */
+  maxRewards?: number;
 }
 
-export function TwitchChatRewardsTable({ guildId, channelId }: TwitchChatRewardsTableProps) {
-  const { data, isLoading, error, refetch } = useTwitchChatRewards(guildId, channelId);
-  const del = useDeleteTwitchChatReward(guildId);
+export function TwitchChatRewardsTable({
+  backend,
+  discordGuildId,
+  channelId,
+  maxRewards = MAX_REWARDS_PER_CHANNEL,
+}: TwitchChatRewardsTableProps) {
+  const { data, isLoading, error, refetch } = backend.useList();
+  const del = backend.useRemove();
   const { toast } = useToast();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -66,7 +77,7 @@ export function TwitchChatRewardsTable({ guildId, channelId }: TwitchChatRewards
     );
   }
 
-  const atLimit = (data?.length ?? 0) >= MAX_REWARDS_PER_CHANNEL;
+  const atLimit = (data?.length ?? 0) >= maxRewards;
 
   return (
     <div className="space-y-3">
@@ -77,7 +88,7 @@ export function TwitchChatRewardsTable({ guildId, channelId }: TwitchChatRewards
           variant="outline"
           onClick={openCreate}
           disabled={atLimit}
-          title={atLimit ? `Limit of ${MAX_REWARDS_PER_CHANNEL} rewards reached` : undefined}
+          title={atLimit ? `Limit of ${maxRewards} rewards reached` : undefined}
         >
           Add reward
         </Button>
@@ -96,7 +107,11 @@ export function TwitchChatRewardsTable({ guildId, channelId }: TwitchChatRewards
       {!isLoading && !error && (!data || data.length === 0) ? (
         <EmptyState
           title="No rewards yet"
-          description="Create a channel-point reward to trigger actions when viewers redeem it: play a sound, read text-to-speech, post to chat, or send to Discord."
+          description={
+            discordGuildId
+              ? 'Create a channel-point reward to trigger actions when viewers redeem it: play a sound, read text-to-speech, post to chat, or send to Discord.'
+              : 'Create a channel-point reward to trigger actions when viewers redeem it: play a sound, read text-to-speech, or post to chat.'
+          }
         />
       ) : null}
 
@@ -123,12 +138,18 @@ export function TwitchChatRewardsTable({ guildId, channelId }: TwitchChatRewards
                   {reward.enabled ? 'Yes' : 'No'}
                 </TableCell>
                 <TableCell className="space-x-1 whitespace-nowrap">
-                  <Button size="sm" variant="ghost" onClick={() => openEdit(reward)}>
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setDeleting(reward)}>
-                    Delete
-                  </Button>
+                  {reward.action === 'discord' && !discordGuildId ? (
+                    <span className="text-xs text-muted-foreground">Managed in the Discord dashboard</span>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="ghost" onClick={() => openEdit(reward)}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setDeleting(reward)}>
+                        Delete
+                      </Button>
+                    </>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -137,7 +158,8 @@ export function TwitchChatRewardsTable({ guildId, channelId }: TwitchChatRewards
       ) : null}
 
       <TwitchChatRewardDialog
-        guildId={guildId}
+        backend={backend}
+        discordGuildId={discordGuildId}
         channelId={channelId}
         open={dialogOpen}
         onOpenChange={setDialogOpen}

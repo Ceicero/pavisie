@@ -113,6 +113,7 @@ describe('POST /creator/twitch/channel/connect', () => {
     expect(JSON.parse((await redis.get(redisKey('creator-connect-state', state)))!)).toEqual({
       platform: 'twitch',
       platformUserId: CREATOR_A,
+      purpose: 'chat',
     });
     // Not a guild-flow state: nothing under the guild integration namespace.
     expect(await redis.get(redisKey('oauthstate', 'integration', state))).toBeNull();
@@ -161,6 +162,7 @@ describe('GET /integrations/twitch/callback — creator connect', () => {
     // The broadcaster token is discarded: no connection/token rows.
     expect(t.fixture.connections.size).toBe(0);
     expect(t.fixture.oauthTokens.size).toBe(0);
+    expect(t.fixture.broadcasterTokens.size).toBe(0);
 
     expect(await t.redis.get(redisKey('creator-connect-state', state))).toBeNull(); // single-use
     expect(

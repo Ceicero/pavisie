@@ -130,6 +130,7 @@ function makeChannelRow(overrides: Record<string, unknown> = {}) {
     commandPrefix: '!',
     connectionId: null,
     overlayTokenEnc: null,
+    ttsOpenAiKeyEnc: null,
     rewardsEnabled: false,
     bridgeDiscordChannelId: null,
     bridgeDiscordToTwitch: false,
@@ -165,7 +166,7 @@ function makeRewardRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'reward-1',
     channelId: 'channel-a',
-    guildId: 'guild-1',
+    guildId: null,
     rewardId: 'twitch-reward-1',
     rewardTitle: 'Hydrate!',
     enabled: true,
@@ -512,36 +513,77 @@ describe('guildless channel: Discord-dependent features are skipped cleanly', ()
     expect(manager.connectedChannelIds()).toEqual(['channel-a']);
   });
 
-  it('DISCORD and TTS reward actions are skipped; CHAT still works; nothing errors', async () => {
+  it('DISCORD reward actions are skipped; CHAT, SOUND and TTS run (TTS on the channel key); nothing errors', async () => {
     const logger = makeLogger();
-    const { ws } = await setup({
-      channels: [makeChannelRow({ rewardsEnabled: true })],
+    const { ws, ctx } = await setup({
+      channels: [makeChannelRow({ rewardsEnabled: true, ttsOpenAiKeyEnc: 'enc:channel-key' })],
       rewards: [
         makeRewardRow({ id: 'r-discord', action: 'DISCORD', chatTemplate: null, discordChannelId: '123456789012345678', discordTemplate: 'x' }),
+        makeRewardRow({ id: 'r-tts', action: 'TTS', chatTemplate: null, ttsTemplate: 'say {user}', volume: 55 }),
+        makeRewardRow({ id: 'r-sound', action: 'SOUND', chatTemplate: null, soundUrl: 'https://cdn.example.com/a.mp3', volume: 30 }),
+        makeRewardRow({ id: 'r-chat', action: 'CHAT' }),
+      ],
+      logger,
+    });
+    const publishSpy = vi.spyOn(ctx.redis, 'publish');
+
+    ws.emit('notification', redemptionFrame());
+    await flush();
+
+    // DISCORD: skipped quietly (a guildless channel has no server to post into).
+    expect(mocks.postAlert).not.toHaveBeenCalled();
+    // TTS: runs, handed the channel row so the channel's OWN key (or none) is what pays for it.
+    expect(mocks.synthesizeTts).toHaveBeenCalledTimes(1);
+    expect(mocks.synthesizeTts).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'channel-a', guildId: null, ttsOpenAiKeyEnc: 'enc:channel-key' }),
+      'say ViewerOne',
+    );
+    // SOUND + TTS both reach the overlay over Redis pub/sub.
+    const published = publishSpy.mock.calls.map(([, payload]) => JSON.parse(payload as string) as Record<string, unknown>);
+    expect(published).toHaveLength(2);
+    expect(published).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'tts', audioId: 'audio-1', volume: 55 }),
+        expect.objectContaining({ kind: 'sound', url: 'https://cdn.example.com/a.mp3', volume: 30 }),
+      ]),
+    );
+    // CHAT: still works.
+    expect(mocks.sendChatMessage).toHaveBeenCalledTimes(1);
+    expect(mocks.sendChatMessage).toHaveBeenCalledWith(expect.anything(), 'b-1', 'Thanks ViewerOne!');
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('a guildless channel with NO TTS key: the TTS action is skipped honestly (no publish, no error), other actions run', async () => {
+    mocks.synthesizeTts.mockResolvedValue(null); // what `synthesizeTts` returns for "no key of any kind"
+    const logger = makeLogger();
+    const { ws, ctx } = await setup({
+      channels: [makeChannelRow({ rewardsEnabled: true })],
+      rewards: [
         makeRewardRow({ id: 'r-tts', action: 'TTS', chatTemplate: null, ttsTemplate: 'say {user}' }),
         makeRewardRow({ id: 'r-chat', action: 'CHAT' }),
       ],
       logger,
     });
+    const publishSpy = vi.spyOn(ctx.redis, 'publish');
 
     ws.emit('notification', redemptionFrame());
     await flush();
 
-    expect(mocks.postAlert).not.toHaveBeenCalled();
-    expect(mocks.synthesizeTts).not.toHaveBeenCalled();
+    expect(publishSpy).not.toHaveBeenCalled();
     expect(mocks.sendChatMessage).toHaveBeenCalledTimes(1);
-    expect(mocks.sendChatMessage).toHaveBeenCalledWith(expect.anything(), 'b-1', 'Thanks ViewerOne!');
     expect(logger.error).not.toHaveBeenCalled();
   });
 });
 
 describe('guild-linked channel: behaviour unchanged (control)', () => {
-  it('routes !balance to the channel economy (same as a guildless channel) and posts DISCORD reward actions', async () => {
+  it('routes !balance to the channel economy (same as a guildless channel), posts DISCORD reward actions and runs TTS with the guild id', async () => {
     const { ws } = await setup({
       channels: [makeChannelRow({ guildId: 'guild-1', rewardsEnabled: true, connectionId: 'conn-1' })],
       economy: makeEconomyRow(),
       rewards: [
-        makeRewardRow({ id: 'r-discord', action: 'DISCORD', chatTemplate: null, discordChannelId: '123456789012345678', discordTemplate: 'x' }),
+        makeRewardRow({ id: 'r-discord', guildId: 'guild-1', action: 'DISCORD', chatTemplate: null, discordChannelId: '123456789012345678', discordTemplate: 'x' }),
+        makeRewardRow({ id: 'r-tts', guildId: 'guild-1', action: 'TTS', chatTemplate: null, ttsTemplate: 'say {user}' }),
       ],
     });
 
@@ -556,5 +598,12 @@ describe('guild-linked channel: behaviour unchanged (control)', () => {
     ws.emit('notification', redemptionFrame());
     await flush();
     expect(mocks.postAlert).toHaveBeenCalledTimes(1);
+    // TTS still gets the linked guild id, so `synthesizeTts` can fall back to the guild's own key when the channel
+    // has none of its own (precedence is unit-tested in twitch-chat-tts.test.ts).
+    expect(mocks.synthesizeTts).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'channel-a', guildId: 'guild-1', ttsOpenAiKeyEnc: null }),
+      'say ViewerOne',
+    );
   });
 });

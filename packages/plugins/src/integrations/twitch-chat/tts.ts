@@ -2,15 +2,20 @@
 // `window.speechSynthesis` does not work in an OBS browser source — CEF ships no voices — so synthesis has to
 // happen here, and the overlay just plays back audio bytes it's handed).
 //
-// Deliberately reuses the `ai` plugin's OWN per-guild key storage/decryption path rather than inventing a
-// second one: a guild that has already configured an OpenAI key for `/ask` etc. gets TTS "for free", and there
-// is exactly one place a guild's OpenAI key is ever stored/decrypted. `ai/service.ts` can't be called directly
+// KEY PRECEDENCE (bring-your-own-key — Pavisie never pays for TTS, there is no platform-wide TTS key):
+//   1. the CHANNEL's own OpenAI key (`TwitchChatChannel.ttsOpenAiKeyEnc`, set on the creator dashboard) — the only
+//      option for a channel with no Discord server, and it wins over (2) when both exist;
+//   2. otherwise, for a channel linked to a Discord server, that GUILD's own key from the `ai` plugin's config.
+//      This deliberately reuses the `ai` plugin's OWN per-guild key storage/decryption path rather than inventing
+//      a second one: a guild that has already configured an OpenAI key for `/ask` etc. gets TTS "for free", and
+//      there is exactly one place a guild's OpenAI key is ever stored/decrypted. `ai/service.ts` can't be called directly
 // (its `AiService.complete()` is a chat completion, not a speech synthesis call, and `ctx.getConfig` only ever
 // resolves the CALLING plugin's own config — there is no cross-plugin config accessor), so this loads the raw
 // `ai` `PluginConfig` row itself and runs it through the exact same `configSchema`/`resolveApiKey` the `ai`
 // plugin uses internally (see packages/plugins/src/ai/manifest.ts, packages/plugins/src/ai/resolve-key.ts).
 import { randomUUID } from 'node:crypto';
-import { redisKey } from '@pavisie/core';
+import { decryptSecret, redisKey } from '@pavisie/core';
+import type { TwitchChatChannel } from '@pavisie/database';
 import type { PluginContext } from '../../sdk';
 import { configSchema as aiConfigSchema, type AiConfig } from '../../ai/manifest';
 import { resolveApiKey } from '../../ai/resolve-key';
@@ -76,33 +81,29 @@ async function requestSpeech(params: { apiKey: string; model: string; text: stri
   return { ok: true, bytes };
 }
 
-/**
- * Synthesizes `text` to speech for `guildId` and caches the resulting mp3 bytes (base64-encoded) in Redis at
- * `pavisie:overlay:tts:<channelId>:<audioId>` with a 300s TTL, returning the opaque `audioId` the overlay's
- * `GET /overlay/:token/tts/:audioId` route resolves back to bytes.
- *
- * The key is scoped by `channelId` deliberately: that route authenticates a capability token to ONE channel,
- * and scoping the key is what stops a valid token for channel A from fetching channel B's audio — which is
- * a viewer's message spoken aloud, so it is exactly the sort of thing that must not leak across tenants.
- * Unguessable audio ids are not the control here; the key scope is.
- *
- * Returns `null` — and NEVER throws — whenever synthesis simply isn't available right now: the guild has not
- * supplied its OWN OpenAI key (TTS is bring-your-own-key and never falls back to the operator's platform key —
- * see the call site), the guild's provider isn't `openai` (an Anthropic-only guild has no corresponding speech
- * endpoint here), or the OpenAI request itself failed. This is the honest "TTS unavailable" path (mirrors the media plugin's
- * `MediaProvider.createStream()` precedent: an unimplemented/unconfigured provider means the feature reports
- * itself unavailable, not an error) — callers (`rewards.ts`'s action dispatch in `manager.ts`) just skip the
- * TTS action when this returns `null`.
- *
- * Never logs the resolved API key.
- */
-export async function synthesizeTts(
-  ctx: PluginContext,
-  guildId: string,
-  channelId: string,
-  text: string,
-): Promise<{ audioId: string } | null> {
-  const config = await loadAiConfig(ctx, guildId);
+/** The slice of a channel row TTS needs: which channel (audio cache scope), which guild (fallback key), and the
+ * channel's own encrypted key. */
+export type TtsChannel = Pick<TwitchChatChannel, 'id' | 'guildId' | 'ttsOpenAiKeyEnc'>;
+
+/** Resolves the OpenAI key to synthesize with, per the precedence above — or `null` when there is none. NEVER
+ * falls back to the operator's platform `OPENAI_API_KEY` (see the comment below). A channel key that no longer
+ * decrypts (e.g. an `ENCRYPTION_KEY` rotated without `_PREVIOUS`) means TTS is unavailable for the channel — it
+ * does NOT silently switch to the guild's key, which the channel owner did not choose to spend. */
+async function resolveTtsApiKey(ctx: PluginContext, channel: TtsChannel): Promise<string | null> {
+  if (channel.ttsOpenAiKeyEnc) {
+    try {
+      return decryptSecret(channel.ttsOpenAiKeyEnc);
+    } catch {
+      ctx.logger.warn(
+        { channelId: channel.id },
+        'integrations/twitch-chat: the channel TTS key could not be decrypted; treating TTS as unavailable',
+      );
+      return null;
+    }
+  }
+
+  if (!channel.guildId) return null;
+  const config = await loadAiConfig(ctx, channel.guildId);
   // Only an `openai`-provider config can possibly yield a usable key here — a `compatible`/`anthropic` guild
   // config has no key that OpenAI's speech endpoint would accept.
   if (config.provider !== 'openai') return null;
@@ -114,11 +115,41 @@ export async function synthesizeTts(
   // `source === 'guild'` assertion below makes that guarantee explicit rather than implicit in an empty object.
   const resolvedKey = resolveApiKey(config, {});
   if (!resolvedKey || resolvedKey.source !== 'guild') return null;
+  return resolvedKey.apiKey;
+}
+
+/**
+ * Synthesizes `text` to speech for `channel` and caches the resulting mp3 bytes (base64-encoded) in Redis at
+ * `pavisie:overlay:tts:<channelId>:<audioId>` with a 300s TTL, returning the opaque `audioId` the overlay's
+ * `GET /overlay/:token/tts/:audioId` route resolves back to bytes.
+ *
+ * The key is scoped by `channelId` deliberately: that route authenticates a capability token to ONE channel,
+ * and scoping the key is what stops a valid token for channel A from fetching channel B's audio — which is
+ * a viewer's message spoken aloud, so it is exactly the sort of thing that must not leak across tenants.
+ * Unguessable audio ids are not the control here; the key scope is.
+ *
+ * Returns `null` — and NEVER throws — whenever synthesis simply isn't available right now: neither the channel nor
+ * its linked guild has supplied its OWN OpenAI key (TTS is bring-your-own-key and never falls back to the
+ * operator's platform key — see `resolveTtsApiKey`), a guild-only setup's provider isn't `openai` (an
+ * Anthropic-only guild has no corresponding speech endpoint here), or the OpenAI request itself failed. This is
+ * the honest "TTS unavailable" path (mirrors the media plugin's `MediaProvider.createStream()` precedent: an
+ * unimplemented/unconfigured provider means the feature reports itself unavailable, not an error) — callers
+ * (`rewards.ts`'s action dispatch in `manager.ts`) just skip the TTS action when this returns `null`.
+ *
+ * Never logs the resolved API key, nor the text being spoken.
+ */
+export async function synthesizeTts(
+  ctx: PluginContext,
+  channel: TtsChannel,
+  text: string,
+): Promise<{ audioId: string } | null> {
+  const apiKey = await resolveTtsApiKey(ctx, channel);
+  if (!apiKey) return null;
 
   try {
-    let result = await requestSpeech({ apiKey: resolvedKey.apiKey, model: PRIMARY_MODEL, text });
+    let result = await requestSpeech({ apiKey, model: PRIMARY_MODEL, text });
     if (!result.ok && isUnknownModelError(result.status, result.body)) {
-      result = await requestSpeech({ apiKey: resolvedKey.apiKey, model: FALLBACK_MODEL, text });
+      result = await requestSpeech({ apiKey, model: FALLBACK_MODEL, text });
     }
     if (!result.ok) {
       ctx.logger.warn(
@@ -130,7 +161,7 @@ export async function synthesizeTts(
 
     const audioId = randomUUID();
     const base64 = Buffer.from(result.bytes).toString('base64');
-    await ctx.redis.set(redisKey('overlay', 'tts', channelId, audioId), base64, 'EX', AUDIO_TTL_SECONDS);
+    await ctx.redis.set(redisKey('overlay', 'tts', channel.id, audioId), base64, 'EX', AUDIO_TTL_SECONDS);
     return { audioId };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

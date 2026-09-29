@@ -5,15 +5,11 @@ import {
   AppError,
   ExternalServiceError,
   NotFoundError,
-  SsrfError,
   ValidationError,
-  assertPublicHttpUrl,
   decryptSecret,
-  encryptSecret,
   env,
   redisKey,
 } from '@pavisie/core';
-import type { TwitchRewardActionKind as PrismaTwitchRewardActionKind } from '@pavisie/database';
 import type {
   TwitchChatChannelDto,
   TwitchChatCommandDto,
@@ -21,7 +17,6 @@ import type {
   TwitchChatStatusDto,
   TwitchChatTimerDto,
   TwitchOverlayInfoDto,
-  TwitchRewardActionKindId,
 } from '@pavisie/types/integrations';
 import { writeDashboardAudit } from '../lib/audit';
 import { getCachedGuildChannels } from '../lib/discord';
@@ -36,10 +31,16 @@ import {
 import { buildProviderAuthorizeUrl, isOAuthProviderConfigured } from '../lib/integrations/providers';
 import { nudgeTwitchChatReconcile } from '../lib/integrations/twitch-chat-reconcile';
 import {
+  REWARD_ACTION_FIELDS,
+  REWARD_ACTION_FIELD_SPEC,
   TWITCH_CHAT_LEVEL_ENUM_MAP,
+  TWITCH_REWARD_ACTION_ENUM_MAP,
+  assertSafeSoundUrl,
   commandExistsError,
   isUniqueViolation,
+  rewardExistsError,
   timerExistsError,
+  type RewardActionField,
 } from '../lib/integrations/twitch-chat-shared';
 import {
   TWITCH_CHAT_MAX_COMMANDS_PER_CHANNEL,
@@ -53,6 +54,7 @@ import {
   updateTwitchChatRewardSchema,
   updateTwitchChatTimerSchema,
 } from '../lib/integrations/twitch-chat-schemas';
+import { issueOverlayToken, overlayUrlFor } from '../lib/overlay-token';
 import { guildIdParamSchema } from '../lib/schemas';
 
 /** Scopes requested when an admin links (or re-links) a broadcaster's Twitch channel.
@@ -74,56 +76,9 @@ const updateChannelWithRewardsSchema = updateTwitchChatChannelSchema.extend({
   rewardsEnabled: z.boolean().optional(),
 });
 
-/** Reverse of `TWITCH_REWARD_ACTION_MAP` (lib/integrations/dto.ts) — input action id -> Prisma enum, for writes. */
-const TWITCH_REWARD_ACTION_ENUM_MAP: Record<TwitchRewardActionKindId, PrismaTwitchRewardActionKind> = {
-  sound: 'SOUND',
-  tts: 'TTS',
-  chat: 'CHAT',
-  discord: 'DISCORD',
-};
-
-/** Mirrors `twitch-chat-schemas.ts`'s private `TWITCH_REWARD_ACTION_FIELD_SPEC` (not exported — that file's
- * `superRefine` only ever sees one request body in isolation). On PATCH we additionally need to validate the
- * reward's *resulting* state (existing row merged with the patch), which only the route layer can do, so the
- * same small spec is duplicated here rather than exported purely for this one caller. */
-const REWARD_ACTION_FIELDS = [
-  'soundUrl',
-  'volume',
-  'ttsTemplate',
-  'chatTemplate',
-  'discordChannelId',
-  'discordTemplate',
-] as const;
-type RewardActionField = (typeof REWARD_ACTION_FIELDS)[number];
-const REWARD_ACTION_FIELD_SPEC: Record<
-  TwitchRewardActionKindId,
-  { required: readonly RewardActionField[]; allowed: readonly RewardActionField[] }
-> = {
-  sound: { required: ['soundUrl'], allowed: ['soundUrl', 'volume'] },
-  tts: { required: ['ttsTemplate'], allowed: ['ttsTemplate'] },
-  chat: { required: ['chatTemplate'], allowed: ['chatTemplate'] },
-  discord: { required: ['discordChannelId', 'discordTemplate'], allowed: ['discordChannelId', 'discordTemplate'] },
-};
-
-// `TWITCH_CHAT_LEVEL_ENUM_MAP`, `isUniqueViolation`, `commandExistsError` and `timerExistsError` live in
-// lib/integrations/twitch-chat-shared.ts — shared with the creator dashboard's routes (routes/creator-twitch.ts).
-
-function rewardExistsError(title: string): AppError {
-  return new AppError(
-    'twitch_chat_reward_exists',
-    `A reward for "${title}" with that action already exists for this channel.`,
-    { status: 409, expose: true },
-  );
-}
-
-/** Converts an `SsrfError` from `assertPublicHttpUrl` into the same 400 shape as `routes/ai.ts`'s baseUrl check. */
-async function assertSafeSoundUrl(url: string): Promise<void> {
-  try {
-    await assertPublicHttpUrl(url);
-  } catch (err) {
-    throw new ValidationError(err instanceof SsrfError ? err.message : 'That sound URL is not allowed.');
-  }
-}
+// `TWITCH_CHAT_LEVEL_ENUM_MAP`, `isUniqueViolation`, `commandExistsError`, `timerExistsError` and the reward helpers
+// (`REWARD_ACTION_FIELD_SPEC`, `assertSafeSoundUrl`, `rewardExistsError`, ...) live in
+// lib/integrations/twitch-chat-shared.ts — shared with the creator dashboard's routes (routes/creator-twitch*.ts).
 
 /**
  * Best-effort delete of a Discord <-> Twitch bridge webhook, called right before its stored credential is
@@ -966,27 +921,7 @@ export default async function twitchChatRoutes(app: ZodFastifyInstance): Promise
       const channel = await app.prisma.twitchChatChannel.findFirst({ where: { id: channelId, guildId } });
       if (!channel) throw new NotFoundError('Twitch chat channel not found.');
 
-      const hadToken = Boolean(channel.overlayTokenEnc);
-      if (channel.overlayTokenEnc) {
-        // Best-effort: drop the old token's Redis index so it stops resolving once replaced. If the old
-        // ciphertext can't be decrypted (e.g. a rotated ENCRYPTION_KEY with no _PREVIOUS set) there's nothing
-        // to clean up by key — it simply becomes an orphaned index entry, which is not a security issue since
-        // resolving it still requires knowing the old token value.
-        try {
-          const oldToken = decryptSecret(channel.overlayTokenEnc);
-          await app.redis.del(redisKey('overlay', 'token', oldToken));
-        } catch {
-          // Ignore — see comment above.
-        }
-      }
-
-      const token = randomBytes(24).toString('hex');
-      await app.prisma.twitchChatChannel.update({
-        where: { id: channelId },
-        data: { overlayTokenEnc: encryptSecret(token) },
-      });
-      // Durable lookup path for the SSE route (channel-points spec: "no TTL — it is the durable lookup path").
-      await app.redis.set(redisKey('overlay', 'token', token), channelId);
+      const { token, hadToken } = await issueOverlayToken(app.redis, app.prisma, channel);
 
       await writeDashboardAudit(app.prisma, {
         guildId,
@@ -1001,8 +936,7 @@ export default async function twitchChatRoutes(app: ZodFastifyInstance): Promise
         after: { configured: true },
       });
 
-      const url = `${env.API_BASE_URL ?? ''}/overlay/${token}`;
-      return { url, hasToken: true };
+      return { url: overlayUrlFor(token), hasToken: true };
     },
   );
 

@@ -554,7 +554,7 @@ with a configurable prefix, default `+`. For example: `/mod ban @user spam` can 
   - `routes/analytics.ts` — `GET /:guildId/analytics?range=7d|30d|90d` (from GuildAnalyticsDaily; only if `GuildConfig.dataCollectionEnabled`)
   - `routes/privacy.ts` — retention policy get/put, `POST /:guildId/data/export` (queues job → downloadable JSON), `POST /:guildId/data/delete` (requires confirmation phrase, queues deletion), `GET /:guildId/data/requests`
   - `routes/webhooks.ts` (NOT under /guilds): `POST /webhooks/github/:endpointId`, `POST /webhooks/twitch`, `POST /webhooks/generic/:endpointId` — raw body, signature verification, idempotency via `ProcessedWebhookEvent`, then enqueue to `integrations.inbound` queue. (`POST /webhooks/stripe` was removed with the Stripe connector, §18a — GitHub's route stays wired but has no provider left to act on deliveries, see §18a.)
-  - `routes/creator-auth.ts` / `routes/creator-twitch.ts` (prefixes `/creator` and `/creator/twitch`) — the creator dashboard's sign-in, session and chat-bot API, see §19e: `GET /creator/auth/twitch/login`, `GET /creator/me`, `POST /creator/logout`; `GET/PATCH/DELETE /creator/twitch/channel`, `POST /creator/twitch/channel/connect`, commands and timers CRUD under `/creator/twitch/channel/{commands,timers}`. All behind `requireCreatorAuth`/`requireTwitchCreator`; the sign-in *callback* is not a route of its own (below).
+  - `routes/creator-auth.ts` / `routes/creator-twitch.ts` (prefixes `/creator` and `/creator/twitch`) — the creator dashboard's sign-in, session and chat-bot API, see §19e: `GET /creator/auth/twitch/login`, `GET /creator/me`, `POST /creator/logout`; `GET/PATCH/DELETE /creator/twitch/channel`, `POST /creator/twitch/channel/connect`, commands and timers CRUD under `/creator/twitch/channel/{commands,timers}`; channel points (`routes/creator-twitch-rewards.ts`, prefix `/creator/twitch/rewards`): `GET/PATCH /` (status, master switch), `POST/DELETE /authorize`, `GET/POST/PATCH/DELETE /items[/:rewardId]`, `GET /overlay`, `POST /overlay/regenerate`, `PUT/DELETE /tts-key`. All behind `requireCreatorAuth`/`requireTwitchCreator`; the sign-in *callback* is not a route of its own (below).
   - `routes/oauth-integrations.ts` — `/integrations/:provider/callback`, first checks whether the state belongs to a creator flow (`creator-login-state` / `creator-connect-state`, Twitch only — §19e; no Discord session needed for those) and otherwise branches on the guild flow's OAuth state `kind`: absent (the original generic per-guild connect flow, unchanged), `twitch_chat` (identifies the broadcaster via Helix, creates the `IntegrationConnection`+`OAuthToken`, upserts `TwitchChatChannel` status PENDING), `twitch_bot` (owner-only — identifies Pavisie's own Twitch account and upserts the singleton `TwitchBotIdentity`, replacing tokens/scopes/expiry on re-auth; returns a small standalone HTML confirmation page instead of a dashboard redirect)
   - `routes/developer-reports.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner`) — ops-console backend for the guild → developer support channel written by the `admin` plugin's `/pavisie report`; intentionally cross-guild data, which is exactly why it is bot-owner-only rather than `requireGuildAccess`: `GET /owner/developer-reports` (cursor-paginated, newest-first, filters `?status=OPEN|HANDLED&kind=BUG|FEEDBACK|QUESTION&guildId=`), `GET /owner/developer-reports/:id`, `PATCH /owner/developer-reports/:id` (`status` and/or `notes`, at least one required — `notes` is internal-only triage text never shown to the reporting guild; flipping to `HANDLED` stamps `handledAt`/`handledBy` from the session, back to `OPEN` clears both)
   - `routes/owner-metrics.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner` like `routes/developer-reports.ts`) — read-only metrics for the local "Pavisie Dev" desktop app: `GET /owner/metrics/overview` (guild presence/growth, member totals + largest guild, developer-report counts, 7d activity), `GET /owner/metrics/guilds` (cursor-paginated, newest-joined first, `?query=&botPresent=`, per-guild plugin/case/ticket/last-activity aggregates), `GET /owner/metrics/errors` (cursor-paginated feed merged from the four models with an error column — `IntegrationConnection.lastError`, `ScheduledJob.lastError`, `WebhookDelivery.error`, `DataRequest.error`, `?source=&guildId=`), `GET /owner/metrics/growth?days=` (daily join/leave counts + running net, zero-filled, clamped 1–365)
@@ -1011,8 +1011,8 @@ No 15th plugin: lives in `packages/plugins/src/integrations/twitch-chat/` (`heli
 - **Identity model**: ONE global `TwitchBotIdentity` row — Brandon authorizes Pavisie's own Twitch account once
   (owner-only `POST /owner/twitch-bot/connect`, scopes `user:read:chat user:write:chat user:bot`). Every chat
   read/send runs on this token, never a broadcaster's. A streamer's channel is linked either from the
-  Discord dashboard (`POST /:guildId/integrations/twitch-chat/connect`, scope `channel:bot`) or — with no Discord
-  server at all — from the creator dashboard (§19e); both upsert a `TwitchChatChannel` row (status `PENDING` until
+  Discord dashboard (`POST /:guildId/integrations/twitch-chat/connect`, scopes `channel:bot channel:read:redemptions`)
+  or — with no Discord server at all — from the creator dashboard (§19e); both upsert a `TwitchChatChannel` row (status `PENDING` until
   the manager subscribes it). There is at most ONE row per Twitch channel (`broadcasterUserId` is globally unique),
   and its `guildId` is optional (§19e).
 - **Transport**: the official EventSub WebSocket (`wss://eventsub.wss.twitch.tv/ws`), using Node 22's built-in
@@ -1096,14 +1096,28 @@ No 15th plugin: lives in `packages/plugins/src/integrations/twitch-chat/` (`heli
 A channel-point reward (something a Twitch viewer buys with channel points in chat) triggers an action in
 Pavisie: playing a sound on the streamer's OBS overlay, speaking text via TTS, posting to Twitch chat, or
 posting to a Discord channel. Live inside `integrations/twitch-chat/` (`rewards.ts`, `tts.ts`, `manager.ts`,
-`broadcaster-token.ts`) plus API routes and dashboard UI; command `/twitch reward` (§7.1).
+`broadcaster-token.ts`) plus API routes and dashboard UI; command `/twitch reward` (§7.1). Since creator dashboard
+phase 2b (§19e) everything here except the DISCORD action works for a channel with **no Discord server**, managed
+from the creator dashboard as well as (for a linked server) the Discord one.
 
 - **Identity model**: each enabled `TwitchChatChannel` row carries an optional `rewardsEnabled` boolean (default
   `false`) and an `overlayTokenEnc` capability-token field. Rewarding starts only when both: the channel has
   rewards enabled, AND the broadcaster has granted `channel:read:redemptions` scope (a broadcaster's own token,
-  not the bot's, held in the `IntegrationConnection`'s `OAuthToken` row keyed by `TwitchChatChannel.connectionId`).
-  Unlike chat (which re-links with `channel:bot` scope alone), existing channels must **re-link** to grant the
-  new scope — the manager's reconcile checks this and surfaced a plain-language error in `lastError` rather than
+  not the bot's). That token lives in **`TwitchBroadcasterToken`**, keyed by the Twitch chat CHANNEL
+  (`channelId` unique, `onDelete: Cascade`) — not by a Discord guild — so a guildless channel can hold one
+  (phase 2b; before it, the token sat in the guild-scoped `IntegrationConnection`'s `OAuthToken`, which a guildless
+  channel has no way to own). Encrypted at rest (`encryptSecret`: `accessTokenEnc`, `refreshTokenEnc`), with
+  `scopes`, `expiresAt`, `rotatedAt`, and a `status`/`lastError` that goes `ERROR` after a terminal refresh
+  failure (for a guild-linked channel that state is mirrored, best-effort, onto its `IntegrationConnection`, which
+  the Discord dashboard shows). It is written by exactly two flows, both via `storeBroadcasterToken`
+  (`apps/api/src/lib/creator/broadcaster-token.ts`): the Discord dashboard's connect/re-link callback (always
+  requests both scopes) and the creator dashboard's "enable channel points" (§19e). A grant without the scope (or
+  without a refresh token/expiry) is never stored, and re-authorizing replaces the row wholesale. Migration
+  `0016_creator_channel_rewards` **moved** every existing guild-linked channel's token from `OAuthToken` into it
+  (verbatim ciphertext, only tokens carrying the scope, then deleted from `OAuthToken` — moved rather than copied
+  because Twitch rotates the refresh token on every use, so a leftover old row could be refreshed by a bot
+  still running the previous build and strand the copy), so existing streamers do not re-authorize. The manager's
+  reconcile checks the token/scope every tick and surfaces a plain-language error in `lastError` rather than
   silently failing.
 - **EventSub subscription model**: one unfiltered `channel.channel_points_custom_reward_redemption.add` v1 subscription
   per enabled channel (never one per reward, which would exhaust Twitch's 300-subscription limit). Matching of a
@@ -1121,10 +1135,15 @@ posting to a Discord channel. Live inside `integrations/twitch-chat/` (`rewards.
   works with multiple `api` replicas: each replica receives every message and writes only to its own connections.
 - **TTS synthesis**: OBS's embedded browser ships no speech voices, so `window.speechSynthesis` is unavailable. TTS
   is therefore synthesized server-side using `OpenAI`'s `/v1/audio/speech` endpoint, trying `gpt-4o-mini-tts` first
-  and falling back to `tts-1` if the model is unknown. Synthesis uses the **guild's own configured OpenAI key**
-  (the same key used by the `ai` plugin's `/ask` and others) — there is no platform-wide TTS key and no cost to
-  the operator. A guild with no configured OpenAI key or a non-OpenAI provider (Anthropic) simply gets no TTS;
-  when this happens, the TTS action logs a warning and is skipped silently, reported honestly (not an error).
+  and falling back to `tts-1` if the model is unknown. It is **bring-your-own-key** — there is no platform-wide
+  TTS key and no cost to the operator. **Key precedence** (`tts.ts` `resolveTtsApiKey`): (1) the channel's own
+  key, `TwitchChatChannel.ttsOpenAiKeyEnc` (encrypted, set from the creator dashboard, write-only in the API —
+  never returned, only "set / not set"; the only option for a guildless channel); (2) otherwise, for a channel
+  linked to a Discord server, that **guild's own configured OpenAI key** (the `ai` plugin's, as before). The
+  channel key wins when both exist; a channel key that no longer decrypts means no TTS (it does NOT silently fall
+  through to the guild's key). A channel with neither, or a guild with a non-OpenAI provider (Anthropic), simply
+  gets no TTS; when this happens, the TTS action logs a warning and is skipped silently, reported honestly (not an
+  error).
   Synthesis never blocks the redemption — any failure leaves other configured actions for the same redemption free
   to run.
 - **Sound effects**: admin-supplied public HTTPS URLs, validated at write time by the existing SSRF guard
@@ -1146,7 +1165,9 @@ posting to a Discord channel. Live inside `integrations/twitch-chat/` (`rewards.
   overlay dedupes by the action's unique `id` field (uuid) so a reconnecting browser does not replay already-played
   sounds. Volume is clamped 0-100 (default 80). The overlay page has a strict CSP (`default-src: none`, media from
   `https:` + `self` + data: URIs), contains **no user input or attack surface**, and serves a simple "link expired"
-  page when the token is invalid.
+  page when the token is invalid. It is keyed to the channel row (not a guild), so it works unchanged for a guildless
+  channel; the creator dashboard shows/rotates it through `lib/overlay-token.ts` (`issueOverlayToken`, shared with
+  the Discord dashboard's regenerate route).
 - **Dashboard / commands**: `/twitch reward add|remove|list` or the dashboard "Rewards" tab on
   `/dashboard/[guildId]/integrations`'s "Twitch chat" card. Config is per-reward with write validation: `action`
   kind determines which payload fields are required (soundUrl for SOUND, ttsTemplate for TTS, chatTemplate for
@@ -1155,8 +1176,8 @@ posting to a Discord channel. Live inside `integrations/twitch-chat/` (`rewards.
 - **Degrades gracefully**: with `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` unset, or before a `TwitchBotIdentity` row
   exists, the manager's rewarding reconcile passes are skipped and the channel reports `rewardsEnabled: false`. If
   rewards ARE enabled but the broadcaster's token lacks `channel:read:redemptions`, the channel's `lastError` field
-  reports the scope gap plainly instead of silently failing. TTS synthesis degrades when the guild has no
-  configured OpenAI key — actions are logged and skipped, never errors. A bad `soundUrl` or invalid
+  reports the scope gap plainly instead of silently failing. TTS synthesis degrades when neither the channel nor its
+  guild has an OpenAI key — actions are logged and skipped, never errors. A bad `soundUrl` or invalid
   `discordChannelId` causes that action to be skipped (logged), while other actions for the same redemption run
   normally.
 
@@ -1289,7 +1310,7 @@ streaming-platform account (Twitch now, Kick later) and use Pavisie's streaming 
 server**. Everything is built with a `platform` discriminator (`CreatorSessionData.platform`, URL shapes like
 `/creator/auth/twitch/...` and `/creator/twitch/...`) so a second platform plugs in beside Twitch.
 
-**Phase plan** (phases 1 and 2a are built):
+**Phase plan** (phases 1, 2a and 2b are built):
 1. *(this section)* Creator sign-in with Twitch, guildless Twitch chat channels, the creator dashboard's chat
    bot section (connect/disconnect, prefix, commands, timers).
 2. Split in two:
@@ -1297,11 +1318,14 @@ server**. Everything is built with a `platform` discriminator (`CreatorSessionDa
      `ChannelTransaction`, carry-over migration `0015_channel_economy`, economy commands/earning/the extension work
      for guildless channels, a "Currency" section on the creator dashboard (settings, top viewers, manual balance
      adjust). The old guild-scoped Twitch rows and config keys are kept, unused, until phase 4 (§18b).
-   - **2b (NEXT)** — channel-point rewards, the OBS overlay and bring-your-own-key TTS move to the creator dashboard.
-     Adds `channel:read:redemptions` plus somewhere to keep the broadcaster token (a guildless channel has no
-     `IntegrationConnection`, which requires a guild).
-3. A "connect a Discord server" flow from the creator dashboard, the Discord <-> Twitch chat bridge for it, and a
-   global leaderboard.
+   - **2b (DONE)** — channel-point rewards, the OBS overlay and bring-your-own-key TTS move to the creator dashboard
+     and work for a guildless channel: the broadcaster token now lives per channel (`TwitchBroadcasterToken`, §19b),
+     a creator-side "enable channel points" authorize, rewards CRUD / master switch / overlay URL / TTS key routes and
+     a "Channel points" section (see "Channel points" below), migration `0016_creator_channel_rewards`. The DISCORD
+     reward action stays Discord-dashboard-only until phase 3.
+3. **(NEXT)** A "connect a Discord server" flow from the creator dashboard (a verified Discord connection — that is
+   what will let a creator use the DISCORD reward action), the Discord <-> Twitch chat bridge for it, and a global
+   leaderboard.
 4. Strip the Twitch chat features off the Discord side (the Discord dashboard keeps moderation/community/alerts).
 5. Kick as a second platform.
 
@@ -1342,7 +1366,9 @@ server**. Everything is built with a `platform` discriminator (`CreatorSessionDa
   linked Discord server". `TwitchChatManager` runs a guildless channel purely on its own `enabled` flag (no
   `ctx.isEnabled` check — that still applies to guild-linked channels exactly as before). For a guildless channel
   custom commands, timers and the built-ins (`!commands`, `!uptime`, `!title`) work; **skipped cleanly** (never a
-  crash, never an error message into Twitch chat): the Discord bridge and DISCORD/TTS reward actions. **Economy commands
+  crash, never an error message into Twitch chat): the Discord bridge and the DISCORD reward action. **Channel-point
+  rewards DO run** for a guildless channel (phase 2b — SOUND, CHAT and TTS on the channel's own OpenAI key, below).
+  **Economy commands
   and chat earning DO run** for a guildless channel (phase 2a) — the currency is owned by the channel, not by a guild
   (§18b) — as does the Twitch extension panel. The Discord-side routes/commands filter by `guildId`, so guildless
   channels never show up in a guild's dashboard. A Discord admin
@@ -1354,8 +1380,8 @@ server**. Everything is built with a `platform` discriminator (`CreatorSessionDa
   authorized **to be the signed-in creator** (otherwise it writes nothing and redirects to
   `/creator?error=twitch-account-mismatch`); it then upserts the channel by `broadcasterUserId` (new: guildless,
   `PENDING`; existing: re-armed in place — `enabled`, `PENDING` — keeping its `guildId`, connection and settings) and
-  nudges the bot's reconcile (`nudgeTwitchChatReconcile`). The broadcaster token is discarded (phase 2 adds
-  `channel:read:redemptions` and a home for the token). `DELETE /creator/twitch/channel` deletes a guildless row
+  nudges the bot's reconcile (`nudgeTwitchChatReconcile`). For a plain chat connect the broadcaster token is discarded (channel points
+  are a separate, explicit authorize — "Channel points" below). `DELETE /creator/twitch/channel` deletes a guildless row
   (commands/timers cascade, like the Discord dashboard's unlink) but only **disables** a guild-linked one
   (`enabled=false`, `DISCONNECTED`) so the Discord side keeps its data.
 - **Other routes**: `GET /creator/twitch/channel` (`{ botConfigured, botLogin, envConfigured, channel | null }`; the
@@ -1383,13 +1409,48 @@ server**. Everything is built with a `platform` discriminator (`CreatorSessionDa
     `reason` is required (≤200 chars) and stored as the transaction's note; a remove can never take a balance below
     zero (409 `would_go_negative`); a channel that has not saved its currency yet is a 404. It writes an
     `admin_add`/`admin_remove` ledger row through `adminAdjustChannel`; no audit-log row (no Discord actor).
+- **Channel points** (phase 2b; `routes/creator-twitch-rewards.ts`, prefix `/creator/twitch/rewards`, creator session +
+  CSRF, 60/min — 20/min for `authorize`, `overlay/regenerate` and `tts-key`): the streamer's OWN channel, always looked
+  up from the session (no channel id in any URL or body; smuggled keys are a 400), so another channel is unreachable
+  and a foreign reward id is a 404. No audit rows (no Discord actor).
+  - `GET /` → `CreatorRewardsStatusDto` (`channelExists`, `channelEnabled`, `rewardsEnabled`, `authorized`,
+    `authorizationError`, `hasOverlay`, `ttsKeyConfigured`, `discordLinked`, `maxRewards`) — flags only, never a secret;
+    `PATCH /` `{ rewardsEnabled }` (strict; turning ON is a 409 `channel_points_not_authorized` until a working token
+    exists).
+  - `POST /authorize` → `{ url }`: the reused redirect URI and a `creator-connect-state` whose payload now carries
+    `purpose: 'channel-points'` (absent = a plain chat connect, so states issued before this shipped still work) and
+    scopes `channel:bot channel:read:redemptions`. The callback (`lib/creator/oauth.ts`) still requires the creator
+    session, a state issued to THAT creator, and the authorizing Twitch account to BE the signed-in creator
+    (otherwise nothing is written, that token is revoked, and it redirects to `/creator?error=twitch-account-mismatch`);
+    a grant missing the scope/refresh token is revoked and redirects to `?error=channel-points-scope-missing`. On
+    success it stores the token (`storeBroadcasterToken`), creates the guildless channel row if there is none, and
+    leaves an EXISTING row's `enabled`/`status` alone (authorizing must not switch a bot the creator turned off back
+    on); rewards stay OFF until the creator flips the switch. `DELETE /authorize` forgets the token and turns rewards
+    off (rewards, overlay URL and TTS key are kept).
+  - `GET/POST/PATCH/DELETE /items[/:rewardId]` — the same schemas, SSRF guard on `soundUrl`, resulting-state check,
+    duplicate 409 and 25-per-channel limit as the Discord dashboard's routes (shared helpers in
+    `twitch-chat-shared.ts`). A reward's `guildId` copies the channel's (null for a guildless channel). **The DISCORD
+    action is not offered from the creator dashboard, even on a Discord-linked channel**: posting into a Discord
+    channel is authorized by Discord permissions, which a signed-in Twitch creator does not have (they may not be an
+    admin of the linked server), so create/edit of it is a 400 and an existing Discord-post reward (made from the
+    Discord dashboard) is listed read-only. Phase 3's verified Discord connection is what adds it.
+  - `GET /overlay` → `{ url, hasToken }` and `POST /overlay/regenerate`: the OBS overlay URL is a capability secret,
+    shown only to its owner (`Cache-Control: no-store`, never logged); reset rotates it (the old URL resolves to 410
+    at once). `GET` never creates one.
+  - `PUT /tts-key` `{ apiKey }` / `DELETE /tts-key` → `{ ttsKeyConfigured }`: the channel's own OpenAI key, `sk-…`
+    shape-checked, stored encrypted (`ttsOpenAiKeyEnc`), write-only — no route ever returns it.
+  Guildless channels can therefore run SOUND, CHAT and TTS rewards (TTS only with their own key); DISCORD stays off
+  until phase 3.
 - **Web** (`apps/web/src/app/creator/**`, `components/creator/*`, `lib/creator/*`): `/creator` signed out is a short
   "Use Pavisie on your stream — no Discord server needed" page with **Sign in with Twitch**; signed in it shows the
   Twitch avatar/name + sign out, a "Chat bot" section (status, connect/disconnect, prefix, commands, timers) and a
   "Currency" section (`components/creator/creator-currency.tsx`: enable switch, name/symbol, daily + streak, give limits,
   earning settings, a top-viewers table with Most earned / Highest balance tabs, and an "Adjust a balance" dialog; honest
   empty states — "not set up" until the first save, "no one has earned anything yet" — and form limits pinned to the API
-  schema by a test).
+  schema by a test) and a "Channel points" section (`components/creator/creator-channel-points.tsx`: connect / disconnect
+  channel points with the master switch, the rewards table — the Discord dashboard's own table and dialog through
+  `TwitchChatRewardsBackend`, with "Send to Discord" not offered — the OBS overlay link, hidden until revealed, with
+  copy and a confirm-guarded reset, and the write-only TTS key field).
   Its own session provider (`CreatorSessionProvider`, mounted in `app/creator/layout.tsx`, `GET /creator/me`) and
   `creatorFetch` (attaches the creator token, never the Discord one). The commands/timers tables and dialogs are the
   Discord dashboard's own components, made data-source-agnostic through `lib/dashboard/twitch-chat-backend.ts`
@@ -1398,7 +1459,10 @@ server**. Everything is built with a `platform` discriminator (`CreatorSessionDa
 - **Privacy**: a creator session holds the Twitch id/login/display name/avatar for up to 7 days (sliding); the
   sign-in token is never stored (`apps/web/src/content/legal.ts`). A streamer's channel currency (phase 2a) keeps
   per-viewer wallets (Twitch id, display name, balance, transaction history) per Twitch channel, whether or not a
-  Discord server is linked. No new env vars.
+  Discord server is linked. If the creator enables channel points (phase 2b) Pavisie also keeps the broadcaster token
+  for `channel:read:redemptions` (encrypted, per channel) until they disconnect it, the channel's rewards, the overlay
+  link (encrypted) and — only if they add one — their own OpenAI key for TTS (encrypted, never shown again); viewers'
+  redemption text is used in memory only and never stored or logged. No new env vars.
 
 ## 20. Brand tokens: gold-and-black
 

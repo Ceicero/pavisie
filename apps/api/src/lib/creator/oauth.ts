@@ -17,8 +17,10 @@ import {
   identifyTwitchUser,
   isOAuthProviderConfigured,
   revokeTwitchToken,
+  type ExchangedProviderToken,
 } from '../integrations/providers';
 import { nudgeTwitchChatReconcile } from '../integrations/twitch-chat-reconcile';
+import { TWITCH_REDEMPTIONS_SCOPE, storeBroadcasterToken } from './broadcaster-token';
 import {
   createCreatorSession,
   currentCreatorSid,
@@ -45,11 +47,18 @@ const CREATOR_STATE_TTL_SECONDS = 600;
  * Strict ones do not. */
 export const CREATOR_LOGIN_STATE_COOKIE_NAME = 'creator_login_state';
 
-/** Scopes requested when a creator connects the bot to their chat. `channel:bot` alone: it is what lets the bot
- * act in that chat. `channel:read:redemptions` (channel-point rewards) is NOT requested yet — nothing would keep
- * the broadcaster token it yields (the token is discarded, and a guildless channel has no `IntegrationConnection`
- * to hold it); phase 2 of the creator dashboard adds it together with a home for the token. */
+/** Scopes requested when a creator connects the bot to their chat: `channel:bot` alone - it is what lets the bot
+ * act in that chat. The broadcaster's token from this grant is discarded. */
 export const TWITCH_CREATOR_CONNECT_SCOPES = 'channel:bot';
+
+/** Scopes requested by "enable channel points" (creator dashboard phase 2b): `channel:bot` (the bot in chat, for
+ * CHAT reward actions and everything else) plus `channel:read:redemptions`, which the channel-point EventSub
+ * subscription needs and ONLY the broadcaster's own token can carry. This grant's token IS kept (encrypted, per
+ * channel, in `TwitchBroadcasterToken`) until the streamer disconnects channel points. */
+export const TWITCH_CREATOR_CHANNEL_POINTS_SCOPES = `channel:bot ${TWITCH_REDEMPTIONS_SCOPE}`;
+
+/** What a creator-connect state authorizes: the chat bot alone, or the chat bot plus channel points. */
+export type CreatorConnectPurpose = 'chat' | 'channel-points';
 
 /** Where the browser lands after a creator-side OAuth round trip: the creator dashboard on the public web app. */
 export function creatorDashboardUrl(query?: Record<string, string>): string {
@@ -98,11 +107,13 @@ export async function startTwitchCreatorLogin(app: ZodFastifyInstance, reply: Fa
   return buildProviderAuthorizeUrl('twitch', state, twitchRedirectUri(), '');
 }
 
-/** `POST /creator/twitch/channel/connect`: a state marking this as a creator connect (no guild), tied to the
- * signed-in creator, plus the `channel:bot` authorize URL. */
+/** `POST /creator/twitch/channel/connect` (purpose `chat`) and `POST /creator/twitch/rewards/authorize` (purpose
+ * `channel-points`): a state marking this as a creator connect (no guild), tied to the signed-in creator and to what
+ * it may authorize, plus the authorize URL for the matching scopes. */
 export async function startTwitchCreatorConnect(
   redis: Redis,
   creator: { platformUserId: string },
+  purpose: CreatorConnectPurpose = 'chat',
 ): Promise<string> {
   if (!isOAuthProviderConfigured('twitch')) {
     throw new ExternalServiceError('Twitch is not configured on this server.');
@@ -110,11 +121,12 @@ export async function startTwitchCreatorConnect(
   const state = randomBytes(24).toString('hex');
   await redis.set(
     creatorConnectStateKey(state),
-    JSON.stringify({ platform: 'twitch', platformUserId: creator.platformUserId }),
+    JSON.stringify({ platform: 'twitch', platformUserId: creator.platformUserId, purpose }),
     'EX',
     CREATOR_STATE_TTL_SECONDS,
   );
-  return buildProviderAuthorizeUrl('twitch', state, twitchRedirectUri(), TWITCH_CREATOR_CONNECT_SCOPES);
+  const scopes = purpose === 'channel-points' ? TWITCH_CREATOR_CHANNEL_POINTS_SCOPES : TWITCH_CREATOR_CONNECT_SCOPES;
+  return buildProviderAuthorizeUrl('twitch', state, twitchRedirectUri(), scopes);
 }
 
 export type CreatorCallbackKind = 'login' | 'connect';
@@ -190,6 +202,8 @@ export async function completeTwitchCreatorLogin(
 interface CreatorConnectStatePayload {
   platform: string;
   platformUserId: string;
+  /** Absent on a state issued before channel points existed - that was always a plain chat connect. */
+  purpose?: CreatorConnectPurpose;
 }
 
 /**
@@ -197,7 +211,10 @@ interface CreatorConnectStatePayload {
  * from Twitch), the state to have been issued to THIS creator, and — the load-bearing check — the Twitch account
  * that just authorized to BE the signed-in creator: otherwise a creator could hand out their authorize URL and
  * have a different channel's owner attach that channel to Pavisie under the wrong dashboard (or vice versa).
- * The broadcaster's token is discarded, not stored (see `TWITCH_CREATOR_CONNECT_SCOPES`).
+ * For a plain chat connect the broadcaster's token is discarded, not stored. For an "enable channel points" connect
+ * (`purpose: 'channel-points'`) it is stored encrypted, per channel (`storeBroadcasterToken`) - but only when it
+ * really carries `channel:read:redemptions`; otherwise nothing is written and the creator is sent back with an
+ * error.
  */
 export async function completeTwitchCreatorConnect(
   app: ZodFastifyInstance,
@@ -223,23 +240,37 @@ export async function completeTwitchCreatorConnect(
   }
   await app.redis.del(stateKey);
 
+  const purpose: CreatorConnectPurpose = payload.purpose ?? 'chat';
   const token = await exchangeProviderCode('twitch', input.code, twitchRedirectUri());
   let twitchUser;
   try {
     twitchUser = await identifyTwitchUser(token.accessToken);
-  } finally {
+  } catch (err) {
+    // Whatever we were about to keep, we cannot vouch for whose it is - do not leave it live.
     await revokeTwitchToken(token.accessToken);
+    throw err;
   }
 
   if (twitchUser.id !== creator.platformUserId) {
-    // Writes nothing. Twitch remembers whichever account the browser is logged into, so this is an easy slip —
-    // send the creator back to their dashboard with a message rather than a raw JSON error.
+    // Writes nothing. Twitch remembers whichever account the browser is logged into, so this is an easy slip -
+    // send the creator back to their dashboard with a message rather than a raw JSON error. The wrong account's
+    // token is revoked (best-effort) so it does not linger.
+    await revokeTwitchToken(token.accessToken);
     reply.redirect(creatorDashboardUrl({ error: 'twitch-account-mismatch' }));
     return;
   }
 
-  // One Pavisie chat-bot config per Twitch channel (`broadcasterUserId` is globally unique). An existing row —
-  // guild-linked or not — is re-armed in place and KEEPS its guildId, connection and settings; only a brand-new
+  if (purpose === 'channel-points') {
+    // The token is kept (or revoked, on a bad grant) inside - never revoked up front here.
+    await completeChannelPointsConnect(app, reply, creator, twitchUser, token);
+    return;
+  }
+
+  // A chat-only token is never needed again.
+  await revokeTwitchToken(token.accessToken);
+
+  // One Pavisie chat-bot config per Twitch channel (`broadcasterUserId` is globally unique). An existing row -
+  // guild-linked or not - is re-armed in place and KEEPS its guildId, connection and settings; only a brand-new
   // channel is created, without a guild.
   await app.prisma.twitchChatChannel.upsert({
     where: { broadcasterUserId: twitchUser.id },
@@ -259,4 +290,42 @@ export async function completeTwitchCreatorConnect(
 
   nudgeTwitchChatReconcile(app, '');
   reply.redirect(creatorDashboardUrl({ connected: 'twitch-chat' }));
+}
+
+/**
+ * The tail of an "enable channel points" connect, once the authorizing Twitch account has been verified to be the
+ * signed-in creator: keep the broadcaster token (encrypted, per channel) and make sure the channel row exists. A
+ * brand-new channel is created guildless like a chat connect does; an EXISTING row keeps `enabled`/`status` and
+ * everything else as it is - authorizing channel points must not silently switch a bot the creator turned off back
+ * on, so only the login is refreshed. Rewards stay off until the creator flips the switch (`rewardsEnabled`).
+ */
+async function completeChannelPointsConnect(
+  app: ZodFastifyInstance,
+  reply: FastifyReply,
+  creator: { platformUserId: string },
+  twitchUser: { id: string; login: string },
+  token: ExchangedProviderToken,
+): Promise<void> {
+  if (!token.scopes.includes(TWITCH_REDEMPTIONS_SCOPE) || !token.refreshToken || !token.expiresIn) {
+    // Nothing usable came back (Twitch grants all requested scopes or none, so this is unexpected): store
+    // nothing and say so rather than pretending channel points are ready.
+    await revokeTwitchToken(token.accessToken);
+    reply.redirect(creatorDashboardUrl({ error: 'channel-points-scope-missing' }));
+    return;
+  }
+
+  const channel = await app.prisma.twitchChatChannel.upsert({
+    where: { broadcasterUserId: twitchUser.id },
+    create: {
+      broadcasterUserId: twitchUser.id,
+      broadcasterLogin: twitchUser.login,
+      status: 'PENDING',
+      createdBy: creator.platformUserId,
+    },
+    update: { broadcasterLogin: twitchUser.login },
+  });
+  await storeBroadcasterToken(app.prisma, channel.id, token);
+
+  nudgeTwitchChatReconcile(app, '');
+  reply.redirect(creatorDashboardUrl({ connected: 'channel-points' }));
 }

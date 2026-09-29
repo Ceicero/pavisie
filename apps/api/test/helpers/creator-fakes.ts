@@ -56,6 +56,11 @@ function makeModel(store: Map<string, any>, idPrefix: string, applyDefaults: (pa
       store.delete(existing.id);
       return existing;
     },
+    deleteMany: async (args: any) => {
+      const doomed = [...store.entries()].filter(([, r]) => matchWhere(r, args?.where));
+      for (const [id] of doomed) store.delete(id);
+      return { count: doomed.length };
+    },
     upsert: async (args: any) => {
       const found = [...store.values()].find((r) => matchWhere(r, args.where));
       if (found) {
@@ -81,6 +86,7 @@ export function channelDefaults(partial: any) {
     commandPrefix: '!',
     connectionId: null,
     overlayTokenEnc: null,
+    ttsOpenAiKeyEnc: null,
     rewardsEnabled: false,
     bridgeDiscordChannelId: null,
     bridgeDiscordToTwitch: false,
@@ -110,6 +116,38 @@ function timerDefaults(partial: any) {
   return { guildId: null, enabled: true, lastFiredAt: null, createdAt: new Date(), updatedAt: new Date(), ...partial };
 }
 
+function rewardDefaults(partial: any) {
+  return {
+    guildId: null,
+    rewardId: null,
+    enabled: true,
+    volume: 80,
+    soundUrl: null,
+    ttsTemplate: null,
+    chatTemplate: null,
+    discordChannelId: null,
+    discordTemplate: null,
+    cooldownSeconds: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...partial,
+  };
+}
+
+function broadcasterTokenDefaults(partial: any) {
+  return {
+    refreshTokenEnc: null,
+    scopes: [],
+    expiresAt: null,
+    rotatedAt: null,
+    status: 'CONNECTED',
+    lastError: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...partial,
+  };
+}
+
 function botIdentityDefaults(partial: any) {
   return { scopes: [], lastError: null, status: 'CONNECTED', createdAt: new Date(), updatedAt: new Date(), ...partial };
 }
@@ -122,6 +160,8 @@ export function creatorFixture() {
   const botIdentities = new Map<string, any>();
   const connections = new Map<string, any>();
   const oauthTokens = new Map<string, any>();
+  const rewards = new Map<string, any>();
+  const broadcasterTokens = new Map<string, any>();
 
   const overrides: PrismaStubOverrides = {
     twitchChatChannel: makeModel(channels, 'chan', channelDefaults),
@@ -130,9 +170,11 @@ export function creatorFixture() {
     twitchBotIdentity: makeModel(botIdentities, 'bot', botIdentityDefaults),
     integrationConnection: makeModel(connections, 'conn', (p) => ({ status: 'PENDING', config: {}, ...p })),
     oAuthToken: makeModel(oauthTokens, 'token', (p) => p),
+    twitchChatReward: makeModel(rewards, 'reward', rewardDefaults),
+    twitchBroadcasterToken: makeModel(broadcasterTokens, 'btok', broadcasterTokenDefaults),
   };
 
-  return { channels, commands, timers, botIdentities, connections, oauthTokens, overrides };
+  return { channels, commands, timers, botIdentities, connections, oauthTokens, rewards, broadcasterTokens, overrides };
 }
 
 export function seedChannel(
@@ -141,6 +183,28 @@ export function seedChannel(
 ): any {
   const row = channelDefaults({ broadcasterLogin: `login-${partial.broadcasterUserId}`, createdBy: 'seed', ...partial });
   fixture.channels.set(row.id, row);
+  return row;
+}
+
+export function seedReward(
+  fixture: ReturnType<typeof creatorFixture>,
+  partial: { id: string; channelId: string; rewardTitle: string; action: string; [key: string]: unknown },
+): any {
+  const row = rewardDefaults({ createdBy: 'seed', ...partial });
+  fixture.rewards.set(row.id, row);
+  return row;
+}
+
+export function seedBroadcasterToken(
+  fixture: ReturnType<typeof creatorFixture>,
+  partial: { id: string; channelId: string; [key: string]: unknown },
+): any {
+  const row = broadcasterTokenDefaults({
+    accessTokenEnc: 'enc-access',
+    scopes: ['channel:bot', 'channel:read:redemptions'],
+    ...partial,
+  });
+  fixture.broadcasterTokens.set(row.id, row);
   return row;
 }
 

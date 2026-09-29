@@ -135,8 +135,9 @@ secret — treat it seriously even on suspicion alone.
    ```
    pnpm --filter @pavisie/database reencrypt:secrets
    ```
-   This walks `OAuthToken.accessTokenEnc`/`refreshTokenEnc`, `WebhookEndpoint.secretEnc`, and the
-   `ai` plugin's `PluginConfig.config.apiKeyEnc`, decrypting each (via the same primary-then-previous
+   This walks `OAuthToken.accessTokenEnc`/`refreshTokenEnc`, `TwitchBroadcasterToken.accessTokenEnc`/
+   `refreshTokenEnc`, `TwitchChatChannel.overlayTokenEnc`/`ttsOpenAiKeyEnc`/`bridgeWebhookTokenEnc`,
+   `WebhookEndpoint.secretEnc`, and the `ai` plugin's `PluginConfig.config.apiKeyEnc`, decrypting each (via the same primary-then-previous
    fallback) and re-encrypting under the current `ENCRYPTION_KEY`. It's idempotent and safe to
    re-run; use `--reencrypt:secrets -- --dry-run` (i.e. `pnpm --filter @pavisie/database exec tsx
 scripts/reencrypt-secrets.ts --dry-run`) first if you want a preview without writing anything. The

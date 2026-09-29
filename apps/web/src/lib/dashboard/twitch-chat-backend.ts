@@ -1,11 +1,15 @@
 import {
   useCreateTwitchChatCommand,
+  useCreateTwitchChatReward,
   useCreateTwitchChatTimer,
   useDeleteTwitchChatCommand,
+  useDeleteTwitchChatReward,
   useDeleteTwitchChatTimer,
   useTwitchChatCommands,
+  useTwitchChatRewards,
   useTwitchChatTimers,
   useUpdateTwitchChatCommand,
+  useUpdateTwitchChatReward,
   useUpdateTwitchChatTimer,
 } from './integrations-queries';
 
@@ -35,6 +39,14 @@ export interface TwitchChatTimersBackend {
   useRemove: () => ReturnType<typeof useDeleteTwitchChatTimer>;
 }
 
+/** The same idea for channel-point rewards (`twitch-chat-rewards-table.tsx` / `twitch-chat-reward-dialog.tsx`). */
+export interface TwitchChatRewardsBackend {
+  useList: () => ReturnType<typeof useTwitchChatRewards>;
+  useCreate: () => ReturnType<typeof useCreateTwitchChatReward>;
+  useUpdate: () => ReturnType<typeof useUpdateTwitchChatReward>;
+  useRemove: () => ReturnType<typeof useDeleteTwitchChatReward>;
+}
+
 /** The Discord dashboard's backend for one linked channel's commands (`/guilds/:guildId/integrations/...`). */
 export function guildTwitchChatCommandsBackend(guildId: string, channelId: string): TwitchChatCommandsBackend {
   return {
@@ -52,5 +64,15 @@ export function guildTwitchChatTimersBackend(guildId: string, channelId: string)
     useCreate: () => useCreateTwitchChatTimer(guildId),
     useUpdate: () => useUpdateTwitchChatTimer(guildId),
     useRemove: () => useDeleteTwitchChatTimer(guildId),
+  };
+}
+
+/** The Discord dashboard's backend for one linked channel's channel-point rewards. */
+export function guildTwitchChatRewardsBackend(guildId: string, channelId: string): TwitchChatRewardsBackend {
+  return {
+    useList: () => useTwitchChatRewards(guildId, channelId),
+    useCreate: () => useCreateTwitchChatReward(guildId),
+    useUpdate: () => useUpdateTwitchChatReward(guildId),
+    useRemove: () => useDeleteTwitchChatReward(guildId),
   };
 }

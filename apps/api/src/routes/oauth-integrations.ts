@@ -26,6 +26,7 @@ import {
   type OAuthProviderId,
 } from '../lib/integrations/providers';
 import { nudgeTwitchChatReconcile } from '../lib/integrations/twitch-chat-reconcile';
+import { storeBroadcasterToken } from '../lib/creator/broadcaster-token';
 
 const paramsSchema = z.object({
   provider: z.enum(OAUTH_PROVIDER_IDS as [OAuthProviderId, ...OAuthProviderId[]]),
@@ -228,22 +229,11 @@ export default async function oauthIntegrationsRoutes(app: ZodFastifyInstance): 
           },
         });
 
-        await app.prisma.oAuthToken.create({
-          data: {
-            connectionId: connection.id,
-            accessTokenEnc: encryptSecret(token.accessToken),
-            refreshTokenEnc: token.refreshToken ? encryptSecret(token.refreshToken) : undefined,
-            tokenType: token.tokenType,
-            scopes: token.scopes,
-            expiresAt: token.expiresIn ? new Date(Date.now() + token.expiresIn * 1000) : undefined,
-          },
-        });
-
         // Keyed on the broadcaster alone (`broadcasterUserId` is globally unique — one Pavisie chat-bot config
         // per Twitch channel). The checks above already guarantee any existing row for this broadcaster belongs
         // to THIS guild: a row linked elsewhere — another guild, or none at all because the streamer set the
         // channel up from the creator dashboard (`guildId` null) — bailed out with `twitch-chat-already-linked`.
-        await app.prisma.twitchChatChannel.upsert({
+        const channel = await app.prisma.twitchChatChannel.upsert({
           where: { broadcasterUserId: twitchUser.id },
           create: {
             guildId,
@@ -260,6 +250,12 @@ export default async function oauthIntegrationsRoutes(app: ZodFastifyInstance): 
             connectionId: connection.id,
           },
         });
+
+        // The broadcaster's token (channel-point rewards) lives with the CHANNEL, not the guild-scoped
+        // connection — a creator-dashboard channel has no connection at all (ARCHITECTURE.md §19b/§19e). A re-link
+        // replaces it wholesale; a grant without `channel:read:redemptions` is useless for rewards, so it is not
+        // kept and any previous token is dropped (rewards then report "re-link needed", as before).
+        await storeBroadcasterToken(app.prisma, channel.id, token);
 
         await writeDashboardAudit(app.prisma, {
           guildId,

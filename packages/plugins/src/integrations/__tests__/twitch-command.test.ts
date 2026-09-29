@@ -536,7 +536,7 @@ describe('/twitch status — channel points', () => {
         prismaOverrides: {
           twitchBotIdentity: { findFirst: async () => null },
           twitchChatChannel: { findMany: async () => [channel] },
-          oAuthToken: { findUnique: async () => ({ scopes: ['channel:bot'] }) },
+          twitchBroadcasterToken: { findUnique: async () => ({ scopes: ['channel:bot'] }) },
         },
       },
     );
@@ -554,7 +554,7 @@ describe('/twitch status — channel points', () => {
         prismaOverrides: {
           twitchBotIdentity: { findFirst: async () => null },
           twitchChatChannel: { findMany: async () => [channel] },
-          oAuthToken: { findUnique: async () => null },
+          twitchBroadcasterToken: { findUnique: async () => null },
         },
       },
     );
@@ -572,7 +572,7 @@ describe('/twitch status — channel points', () => {
         prismaOverrides: {
           twitchBotIdentity: { findFirst: async () => null },
           twitchChatChannel: { findMany: async () => [channel] },
-          oAuthToken: { findUnique: async () => ({ scopes: ['channel:read:redemptions'] }) },
+          twitchBroadcasterToken: { findUnique: async () => ({ scopes: ['channel:read:redemptions'] }) },
         },
       },
     );
@@ -590,7 +590,7 @@ describe('/twitch status — channel points', () => {
         prismaOverrides: {
           twitchBotIdentity: { findFirst: async () => null },
           twitchChatChannel: { findMany: async () => [channel] },
-          oAuthToken: { findUnique: async () => ({ scopes: ['channel:read:redemptions'] }) },
+          twitchBroadcasterToken: { findUnique: async () => ({ scopes: ['channel:read:redemptions'] }) },
         },
       },
     );
@@ -1009,7 +1009,7 @@ describe('/twitch reward enable', () => {
       {
         prismaOverrides: {
           twitchChatChannel: { findMany: async () => [channelWithoutScope], update },
-          oAuthToken: { findUnique: async () => ({ scopes: ['channel:bot'] }) },
+          twitchBroadcasterToken: { findUnique: async () => ({ scopes: ['channel:bot'] }) },
         },
         overrides: { audit },
       },
@@ -1035,7 +1035,7 @@ describe('/twitch reward enable', () => {
       {
         prismaOverrides: {
           twitchChatChannel: { findMany: async () => [channelWithScope], update },
-          oAuthToken: { findUnique: async () => ({ scopes: ['channel:read:redemptions'] }) },
+          twitchBroadcasterToken: { findUnique: async () => ({ scopes: ['channel:read:redemptions'] }) },
         },
       },
     );

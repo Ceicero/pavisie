@@ -3,8 +3,9 @@
 // matching every enabled `TwitchChatChannel` row whose guild has the `integrations` plugin enabled — plus every
 // enabled GUILDLESS row (`guildId === null`, set up from the creator dashboard, ARCHITECTURE.md §19e), which runs on
 // its own `enabled` flag alone: custom commands, timers, the built-ins and the channel's own currency (economy
-// commands + chat earning, `ChannelEconomy`, §18b) work, while everything that needs a Discord server (the Discord
-// bridge, DISCORD/TTS reward actions) is quietly unavailable.
+// commands + chat earning, `ChannelEconomy`, §18b) and channel-point SOUND/CHAT/TTS rewards (the broadcaster token
+// lives in `TwitchBroadcasterToken`, TTS runs on the channel's own OpenAI key) work, while everything that needs a
+// Discord server (the Discord bridge, DISCORD reward actions) is quietly unavailable.
 //
 // Since the channel-points extension, a channel can carry up to TWO independent EventSub subscriptions —
 // `channel.chat.message` (always, on the bot identity's token) and `channel.channel_points_custom_reward_
@@ -67,7 +68,7 @@ const NO_CHANNELS_IDLE_REASON = 'no linked Twitch channels yet';
 /** Written to `TwitchChatChannel.lastError` when rewards are enabled but the broadcaster hasn't (re-)granted
  * `channel:read:redemptions` — surfaced in the dashboard and `/twitch status` rather than failing silently. */
 const REWARDS_SCOPE_MISSING_ERROR =
-  'Channel-point rewards are on, but this channel needs to be re-linked to grant channel-point redemption permission (channel:read:redemptions).';
+  'Channel-point rewards are on, but Pavisie does not have channel-point redemption permission (channel:read:redemptions) for this channel. Re-link the channel from the Discord dashboard, or authorize channel points again from the creator dashboard.';
 /** How long a `getStream` liveness result is trusted for the Twitch chat-earning gate before it's re-checked —
  * keeps a busy chat from costing one Helix call per message (ARCHITECTURE.md §18b/§19a). */
 const LIVENESS_CACHE_TTL_MS = 60_000;
@@ -1074,19 +1075,14 @@ export class TwitchChatManager {
           });
           return;
         case 'TTS': {
-          // TTS runs on the linked guild's own OpenAI key (bring-your-own-key), so it needs a guild.
-          if (!channel.guildId) {
-            ctx.logger.debug(
-              { rewardId: action.reward.id },
-              'integrations/twitch-chat: TTS reward action skipped (channel has no linked Discord server)',
-            );
-            return;
-          }
-          const synthesized = await synthesizeTts(ctx, channel.guildId, channel.id, action.text);
+          // TTS is bring-your-own-key: the channel's own OpenAI key (set on the creator dashboard) if it has
+          // one, else — only for a channel linked to a Discord server — that guild's own key. A channel with
+          // neither has no TTS (skipped quietly below, never an error into Twitch chat).
+          const synthesized = await synthesizeTts(ctx, channel, action.text);
           if (!synthesized) {
             ctx.logger.warn(
               { rewardId: action.reward.id, rewardTitle: action.reward.rewardTitle },
-              'integrations/twitch-chat: TTS unavailable for this guild; skipping the TTS reward action',
+              'integrations/twitch-chat: TTS unavailable for this channel (no OpenAI key); skipping the TTS reward action',
             );
             return;
           }

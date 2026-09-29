@@ -45,10 +45,10 @@ function makeChannel(overrides: Record<string, unknown> = {}): any {
 function makeToken(overrides: Record<string, unknown> = {}) {
   return {
     id: 'token-1',
-    connectionId: 'connection-1',
+    channelId: 'channel-1',
     accessTokenEnc: encryptSecret('broadcaster-access-token'),
     refreshTokenEnc: encryptSecret('broadcaster-refresh-token'),
-    tokenType: 'bearer',
+    
     scopes: ['channel:read:redemptions'],
     expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1h out, not expiring soon
     rotatedAt: null,
@@ -77,7 +77,7 @@ describe('createRewardRedemptionSubscription', () => {
 
     const token = makeToken();
     const { ctx } = createTestContext({
-      prismaOverrides: { oAuthToken: { findUnique: async () => token } },
+      prismaOverrides: { twitchBroadcasterToken: { findUnique: async () => token } },
     });
 
     const result = await createRewardRedemptionSubscription(ctx, 'session-abc', makeChannel());
@@ -106,7 +106,7 @@ describe('createRewardRedemptionSubscription', () => {
     const fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
     const { ctx } = createTestContext({
-      prismaOverrides: { oAuthToken: { findUnique: async () => null } },
+      prismaOverrides: { twitchBroadcasterToken: { findUnique: async () => null } },
     });
 
     const result = await createRewardRedemptionSubscription(ctx, 'session-abc', makeChannel());
@@ -120,7 +120,7 @@ describe('createRewardRedemptionSubscription', () => {
 
     const token = makeToken();
     const { ctx } = createTestContext({
-      prismaOverrides: { oAuthToken: { findUnique: async () => token } },
+      prismaOverrides: { twitchBroadcasterToken: { findUnique: async () => token } },
     });
 
     const result = await createRewardRedemptionSubscription(ctx, 'session-abc', makeChannel());
@@ -148,7 +148,7 @@ describe('createRewardRedemptionSubscription', () => {
 
     const { ctx } = createTestContext({
       prismaOverrides: {
-        oAuthToken: {
+        twitchBroadcasterToken: {
           findUnique: async () => token,
           update: async (args: unknown) => {
             const data = (args as { data: Record<string, unknown> }).data;
@@ -189,7 +189,7 @@ describe('listCustomRewards', () => {
 
     const token = makeToken();
     const { ctx } = createTestContext({
-      prismaOverrides: { oAuthToken: { findUnique: async () => token } },
+      prismaOverrides: { twitchBroadcasterToken: { findUnique: async () => token } },
     });
 
     const result = await listCustomRewards(ctx, makeChannel());
@@ -211,7 +211,7 @@ describe('listCustomRewards', () => {
     const fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
     const { ctx } = createTestContext({
-      prismaOverrides: { oAuthToken: { findUnique: async () => null } },
+      prismaOverrides: { twitchBroadcasterToken: { findUnique: async () => null } },
     });
 
     const result = await listCustomRewards(ctx, makeChannel());
@@ -225,7 +225,7 @@ describe('listCustomRewards', () => {
 
     const token = makeToken();
     const { ctx } = createTestContext({
-      prismaOverrides: { oAuthToken: { findUnique: async () => token } },
+      prismaOverrides: { twitchBroadcasterToken: { findUnique: async () => token } },
     });
 
     const result = await listCustomRewards(ctx, makeChannel());

@@ -26,10 +26,7 @@ import type {
 } from '@pavisie/types/integrations';
 import { TWITCH_REWARD_ACTION_KINDS } from '@pavisie/types/integrations';
 import { ApiClientError } from '@/lib/dashboard/api';
-import {
-  useCreateTwitchChatReward,
-  useUpdateTwitchChatReward,
-} from '@/lib/dashboard/integrations-queries';
+import type { TwitchChatRewardsBackend } from '@/lib/dashboard/twitch-chat-backend';
 import { DiscordChannelSelect } from '../discord-selects';
 
 /** Client-side validation mirrors the server in `apps/api/src/lib/integrations/twitch-chat-schemas.ts`. */
@@ -50,7 +47,12 @@ const ACTION_LABELS: Record<TwitchRewardActionKindId, string> = {
 };
 
 export interface TwitchChatRewardDialogProps {
-  guildId: string;
+  /** Where rewards are written - the Discord dashboard's guild routes or the creator dashboard's own. */
+  backend: TwitchChatRewardsBackend;
+  /** The linked Discord server, when there is one AND the caller may post into it (the Discord dashboard). It is
+   * what makes the "Send to Discord" action available; without it (the creator dashboard) that action is not
+   * offered at all. */
+  discordGuildId?: string | null;
   channelId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -59,7 +61,8 @@ export interface TwitchChatRewardDialogProps {
 }
 
 export function TwitchChatRewardDialog({
-  guildId,
+  backend,
+  discordGuildId,
   channelId,
   open,
   onOpenChange,
@@ -76,8 +79,9 @@ export function TwitchChatRewardDialog({
   const [discordChannelId, setDiscordChannelId] = React.useState<string | null>(null);
   const [discordTemplate, setDiscordTemplate] = React.useState('');
 
-  const create = useCreateTwitchChatReward(guildId);
-  const update = useUpdateTwitchChatReward(guildId);
+  const create = backend.useCreate();
+  const update = backend.useUpdate();
+  const actionKinds = TWITCH_REWARD_ACTION_KINDS.filter((kind) => kind !== 'discord' || Boolean(discordGuildId));
   const { toast } = useToast();
   const saving = create.isPending || update.isPending;
 
@@ -238,7 +242,7 @@ export function TwitchChatRewardDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TWITCH_REWARD_ACTION_KINDS.map((kind) => (
+                {actionKinds.map((kind) => (
                   <SelectItem key={kind} value={kind}>
                     {ACTION_LABELS[kind]}
                   </SelectItem>
@@ -295,8 +299,8 @@ export function TwitchChatRewardDialog({
                 />
               </FormField>
               <p className="text-xs text-muted-foreground">
-                Text-to-speech uses your server's own OpenAI key from the AI plugin. Without one, TTS rewards stay
-                silent.
+                Text-to-speech uses an OpenAI key you provide: your channel's own key, or your Discord server's key
+                from the AI plugin. Without one, TTS rewards stay silent.
               </p>
             </>
           ) : null}
@@ -327,7 +331,7 @@ export function TwitchChatRewardDialog({
             <>
               <FormField label="Discord channel" required>
                 <DiscordChannelSelect
-                  guildId={guildId}
+                  guildId={discordGuildId ?? ''}
                   value={discordChannelId}
                   onChange={setDiscordChannelId}
                 />

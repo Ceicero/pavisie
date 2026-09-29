@@ -1414,6 +1414,10 @@ model TwitchChatChannel {
   // capability token, encrypted at rest, and whether reward redemptions are turned on for this channel at all.
   overlayTokenEnc   String?
   rewardsEnabled    Boolean                @default(false)
+  // The channel's OWN OpenAI API key for channel-point TTS (bring-your-own-key: Pavisie never pays for TTS),
+  // encrypted at rest with @pavisie/core's encryptSecret/decryptSecret. Write-only through the API (never returned,
+  // only "set / not set"). When set it wins over the linked guild's `ai` plugin key (ARCHITECTURE.md §19a/§19e).
+  ttsOpenAiKeyEnc   String?
   // Discord <-> Twitch chat bridge (opt-in, off by default per direction; ARCHITECTURE.md §19a). At most one
   // Discord text channel per TwitchChatChannel. `bridgeWebhookId`/`bridgeWebhookTokenEnc` are the bot-created
   // Discord channel webhook used for the Twitch -> Discord direction, persisted (token encrypted at rest via
@@ -1434,9 +1438,34 @@ model TwitchChatChannel {
   commands TwitchChatCommand[]
   timers   TwitchChatTimer[]
   rewards  TwitchChatReward[]
+  // The broadcaster's own token for channel-point redemptions (see TwitchBroadcasterToken below).
+  broadcasterToken TwitchBroadcasterToken?
 
   @@index([guildId])
   @@index([guildId, bridgeDiscordChannelId])
+}
+
+/// The BROADCASTER's own Twitch user token (scope `channel:read:redemptions`), kept per TWITCH CHANNEL — not per
+/// Discord guild — so a channel set up from the creator dashboard with no Discord server can use channel-point
+/// rewards (ARCHITECTURE.md §19b/§19e). The `channel.channel_points_custom_reward_redemption.add` EventSub
+/// subscription can only be created with this token, never the bot identity's. Encrypted at rest; deleted with the
+/// channel and when the streamer disconnects channel points. Migration 0016 moved every guild-linked channel's
+/// existing broadcaster token here out of `OAuthToken`.
+model TwitchBroadcasterToken {
+  id              String            @id @default(cuid())
+  channelId       String            @unique
+  channel         TwitchChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  accessTokenEnc  String
+  // Twitch rotates the refresh token on every use; the new one is persisted on each refresh.
+  refreshTokenEnc String?
+  scopes          String[]
+  expiresAt       DateTime?
+  rotatedAt       DateTime?
+  // ERROR after a terminal refresh failure (revoked/expired refresh token) — the streamer must re-authorize.
+  status          ConnectionStatus  @default(CONNECTED)
+  lastError       String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 }
 
 /// Custom `!command` responses for a linked Twitch chat channel.
@@ -1488,8 +1517,9 @@ model TwitchChatReward {
   id        String                 @id @default(cuid())
   channelId String
   channel   TwitchChatChannel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  guildId   String
-  guild     Guild                  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  // The parent channel's linked Discord server, if any. NULL for a reward on a creator-dashboard-only channel.
+  guildId   String?
+  guild     Guild?                 @relation(fields: [guildId], references: [id], onDelete: Cascade)
   // Twitch custom reward id, when picked from the dashboard's "list rewards from Twitch" dropdown; null means
   // match redemptions by `rewardTitle` (case-insensitively) instead — e.g. for a reward created after this row.
   rewardId  String?

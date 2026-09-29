@@ -469,7 +469,11 @@ describe('TwitchChatManager reward redemption dispatch', () => {
 
     // channelId is passed so the synthesized audio lands under a channel-scoped Redis key — that scope is
     // what stops another channel's valid overlay token from fetching this audio.
-    expect(mocks.synthesizeTts).toHaveBeenCalledWith(ctx, 'guild-1', 'channel-a', 'Say hi to ViewerOne');
+    expect(mocks.synthesizeTts).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ id: 'channel-a', guildId: 'guild-1' }),
+      'Say hi to ViewerOne',
+    );
     expect(publishSpy).toHaveBeenCalledTimes(1);
     const [channelArg, payloadArg] = publishSpy.mock.calls[0] as [string, string];
     expect(channelArg).toBe(redisKey('overlay', 'channel-a'));

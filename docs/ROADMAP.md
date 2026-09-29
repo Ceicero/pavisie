@@ -64,11 +64,13 @@ set` (and the equivalent dashboard action) changes a member's stored XP/level im
   rather than failing silently. No Twitch-side moderation actions (ban/timeout/delete) ship in v1 —
   custom commands and timers only.
 - **Twitch channel-point rewards are live.** Viewers redeeming a custom Twitch channel-point reward triggers
-  one of four actions: play a sound on the streamer's OBS overlay, speak text via TTS (using the guild's own
-  OpenAI key, or unavailable if not configured), post to Twitch chat, or post to a Discord channel. Configured
-  per-channel from `/twitch reward add|remove|list` or the dashboard's "Rewards" tab. Existing linked channels
-  **must re-link to grant `channel:read:redemptions` scope** before the broadcaster's rewards can start working —
-  the reconcile loop reports this plainly rather than silently failing. TTS synthesis is server-side (OBS's
+  one of four actions: play a sound on the streamer's OBS overlay, speak text via TTS (using the channel's own
+  OpenAI key, else the linked guild's own key, or unavailable if neither is configured), post to Twitch chat, or
+  post to a Discord channel. Configured per-channel from `/twitch reward add|remove|list`, the Discord dashboard's
+  "Rewards" tab, or — with no Discord server at all — the creator dashboard's "Channel points" section (everything
+  but the Discord action). The streamer's broadcaster token (`channel:read:redemptions`) is kept per channel; a
+  channel without that permission (never granted, or revoked) must authorize again — the reconcile loop reports this
+  plainly rather than silently failing. TTS synthesis is server-side (OBS's
   embedded browser has no voices), and sound URLs are validated by the existing SSRF guard at write time. Viewer
   reward-input text is never persisted or logged. The overlay is an HTML page served at a capability-token URL
   (treat the URL like a password) and can be regenerated without re-linking.

@@ -7,18 +7,28 @@ import type {
   CreatorEconomyAdjustInput,
   CreatorEconomyAdjustResultDto,
   CreatorEconomyLeaderboardDto,
+  CreatorRewardsStatusDto,
+  CreatorTtsKeyStatusDto,
   CreatorTwitchChannelDto,
   CreatorTwitchChannelStatusDto,
 } from '@pavisie/types/creator';
 import type {
   CreateTwitchChatCommandInput,
+  CreateTwitchChatRewardInput,
   CreateTwitchChatTimerInput,
   TwitchChatCommandDto,
+  TwitchChatRewardDto,
   TwitchChatTimerDto,
+  TwitchOverlayInfoDto,
   UpdateTwitchChatCommandInput,
+  UpdateTwitchChatRewardInput,
   UpdateTwitchChatTimerInput,
 } from '@pavisie/types/integrations';
-import type { TwitchChatCommandsBackend, TwitchChatTimersBackend } from '@/lib/dashboard/twitch-chat-backend';
+import type {
+  TwitchChatCommandsBackend,
+  TwitchChatRewardsBackend,
+  TwitchChatTimersBackend,
+} from '@/lib/dashboard/twitch-chat-backend';
 import { creatorFetch } from './api';
 import { useCreatorSession } from './session';
 
@@ -29,10 +39,14 @@ export const creatorQueryKeys = {
   twitchTimers: () => ['creator', 'twitch', 'timers'] as const,
   twitchEconomy: () => ['creator', 'twitch', 'economy'] as const,
   twitchEconomyLeaderboard: () => ['creator', 'twitch', 'economy', 'leaderboard'] as const,
+  twitchRewards: () => ['creator', 'twitch', 'rewards'] as const,
+  twitchRewardItems: () => ['creator', 'twitch', 'rewards', 'items'] as const,
+  twitchRewardsOverlay: () => ['creator', 'twitch', 'rewards', 'overlay'] as const,
 };
 
 const CHANNEL_PATH = '/creator/twitch/channel';
 const ECONOMY_PATH = '/creator/twitch/economy';
+const REWARDS_PATH = '/creator/twitch/rewards';
 
 /** Queries only run for a signed-in creator (otherwise they would just 401). */
 function useSignedIn(): boolean {
@@ -242,3 +256,136 @@ export const creatorTwitchTimersBackend: TwitchChatTimersBackend = {
   useUpdate: useUpdateCreatorTimer,
   useRemove: useDeleteCreatorTimer,
 };
+
+// ---------------------------------------------------------------------------
+// Channel points: authorization, the master switch, rewards, the OBS overlay URL and the channel's TTS key.
+// Everything is the signed-in creator's own channel (implied by the session); nothing needs a Discord server.
+// ---------------------------------------------------------------------------
+
+export function useCreatorRewardsStatus() {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: creatorQueryKeys.twitchRewards(),
+    queryFn: () => creatorFetch<CreatorRewardsStatusDto>(REWARDS_PATH),
+    enabled: signedIn,
+  });
+}
+
+/** Invalidates everything under the rewards key (status, list, overlay) in one call. */
+function useInvalidateRewards() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: creatorQueryKeys.twitchRewards() });
+}
+
+/** Starts "enable channel points": resolves with the Twitch authorize URL to navigate to. */
+export function useAuthorizeCreatorChannelPoints() {
+  return useMutation({
+    mutationFn: () => creatorFetch<{ url: string }>(`${REWARDS_PATH}/authorize`, { method: 'POST' }),
+  });
+}
+
+/** Disconnects channel points: the broadcaster token is forgotten and rewards switch off. */
+export function useDisconnectCreatorChannelPoints() {
+  const invalidate = useInvalidateRewards();
+  return useMutation({
+    mutationFn: () => creatorFetch<void>(`${REWARDS_PATH}/authorize`, { method: 'DELETE' }),
+    onSuccess: () => void invalidate(),
+  });
+}
+
+export function useSetCreatorRewardsEnabled() {
+  const invalidate = useInvalidateRewards();
+  return useMutation({
+    mutationFn: (rewardsEnabled: boolean) =>
+      creatorFetch<{ rewardsEnabled: boolean }>(REWARDS_PATH, { method: 'PATCH', body: { rewardsEnabled } }),
+    onSuccess: () => void invalidate(),
+  });
+}
+
+function useCreatorRewardItems() {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: creatorQueryKeys.twitchRewardItems(),
+    queryFn: () => creatorFetch<TwitchChatRewardDto[]>(`${REWARDS_PATH}/items`),
+    enabled: signedIn,
+  });
+}
+
+function useCreateCreatorReward() {
+  const invalidate = useInvalidateRewards();
+  return useMutation({
+    mutationFn: ({ input }: { channelId: string; input: CreateTwitchChatRewardInput }) =>
+      creatorFetch<TwitchChatRewardDto>(`${REWARDS_PATH}/items`, { method: 'POST', body: input }),
+    onSuccess: () => void invalidate(),
+  });
+}
+
+function useUpdateCreatorReward() {
+  const invalidate = useInvalidateRewards();
+  return useMutation({
+    mutationFn: ({
+      rewardId,
+      patch,
+    }: {
+      rewardId: string;
+      channelId: string;
+      patch: UpdateTwitchChatRewardInput;
+    }) => creatorFetch<TwitchChatRewardDto>(`${REWARDS_PATH}/items/${rewardId}`, { method: 'PATCH', body: patch }),
+    onSuccess: () => void invalidate(),
+  });
+}
+
+function useDeleteCreatorReward() {
+  const invalidate = useInvalidateRewards();
+  return useMutation({
+    mutationFn: ({ rewardId }: { rewardId: string; channelId: string }) =>
+      creatorFetch<void>(`${REWARDS_PATH}/items/${rewardId}`, { method: 'DELETE' }),
+    onSuccess: () => void invalidate(),
+  });
+}
+
+export const creatorTwitchRewardsBackend: TwitchChatRewardsBackend = {
+  useList: useCreatorRewardItems,
+  useCreate: useCreateCreatorReward,
+  useUpdate: useUpdateCreatorReward,
+  useRemove: useDeleteCreatorReward,
+};
+
+/** The overlay URL is a capability secret: shown only to the owner, fetched only once the section is open and a
+ * URL exists (`enabled`), and never persisted by the browser beyond React Query's in-memory cache. */
+export function useCreatorRewardsOverlay(enabled: boolean) {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: creatorQueryKeys.twitchRewardsOverlay(),
+    queryFn: () => creatorFetch<TwitchOverlayInfoDto>(`${REWARDS_PATH}/overlay`),
+    enabled: signedIn && enabled,
+    gcTime: 0,
+  });
+}
+
+/** Creates the overlay URL, or rotates it (the old URL stops working at once). */
+export function useResetCreatorRewardsOverlay() {
+  const invalidate = useInvalidateRewards();
+  return useMutation({
+    mutationFn: () => creatorFetch<TwitchOverlayInfoDto>(`${REWARDS_PATH}/overlay/regenerate`, { method: 'POST' }),
+    onSuccess: () => void invalidate(),
+  });
+}
+
+/** Sets (or replaces) the channel's own OpenAI key for TTS. Write-only: the key is never read back. */
+export function useSetCreatorTtsKey() {
+  const invalidate = useInvalidateRewards();
+  return useMutation({
+    mutationFn: (apiKey: string) =>
+      creatorFetch<CreatorTtsKeyStatusDto>(`${REWARDS_PATH}/tts-key`, { method: 'PUT', body: { apiKey } }),
+    onSuccess: () => void invalidate(),
+  });
+}
+
+export function useClearCreatorTtsKey() {
+  const invalidate = useInvalidateRewards();
+  return useMutation({
+    mutationFn: () => creatorFetch<CreatorTtsKeyStatusDto>(`${REWARDS_PATH}/tts-key`, { method: 'DELETE' }),
+    onSuccess: () => void invalidate(),
+  });
+}

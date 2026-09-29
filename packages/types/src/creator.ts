@@ -122,3 +122,35 @@ export interface CreatorEconomyAdjustResultDto {
   amount: string;
   newBalance: string;
 }
+
+// ---------------------------------------------------------------------------
+// Channel points: rewards, OBS overlay, TTS key (creator dashboard phase 2b, ARCHITECTURE.md §19b / §19e)
+// ---------------------------------------------------------------------------
+
+/** `GET /creator/twitch/rewards`. Everything the "Channel points" section needs to decide what to show; none of it
+ * is a secret (the overlay URL and the TTS key are never in here). */
+export interface CreatorRewardsStatusDto {
+  /** The creator has a Pavisie chat channel row (rewards are attached to it). */
+  channelExists: boolean;
+  /** The bot is switched on for that channel — rewards only run while it is. */
+  channelEnabled: boolean;
+  /** Master switch for channel-point rewards on this channel. */
+  rewardsEnabled: boolean;
+  /** Pavisie holds a working broadcaster authorization (`channel:read:redemptions`) for this channel. */
+  authorized: boolean;
+  /** Why the stored authorization stopped working (a revoked/expired grant), or null. The streamer re-authorizes. */
+  authorizationError: string | null;
+  /** An OBS overlay URL has been created (the URL itself comes from `GET .../overlay`, owner only). */
+  hasOverlay: boolean;
+  /** The channel has its OWN OpenAI key for TTS ("set / not set" only — the key is write-only). */
+  ttsKeyConfigured: boolean;
+  /** The channel is also linked to a Discord server (which may hold its own TTS key as a fallback). */
+  discordLinked: boolean;
+  /** Per-channel reward cap. */
+  maxRewards: number;
+}
+
+/** `PUT /creator/twitch/rewards/tts-key` and `DELETE` answer with this; the key itself is never returned. */
+export interface CreatorTtsKeyStatusDto {
+  ttsKeyConfigured: boolean;
+}

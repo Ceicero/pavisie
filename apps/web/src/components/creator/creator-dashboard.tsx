@@ -4,6 +4,7 @@ import * as React from 'react';
 import { LogOut, Twitch } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle, Button, Card, CardContent, PageHeader, Skeleton, useToast } from '@pavisie/ui';
 import { useCreatorSession } from '@/lib/creator/session';
+import { CreatorChannelPoints } from './creator-channel-points';
 import { CreatorChatBot } from './creator-chat-bot';
 import { CreatorCurrency } from './creator-currency';
 
@@ -11,6 +12,8 @@ import { CreatorCurrency } from './creator-currency';
 const ERROR_MESSAGES: Record<string, string> = {
   'twitch-account-mismatch':
     "The Twitch account that approved the bot isn't the one you're signed in with. Switch Twitch accounts in your browser (or sign out of Twitch), then try again.",
+  'channel-points-scope-missing':
+    "Twitch didn't give Pavisie permission to see channel-point redemptions, so nothing was saved. Please try enabling channel points again and approve every permission Twitch asks for.",
 };
 
 /**
@@ -32,6 +35,13 @@ export function CreatorDashboard() {
     if (!connected && !error) return;
     if (connected === 'twitch-chat') {
       toast({ title: 'Pavisie is joining your chat', description: 'It can take up to a minute to appear.', variant: 'success' });
+    }
+    if (connected === 'channel-points') {
+      toast({
+        title: 'Channel points connected',
+        description: 'Add your rewards, then switch rewards on. It can take up to a minute to start.',
+        variant: 'success',
+      });
     }
     if (error) {
       setNotice(ERROR_MESSAGES[error] ?? 'Something went wrong. Please try again.');
@@ -57,7 +67,7 @@ export function CreatorDashboard() {
               <h1 className="text-3xl font-semibold tracking-tight">Use Pavisie on your stream</h1>
               <p className="text-muted-foreground">
                 No Discord server needed. Sign in with Twitch to add Pavisie to your chat: custom commands,
-                timers, your own viewer currency, and more streaming features as they arrive.
+                timers, channel-point rewards with an OBS overlay, your own viewer currency, and more streaming features as they arrive.
               </p>
             </div>
 
@@ -120,6 +130,7 @@ export function CreatorDashboard() {
 
       <div className="space-y-10">
         <CreatorChatBot />
+        <CreatorChannelPoints />
         <CreatorCurrency />
       </div>
     </div>

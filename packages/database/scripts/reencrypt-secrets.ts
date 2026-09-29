@@ -12,6 +12,8 @@
 //
 // Fields covered (every `*Enc` secret column/JSON-field in the schema today):
 //   - OAuthToken.accessTokenEnc / OAuthToken.refreshTokenEnc
+//   - TwitchBroadcasterToken.accessTokenEnc / TwitchBroadcasterToken.refreshTokenEnc
+//   - TwitchChatChannel.overlayTokenEnc / ttsOpenAiKeyEnc / bridgeWebhookTokenEnc
 //   - WebhookEndpoint.secretEnc
 //   - PluginConfig.config.apiKeyEnc  (JSON field, only present on the `ai` plugin's config)
 //
@@ -90,6 +92,78 @@ async function reencryptOAuthTokens(dryRun: boolean): Promise<Summary> {
           data: {
             ...(newAccess !== undefined ? { accessTokenEnc: newAccess } : {}),
             ...(newRefresh !== undefined ? { refreshTokenEnc: newRefresh } : {}),
+          },
+        });
+      }
+    }
+
+    cursor = rows[rows.length - 1]!.id;
+    if (rows.length < BATCH_SIZE) break;
+  }
+
+  return summary;
+}
+
+async function reencryptTwitchBroadcasterTokens(dryRun: boolean): Promise<Summary> {
+  const summary = emptySummary();
+  let cursor: string | undefined;
+
+  for (;;) {
+    const rows = await prisma.twitchBroadcasterToken.findMany({
+      take: BATCH_SIZE,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      orderBy: { id: 'asc' },
+      select: { id: true, accessTokenEnc: true, refreshTokenEnc: true },
+    });
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      summary.scanned += 1;
+      const newAccess = reencryptValue('TwitchBroadcasterToken.accessTokenEnc', row.id, row.accessTokenEnc, summary);
+      const newRefresh = reencryptValue('TwitchBroadcasterToken.refreshTokenEnc', row.id, row.refreshTokenEnc, summary);
+      if (!dryRun && (newAccess !== undefined || newRefresh !== undefined)) {
+        await prisma.twitchBroadcasterToken.update({
+          where: { id: row.id },
+          data: {
+            ...(newAccess !== undefined ? { accessTokenEnc: newAccess } : {}),
+            ...(newRefresh !== undefined ? { refreshTokenEnc: newRefresh } : {}),
+          },
+        });
+      }
+    }
+
+    cursor = rows[rows.length - 1]!.id;
+    if (rows.length < BATCH_SIZE) break;
+  }
+
+  return summary;
+}
+
+async function reencryptTwitchChatChannelSecrets(dryRun: boolean): Promise<Summary> {
+  const summary = emptySummary();
+  let cursor: string | undefined;
+
+  for (;;) {
+    const rows = await prisma.twitchChatChannel.findMany({
+      take: BATCH_SIZE,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      orderBy: { id: 'asc' },
+      select: { id: true, overlayTokenEnc: true, ttsOpenAiKeyEnc: true, bridgeWebhookTokenEnc: true },
+    });
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      summary.scanned += 1;
+      const overlay = reencryptValue('TwitchChatChannel.overlayTokenEnc', row.id, row.overlayTokenEnc, summary);
+      const ttsKey = reencryptValue('TwitchChatChannel.ttsOpenAiKeyEnc', row.id, row.ttsOpenAiKeyEnc, summary);
+      const bridge = reencryptValue('TwitchChatChannel.bridgeWebhookTokenEnc', row.id, row.bridgeWebhookTokenEnc, summary);
+      if (!dryRun && (overlay !== undefined || ttsKey !== undefined || bridge !== undefined)) {
+        await prisma.twitchChatChannel.update({
+          where: { id: row.id },
+          data: {
+            ...(overlay !== undefined ? { overlayTokenEnc: overlay } : {}),
+            ...(ttsKey !== undefined ? { ttsOpenAiKeyEnc: ttsKey } : {}),
+            ...(bridge !== undefined ? { bridgeWebhookTokenEnc: bridge } : {}),
           },
         });
       }
@@ -181,6 +255,8 @@ async function main(): Promise<void> {
 
   const total = emptySummary();
   mergeInto(total, await reencryptOAuthTokens(dryRun));
+  mergeInto(total, await reencryptTwitchBroadcasterTokens(dryRun));
+  mergeInto(total, await reencryptTwitchChatChannelSecrets(dryRun));
   mergeInto(total, await reencryptWebhookEndpoints(dryRun));
   mergeInto(total, await reencryptAiPluginConfigs(dryRun));
 
