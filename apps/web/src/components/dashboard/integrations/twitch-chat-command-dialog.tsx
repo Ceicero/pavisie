@@ -25,7 +25,7 @@ import {
   type TwitchChatLevelId,
 } from '@pavisie/types/integrations';
 import { ApiClientError } from '@/lib/dashboard/api';
-import { useCreateTwitchChatCommand, useUpdateTwitchChatCommand } from '@/lib/dashboard/integrations-queries';
+import type { TwitchChatCommandsBackend } from '@/lib/dashboard/twitch-chat-backend';
 import { TWITCH_CHAT_LEVEL_LABEL } from './twitch-chat-commands-table';
 
 /** Mirrors `twitchChatNameSchema` in `apps/api/src/lib/integrations/twitch-chat-schemas.ts`. Client-side
@@ -34,7 +34,7 @@ const NAME_PATTERN = /^[a-z0-9_]{1,32}$/;
 const RESERVED_NAMES: readonly string[] = TWITCH_CHAT_RESERVED_COMMAND_NAMES;
 
 export interface TwitchChatCommandDialogProps {
-  guildId: string;
+  backend: TwitchChatCommandsBackend;
   channelId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,7 +43,7 @@ export interface TwitchChatCommandDialogProps {
 }
 
 export function TwitchChatCommandDialog({
-  guildId,
+  backend,
   channelId,
   open,
   onOpenChange,
@@ -54,8 +54,8 @@ export function TwitchChatCommandDialog({
   const [response, setResponse] = React.useState('');
   const [cooldownSeconds, setCooldownSeconds] = React.useState(5);
   const [minLevel, setMinLevel] = React.useState<TwitchChatLevelId>('everyone');
-  const create = useCreateTwitchChatCommand(guildId);
-  const update = useUpdateTwitchChatCommand(guildId);
+  const create = backend.useCreate();
+  const update = backend.useUpdate();
   const { toast } = useToast();
   const saving = create.isPending || update.isPending;
 

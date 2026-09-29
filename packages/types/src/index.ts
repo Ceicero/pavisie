@@ -16,3 +16,4 @@ export * from './roles';
 export * from './tickets';
 export * from './developer-reports';
 export * from './owner-metrics';
+export * from './creator';

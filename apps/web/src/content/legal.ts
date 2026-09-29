@@ -43,6 +43,8 @@ export function privacyPolicy(operator: string, contactEmail: string): LegalSect
       paragraphs: [
         "Signing into the dashboard uses Discord OAuth. We receive your Discord user id, username, avatar, and the list of servers you manage, only to determine which servers you're allowed to configure.",
         'A session cookie keeps you signed in; it is httpOnly, cannot be read by page scripts, and expires automatically. OAuth tokens are encrypted at rest and used only to call the Discord API on your behalf.',
+        "Streamers can also use the creator dashboard (/creator) with just a Twitch account, no Discord account or server needed. Signing in there asks Twitch only who you are: we receive your Twitch user id, login name, display name and profile picture address, and hold them in a session for up to 7 days (renewed while you keep using it) so the page can show you as signed in. The Twitch sign-in token is used once to ask Twitch who you are and is not stored; we also ask Twitch to revoke it. Signing out ends the session immediately.",
+        "If you connect Pavisie's chat bot to your Twitch channel from the creator dashboard, we store your Twitch channel id and login name together with the commands, timers and settings you create there, until you disconnect. Disconnecting deletes them, unless the channel is also linked to a Discord server, in which case that server's own settings are kept and the bot is only switched off. Twitch chat message text is never stored or logged.",
       ],
     },
     {
@@ -54,7 +56,7 @@ export function privacyPolicy(operator: string, contactEmail: string): LegalSect
     {
       title: '5. Cookies',
       paragraphs: [
-        'This website does not use tracking or advertising cookies. The dashboard uses one strictly-necessary session cookie to keep you signed in.',
+        'This website does not use tracking or advertising cookies. The dashboard uses one strictly-necessary session cookie to keep you signed in. The creator dashboard uses its own strictly-necessary session cookie, plus a short-lived one (a few minutes) during Twitch sign-in that makes sure sign-in finishes in the browser that started it.',
       ],
     },
     {

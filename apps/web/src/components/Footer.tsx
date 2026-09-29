@@ -8,6 +8,7 @@ const COLUMNS: { title: string; links: { href: string; label: string; external?:
     links: [
       { href: '/features', label: 'Features & commands' },
       { href: '/enforcer', label: 'Enforcer' },
+      { href: '/creator', label: 'For streamers' },
       { href: '/donate', label: 'Donate' },
     ],
   },

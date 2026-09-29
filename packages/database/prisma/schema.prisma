@@ -1315,9 +1315,13 @@ model TwitchBotIdentity {
 /// A guild's linked Twitch channel for the chat bot (dashboard "Connect Twitch channel").
 model TwitchChatChannel {
   id                String                 @id @default(cuid())
-  guildId           String
-  guild             Guild                  @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  broadcasterUserId String
+  // The linked Discord server, if any. NULL for a channel set up purely from the creator dashboard (a streamer who
+  // signed in with Twitch and has no Discord server linked — ARCHITECTURE.md §19e). Every Discord-dependent feature
+  // (economy, the Discord bridge, DISCORD/TTS reward actions) is unavailable while this is NULL.
+  guildId           String?
+  guild             Guild?                 @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  // One Pavisie chat-bot config per Twitch channel, globally (a channel can never be linked from two places at once).
+  broadcasterUserId String                 @unique
   broadcasterLogin  String
   enabled           Boolean                @default(true)
   status            ConnectionStatus       @default(PENDING)
@@ -1351,7 +1355,6 @@ model TwitchChatChannel {
   timers   TwitchChatTimer[]
   rewards  TwitchChatReward[]
 
-  @@unique([guildId, broadcasterUserId])
   @@index([guildId])
   @@index([guildId, bridgeDiscordChannelId])
 }
@@ -1361,8 +1364,9 @@ model TwitchChatCommand {
   id              String            @id @default(cuid())
   channelId       String
   channel         TwitchChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  guildId         String
-  guild           Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  // NULL when the parent channel has no linked Discord server (creator-dashboard-only channel).
+  guildId         String?
+  guild           Guild?            @relation(fields: [guildId], references: [id], onDelete: Cascade)
   name            String
   response        String
   cooldownSeconds Int               @default(5)
@@ -1381,8 +1385,9 @@ model TwitchChatTimer {
   id              String            @id @default(cuid())
   channelId       String
   channel         TwitchChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  guildId         String
-  guild           Guild             @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  // NULL when the parent channel has no linked Discord server (creator-dashboard-only channel).
+  guildId         String?
+  guild           Guild?            @relation(fields: [guildId], references: [id], onDelete: Cascade)
   name            String
   message         String
   intervalMinutes Int

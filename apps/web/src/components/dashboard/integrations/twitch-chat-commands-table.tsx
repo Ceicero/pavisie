@@ -14,7 +14,7 @@ import {
   useToast,
 } from '@pavisie/ui';
 import type { TwitchChatCommandDto, TwitchChatLevelId } from '@pavisie/types/integrations';
-import { useDeleteTwitchChatCommand, useTwitchChatCommands } from '@/lib/dashboard/integrations-queries';
+import type { TwitchChatCommandsBackend } from '@/lib/dashboard/twitch-chat-backend';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ConfirmDialog } from '../confirm-dialog';
 import { ErrorState } from '../error-state';
@@ -34,15 +34,16 @@ export const TWITCH_CHAT_LEVEL_LABEL: Record<TwitchChatLevelId, string> = {
 };
 
 export interface TwitchChatCommandsTableProps {
-  guildId: string;
+  /** Where the commands are read/written — the Discord dashboard's guild routes or the creator dashboard's own. */
+  backend: TwitchChatCommandsBackend;
   channelId: string;
   /** This channel's current command prefix, only for the empty-state built-ins hint (e.g. "!commands"). */
   prefix: string;
 }
 
-export function TwitchChatCommandsTable({ guildId, channelId, prefix }: TwitchChatCommandsTableProps) {
-  const { data, isLoading, error, refetch } = useTwitchChatCommands(guildId, channelId);
-  const del = useDeleteTwitchChatCommand(guildId);
+export function TwitchChatCommandsTable({ backend, channelId, prefix }: TwitchChatCommandsTableProps) {
+  const { data, isLoading, error, refetch } = backend.useList();
+  const del = backend.useRemove();
   const { toast } = useToast();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -155,7 +156,7 @@ export function TwitchChatCommandsTable({ guildId, channelId, prefix }: TwitchCh
       ) : null}
 
       <TwitchChatCommandDialog
-        guildId={guildId}
+        backend={backend}
         channelId={channelId}
         open={dialogOpen}
         onOpenChange={setDialogOpen}

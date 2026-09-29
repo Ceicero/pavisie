@@ -16,10 +16,11 @@ export interface TwitchExtGuildContext {
  * throwing — the routes turn a `null` into `{ enabled: false }`, never an error, so the panel can show a plain
  * "not enabled for this channel" message instead of an error state (ARCHITECTURE.md §19d).
  *
- * `TwitchChatChannel.broadcasterUserId` has no *global* unique constraint in the schema (only
- * `@@unique([guildId, broadcasterUserId])`) — but ARCHITECTURE.md §18b/§19a's identity model is that a given
- * Twitch broadcaster only ever links one guild in practice, so `findFirst` (rather than requiring a guildId we
- * don't have yet) is the right lookup here, same as any other channel_id -> guild resolution in this codebase.
+ * `TwitchChatChannel.broadcasterUserId` is globally unique (one Pavisie chat-bot config per Twitch channel), so
+ * this resolves at most one row. It may be a GUILDLESS row (`guildId` null — a streamer who set the channel up
+ * from the creator dashboard, ARCHITECTURE.md §19e): the panel's currency is still guild-owned in this phase, so
+ * a channel with no guild has nothing to show and resolves to `null` ("not enabled") like any other unavailable
+ * case. Channel-owned currency (phase 2) lifts that.
  */
 export async function resolveTwitchExtGuildContext(
   app: ZodFastifyInstance,
@@ -32,11 +33,14 @@ export async function resolveTwitchExtGuildContext(
   });
   if (!channel) return null;
 
-  const economyEnabled = await app.configStore.isEnabled(channel.guildId, 'economy');
+  const guildId = channel.guildId;
+  if (!guildId) return null;
+
+  const economyEnabled = await app.configStore.isEnabled(guildId, 'economy');
   if (!economyEnabled) return null;
 
-  const economyConfig = await app.configStore.getConfig<EconomyConfig>(channel.guildId, 'economy');
+  const economyConfig = await app.configStore.getConfig<EconomyConfig>(guildId, 'economy');
   if (!economyConfig.twitchEnabled) return null;
 
-  return { guildId: channel.guildId, economyConfig };
+  return { guildId, economyConfig };
 }

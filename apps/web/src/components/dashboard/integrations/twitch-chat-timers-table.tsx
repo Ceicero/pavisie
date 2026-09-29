@@ -14,7 +14,7 @@ import {
   useToast,
 } from '@pavisie/ui';
 import type { TwitchChatTimerDto } from '@pavisie/types/integrations';
-import { useDeleteTwitchChatTimer, useTwitchChatTimers } from '@/lib/dashboard/integrations-queries';
+import type { TwitchChatTimersBackend } from '@/lib/dashboard/twitch-chat-backend';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ConfirmDialog } from '../confirm-dialog';
 import { ErrorState } from '../error-state';
@@ -25,13 +25,14 @@ import { TwitchChatTimerDialog } from './twitch-chat-timer-dialog';
 const MAX_TIMERS_PER_CHANNEL = 10;
 
 export interface TwitchChatTimersTableProps {
-  guildId: string;
+  /** Where the timers are read/written — the Discord dashboard's guild routes or the creator dashboard's own. */
+  backend: TwitchChatTimersBackend;
   channelId: string;
 }
 
-export function TwitchChatTimersTable({ guildId, channelId }: TwitchChatTimersTableProps) {
-  const { data, isLoading, error, refetch } = useTwitchChatTimers(guildId, channelId);
-  const del = useDeleteTwitchChatTimer(guildId);
+export function TwitchChatTimersTable({ backend, channelId }: TwitchChatTimersTableProps) {
+  const { data, isLoading, error, refetch } = backend.useList();
+  const del = backend.useRemove();
   const { toast } = useToast();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -141,7 +142,7 @@ export function TwitchChatTimersTable({ guildId, channelId }: TwitchChatTimersTa
       ) : null}
 
       <TwitchChatTimerDialog
-        guildId={guildId}
+        backend={backend}
         channelId={channelId}
         open={dialogOpen}
         onOpenChange={setDialogOpen}

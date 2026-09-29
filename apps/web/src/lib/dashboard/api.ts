@@ -39,6 +39,12 @@ export class ApiClientError extends Error {
 export interface ApiFetchInit extends Omit<RequestInit, 'body'> {
   /** JSON-serializable body. Strings, `FormData`, and `Blob` are passed through untouched. */
   body?: unknown;
+  /**
+   * The CSRF token to attach on a mutating request, INSTEAD of the Discord dashboard session's (module-level)
+   * one. The creator dashboard passes its own session's token here (`lib/creator/api.ts`) — the two session types
+   * have separate tokens, and the API only accepts each on its own routes. Omit to use the dashboard session's.
+   */
+  csrfToken?: string | null;
 }
 
 function isBodyInit(value: unknown): value is BodyInit {
@@ -54,7 +60,8 @@ function isBodyInit(value: unknown): value is BodyInit {
  * Fetch wrapper for the Pavisie API: sends cookies, JSON-encodes plain object bodies, attaches
  * `X-CSRF-Token` on mutating requests, parses JSON responses, and throws `ApiClientError` on failure.
  */
-export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {}): Promise<T> {
+export async function apiFetch<T = unknown>(path: string, rawInit: ApiFetchInit = {}): Promise<T> {
+  const { csrfToken: csrfOverride, ...init } = rawInit;
   const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
   const method = (init.method ?? 'GET').toUpperCase();
   const headers = new Headers(init.headers);
@@ -70,8 +77,9 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {
     }
   }
 
-  if (isMutating && csrfToken) {
-    headers.set('X-CSRF-Token', csrfToken);
+  const effectiveCsrfToken = csrfOverride !== undefined ? csrfOverride : csrfToken;
+  if (isMutating && effectiveCsrfToken) {
+    headers.set('X-CSRF-Token', effectiveCsrfToken);
   }
 
   let response: Response;

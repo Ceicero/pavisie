@@ -33,7 +33,8 @@ export interface FakeTransaction {
 
 export interface FakeTwitchChatChannel {
   id: string;
-  guildId: string;
+  /** `null` = a guildless channel (set up from the creator dashboard). */
+  guildId: string | null;
   broadcasterUserId: string;
   enabled: boolean;
 }

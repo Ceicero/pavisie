@@ -16,6 +16,7 @@ import {
 import type { TwitchChatChannelDto } from '@pavisie/types/integrations';
 import { useDeleteTwitchChatChannel, useUpdateTwitchChatChannel } from '@/lib/dashboard/integrations-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
+import { guildTwitchChatCommandsBackend, guildTwitchChatTimersBackend } from '@/lib/dashboard/twitch-chat-backend';
 import { ConfirmDialog } from '../confirm-dialog';
 import { TwitchChatBridgePanel } from './twitch-chat-bridge-panel';
 import { TwitchChatCommandsTable } from './twitch-chat-commands-table';
@@ -136,8 +137,12 @@ export function TwitchChatChannelCard({ guildId, channel }: TwitchChatChannelCar
           </div>
         </FormField>
 
-        <TwitchChatCommandsTable guildId={guildId} channelId={channel.id} prefix={channel.commandPrefix} />
-        <TwitchChatTimersTable guildId={guildId} channelId={channel.id} />
+        <TwitchChatCommandsTable
+          backend={guildTwitchChatCommandsBackend(guildId, channel.id)}
+          channelId={channel.id}
+          prefix={channel.commandPrefix}
+        />
+        <TwitchChatTimersTable backend={guildTwitchChatTimersBackend(guildId, channel.id)} channelId={channel.id} />
         <TwitchChatRewardsTable guildId={guildId} channelId={channel.id} />
         <TwitchChatOverlayPanel guildId={guildId} channel={channel} />
         <TwitchChatBridgePanel guildId={guildId} channel={channel} />

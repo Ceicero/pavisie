@@ -280,10 +280,12 @@ export interface TwitchHelixUser {
   id: string;
   login: string;
   displayName: string;
+  /** Twitch profile picture URL; `null` if Helix didn't send one. Only the creator sign-in uses it. */
+  profileImageUrl: string | null;
 }
 
 interface RawTwitchUsersResponse {
-  data?: { id: string; login: string; display_name: string }[];
+  data?: { id: string; login: string; display_name: string; profile_image_url?: string }[];
 }
 
 /**
@@ -307,7 +309,33 @@ export async function identifyTwitchUser(accessToken: string): Promise<TwitchHel
   if (!user) {
     throw new ExternalServiceError('Twitch user lookup returned no user.');
   }
-  return { id: user.id, login: user.login, displayName: user.display_name };
+  return {
+    id: user.id,
+    login: user.login,
+    displayName: user.display_name,
+    profileImageUrl: user.profile_image_url || null,
+  };
+}
+
+/**
+ * Best-effort revocation of a Twitch user access token (`POST https://id.twitch.tv/oauth2/revoke`). Used by the
+ * creator sign-in, which only needs the token for one Helix "who am I" call and then throws it away (ARCHITECTURE.md
+ * §19e) — revoking it makes "we do not keep your Twitch token" literally true on Twitch's side too. Never throws:
+ * a failed revoke must not fail a sign-in that already succeeded, and the token is discarded either way.
+ */
+export async function revokeTwitchToken(accessToken: string): Promise<void> {
+  const clientId = env.TWITCH_CLIENT_ID;
+  if (!clientId) return;
+  try {
+    await fetch('https://id.twitch.tv/oauth2/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: clientId, token: accessToken }),
+      signal: AbortSignal.timeout(3000),
+    });
+  } catch {
+    // Swallowed on purpose — see doc comment above.
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -20,7 +20,9 @@ import { TopBar } from './TopBar';
  */
 export function SiteChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isDashboard = pathname?.startsWith('/dashboard') ?? false;
+  // The creator dashboard (`/creator/**`, docs/ARCHITECTURE.md section 19e) uses the same app-style chrome as the
+  // Discord dashboard: opaque `@pavisie/ui` surfaces, no marketing smoke/grain/footer.
+  const isDashboard = (pathname?.startsWith('/dashboard') || pathname?.startsWith('/creator')) ?? false;
 
   return (
     <>

@@ -6,6 +6,11 @@ import { buildApp } from '../../src/app';
 import type { ZodFastifyInstance } from '../../src/lib/http';
 import type { QueueRegistryLike } from '../../src/lib/queues';
 import { SESSION_COOKIE_NAME, createSession, type SessionData } from '../../src/lib/session';
+import {
+  CREATOR_SESSION_COOKIE_NAME,
+  createCreatorSession,
+  type CreatorSessionData,
+} from '../../src/lib/creator/session';
 
 export interface FakeQueueCall {
   queue: string;
@@ -110,4 +115,35 @@ export async function seedUserGuilds(
     'EX',
     60,
   );
+}
+
+export interface LoginAsCreatorInput {
+  /** The creator's Twitch user id (also the broadcaster id they own). */
+  platformUserId: string;
+  login?: string;
+  displayName?: string;
+}
+
+export interface AuthedCreatorSession {
+  cookieHeader: string;
+  session: CreatorSessionData;
+  sid: string;
+}
+
+/** Creates a live CREATOR session (`csid`, the creator dashboard's session type — not the Discord `sid`) in `redis`
+ * and returns a `Cookie` header value, signed exactly the way the real app signs it. */
+export async function loginAsCreator(
+  app: ZodFastifyInstance,
+  redis: Redis,
+  input: LoginAsCreatorInput,
+): Promise<AuthedCreatorSession> {
+  const { sid, session } = await createCreatorSession(redis, {
+    platform: 'twitch',
+    platformUserId: input.platformUserId,
+    login: input.login ?? 'test-creator',
+    displayName: input.displayName ?? 'Test Creator',
+    avatarUrl: null,
+  });
+  const signed = app.signCookie(sid);
+  return { cookieHeader: `${CREATOR_SESSION_COOKIE_NAME}=${signed}`, session, sid };
 }

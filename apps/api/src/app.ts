@@ -33,6 +33,7 @@ import type { ZodFastifyInstance } from './lib/http';
 import { dispatchOverlayMessage } from './lib/overlay-registry';
 import { QueueRegistry, type QueueRegistryLike } from './lib/queues';
 import { getSession, SESSION_COOKIE_NAME } from './lib/session';
+import { CREATOR_SESSION_COOKIE_NAME, getCreatorSession } from './lib/creator/session';
 
 import authRoutes from './routes/auth';
 import guildsRoutes from './routes/guilds';
@@ -61,6 +62,8 @@ import developerReportsRoutes from './routes/developer-reports';
 import ownerMetricsRoutes from './routes/owner-metrics';
 import twitchBotRoutes from './routes/twitch-bot';
 import twitchExtRoutes from './routes/twitch-ext';
+import creatorAuthRoutes from './routes/creator-auth';
+import creatorTwitchRoutes from './routes/creator-twitch';
 
 export interface BuildAppDeps {
   prisma?: PrismaClient;
@@ -155,6 +158,7 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   app.decorate('configStore', configStore);
   app.decorate('registry', registry);
   app.decorateRequest('session', null);
+  app.decorateRequest('creator', null);
 
   await app.register(helmet, {
     // This process only ever serves JSON, plus (outside production — see the swagger/swaggerUi registration
@@ -219,6 +223,23 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
       return;
     }
     request.session = await getSession(redis, unsigned.value);
+  });
+
+  // Resolves the CREATOR session (creator dashboard, ARCHITECTURE.md §19e) — a different cookie and Redis
+  // namespace from the Discord session above, so a request can carry either, both, or neither. Only `/creator/*`
+  // routes (and `csrfProtection` for them) ever look at `request.creator`.
+  app.addHook('onRequest', async (request) => {
+    const raw = request.cookies[CREATOR_SESSION_COOKIE_NAME];
+    if (!raw) {
+      request.creator = null;
+      return;
+    }
+    const unsigned = request.unsignCookie(raw);
+    if (!unsigned.valid || !unsigned.value) {
+      request.creator = null;
+      return;
+    }
+    request.creator = await getCreatorSession(redis, unsigned.value);
   });
 
   app.addHook('preHandler', csrfProtection);
@@ -341,6 +362,8 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   await app.register(developerReportsRoutes, { prefix: '/owner' });
   await app.register(ownerMetricsRoutes, { prefix: '/owner' });
   await app.register(twitchBotRoutes, { prefix: '/owner' });
+  await app.register(creatorAuthRoutes, { prefix: '/creator' });
+  await app.register(creatorTwitchRoutes, { prefix: '/creator/twitch' });
   // Its own encapsulation context (a plain async function, not `fastify-plugin`-wrapped) so the manual CORS
   // hook it registers on itself (see routes/twitch-ext.ts) stays scoped to `/twitch-ext/*` and never widens
   // the dashboard-only `cors` registered above for any other route.

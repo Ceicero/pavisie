@@ -534,7 +534,7 @@ with a configurable prefix, default `+`. For example: `/mod ban @user spam` can 
 - Fastify 5 + `fastify-type-provider-zod` (`serializerCompiler`, `validatorCompiler`, `jsonSchemaTransform` for swagger). Swagger UI at `/docs`, JSON at `/docs/json` — **registered only when `NODE_ENV !== 'production'`**; disabled in production so the exact request shape of public endpoints like `/auth/discord/login` isn't handed to anyone who looks (see `docs/SECURITY.md`). Script `openapi:export` writes `docs/openapi.json` from a dev/test run.
 - Plugins: helmet, cors (`origin: [env.DASHBOARD_URL]`, `credentials: true`), cookie (signed with SESSION_SECRET), rate-limit (global 300/min per IP, auth routes 20/min; Redis-backed store, shared across api instances and survives restarts — not per-process memory), sensible.
 - Session: `sid` cookie (httpOnly, sameSite `lax`, secure in prod, `domain: COOKIE_DOMAIN?`), 32-byte random id, Redis hash `pavisie:session:<sid>` TTL 7d: `{ userId, username, avatar, accessTokenEnc, refreshTokenEnc, expiresAt, csrfToken }`. `request.session` decorator. Logout deletes.
-- CSRF: mutating routes require header `X-CSRF-Token` equal to session csrf token (returned by `GET /auth/me`) **and** `Origin`/`Referer` (when present) must be in the allowlist. Dashboard api client sends the header.
+- CSRF: mutating routes require header `X-CSRF-Token` equal to session csrf token (returned by `GET /auth/me`) **and** `Origin`/`Referer` (when present) must be in the allowlist. Dashboard api client sends the header. Two session types exist (the Discord `sid` session and the creator `csid` session, §19e) and each guards ONLY its own routes: `/creator/*` routes are checked against the creator session's token, everything else against the Discord session's — decided from the matched route pattern (`request.routeOptions.url`), not the raw URL, since the router percent-decodes paths. A request carrying both cookies can therefore never satisfy one surface with the other's token.
 - Auth: `GET /auth/discord/login` (state in Redis 10min, PKCE not required for Discord but include `state`), scopes `identify guilds`; `GET /auth/discord/callback`; `POST /auth/logout`; `GET /auth/me` → `{ user, csrfToken }`. `POST /auth/test-login` only when `E2E_TEST_MODE=true && NODE_ENV!=='production'` (creates a session for a synthetic user + synthetic guild `000000000000000000` where the user is admin) — used by Playwright.
 - Guild access: `GET /guilds` → guilds where user has `MANAGE_GUILD` or `ADMINISTRATOR` or is owner (from `/users/@me/guilds` with user token, cached 60s in Redis) intersected with guilds the bot is in (`Guild` table with `botPresent=true`; the bot upserts on guildCreate/guildDelete/ready). Response marks `botPresent` so the dashboard can show an "Add bot" link (invite URL) for others. `preHandler requireGuildAccess` on `/guilds/:guildId/*` re-checks from the cached guild list (403 otherwise). All writes call `writeAudit` with `source: 'dashboard'`.
 - Route files (one per feature; each exports `default async function routes(app: FastifyInstance)` registered under prefix `/guilds/:guildId`):
@@ -555,7 +555,8 @@ with a configurable prefix, default `+`. For example: `/mod ban @user spam` can 
   - `routes/analytics.ts` — `GET /:guildId/analytics?range=7d|30d|90d` (from GuildAnalyticsDaily; only if `GuildConfig.dataCollectionEnabled`)
   - `routes/privacy.ts` — retention policy get/put, `POST /:guildId/data/export` (queues job → downloadable JSON), `POST /:guildId/data/delete` (requires confirmation phrase, queues deletion), `GET /:guildId/data/requests`
   - `routes/webhooks.ts` (NOT under /guilds): `POST /webhooks/github/:endpointId`, `POST /webhooks/twitch`, `POST /webhooks/generic/:endpointId` — raw body, signature verification, idempotency via `ProcessedWebhookEvent`, then enqueue to `integrations.inbound` queue. (`POST /webhooks/stripe` was removed with the Stripe connector, §18a — GitHub's route stays wired but has no provider left to act on deliveries, see §18a.)
-  - `routes/oauth-integrations.ts` — `/integrations/:provider/callback`, branching on the OAuth state's `kind`: absent (the original generic per-guild connect flow, unchanged), `twitch_chat` (identifies the broadcaster via Helix, creates the `IntegrationConnection`+`OAuthToken`, upserts `TwitchChatChannel` status PENDING), `twitch_bot` (owner-only — identifies Pavisie's own Twitch account and upserts the singleton `TwitchBotIdentity`, replacing tokens/scopes/expiry on re-auth; returns a small standalone HTML confirmation page instead of a dashboard redirect)
+  - `routes/creator-auth.ts` / `routes/creator-twitch.ts` (prefixes `/creator` and `/creator/twitch`) — the creator dashboard's sign-in, session and chat-bot API, see §19e: `GET /creator/auth/twitch/login`, `GET /creator/me`, `POST /creator/logout`; `GET/PATCH/DELETE /creator/twitch/channel`, `POST /creator/twitch/channel/connect`, commands and timers CRUD under `/creator/twitch/channel/{commands,timers}`. All behind `requireCreatorAuth`/`requireTwitchCreator`; the sign-in *callback* is not a route of its own (below).
+  - `routes/oauth-integrations.ts` — `/integrations/:provider/callback`, first checks whether the state belongs to a creator flow (`creator-login-state` / `creator-connect-state`, Twitch only — §19e; no Discord session needed for those) and otherwise branches on the guild flow's OAuth state `kind`: absent (the original generic per-guild connect flow, unchanged), `twitch_chat` (identifies the broadcaster via Helix, creates the `IntegrationConnection`+`OAuthToken`, upserts `TwitchChatChannel` status PENDING), `twitch_bot` (owner-only — identifies Pavisie's own Twitch account and upserts the singleton `TwitchBotIdentity`, replacing tokens/scopes/expiry on re-auth; returns a small standalone HTML confirmation page instead of a dashboard redirect)
   - `routes/developer-reports.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner`) — ops-console backend for the guild → developer support channel written by the `admin` plugin's `/pavisie report`; intentionally cross-guild data, which is exactly why it is bot-owner-only rather than `requireGuildAccess`: `GET /owner/developer-reports` (cursor-paginated, newest-first, filters `?status=OPEN|HANDLED&kind=BUG|FEEDBACK|QUESTION&guildId=`), `GET /owner/developer-reports/:id`, `PATCH /owner/developer-reports/:id` (`status` and/or `notes`, at least one required — `notes` is internal-only triage text never shown to the reporting guild; flipping to `HANDLED` stamps `handledAt`/`handledBy` from the session, back to `OPEN` clears both)
   - `routes/owner-metrics.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner` like `routes/developer-reports.ts`) — read-only metrics for the local "Pavisie Dev" desktop app: `GET /owner/metrics/overview` (guild presence/growth, member totals + largest guild, developer-report counts, 7d activity), `GET /owner/metrics/guilds` (cursor-paginated, newest-joined first, `?query=&botPresent=`, per-guild plugin/case/ticket/last-activity aggregates), `GET /owner/metrics/errors` (cursor-paginated feed merged from the four models with an error column — `IntegrationConnection.lastError`, `ScheduledJob.lastError`, `WebhookDelivery.error`, `DataRequest.error`, `?source=&guildId=`), `GET /owner/metrics/growth?days=` (daily join/leave counts + running net, zero-filled, clamped 1–365)
   - `routes/twitch-bot.ts` (NOT under `/guilds`, prefix `/owner`, gated on `requireBotOwner`) — Pavisie's own Twitch chat-bot account identity, the singleton `TwitchBotIdentity` row (§19a): `GET /owner/twitch-bot` → the DTO or `{ configured: false }`, `POST /owner/twitch-bot/connect` → OAuth authorize URL (scopes `user:read:chat user:write:chat user:bot`), `DELETE /owner/twitch-bot`. Never returns the encrypted access/refresh tokens.
@@ -693,7 +694,8 @@ options: [{name, description, required, type}], subcommands: [{ name, fullName, 
   `src/content/plugins.ts` (`Record<PluginId, { headline, whyGaming: string[], highlights: string[] }>`) and
   `src/content/site.ts`.
 - Pages: `/`, `/features` (all plugins; anchors per plugin; `/features/[pluginId]` detail with full command table),
-  `/enforcer`, `/donate`, `/support`, `/privacy`, `/terms`, `not-found`.
+  `/enforcer`, `/donate`, `/support`, `/privacy`, `/terms`, `not-found`, and `/creator` (the streamer-facing creator
+  dashboard, §19e — app-style chrome like `/dashboard`, and also its own public landing page when signed out).
 - Donate page: reads `GET {API}/donations/config` at request time (never cached; `dynamic = 'force-dynamic'`).
   When `enabled` is true, renders an external link to the Ko-fi page (`kofiUrl`); when false, shows an
   honest "donations aren't set up on this deployment" notice.
@@ -963,9 +965,11 @@ No 15th plugin: lives in `packages/plugins/src/integrations/twitch-chat/` (`heli
 
 - **Identity model**: ONE global `TwitchBotIdentity` row — Brandon authorizes Pavisie's own Twitch account once
   (owner-only `POST /owner/twitch-bot/connect`, scopes `user:read:chat user:write:chat user:bot`). Every chat
-  read/send runs on this token, never a broadcaster's. Per guild, a streamer links their channel from the
-  dashboard (`POST /:guildId/integrations/twitch-chat/connect`, scope `channel:bot`), which upserts a
-  `TwitchChatChannel` row (status `PENDING` until the manager subscribes it).
+  read/send runs on this token, never a broadcaster's. A streamer's channel is linked either from the
+  Discord dashboard (`POST /:guildId/integrations/twitch-chat/connect`, scope `channel:bot`) or — with no Discord
+  server at all — from the creator dashboard (§19e); both upsert a `TwitchChatChannel` row (status `PENDING` until
+  the manager subscribes it). There is at most ONE row per Twitch channel (`broadcasterUserId` is globally unique),
+  and its `guildId` is optional (§19e).
 - **Transport**: the official EventSub WebSocket (`wss://eventsub.wss.twitch.tv/ws`), using Node 22's built-in
   global `WebSocket` — no new runtime dependency. `EventSubSocket` (`socket.ts`) is a thin frame classifier
   (`session_welcome`/`session_keepalive`/`session_reconnect`/`notification`/`revocation`) with a keepalive
@@ -975,7 +979,8 @@ No 15th plugin: lives in `packages/plugins/src/integrations/twitch-chat/` (`heli
 - **`TwitchChatManager`** (module-level singleton instantiated in `integrations/index.ts`, so the same instance
   backs both the job and the registered service) owns the socket and reconciles desired vs. actual
   `channel.chat.message` v1 EventSub subscriptions every minute via the `twitch-chat-tick` job (cron
-  `* * * * *`): desired = enabled `TwitchChatChannel` rows whose guild currently has `integrations` enabled,
+  `* * * * *`): desired = enabled `TwitchChatChannel` rows whose guild currently has `integrations` enabled
+  plus every enabled GUILDLESS row (`guildId` null — those run on their own `enabled` flag, §19e),
   capped at 300 (one WebSocket session's zero-cost-subscription limit — excess channels are left unsubscribed
   with a warning log). Replies go out through Helix `POST /helix/chat/messages` (`sendChatMessage`, client-side
   throttled to 1 send/sec/broadcaster; anything beyond that is dropped, never queued). On `revocation` (e.g. the
@@ -1177,7 +1182,8 @@ user id> }`, exactly as in §18b — never linked to a Discord wallet, never lin
   viewer has shared identity via `Twitch.ext.actions.requestIdShare()`), and `role`.
 - **Channel -> guild -> enablement** (`apps/api/src/lib/twitch-ext/context.ts`,
   `resolveTwitchExtGuildContext`): `channel_id` looks up the enabled `TwitchChatChannel` row by
-  `broadcasterUserId` (a broadcaster links exactly one guild, §19a's identity model), then checks the guild's
+  `broadcasterUserId` (globally unique — a broadcaster has exactly one row, §19a/§19e; a GUILDLESS row resolves to
+  `{ enabled: false }` until channel-owned currency ships), then checks the guild's
   `economy` plugin is enabled AND its `twitchEnabled` config flag. Any failure at any step (unlinked channel,
   plugin disabled, `twitchEnabled` off) is `{ enabled: false }` — a normal 200, never an error — so the panel
   shows a plain "not enabled for this channel" message instead of an error state.
@@ -1228,6 +1234,95 @@ user id> }`, exactly as in §18b — never linked to a Discord wallet, never lin
   to `panel.html` and config path to `config.html`, turn on **Request Identity Link**, add the API origin to
   **Allowlist for URL Fetching Domains**, set the Extension Secret on the API's Railway env, run **Hosted Test**
   against a real/test channel end-to-end, then submit for Twitch's review.
+
+## 19e. Creator dashboard — streamers without a Discord server (Phase 1)
+
+Pavisie is being split in two: the Discord dashboard keeps moderation/community/alerts, and a NEW, separate
+**creator dashboard** (`/creator` on the web app, `/creator/*` on the API) lets a streamer sign in with their
+streaming-platform account (Twitch now, Kick later) and use Pavisie's streaming features with **no Discord
+server**. Everything is built with a `platform` discriminator (`CreatorSessionData.platform`, URL shapes like
+`/creator/auth/twitch/...` and `/creator/twitch/...`) so a second platform plugs in beside Twitch.
+
+**Phase plan** (only phase 1 is built):
+1. *(this section)* Creator sign-in with Twitch, guildless Twitch chat channels, the creator dashboard's chat
+   bot section (connect/disconnect, prefix, commands, timers).
+2. Channel-point rewards and the Twitch extension move to the creator dashboard; the currency becomes
+   **channel-owned** (not guild-owned), so economy commands/earning/the extension work for guildless channels.
+   Adds `channel:read:redemptions` plus somewhere to keep the broadcaster token (a guildless channel has no
+   `IntegrationConnection`, which requires a guild).
+3. A "connect a Discord server" flow from the creator dashboard, the Discord <-> Twitch chat bridge for it, and a
+   global leaderboard.
+4. Strip the Twitch chat features off the Discord side (the Discord dashboard keeps moderation/community/alerts).
+5. Kick as a second platform.
+
+- **Sign-in** (`apps/api/src/lib/creator/oauth.ts`, `routes/creator-auth.ts`): `GET /creator/auth/twitch/login`
+  stores a random single-use `state` in Redis (`redisKey('creator-login-state', state)`, 10 min), binds it to the
+  browser with a signed, httpOnly, `sameSite: 'lax'` pre-login cookie `creator_login_state` (same reasoning as the
+  Discord login's `oauth_state`, §10: the callback is a top-level GET redirect), and 302s to Twitch's authorize URL
+  with **no scopes** (identity only — Helix "Get Users" works with a scope-less user token).
+- **Callback branching** — the redirect URI is the ALREADY-REGISTERED `${API_BASE_URL}/integrations/twitch/callback`
+  (nothing new to register in the Twitch console). `routes/oauth-integrations.ts`'s pre-handler
+  (`detectCreatorCallback`) looks the returned `state` up in the creator namespaces first: a creator-login state
+  (or a signed pre-login cookie matching it, so an expired/replayed state gets a proper message) runs
+  `completeTwitchCreatorLogin`; a `creator-connect-state` runs `completeTwitchCreatorConnect`; anything else falls
+  through to the original guild flows with the Discord-session gate (`requireAuth`) and behaviour unchanged. The
+  creator branches never need a Discord session. Only Twitch has creator flows.
+- **Login completion**: browser-binding check first (a wrong browser does NOT consume the state), then the
+  single-use Redis state, then the code exchange (`exchangeProviderCode`), one Helix Get Users call
+  (`identifyTwitchUser`, now also returning `profile_image_url`), and the token is **discarded — never stored** —
+  and revoked best-effort (`revokeTwitchToken`). A fresh creator session is created (the browser's previous one is
+  destroyed) and the browser is redirected to `${WEB_URL ?? DASHBOARD_URL}/creator`.
+- **Creator session** (`lib/creator/session.ts`): SEPARATE from the Discord session — cookie `csid` (signed,
+  httpOnly, same `sameSite`/`secure`/`COOKIE_DOMAIN` rules as `sid`), Redis `pavisie:creator-session:<sid>`, 7-day
+  sliding TTL, data `{ platform: 'twitch', platformUserId, login, displayName, avatarUrl, csrfToken }` (no
+  token). `request.creator` (decorated in `app.ts`) is what `requireCreatorAuth` / `requireTwitchCreator`
+  (`lib/creator/auth.ts`) check; a Discord `sid` never authenticates a creator route nor vice versa.
+  `GET /creator/me` → `{ creator, csrfToken }` (401 without a session); `POST /creator/logout` destroys it.
+- **CSRF**: every mutating `/creator/*` request needs `X-CSRF-Token` = the creator session's token **and** an
+  allowlisted `Origin`/`Referer` — `lib/csrf.ts` picks the session from the matched route (see §10), so the two
+  session types cannot be crossed.
+- **Ownership rule**: the creator whose Twitch user id equals `TwitchChatChannel.broadcasterUserId` owns that row,
+  whether or not it has a `guildId`. The channel is never addressed by id in a creator URL — it is always looked up
+  from the session — so the owner's existing guild-linked channel simply appears in their creator dashboard, and
+  someone else's channel is unreachable; a missing channel, or a command/timer id belonging to another channel, is
+  a **404** (never 403). Every route is rate limited (60/min; sign-in 20/min).
+- **Guildless channels** (data + bot): `TwitchChatChannel.guildId` is optional and `broadcasterUserId` is globally
+  unique (migration `0014_creator_guildless_twitch_channels`; `TwitchChatCommand.guildId` / `TwitchChatTimer.guildId`
+  are optional too — they mirror their channel's guild). An existing row keeps its `guildId`, which now means "the
+  linked Discord server". `TwitchChatManager` runs a guildless channel purely on its own `enabled` flag (no
+  `ctx.isEnabled` check — that still applies to guild-linked channels exactly as before). For a guildless channel
+  custom commands, timers and the built-ins (`!commands`, `!uptime`, `!title`) work; **skipped cleanly** (never a
+  crash, never an error message into Twitch chat): economy commands and chat earning, the Discord bridge, and
+  DISCORD/TTS reward actions. The Discord-side routes/commands filter by `guildId`, so guildless channels never show
+  up in a guild's dashboard; the Twitch extension's context resolver returns "not enabled" for them. A Discord admin
+  trying to link a broadcaster that already has a guildless row is refused as "already linked" (attaching a
+  guild to an existing creator channel is phase 3's connect-a-Discord-server flow).
+- **Connect the bot** (`POST /creator/twitch/channel/connect`): returns the Twitch authorize URL for scope
+  `channel:bot` only, with a `creator-connect-state` naming the signed-in creator. The callback requires the
+  creator session, requires the state to have been issued to THAT creator, and requires the Twitch user who
+  authorized **to be the signed-in creator** (otherwise it writes nothing and redirects to
+  `/creator?error=twitch-account-mismatch`); it then upserts the channel by `broadcasterUserId` (new: guildless,
+  `PENDING`; existing: re-armed in place — `enabled`, `PENDING` — keeping its `guildId`, connection and settings) and
+  nudges the bot's reconcile (`nudgeTwitchChatReconcile`). The broadcaster token is discarded (phase 2 adds
+  `channel:read:redemptions` and a home for the token). `DELETE /creator/twitch/channel` deletes a guildless row
+  (commands/timers cascade, like the Discord dashboard's unlink) but only **disables** a guild-linked one
+  (`enabled=false`, `DISCONNECTED`) so the Discord side keeps its data.
+- **Other routes**: `GET /creator/twitch/channel` (`{ botConfigured, botLogin, envConfigured, channel | null }`; the
+  channel DTO carries `discordLinked`, never the guild id), `PATCH` (`enabled`, `commandPrefix` only — bridge/reward
+  fields are rejected), commands (max 50) and timers (max 10) CRUD with the same schemas and reserved-name rules as
+  the Discord routes (`lib/integrations/twitch-chat-schemas.ts`, shared helpers in `twitch-chat-shared.ts`,
+  economy names included). No audit-log rows: the audit log is per Discord guild and a creator action has no Discord
+  actor.
+- **Web** (`apps/web/src/app/creator/**`, `components/creator/*`, `lib/creator/*`): `/creator` signed out is a short
+  "Use Pavisie on your stream — no Discord server needed" page with **Sign in with Twitch**; signed in it shows the
+  Twitch avatar/name + sign out and a "Chat bot" section (status, connect/disconnect, prefix, commands, timers).
+  Its own session provider (`CreatorSessionProvider`, mounted in `app/creator/layout.tsx`, `GET /creator/me`) and
+  `creatorFetch` (attaches the creator token, never the Discord one). The commands/timers tables and dialogs are the
+  Discord dashboard's own components, made data-source-agnostic through `lib/dashboard/twitch-chat-backend.ts`
+  (hooks passed as a `backend` prop: guild routes vs creator routes). `apps/web/src/middleware.ts` only gates
+  `/dashboard`, so `/creator` (the public landing) is untouched.
+- **Privacy**: a creator session holds the Twitch id/login/display name/avatar for up to 7 days (sliding); the
+  sign-in token is never stored (`apps/web/src/content/legal.ts`). No new env vars.
 
 ## 20. Brand tokens: gold-and-black
 

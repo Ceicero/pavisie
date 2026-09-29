@@ -183,6 +183,17 @@ describe('GET /twitch-ext/summary', () => {
     await app.close();
   });
 
+  it('returns { enabled: false } for a guildless channel (creator dashboard only, no Discord server linked)', async () => {
+    const options = enabledGuildPrismaOptions({
+      channels: [{ id: 'chan-1', guildId: null, broadcasterUserId: CHANNEL_ID, enabled: true }],
+    });
+    const { app } = await buildTwitchExtTestApp(options);
+    const res = await app.inject({ method: 'GET', url: '/twitch-ext/summary', headers: { authorization: `Bearer ${signToken()}` } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ enabled: false });
+    await app.close();
+  });
+
   it('returns { enabled: false } when the economy plugin is disabled for the linked guild', async () => {
     const options = enabledGuildPrismaOptions({ pluginStates: { [`${GUILD_ID}:economy`]: false } });
     const { app } = await buildTwitchExtTestApp(options);

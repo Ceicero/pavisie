@@ -1,3 +1,4 @@
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
 import {
@@ -10,7 +11,13 @@ import {
   redisKey,
 } from '@pavisie/core';
 import { writeDashboardAudit } from '../lib/audit';
-import { requireAuth } from '../lib/guild-access';
+import { UnauthenticatedError, requireAuth } from '../lib/guild-access';
+import {
+  completeTwitchCreatorConnect,
+  completeTwitchCreatorLogin,
+  detectCreatorCallback,
+  type CreatorCallbackKind,
+} from '../lib/creator/oauth';
 import {
   OAUTH_PROVIDER_IDS,
   PROVIDER_ENUM_MAP,
@@ -67,15 +74,57 @@ interface OAuthStatePayload {
  *   upserts the single `TwitchBotIdentity` row (fixed id, see `TWITCH_BOT_IDENTITY_ID`), replacing
  *   tokens/scopes/expiry on re-auth.
  * Scopes are decided server-side only, by whichever `/connect` route built the authorize URL — this callback
- * never reads or trusts a scope from the request. */
+ * never reads or trusts a scope from the request.
+ *
+ * CREATOR flows (ARCHITECTURE.md §19e) share this same, already-registered redirect URI so the operator never
+ * has to register a second one with Twitch. They are told apart FIRST, by looking the `state` up in the creator
+ * namespaces (`lib/creator/oauth.ts` `detectCreatorCallback`) — a streamer signing in has no Discord session, so
+ * the Discord-session gate below must not run for them:
+ * - creator sign-in (`creator-login-state` + browser-bound cookie): identifies the Twitch user, discards the
+ *   token, opens a creator session (`csid`), redirects to `/creator`.
+ * - creator connect (`creator-connect-state`, needs the `csid` session): the authorizing Twitch account must be
+ *   the signed-in creator; upserts their (possibly guildless) `TwitchChatChannel`.
+ * A state in neither namespace goes down the original guild-scoped path below, byte-for-byte as before (Discord
+ * session required, state from `oauthstate:integration:*`). Only Twitch has creator flows. */
 export default async function oauthIntegrationsRoutes(app: ZodFastifyInstance): Promise<void> {
+  // Which creator flow (if any) each in-flight request belongs to, decided once in the preHandler so the handler
+  // does not repeat the Redis lookups (and so the two can never disagree about it).
+  const creatorFlowByRequest = new WeakMap<FastifyRequest, CreatorCallbackKind>();
+
+  async function gateCallback(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    const { provider } = request.params as { provider: OAuthProviderId };
+    const { state } = request.query as { state: string };
+    if (provider === 'twitch') {
+      const kind = await detectCreatorCallback(app.redis, request, state);
+      if (kind) {
+        creatorFlowByRequest.set(request, kind);
+        return; // creator flows authenticate themselves (browser-bound state / creator session), not via Discord
+      }
+    }
+    await requireAuth(request, reply);
+  }
+
   app.get(
     '/:provider/callback',
-    { schema: { params: paramsSchema, querystring: querySchema }, preHandler: requireAuth },
+    { schema: { params: paramsSchema, querystring: querySchema }, preHandler: gateCallback },
     async (request, reply) => {
       const { provider } = request.params as { provider: OAuthProviderId };
       const { code, state } = request.query as { code: string; state: string };
-      const session = request.session!;
+
+      const creatorFlow = creatorFlowByRequest.get(request);
+      if (creatorFlow === 'login') {
+        await completeTwitchCreatorLogin(app, request, reply, { code, state });
+        return;
+      }
+      if (creatorFlow === 'connect') {
+        await completeTwitchCreatorConnect(app, request, reply, { code, state });
+        return;
+      }
+
+      // Original guild-scoped flows: `gateCallback` only lets a request through without a creator flow if
+      // `requireAuth` passed, so a Discord session is present.
+      const session = request.session;
+      if (!session) throw new UnauthenticatedError();
 
       const stateKey = redisKey('oauthstate', 'integration', state);
       const raw = await app.redis.get(stateKey);
@@ -190,8 +239,12 @@ export default async function oauthIntegrationsRoutes(app: ZodFastifyInstance): 
           },
         });
 
+        // Keyed on the broadcaster alone (`broadcasterUserId` is globally unique — one Pavisie chat-bot config
+        // per Twitch channel). The checks above already guarantee any existing row for this broadcaster belongs
+        // to THIS guild: a row linked elsewhere — another guild, or none at all because the streamer set the
+        // channel up from the creator dashboard (`guildId` null) — bailed out with `twitch-chat-already-linked`.
         await app.prisma.twitchChatChannel.upsert({
-          where: { guildId_broadcasterUserId: { guildId, broadcasterUserId: twitchUser.id } },
+          where: { broadcasterUserId: twitchUser.id },
           create: {
             guildId,
             broadcasterUserId: twitchUser.id,

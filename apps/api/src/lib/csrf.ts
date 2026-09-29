@@ -44,14 +44,33 @@ function isAllowedOrigin(value: string): boolean {
 }
 
 /**
+ * True for the creator dashboard's route tree (`/creator/*`, ARCHITECTURE.md §19e). Decided from the route's
+ * REGISTERED pattern (`routeOptions.url`), never the raw request URL: the router percent-decodes the URL it
+ * matches on (`/%63reator/...` reaches the same handler as `/creator/...`), so a check on the raw string could be
+ * dodged to make a creator route be guarded by the wrong (or no) session's token. Unmatched requests have no
+ * route and nothing to protect.
+ */
+function isCreatorRoute(request: FastifyRequest): boolean {
+  const pattern = request.routeOptions?.url;
+  return typeof pattern === 'string' && (pattern === '/creator' || pattern.startsWith('/creator/'));
+}
+
+/**
  * Global preHandler: for mutating HTTP methods (outside the small exemption list), requires the
- * `X-CSRF-Token` header to match the session's csrf token, and — when present — the `Origin`/`Referer`
- * header to be in the dashboard/web origin allowlist (ARCHITECTURE.md §10).
+ * `X-CSRF-Token` header to match the csrf token of the session that guards the matched route, and — when
+ * present — the `Origin`/`Referer` header to be in the dashboard/web origin allowlist (ARCHITECTURE.md §10).
+ *
+ * Two session types exist and each guards its own routes ONLY: `/creator/*` routes are guarded by the creator
+ * session (`csid`), everything else by the Discord dashboard session (`sid`). A request carrying both cookies is
+ * therefore checked against exactly one token — the Discord token never satisfies a creator route, nor the
+ * creator token a dashboard route.
  */
 export async function csrfProtection(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   if (!MUTATING_METHODS.has(request.method)) return;
   if (isExempt(request.url)) return;
-  if (!request.session) return; // let route-level requireAuth produce the 401 for unauthenticated mutating calls
+  const active = isCreatorRoute(request) ? request.creator : request.session;
+  // Let route-level requireAuth/requireCreatorAuth produce the 401 for unauthenticated mutating calls.
+  if (!active) return;
 
   const origin = request.headers.origin;
   const referer = request.headers.referer;
@@ -64,7 +83,7 @@ export async function csrfProtection(request: FastifyRequest, _reply: FastifyRep
 
   const headerToken = request.headers[CSRF_HEADER];
   const token = Array.isArray(headerToken) ? headerToken[0] : headerToken;
-  if (!token || !timingSafeEqualStr(token, request.session.csrfToken)) {
+  if (!token || !timingSafeEqualStr(token, active.csrfToken)) {
     throw new PermissionError('Missing or invalid CSRF token.');
   }
 }

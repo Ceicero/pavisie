@@ -61,6 +61,11 @@ export function TopBar() {
   const pathname = usePathname();
   const params = useParams<{ guildId?: string }>();
   const inDashboard = pathname?.startsWith('/dashboard') ?? false;
+  // `/creator/**` (the streamer dashboard) is app chrome too: no marketing CTAs, and a theme toggle. Its account
+  // controls (avatar, sign out) live in the page itself — the Discord `AccountMenu` below reads the Discord
+  // dashboard session, which a creator does not have.
+  const inCreator = pathname?.startsWith('/creator') ?? false;
+  const inApp = inDashboard || inCreator;
   const guildId = inDashboard ? params?.guildId : undefined;
   const invite = inviteUrl();
 
@@ -76,7 +81,7 @@ export function TopBar() {
         </div>
       ) : null}
 
-      {!inDashboard ? (
+      {!inApp ? (
         <nav aria-label="Primary" className="hidden items-center gap-6 md:flex">
           {SITE_LINKS.map((link) => (
             <Link
@@ -91,7 +96,7 @@ export function TopBar() {
       ) : null}
 
       <div className="ml-auto flex items-center gap-2">
-        {!inDashboard ? (
+        {!inApp ? (
           <>
             <ButtonLink href="/dashboard" variant="ghost" size="md" className="hidden sm:inline-flex">
               Open dashboard
@@ -108,7 +113,7 @@ export function TopBar() {
           </>
         ) : null}
 
-        {inDashboard ? <ThemeToggle /> : null}
+        {inApp ? <ThemeToggle /> : null}
         {inDashboard ? <AccountMenu /> : null}
 
         <HamburgerMenu />

@@ -1,6 +1,9 @@
 // TwitchChatManager — the process-wide (one per bot process; see `../index.ts`'s module-level singleton
 // instantiation) owner of the EventSub WebSocket connection and the reconcile loop that keeps its subscriptions
-// matching every enabled `TwitchChatChannel` row whose guild has the `integrations` plugin enabled.
+// matching every enabled `TwitchChatChannel` row whose guild has the `integrations` plugin enabled — plus every
+// enabled GUILDLESS row (`guildId === null`, set up from the creator dashboard, ARCHITECTURE.md §19e), which runs on
+// its own `enabled` flag alone: custom commands, timers and the built-ins work, while everything that needs a
+// Discord server (economy commands/earning, the Discord bridge, DISCORD/TTS reward actions) is quietly unavailable.
 //
 // Since the channel-points extension, a channel can carry up to TWO independent EventSub subscriptions —
 // `channel.chat.message` (always, on the bot identity's token) and `channel.channel_points_custom_reward_
@@ -224,14 +227,15 @@ export class TwitchChatManager {
 
   /** Every enabled `TwitchChatChannel` row whose guild currently has the `integrations` plugin enabled
    * (`ctx.isEnabled`, same per-guild-enablement contract every other plugin job uses — e.g.
-   * `community/jobs/stats-refresh.ts`), uncapped. Shared by `tryConnect` (which only needs to know whether this
-   * is empty, to decide whether opening a socket is even worthwhile) and `reconcile` (which needs the full list
-   * to diff against). */
+   * `community/jobs/stats-refresh.ts`), uncapped. A guildless row (`guildId === null`) has no guild whose plugin
+   * state could gate it, so it is desired purely on its own `enabled` flag (already applied by the query).
+   * Shared by `tryConnect` (which only needs to know whether this is empty, to decide whether opening a socket is
+   * even worthwhile) and `reconcile` (which needs the full list to diff against). */
   private async computeDesiredChannels(ctx: PluginContext): Promise<TwitchChatChannel[]> {
     const rows = await ctx.prisma.twitchChatChannel.findMany({ where: { enabled: true } });
     const desired: TwitchChatChannel[] = [];
     for (const row of rows) {
-      if (await ctx.isEnabled(row.guildId)) desired.push(row);
+      if (row.guildId === null || (await ctx.isEnabled(row.guildId))) desired.push(row);
     }
     return desired;
   }
@@ -434,7 +438,14 @@ export class TwitchChatManager {
         this.bridgeWebhookClients.delete(channel.id);
       }
 
-      if (!channel.bridgeDiscordChannelId || (!channel.bridgeDiscordToTwitch && !channel.bridgeTwitchToDiscord)) {
+      // A guildless channel (creator-dashboard-only) has no Discord server to bridge to: treated exactly like
+      // "bridge fully off", whatever stray bridge fields the row might carry.
+      const guildId = channel.guildId;
+      if (
+        !guildId ||
+        !channel.bridgeDiscordChannelId ||
+        (!channel.bridgeDiscordToTwitch && !channel.bridgeTwitchToDiscord)
+      ) {
         this.bridgeAnnounced.delete(channel.id);
         pruneBridgeDropCount(channel.id);
         pruneBridgeSendBucket(channel.id);
@@ -443,8 +454,7 @@ export class TwitchChatManager {
       }
 
       const guild =
-        ctx.client.guilds.cache.get(channel.guildId) ??
-        (await ctx.client.guilds.fetch(channel.guildId).catch(() => null));
+        ctx.client.guilds.cache.get(guildId) ?? (await ctx.client.guilds.fetch(guildId).catch(() => null));
       if (!guild) continue;
 
       const access = await checkBridgeChannelAccess(guild, channel.bridgeDiscordChannelId);
@@ -833,11 +843,16 @@ export class TwitchChatManager {
     cached: ChannelCacheEntry,
     event: { chatterUserId: string; chatterDisplayName: string; messageText: string },
   ): Promise<EconomyCommandResult> {
-    const economyEnabled = await ctx.isEnabled(cached.channel.guildId, 'economy');
+    // Economy is per-guild in this phase: a guildless channel has no wallet to read/write, so its reserved
+    // economy names simply fall through to the engine (which ignores an unknown name) — never an error reply.
+    const guildId = cached.channel.guildId;
+    if (!guildId) return { handled: false };
+
+    const economyEnabled = await ctx.isEnabled(guildId, 'economy');
     const economyService = ctx.services.get('economy');
     if (!economyEnabled || !economyService) return { handled: false };
 
-    const config = await economyService.getConfig(cached.channel.guildId).catch(() => null);
+    const config = await economyService.getConfig(guildId).catch(() => null);
     if (!config) return { handled: false };
 
     // `cached.commands` is already filtered to `enabled: true` rows (see `refreshChannelCache`'s query).
@@ -847,7 +862,7 @@ export class TwitchChatManager {
       event,
       commandPrefix: cached.channel.commandPrefix,
       channelId: cached.channel.id,
-      guildId: cached.channel.guildId,
+      guildId,
       customCommandNames,
       economyEnabled,
       config,
@@ -874,12 +889,17 @@ export class TwitchChatManager {
     if (event.chatterUserId === cached.channel.broadcasterUserId) return;
     if (isExcludedChatBotLogin(event.chatterLogin)) return;
 
-    const economyEnabled = await ctx.isEnabled(cached.channel.guildId, 'economy');
+    // No guild, no wallet: a guildless channel never earns (economy is per-guild until the channel-owned
+    // currency ships — ARCHITECTURE.md §19e).
+    const guildId = cached.channel.guildId;
+    if (!guildId) return;
+
+    const economyEnabled = await ctx.isEnabled(guildId, 'economy');
     if (!economyEnabled) return;
     const economyService = ctx.services.get('economy');
     if (!economyService) return;
 
-    const config = await economyService.getConfig(cached.channel.guildId).catch(() => null);
+    const config = await economyService.getConfig(guildId).catch(() => null);
     if (!config || !config.twitchEnabled || !config.twitchEarnEnabled) return;
 
     const now = Date.now();
@@ -887,13 +907,13 @@ export class TwitchChatManager {
     if (!isLive) return;
 
     const cooldownAcquired = await ctx.redis
-      .set(earnCooldownKey(cached.channel.guildId, event.chatterUserId), '1', 'EX', config.twitchEarnCooldownSeconds, 'NX')
+      .set(earnCooldownKey(guildId, event.chatterUserId), '1', 'EX', config.twitchEarnCooldownSeconds, 'NX')
       .catch(() => null);
     if (cooldownAcquired !== 'OK') return;
 
     const creditAmount = await reserveDailyEarnBudget(
       ctx.redis,
-      cached.channel.guildId,
+      guildId,
       event.chatterUserId,
       config.twitchEarnPerMessage,
       config.twitchEarnDailyCap,
@@ -901,7 +921,7 @@ export class TwitchChatManager {
     if (creditAmount <= 0) return;
 
     await economyService.credit(
-      cached.channel.guildId,
+      guildId,
       'TWITCH',
       event.chatterUserId,
       creditAmount,
@@ -933,6 +953,7 @@ export class TwitchChatManager {
     channel: TwitchChatChannel,
     event: { chatterUserId: string; chatterDisplayName: string; messageText: string },
   ): Promise<void> {
+    if (!channel.guildId) return; // guildless channel: no Discord server to relay into
     if (!channel.bridgeTwitchToDiscord) return;
     if (!channel.bridgeDiscordChannelId) return;
     if (event.chatterUserId === this.botUserId) return; // self-ignore (safety rule 1) — never bounce our own relayed messages back
@@ -1022,6 +1043,15 @@ export class TwitchChatManager {
           await sendChatMessage(ctx, channel.broadcasterUserId, action.text);
           return;
         case 'DISCORD':
+          // A Discord post needs a guild; a guildless channel treats the action as unavailable (skipped
+          // quietly, never an error into Twitch chat).
+          if (!channel.guildId) {
+            ctx.logger.debug(
+              { rewardId: action.reward.id },
+              'integrations/twitch-chat: DISCORD reward action skipped (channel has no linked Discord server)',
+            );
+            return;
+          }
           await postAlert(ctx, { guildId: channel.guildId, channelId: action.discordChannelId }, {
             title: `Channel point redeemed: ${action.reward.rewardTitle}`,
             description: action.text,
@@ -1036,6 +1066,14 @@ export class TwitchChatManager {
           });
           return;
         case 'TTS': {
+          // TTS runs on the linked guild's own OpenAI key (bring-your-own-key), so it needs a guild.
+          if (!channel.guildId) {
+            ctx.logger.debug(
+              { rewardId: action.reward.id },
+              'integrations/twitch-chat: TTS reward action skipped (channel has no linked Discord server)',
+            );
+            return;
+          }
           const synthesized = await synthesizeTts(ctx, channel.guildId, channel.id, action.text);
           if (!synthesized) {
             ctx.logger.warn(

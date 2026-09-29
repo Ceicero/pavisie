@@ -13,15 +13,10 @@ import {
   env,
   redisKey,
 } from '@pavisie/core';
-import {
-  Prisma,
-  type TwitchChatLevel as PrismaTwitchChatLevel,
-  type TwitchRewardActionKind as PrismaTwitchRewardActionKind,
-} from '@pavisie/database';
+import type { TwitchRewardActionKind as PrismaTwitchRewardActionKind } from '@pavisie/database';
 import type {
   TwitchChatChannelDto,
   TwitchChatCommandDto,
-  TwitchChatLevelId,
   TwitchChatRewardDto,
   TwitchChatStatusDto,
   TwitchChatTimerDto,
@@ -40,6 +35,12 @@ import {
 } from '../lib/integrations/dto';
 import { buildProviderAuthorizeUrl, isOAuthProviderConfigured } from '../lib/integrations/providers';
 import { nudgeTwitchChatReconcile } from '../lib/integrations/twitch-chat-reconcile';
+import {
+  TWITCH_CHAT_LEVEL_ENUM_MAP,
+  commandExistsError,
+  isUniqueViolation,
+  timerExistsError,
+} from '../lib/integrations/twitch-chat-shared';
 import {
   TWITCH_CHAT_MAX_COMMANDS_PER_CHANNEL,
   TWITCH_CHAT_MAX_REWARDS_PER_CHANNEL,
@@ -104,35 +105,8 @@ const REWARD_ACTION_FIELD_SPEC: Record<
   discord: { required: ['discordChannelId', 'discordTemplate'], allowed: ['discordChannelId', 'discordTemplate'] },
 };
 
-/** Reverse of `TWITCH_CHAT_LEVEL_MAP` (lib/integrations/dto.ts) — input level id -> Prisma enum, for writes. */
-const TWITCH_CHAT_LEVEL_ENUM_MAP: Record<TwitchChatLevelId, PrismaTwitchChatLevel> = {
-  everyone: 'EVERYONE',
-  subscriber: 'SUBSCRIBER',
-  vip: 'VIP',
-  moderator: 'MODERATOR',
-  broadcaster: 'BROADCASTER',
-};
-
-/** True for Prisma's unique-constraint-violation error (P2002) — same check as `community.ts`'s `isUniqueViolation`. */
-function isUniqueViolation(err: unknown): boolean {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
-}
-
-function commandExistsError(name: string): AppError {
-  return new AppError(
-    'twitch_chat_command_exists',
-    `A command named "${name}" already exists for this channel.`,
-    { status: 409, expose: true },
-  );
-}
-
-function timerExistsError(name: string): AppError {
-  return new AppError(
-    'twitch_chat_timer_exists',
-    `A timer named "${name}" already exists for this channel.`,
-    { status: 409, expose: true },
-  );
-}
+// `TWITCH_CHAT_LEVEL_ENUM_MAP`, `isUniqueViolation`, `commandExistsError` and `timerExistsError` live in
+// lib/integrations/twitch-chat-shared.ts — shared with the creator dashboard's routes (routes/creator-twitch.ts).
 
 function rewardExistsError(title: string): AppError {
   return new AppError(

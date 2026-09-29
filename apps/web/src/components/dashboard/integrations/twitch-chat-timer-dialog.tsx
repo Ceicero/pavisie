@@ -15,7 +15,7 @@ import {
 } from '@pavisie/ui';
 import type { TwitchChatTimerDto } from '@pavisie/types/integrations';
 import { ApiClientError } from '@/lib/dashboard/api';
-import { useCreateTwitchChatTimer, useUpdateTwitchChatTimer } from '@/lib/dashboard/integrations-queries';
+import type { TwitchChatTimersBackend } from '@/lib/dashboard/twitch-chat-backend';
 
 /** Mirrors `twitchChatNameSchema` / `twitchChatIntervalMinutesSchema` in
  * `apps/api/src/lib/integrations/twitch-chat-schemas.ts`. Client-side validation only. */
@@ -24,7 +24,7 @@ const MIN_INTERVAL_MINUTES = 5;
 const MAX_INTERVAL_MINUTES = 1440;
 
 export interface TwitchChatTimerDialogProps {
-  guildId: string;
+  backend: TwitchChatTimersBackend;
   channelId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -33,7 +33,7 @@ export interface TwitchChatTimerDialogProps {
 }
 
 export function TwitchChatTimerDialog({
-  guildId,
+  backend,
   channelId,
   open,
   onOpenChange,
@@ -43,8 +43,8 @@ export function TwitchChatTimerDialog({
   const [name, setName] = React.useState('');
   const [message, setMessage] = React.useState('');
   const [intervalMinutes, setIntervalMinutes] = React.useState(30);
-  const create = useCreateTwitchChatTimer(guildId);
-  const update = useUpdateTwitchChatTimer(guildId);
+  const create = backend.useCreate();
+  const update = backend.useUpdate();
   const { toast } = useToast();
   const saving = create.isPending || update.isPending;
 
