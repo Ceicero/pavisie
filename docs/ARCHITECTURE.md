@@ -438,7 +438,6 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 - `automod`: `{ quarantine(guildId, userId, reason) }`
 - `tickets`, `roles` (`assignRoles`, `verifyMember`), `integrations` (`sendOutbound(guildId, endpointId, payload)`), `ai` (`complete(...)`) — each plugin registers its service in `onLoad` and consumers call `ctx.services.get('x')` and no-op gracefully if absent.
 - `twitchChat`: `{ status(): TwitchChatRuntimeStatus; reconcileNow(): Promise<void>; stop(): Promise<void> }` — the `integrations` plugin's Twitch chat bot runtime; registered from the same `onLoad` (§19a).
-- `economy`: `{ getConfig(guildId); getOrCreateWallet(guildId, platform, userId, displayName?); claimDaily(guildId, platform, userId); give(guildId, fromUserId, toUserId, amount, platform); credit(guildId, platform, userId, amount, type, displayName?); getLeaderboard(guildId, limit?) }` — registered by the `economy` plugin; the `integrations` plugin's Twitch chat runtime is its only cross-plugin consumer so far (§18b).
 
 ### 7.6 Platform events (`@pavisie/types` `PlatformEventMap`)
 
@@ -478,7 +477,7 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 - `prisma/schema.prisma` (postgres). Client singleton in `src/client.ts` (`export const prisma`, `export * from '@prisma/client'` types). `src/index.ts` also exports `writeAudit(prisma, entry)`, `withGuild(guildId)` helpers, and `retention.ts` helpers.
 - Migration: `prisma/migrations/0001_init/migration.sql` + `migration_lock.toml`, generated with `prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script` (no DB needed). Scripts: `generate`, `migrate:dev`, `migrate:deploy`, `migrate:diff`, `seed` (`tsx prisma/seed.ts`), `studio`.
 - Conventions: ids `String @id @default(cuid())` unless a Discord snowflake is natural (`Guild.id`, `UserProfile.id` = discord user id). Every tenant table has `guildId String` + `@@index([guildId])` (+ compound indexes for hot lookups). Timestamps `createdAt @default(now())`, `updatedAt @updatedAt`. Soft delete via `deletedAt DateTime?` on ModerationCase, Ticket, RolePanel, AutomodRule, Suggestion, WebhookEndpoint, IntegrationConnection. FK to `Guild` with `onDelete: Cascade` (guild data deletion = delete Guild row → cascades). Json config columns typed `Json`.
-- Models (minimum): Guild, GuildConfig (1:1; staff role ids, locale, timezone, fastActions, modLogChannelId, dataCollection flags), PluginState, PluginConfig, PluginMigration, UserProfile, ModerationCase (`caseNumber Int` per guild `@@unique([guildId, caseNumber])`, type enum WARN|TIMEOUT|UNTIMEOUT|KICK|BAN|UNBAN|SOFTBAN|PURGE|LOCK|UNLOCK|SLOWMODE|NICK|ROLE_ADD|ROLE_REMOVE|QUARANTINE|NOTE, targetId, moderatorId, reason, evidenceUrls String[], durationMs, expiresAt, expiredAt, dmSent Boolean, metadata Json, source), ModerationWarning, ModerationNote, ModerationAppeal, ModerationEscalationRule (or inside config Json), AutomodRule, AutomodEvent (with reviewStatus enum PENDING|APPROVED|FALSE_POSITIVE), AuditLog, LogEvent (logging plugin searchable store; content fields nullable), Ticket, TicketParticipant, TicketTranscript, TicketPanel, RolePanel, RolePanelOption, RoleGroup, MemberRoleSnapshot (role persistence), VerificationRequest, OnboardingProgress, ScheduledJob, Reminder, ScheduledAnnouncement, Giveaway, GiveawayEntry, Poll, PollOption, PollVote, Suggestion, SuggestionVote, StarboardEntry, TempVoiceChannel, CommunityEvent, EventRsvp, LevelProfile, LevelReward, ReputationEvent, EconomyAccount, EconomyTransaction, AfkStatus, IntegrationConnection, OAuthToken (encrypted fields `accessTokenEnc`, `refreshTokenEnc`, `expiresAt`, `scopes String[]`), WebhookEndpoint (inbound + outbound, `secretEnc`), WebhookDelivery, ProcessedWebhookEvent (idempotency: `@@unique([provider, eventId])`), DataRetentionPolicy, DataRequest (export/delete jobs), AiUsage, GuildAnalyticsDaily, TwitchBotIdentity (singleton — Pavisie's own Twitch chat-bot account), TwitchChatChannel (a guild's linked Twitch channel, with `overlayTokenEnc` + `rewardsEnabled` for channel-point rewards — §19b), TwitchChatCommand, TwitchChatTimer (enum `TwitchChatLevel` EVERYONE|SUBSCRIBER|VIP|MODERATOR|BROADCASTER — see §19a), TwitchChatReward (channel-point reward → action mapping, enum `TwitchRewardActionKind` SOUND|TTS|CHAT|DISCORD — see §19b), GameAccountLink, GameStatSnapshot (enum `GameAccountProvider` STEAM only in v1, per-guild opt-in link + latest curated stat snapshot — see §19c).
+- Models (minimum): Guild, GuildConfig (1:1; staff role ids, locale, timezone, fastActions, modLogChannelId, dataCollection flags), PluginState, PluginConfig, PluginMigration, UserProfile, ModerationCase (`caseNumber Int` per guild `@@unique([guildId, caseNumber])`, type enum WARN|TIMEOUT|UNTIMEOUT|KICK|BAN|UNBAN|SOFTBAN|PURGE|LOCK|UNLOCK|SLOWMODE|NICK|ROLE_ADD|ROLE_REMOVE|QUARANTINE|NOTE, targetId, moderatorId, reason, evidenceUrls String[], durationMs, expiresAt, expiredAt, dmSent Boolean, metadata Json, source), ModerationWarning, ModerationNote, ModerationAppeal, ModerationEscalationRule (or inside config Json), AutomodRule, AutomodEvent (with reviewStatus enum PENDING|APPROVED|FALSE_POSITIVE), AuditLog, LogEvent (logging plugin searchable store; content fields nullable), Ticket, TicketParticipant, TicketTranscript, TicketPanel, RolePanel, RolePanelOption, RoleGroup, MemberRoleSnapshot (role persistence), VerificationRequest, OnboardingProgress, ScheduledJob, Reminder, ScheduledAnnouncement, Giveaway, GiveawayEntry, Poll, PollOption, PollVote, Suggestion, SuggestionVote, StarboardEntry, TempVoiceChannel, CommunityEvent, EventRsvp, LevelProfile, LevelReward, ReputationEvent, EconomyAccount, EconomyTransaction (guild wallets; `platform = TWITCH` rows are legacy, §18b), ChannelEconomy, ChannelWallet, ChannelTransaction (a streaming channel's own currency, enum `StreamPlatform` — §18b/§19e), AfkStatus, IntegrationConnection, OAuthToken (encrypted fields `accessTokenEnc`, `refreshTokenEnc`, `expiresAt`, `scopes String[]`), WebhookEndpoint (inbound + outbound, `secretEnc`), WebhookDelivery, ProcessedWebhookEvent (idempotency: `@@unique([provider, eventId])`), DataRetentionPolicy, DataRequest (export/delete jobs), AiUsage, GuildAnalyticsDaily, TwitchBotIdentity (singleton — Pavisie's own Twitch chat-bot account), TwitchChatChannel (a guild's linked Twitch channel, with `overlayTokenEnc` + `rewardsEnabled` for channel-point rewards — §19b), TwitchChatCommand, TwitchChatTimer (enum `TwitchChatLevel` EVERYONE|SUBSCRIBER|VIP|MODERATOR|BROADCASTER — see §19a), TwitchChatReward (channel-point reward → action mapping, enum `TwitchRewardActionKind` SOUND|TTS|CHAT|DISCORD — see §19b), GameAccountLink, GameStatSnapshot (enum `GameAccountProvider` STEAM only in v1, per-guild opt-in link + latest curated stat snapshot — see §19c).
 - Seed (`prisma/seed.ts`): only creates a **demo guild clearly named `Pavisie Demo (seed)`** with id `000000000000000000`, sample plugin states, one sample automod rule in dry-run, sample retention policy. No fake users/messages.
 
 ## 9. Bot host (`apps/bot`)
@@ -750,98 +749,144 @@ degrades to a no-op (ARCHITECTURE.md's "safely degrade if an optional integratio
 `IntegrationConnection` rows keep reading correctly (schema.prisma) — do not drop them, and do not re-add a
 provider file/registry entry for one without deciding whether its enum value should come back into use.
 
-## 18b. `economy` plugin (per-platform wallets)
+## 18b. `economy` plugin (guild wallets) and the channel-owned Twitch currency
 
 Virtual currency feature: `/economy balance|daily|give|leaderboard|config` and `/economy admin add|remove`.
 **No real-money functionality** — currency is virtual-only, cannot be purchased, cashed out, or used for wagering.
 
-**Platform-aware wallets**: Every wallet is keyed by `(guildId, platform, userId)`. Platforms are `DISCORD`
-(user-keyed: snowflake id) and `TWITCH` (Twitch viewer-keyed: numeric user id). Wallets on different platforms
-are **never merged, linked, or transferred** — a Discord member has a separate wallet from a Twitch viewer with
-the same numeric id digits (hence platform is part of the unique key). Historical: every row existing before
-migration 0013 defaults to `platform=DISCORD`.
+There are now **two separate currencies**, and they are never merged, linked or transferred between:
 
-**Ledger discipline**: Every balance change is an append-only `EconomyTransaction` row. The balance on
-`EconomyAccount` is a derived/cached total, never edited without a matching transaction. Ledger functions
-(`packages/plugins/src/economy/ledger.ts` — **the only module allowed to write a balance**): `getOrCreateWallet`
-(upsert by compound key; Twitch wallets store `displayName`), `claimDaily` (per-wallet cooldown & streak), `give`
-(same-platform only; cross-platform rejected), `credit` (earning; positive amounts only; sets transaction type),
-`adminAdjust` (add/remove; prevents negative), `getPlatformLeaderboard` (top wallets on one platform by lifetime
-earned — shared, read-only, by `/economy leaderboard platform:<x>` and the Twitch `!top` chat command, so the
-ranking query lives in exactly one place). All mutators use `prisma.$transaction` with conditional `updateMany`
-guards for concurrency safety (exactly one concurrent claim/give wins, others fail atomically with no ledger
-row). **Every transaction created anywhere explicitly sets `platform`** — never rely on the DB default in new
-code. Earned transaction types: `['daily', 'twitch_chat_earn', 'twitch_watch_earn']` (`twitch_watch_earn`
-reserved for a future Twitch-watch-time feature).
+1. **The Discord server's currency** (this plugin) — wallets keyed by `(guildId, platform = DISCORD, userId)` in
+   `EconomyAccount`/`EconomyTransaction`, configured with `/economy config` and the Discord dashboard.
+2. **A Twitch channel's currency** (`ChannelEconomy`, below) — **owned by the Twitch channel**, configured by the
+   streamer on the creator dashboard (§19e), working with **no Discord server at all**. It was moved off the guild
+   in creator-dashboard phase 2a (migration `0015_channel_economy`): the guild economy no longer has any Twitch
+   settings.
 
-**Leaderboards**: `/economy leaderboard [platform]` with choices `global` (default), `discord`, `twitch`.
-- `global`: top 10 by current `balance` across all platforms. Discord rows: `<@id>` mention. Twitch rows:
+**Guild wallets (`EconomyAccount`/`EconomyTransaction`)**: platform is part of the unique key (`DISCORD` or the legacy
+`TWITCH`) so a Discord snowflake and a Twitch id with the same digits could never collide. Historical rows: every row
+existing before migration 0013 is `DISCORD`. **`platform = TWITCH` rows in these tables are LEGACY**: they were carried
+over into the channel economy by migration 0015 (see below) and are now unused — deliberately left in place, unmodified,
+so the migration is trivially reversible; they are dropped in creator-dashboard phase 4. Nothing reads them any more
+(the Discord leaderboards filter `platform = DISCORD` explicitly).
+
+**Ledger discipline**: Every balance change is an append-only transaction row. The balance on the wallet row is a
+derived/cached total, never edited without a matching transaction. The guild ledger
+(`packages/plugins/src/economy/ledger.ts`) is the only module allowed to write a guild-wallet balance:
+`getOrCreateWallet` (upsert by compound key), `claimDaily` (per-wallet cooldown & streak), `give` (same-platform
+only), `credit`, `adminAdjust` (add/remove; prevents negative), `getPlatformLeaderboard` (top wallets by lifetime
+earned). All mutators use `prisma.$transaction` with conditional `updateMany` guards for concurrency safety (exactly
+one concurrent claim/give wins, others fail atomically with no ledger row). Earned transaction types:
+`['daily', 'twitch_chat_earn', 'twitch_watch_earn']` (`twitch_watch_earn` reserved for a future watch-time feature).
+
+**Discord leaderboards**: `/economy leaderboard [platform]` with choices `global` (default), `discord`, `twitch`.
+- `discord`: top 10 Discord wallets by **lifetime earned**.
+- `twitch`: the Twitch viewers of the channels **linked to this server** (`TwitchChatChannel.guildId`), read from those
+  channels' `ChannelWallet`s by lifetime earned, each row in its own channel's currency symbol. Only channels whose
+  streamer has switched their currency **on** are shown. No linked channel (or none with a currency on) is an honest
+  empty state ("No Twitch channel linked to this server has a currency switched on yet…"), never an empty-looking board.
+- `global`: the top 10 by **current balance** across this server's Discord wallets and the linked channels' Twitch
+  wallets (the two are ranked side by side, each in its own currency; they are not converted or merged). Twitch rows:
   escaped `displayName` (fallback "Twitch viewer") + ` (Twitch)` marker.
-- `discord` / `twitch`: top 10 by **lifetime earned** on that platform (sum of transaction `amount` where
-  `platform` matches and `type ∈ EARNED_TRANSACTION_TYPES`). Wallets with zero earned excluded. Title clarifies
-  the board.
 
-Existing Discord commands keep their replies, cooldowns, streak maths and error messages; they call the ledger
-functions with `platform='DISCORD'`. The only visible change is the leaderboard title, which now names the board.
+`/economy config` now only has the currency name/symbol, daily min/max and give min/max. The old `twitch-*` options
+(and the `twitchEnabled`/`twitchEarn*` keys of the guild config schema) were removed **backward-compatibly**: the
+schema is non-strict, so stale copies of those keys still in a guild's stored config are silently dropped on read and
+never break config parsing; a NEW write of one through the dashboard is rejected as an unknown field. The former
+cross-plugin `economy` service (`ServiceMap.economy`) had the Twitch chat runtime as its only consumer and was removed
+with them.
 
-**Cross-plugin service** (`ServiceMap.economy`, §7.5, registered by `economy`'s `onLoad`):
-`getConfig(guildId)` (currency name/symbol + the five `twitch*` fields below), `getOrCreateWallet`,
-`claimDaily`, `give(guildId, fromUserId, toUserId, amount, platform)` (`toUserId` must already be resolved — a
-Discord snowflake, or a Twitch numeric id resolved from a login via Helix by the caller; this service never
-resolves a login itself), `credit`, `getLeaderboard(guildId, limit?)` (TWITCH-platform only, via
-`getPlatformLeaderboard`). Other plugins call it via `ctx.services.get('economy')` and no-op gracefully when
-it's absent (economy plugin disabled/unavailable) — never touch `ledger.ts` or Prisma's `EconomyAccount`/
-`EconomyTransaction` models directly from outside the `economy` plugin.
+### Channel-owned Twitch currency (`ChannelEconomy`)
 
-**Twitch chat runtime** (inside the `integrations` plugin's `twitch-chat/` — §19a — not a new plugin):
-`config` gains five fields: `twitchEnabled` (turns on the five chat commands below), `twitchEarnEnabled`
-(turns on chat earning; independent of `twitchEnabled` — commands can be on with earning off, or vice versa),
-`twitchEarnPerMessage` (default 5), `twitchEarnCooldownSeconds` (default 60, min 10), `twitchEarnDailyCap`
-(default 200, per viewer per UTC day). All five are exposed as `/economy config` options and required to
-round-trip through `/economy config` unchanged otherwise.
+- **Models** (migration 0015, `packages/database/prisma/schema.prisma`): `ChannelEconomy` — one per streaming channel,
+  unique `(platform: StreamPlatform, channelUserId)`, holding the channel's currency settings: `enabled` (default
+  false), `currencyName`/`currencySymbol` (Agis / ♦️), `dailyMinAmount`/`dailyMaxAmount` (50/150),
+  `streakBonusPerDay`/`streakBonusMax` (10/200), `giveMinAmount`/`giveMaxAmount` (1/100000), `earnEnabled` (false),
+  `earnPerMessage` (5), `earnCooldownSeconds` (60), `earnDailyCap` (200) — the same defaults and bounds as the guild
+  economy. `ChannelWallet` `(economyId, viewerUserId)` unique — the viewer's Twitch id, display name, balance,
+  `lastDailyAt`. `ChannelTransaction` — the append-only ledger (`walletId`, from/to viewer ids, amount, `type`, `note`),
+  same `type` vocabulary as the guild ledger (`daily`, `give`, `twitch_chat_earn`, `admin_add`, `admin_remove`).
+  **`StreamPlatform`** is a new enum (today `TWITCH` only) rather than a reuse of `EconomyPlatform`: that enum carries
+  `DISCORD`, which is meaningless for a channel currency, and adding `KICK` to it would pollute guild wallets; a second
+  platform (Kick, phase 5) adds one value here and reuses everything else.
+- **Keyed by broadcaster id, not by a foreign key** to `TwitchChatChannel` (or to a guild): disconnecting or deleting
+  the chat bot, unlinking a Discord server or a guild being deleted never deletes anyone's balance.
+- **Created by the streamer's first save**, never by viewing: `GET /creator/twitch/economy` on a channel with no row
+  returns the defaults with `configured: false` and writes nothing; the first `PATCH` upserts the row.
+- **Ledger** (`packages/plugins/src/channel-economy/ledger.ts` — the only module allowed to write a `ChannelWallet`
+  balance), mirroring `economy/ledger.ts` exactly: atomic `$transaction`s with conditional `updateMany` guards,
+  append-only transactions, no negative balances, daily cooldown (20h) and streak (48h window) from the very same pure
+  `rollDaily`, `give` inside ONE channel's currency (self / bot / min / max / insufficient checks), `credit` for
+  earning, `adminAdjustChannel` for the streamer, and the lifetime-earned (`EARNED_TRANSACTION_TYPES`, shared with the
+  guild ledger) and balance leaderboards. Three deliberate tightenings, none changing an outcome a caller relied on:
+  amounts must be safe positive integers everywhere (`invalid_amount`, instead of a thrown `RangeError`); `give` creates
+  the RECIPIENT's wallet only after every validation has passed (a rejected `!give` never stores a bystander's display
+  name); `claimDaily`'s retry-after is measured against the injected `now`. Parity with the guild ledger is asserted by
+  tests that run the same operation sequences against both. Settings live in
+  `channel-economy/settings.ts` (Zod schema with the guild economy's bounds, `CHANNEL_ECONOMY_DEFAULTS`, cross-field
+  min<=max check).
+- **Carry-over (migration 0015, hand-written data copy, clearly marked in the SQL)**: for every `TwitchChatChannel`
+  with a `guildId`, create its `ChannelEconomy` from that guild's stored economy plugin config (`PluginConfig.config`
+  jsonb: currency name/symbol, daily, streak, give, `twitchEarn*`), falling back to the defaults for an absent or
+  wrong-typed key and clamping numbers to the schema bounds; `enabled` = the guild's `twitchEnabled` AND the economy
+  plugin being enabled (`PluginState`). Then copy every `EconomyAccount(platform = TWITCH)` of that guild into
+  `ChannelWallet` (balance, `lastDailyAt`, display name and timestamps verbatim) and every
+  `EconomyTransaction(platform = TWITCH)` into `ChannelTransaction` (amount, type, note, from/to, `createdAt` verbatim;
+  `accountId` remapped to the copied wallet). Guildless channels never had wallets, so they get no row until their
+  streamer saves. Ids are deterministic (`ce_<channelRowId>`, `cw_<channelRowId>_<accountId>`,
+  `ct_<channelRowId>_<txId>`), so no extension is needed and every copied row is traceable. If one guild ever linked
+  several broadcasters, its pooled Twitch wallets are copied into each channel's economy (nobody loses currency).
+  Twitch wallets of a guild that no longer has ANY linked channel cannot be attributed and stay in the legacy tables.
+  **The old rows and the guild config's stale keys are NOT modified or deleted** (rollback = redeploy the previous
+  build); they are dropped in phase 4.
+- **Twitch chat runtime** (inside the `integrations` plugin's `twitch-chat/` — §19a): economy commands and earning run
+  for ANY enabled `TwitchChatChannel`, guild-linked or guildless, against the channel's `ChannelEconomy` **when its
+  `enabled` is true** (earning additionally needs `earnEnabled` and a live stream). The bot no longer reads the guild
+  economy config or its enablement for Twitch. The row is read through a small in-memory cache
+  (`ECONOMY_CACHE_TTL_MS`, 30s, negative results cached too), so a streamer's change on the creator dashboard reaches
+  chat within about 30 seconds and a busy chat does not cost a database read per message.
 - **Commands** (`integrations/twitch-chat/economy-commands.ts`, `handleEconomyChatCommand` — pure/testable, no
-  `PluginContext`): `!balance`/`!bal` (caller's TWITCH balance), `!daily` (claims on the TWITCH wallet), `!give
-  <login> <amount>` (optional leading `@`; resolves the login to a Twitch user id via Helix `GET /users?login=`
-  — `getUserByLogin` in `helix.ts`, same token/retry pattern as `getStream`/`getChannelInfo` — then transfers
-  TWITCH -> TWITCH; rejects self, the bot's own Twitch account, an unresolved login, and an invalid/out-of-range
-  amount, via the ledger's own `validateGive`), `!top` (TWITCH board top 5, one line, via
-  `getPlatformLeaderboard`). **Precedence**: `TwitchChatManager` tries these BEFORE `engine.handleChatMessage`
-  for any message starting with the channel's prefix; a reserved name (`balance`/`bal`/`daily`/`give`/`top`,
-  added to `TWITCH_CHAT_RESERVED_COMMAND_NAMES` alongside the `commands`/`uptime`/`title` built-ins) is only
-  handled here when the `economy` plugin is enabled for the guild AND `twitchEnabled` AND no enabled custom
-  command already owns that name — an existing custom command with a reserved name always wins, so a channel
-  configured before this feature shipped keeps working unchanged. A message this module doesn't handle falls
-  through to the engine completely unchanged — never a marker string. A per-viewer, per-command 10s cooldown
-  (`econ:<viewerId>:<name>`) reuses the engine's own `CommandCooldowns` class under a distinct key namespace, so
-  custom-command/built-in cooldown behavior is untouched. **`!give`'s login argument is validated against
-  Twitch's own login alphabet (`^[a-z0-9_]{1,25}$`, after stripping one leading `@` and lowercasing) BEFORE any
-  Helix call or any reply** — an invalid login (spaces, punctuation, a URL, anything outside that alphabet)
-  gets a fixed rejection that never echoes the input, and an unresolved-but-valid-looking login also gets a
-  fixed "couldn't find that Twitch user" reply with no echo either. This closes an echo-abuse hole: without it,
-  `!give <slur or link> 5` would have made the bot repeat arbitrary viewer-typed text in its own voice in the
-  streamer's chat. Every other economy reply only ever includes Twitch-verified display names (from the
-  EventSub event or a Helix user lookup, never raw message text) or our own formatted numbers — never a raw
-  viewer-typed argument.
-- **Earning** (`integrations/twitch-chat/economy-earn.ts` + `TwitchChatManager.tryEconomyEarn`): for each
-  non-command chat message (doesn't start with the channel's prefix) not from the bot, **not from the channel's
-  broadcaster** (no self-farming), and **not from a well-known third-party chat bot** (`EXCLUDED_CHAT_BOT_LOGINS`
-  — `nightbot`, `streamelements`, `streamlabs`, `moobot`, `fossabot`, `wizebot`, `soundalerts`, `sery_bot`,
-  `botrixoficial`, `kofistreambot`, `own3d`, `pokemoncommunitygame`, `commanderroot`; matched case-insensitively
-  against the EventSub event's `chatter_user_login`, never the display name — these bots post automated timer/
-  alert messages continuously all stream, so without this they'd max the daily cap every stream and dominate
-  the leaderboard; the exclusion is earning-only, every one of them can still run economy commands like any
-  other viewer), while economy is enabled, `twitchEnabled`, and `twitchEarnEnabled`: only while the channel is
-  **live** — liveness is one `getStream` lookup per broadcaster, cached in-memory for 60s
-  (`isChannelLive`/`LIVENESS_CACHE_TTL_MS`; a failed lookup is cached and treated as not-live, so a Helix outage
-  never costs one call per message either) — then a per-viewer-per-guild cooldown (`SET ... EX
-  <twitchEarnCooldownSeconds> NX`) and a UTC-day earn budget (`reserveDailyEarnBudget`) that credits
-  `twitchEarnPerMessage`, or a smaller "partial final credit" once the day's remaining budget is under that, or
-  `0` once the cap is reached. **Every write to the daily-budget key sets its value and its TTL in one atomic
-  Redis operation** — `MULTI` for the `INCRBY`+`PEXPIRE` pair, `SET ... PX` (not separate `SET`+`PEXPIRE` calls)
-  for the cap-clamp — so a process crash between two round trips can never leave the key with no TTL (which
-  would otherwise leak it past UTC midnight forever instead of expiring on schedule). A successful credit goes
-  through the `economy` service's `credit(..., 'twitch_chat_earn', displayName)` — silent, no chat reply, never
-  logged, and every step is best-effort (never throws into the chat pipeline).
+  `PluginContext`, talks to the currency only through an `EconomyChatPort` built over the channel ledger by
+  `economy-port.ts`): `!balance`/`!bal` (the viewer's balance), `!daily` (claims), `!give <login> <amount>` (optional
+  leading `@`; resolves the login to a Twitch user id via Helix `GET /users?login=` — `getUserByLogin` in `helix.ts` —
+  then transfers inside the channel's currency; rejects self, the bot's own Twitch account, an unresolved login and an
+  invalid/out-of-range amount), `!top` (top 5 by lifetime earned, one line). **Precedence**: `TwitchChatManager` tries
+  these BEFORE `engine.handleChatMessage` for any message starting with the channel's prefix; a reserved name
+  (`balance`/`bal`/`daily`/`give`/`top`, in `TWITCH_CHAT_RESERVED_COMMAND_NAMES` alongside the `commands`/`uptime`/
+  `title` built-ins) is only handled here when the channel has an enabled currency AND no enabled custom command
+  already owns that name — an existing custom command with a reserved name always wins. The currency row is loaded
+  lazily, only once a message is known to be an economy command nothing else owns. A message this module doesn't handle
+  falls through to the engine completely unchanged — never a marker string. A per-viewer, per-command 10s cooldown
+  (`econ:<viewerId>:<name>`) reuses the engine's own `CommandCooldowns` class under a distinct key namespace.
+  **`!give`'s login argument is validated against Twitch's own login alphabet (`^[a-z0-9_]{1,25}$`, after stripping one
+  leading `@` and lowercasing) BEFORE any Helix call or any reply** — an invalid login gets a fixed rejection that never
+  echoes the input, and an unresolved-but-valid-looking login also gets a fixed "couldn't find that Twitch user" reply
+  with no echo either. This closes an echo-abuse hole: without it, `!give <slur or link> 5` would have made the bot
+  repeat arbitrary viewer-typed text in its own voice in the streamer's chat. Every other economy reply only ever
+  includes Twitch-verified display names (from the EventSub event or a Helix user lookup, never raw message text) or
+  our own formatted numbers — never a raw viewer-typed argument.
+- **Earning** (`integrations/twitch-chat/economy-earn.ts` + `TwitchChatManager.tryEconomyEarn`): for each non-command
+  chat message (doesn't start with the channel's prefix) not from the bot, **not from the channel's broadcaster** (no
+  self-farming), and **not from a well-known third-party chat bot** (`EXCLUDED_CHAT_BOT_LOGINS` — `nightbot`,
+  `streamelements`, `streamlabs`, `moobot`, `fossabot`, `wizebot`, `soundalerts`, `sery_bot`, `botrixoficial`,
+  `kofistreambot`, `own3d`, `pokemoncommunitygame`, `commanderroot`; matched case-insensitively against the EventSub
+  event's `chatter_user_login`, never the display name; earning-only, every one of them can still run economy
+  commands), while the currency is `enabled` and `earnEnabled` (and `earnDailyCap` > 0): only while the channel is
+  **live** — one `getStream` lookup per broadcaster, cached in-memory for 60s (`isChannelLive`/`LIVENESS_CACHE_TTL_MS`;
+  a failed lookup is cached and treated as not-live) — then a per-viewer-per-**channel** cooldown (`SET ... EX
+  <earnCooldownSeconds> NX`) and a UTC-day earn budget (`reserveDailyEarnBudget`) that credits `earnPerMessage`, or a
+  smaller "partial final credit" once the day's remaining budget is under that, or `0` once the cap is reached. The
+  Redis keys are scoped to the channel economy's id — `pavisie:channel-economy:earn-cooldown:<economyId>:<viewerId>`
+  and `…:earn-daily:<economyId>:<viewerId>:<UTC date>` (the pre-0015 guild-scoped `economy:twitchearn-*` keys are no
+  longer read and expire on their own; at cutover a viewer can therefore earn up to one extra daily cap that UTC day).
+  **Every write to the daily-budget key sets its value and its TTL in one atomic Redis operation** — `MULTI` for the
+  `INCRBY`+`PEXPIRE` pair, `SET ... PX` for the cap-clamp — so a crash can never leave the key with no TTL. A
+  successful credit goes through the channel ledger's `creditChannel(..., 'twitch_chat_earn')` — silent, no chat reply,
+  never logged, and every step is best-effort (never throws into the chat pipeline).
+- **Extension panel** (§19d): resolves `channel_id` → the channel's enabled `ChannelEconomy` directly (no guild, no
+  linked chat-bot row needed); summary reads never create a wallet.
+- **Creator dashboard** (§19e): `GET/PATCH /creator/twitch/economy`, `GET …/leaderboard`, `POST …/adjust`; UI section
+  "Currency".
 
 ## 19. `enforcer` plugin
 
@@ -996,7 +1041,7 @@ No 15th plugin: lives in `packages/plugins/src/integrations/twitch-chat/` (`heli
   command's `minLevel`; per-`(channelId, commandName)` in-memory cooldown; `{user}`/`{channel}` templating only
   (no other interpolation). Built-ins `!commands` (lists enabled custom command names), `!uptime` (via Helix
   `GET /streams`), `!title` (via Helix `GET /channels`) — reserved names a NEW custom command can never take
-  (`commands`/`uptime`/`title`, plus the economy plugin's `balance`/`bal`/`daily`/`give`/`top` — §18b — all in
+  (`commands`/`uptime`/`title`, plus the channel currency's `balance`/`bal`/`daily`/`give`/`top` — §18b — all in
   `TWITCH_CHAT_RESERVED_COMMAND_NAMES`, enforced at the API layer and mirrored in the `/twitch` slash command).
   Unlike the built-ins, the economy names are tried by a separate module BEFORE the engine even sees the
   message (`integrations/twitch-chat/economy-commands.ts` — §18b) — the engine itself has no economy knowledge
@@ -1013,13 +1058,14 @@ No 15th plugin: lives in `packages/plugins/src/integrations/twitch-chat/` (`heli
   text to the *other* platform. That relayed text is still never persisted or logged by Pavisie; it is only ever
   held in memory for the length of one relay call. Once relayed, though, it becomes an ordinary message on the
   destination platform and is stored there under that platform's own terms — deleting the original does not
-  delete the relayed copy. **A second carve-out** (§18b): when a guild turns on the server's virtual currency
-  plugin (Agis by default — an admin can rename it) for a linked Twitch channel (`economy` plugin enabled +
-  `twitchEnabled`), Pavisie stores a Twitch wallet — Twitch user id, display name, balance, and an append-only
+  delete the relayed copy. **A second carve-out** (§18b/§19e): when a streamer turns on their channel's virtual currency (Agis by default —
+  they can rename it; configured on the creator dashboard, working with or without a Discord server), Pavisie stores a
+  Twitch wallet held **per Twitch channel** — Twitch user id, display name, balance, and an append-only
   transaction history — for each viewer who runs an economy chat command, earns from chat, or receives currency
-  from another viewer via `!give` (a `!give` recipient gets a wallet even if they've never themselves run a
-  command). Chat message *text* is still never stored; only the reserved economy commands' resolved arguments
-  (a login to resolve, an amount) are ever used, in memory, to make a ledger call, and are not logged. No Twitch-side moderation actions (ban/timeout/delete) ship in v1 — no moderator
+  from another viewer via `!give` (a `!give` recipient gets a wallet only once the give succeeds). The streamer can also
+  add to or remove from a viewer's balance (recorded with their reason). Chat message *text* is still never stored;
+  only the reserved economy commands' resolved arguments (a login to resolve, an amount) are ever used, in memory, to
+  make a ledger call, and are not logged. No Twitch-side moderation actions (ban/timeout/delete) ship in v1 — no moderator
   scopes are requested.
 - **Discord <-> Twitch chat bridge** (`twitch-chat/bridge-format.ts`, `bridge-webhook.ts`, `bridge-metrics.ts`,
   `bridge-discord-handler.ts`; `TwitchChatManager`'s `runBridgeReconcile`/`relayTwitchToDiscordIfBridged`; command
@@ -1159,12 +1205,13 @@ same "declare it, degrade honestly" pattern as `media`'s `MEDIA_PROVIDER` gate. 
 
 ## 19d. Twitch Extension — the Agis panel (EBS in `apps/api`, front-end `apps/twitch-extension`)
 
-A Twitch panel extension shown under a streamer's video: the guild's currency name/symbol, the viewer's
-Twitch-wallet balance, a "Claim daily" button (same rules/streak as `!daily`), and the Twitch leaderboard
-(lifetime earned on Twitch, top 10). Reuses the `economy` plugin's existing per-platform wallets (§18b) — this
-is a second *client* of the same TWITCH-platform data the chat bot already reads/writes, not a new data model.
-A viewer's wallet is `{ guildId: <guild the channel is linked to>, platform: 'TWITCH', userId: <real Twitch
-user id> }`, exactly as in §18b — never linked to a Discord wallet, never linked across guilds.
+A Twitch panel extension shown under a streamer's video: the channel's currency name/symbol, the viewer's
+wallet balance, a "Claim daily" button (same rules/streak as `!daily`), and the channel's leaderboard
+(lifetime earned, top 10). Reuses the channel-owned currency (`ChannelEconomy`/`ChannelWallet`, §18b) — this
+is a second *client* of the same data the chat bot already reads/writes, not a new data model. A viewer's wallet is
+`{ economyId: <the channel's ChannelEconomy>, viewerUserId: <real Twitch user id> }` — never linked to a Discord
+wallet, never linked across channels. Since phase 2a the panel needs **no Discord server**: it is resolved from the
+channel's own currency alone.
 
 - **EBS routes** (`apps/api/src/routes/twitch-ext.ts`, prefix `/twitch-ext`): `GET /summary` (read-only —
   `{ enabled, currencyName?, currencySymbol?, identityShared?, wallet?, leaderboard? }`, bigints as decimal
@@ -1180,20 +1227,19 @@ user id> }`, exactly as in §18b — never linked to a Discord wallet, never lin
   logs/tests only, via `apps/api/src/lib/twitch-ext/auth.ts`'s `requireTwitchExtensionAuth`, never echoed to
   the caller). Extracts `channel_id`, `opaque_user_id` (always present), `user_id` (present only once the
   viewer has shared identity via `Twitch.ext.actions.requestIdShare()`), and `role`.
-- **Channel -> guild -> enablement** (`apps/api/src/lib/twitch-ext/context.ts`,
-  `resolveTwitchExtGuildContext`): `channel_id` looks up the enabled `TwitchChatChannel` row by
-  `broadcasterUserId` (globally unique — a broadcaster has exactly one row, §19a/§19e; a GUILDLESS row resolves to
-  `{ enabled: false }` until channel-owned currency ships), then checks the guild's
-  `economy` plugin is enabled AND its `twitchEnabled` config flag. Any failure at any step (unlinked channel,
-  plugin disabled, `twitchEnabled` off) is `{ enabled: false }` — a normal 200, never an error — so the panel
-  shows a plain "not enabled for this channel" message instead of an error state.
-- **Never creates a wallet just for viewing**: `GET /summary` reads `EconomyAccount`/`EconomyTransaction`
+- **Channel -> currency -> enablement** (`apps/api/src/lib/twitch-ext/context.ts`,
+  `resolveTwitchExtChannelContext`): `channel_id` is looked up directly as the channel's `ChannelEconomy`
+  (`platform = TWITCH`, `channelUserId = channel_id`) and must be `enabled`. No `TwitchChatChannel` row, no guild and
+  no guild economy plugin are involved — a streamer who only uses the creator dashboard (§19e) is fully supported.
+  Any failure (no currency set up, or the streamer switched it off) is `{ enabled: false }` — a normal 200, never an
+  error — so the panel shows a plain "not enabled for this channel" message instead of an error state.
+- **Never creates a wallet just for viewing**: `GET /summary` reads `ChannelWallet`/`ChannelTransaction`
   directly (`apps/api/src/lib/twitch-ext/wallet-summary.ts`) rather than calling the ledger's
-  `getOrCreateWallet` (which upserts) — a viewer who never claims/earns/receives currency leaves no row behind
+  `getOrCreateChannelWallet` (which upserts) — a viewer who never claims/earns/receives currency leaves no row behind
   just from opening the panel. An absent wallet reads as a zero balance, claimable-now, streak 0. Balance
-  **writes** (`POST /daily`) go through `packages/plugins/src/economy/ledger.ts`'s `claimDaily` only, same as
-  every other economy mutation path in the codebase (CLAUDE.md: ledger.ts is the only module allowed to write a
-  balance) — the leaderboard read reuses `ledger.ts`'s existing `getPlatformLeaderboard` rather than a second
+  **writes** (`POST /daily`) go through `packages/plugins/src/channel-economy/ledger.ts`'s `claimChannelDaily`
+  only, same as every other channel-economy mutation path (that ledger is the only module allowed to write a
+  `ChannelWallet` balance) — the leaderboard read reuses its `getChannelEarnedLeaderboard` rather than a second
   query.
 - **CORS**: `/twitch-ext/*` is served to `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv` — a different
   origin than the dashboard's `@fastify/cors` registration in `app.ts` (which stays `[DASHBOARD_URL, WEB_URL]`,
@@ -1243,13 +1289,17 @@ streaming-platform account (Twitch now, Kick later) and use Pavisie's streaming 
 server**. Everything is built with a `platform` discriminator (`CreatorSessionData.platform`, URL shapes like
 `/creator/auth/twitch/...` and `/creator/twitch/...`) so a second platform plugs in beside Twitch.
 
-**Phase plan** (only phase 1 is built):
+**Phase plan** (phases 1 and 2a are built):
 1. *(this section)* Creator sign-in with Twitch, guildless Twitch chat channels, the creator dashboard's chat
    bot section (connect/disconnect, prefix, commands, timers).
-2. Channel-point rewards and the Twitch extension move to the creator dashboard; the currency becomes
-   **channel-owned** (not guild-owned), so economy commands/earning/the extension work for guildless channels.
-   Adds `channel:read:redemptions` plus somewhere to keep the broadcaster token (a guildless channel has no
-   `IntegrationConnection`, which requires a guild).
+2. Split in two:
+   - **2a (DONE)** — the currency becomes **channel-owned** (not guild-owned): `ChannelEconomy`/`ChannelWallet`/
+     `ChannelTransaction`, carry-over migration `0015_channel_economy`, economy commands/earning/the extension work
+     for guildless channels, a "Currency" section on the creator dashboard (settings, top viewers, manual balance
+     adjust). The old guild-scoped Twitch rows and config keys are kept, unused, until phase 4 (§18b).
+   - **2b (NEXT)** — channel-point rewards, the OBS overlay and bring-your-own-key TTS move to the creator dashboard.
+     Adds `channel:read:redemptions` plus somewhere to keep the broadcaster token (a guildless channel has no
+     `IntegrationConnection`, which requires a guild).
 3. A "connect a Discord server" flow from the creator dashboard, the Discord <-> Twitch chat bridge for it, and a
    global leaderboard.
 4. Strip the Twitch chat features off the Discord side (the Discord dashboard keeps moderation/community/alerts).
@@ -1292,9 +1342,10 @@ server**. Everything is built with a `platform` discriminator (`CreatorSessionDa
   linked Discord server". `TwitchChatManager` runs a guildless channel purely on its own `enabled` flag (no
   `ctx.isEnabled` check — that still applies to guild-linked channels exactly as before). For a guildless channel
   custom commands, timers and the built-ins (`!commands`, `!uptime`, `!title`) work; **skipped cleanly** (never a
-  crash, never an error message into Twitch chat): economy commands and chat earning, the Discord bridge, and
-  DISCORD/TTS reward actions. The Discord-side routes/commands filter by `guildId`, so guildless channels never show
-  up in a guild's dashboard; the Twitch extension's context resolver returns "not enabled" for them. A Discord admin
+  crash, never an error message into Twitch chat): the Discord bridge and DISCORD/TTS reward actions. **Economy commands
+  and chat earning DO run** for a guildless channel (phase 2a) — the currency is owned by the channel, not by a guild
+  (§18b) — as does the Twitch extension panel. The Discord-side routes/commands filter by `guildId`, so guildless
+  channels never show up in a guild's dashboard. A Discord admin
   trying to link a broadcaster that already has a guildless row is refused as "already linked" (attaching a
   guild to an existing creator channel is phase 3's connect-a-Discord-server flow).
 - **Connect the bot** (`POST /creator/twitch/channel/connect`): returns the Twitch authorize URL for scope
@@ -1313,16 +1364,41 @@ server**. Everything is built with a `platform` discriminator (`CreatorSessionDa
   the Discord routes (`lib/integrations/twitch-chat-schemas.ts`, shared helpers in `twitch-chat-shared.ts`,
   economy names included). No audit-log rows: the audit log is per Discord guild and a creator action has no Discord
   actor.
+- **Channel currency** (phase 2a; `routes/creator-twitch-economy.ts`, prefix `/creator/twitch/economy`, same creator
+  session + CSRF rules, 60/min — 20/min for `adjust`): the streamer's OWN `ChannelEconomy` (§18b), always looked up as
+  (TWITCH, the session's Twitch user id) — there is no id in any URL or body (unknown body keys such as a smuggled
+  `channelUserId`/`economyId` are a 400), so another channel's currency is unreachable by construction. It needs no
+  Discord server and no chat-bot connection.
+  - `GET /` → `{ configured, settings }`; with no row it returns the defaults with `configured: false` and **writes
+    nothing** (viewing never creates a row).
+  - `PATCH /` (partial, strict, Zod-validated with the guild economy's bounds; min<=max checked against the merged
+    settings, error code `invalid_economy_settings`): the FIRST save upserts the row from the defaults + the patch (a
+    native upsert on the unique key, so two racing first saves cannot both insert); an empty patch changes nothing and
+    creates nothing. `enabled` is the master switch.
+  - `GET /leaderboard?limit=` → `{ configured, earned[], balance[] }` (lifetime earned and current balance, amounts as
+    decimal strings); empty arrays, not an error, before setup or before anyone has earned.
+  - `POST /adjust` `{ login, direction: 'add'|'remove', amount, reason }` — the streamer's manual balance change:
+    the login is checked against Twitch's own alphabet, then resolved to a stable user id via Helix with the shared
+    **app** (client-credentials) token (`lib/creator/twitch-users.ts`; a Helix outage is a 502, never "no such user");
+    `reason` is required (≤200 chars) and stored as the transaction's note; a remove can never take a balance below
+    zero (409 `would_go_negative`); a channel that has not saved its currency yet is a 404. It writes an
+    `admin_add`/`admin_remove` ledger row through `adminAdjustChannel`; no audit-log row (no Discord actor).
 - **Web** (`apps/web/src/app/creator/**`, `components/creator/*`, `lib/creator/*`): `/creator` signed out is a short
   "Use Pavisie on your stream — no Discord server needed" page with **Sign in with Twitch**; signed in it shows the
-  Twitch avatar/name + sign out and a "Chat bot" section (status, connect/disconnect, prefix, commands, timers).
+  Twitch avatar/name + sign out, a "Chat bot" section (status, connect/disconnect, prefix, commands, timers) and a
+  "Currency" section (`components/creator/creator-currency.tsx`: enable switch, name/symbol, daily + streak, give limits,
+  earning settings, a top-viewers table with Most earned / Highest balance tabs, and an "Adjust a balance" dialog; honest
+  empty states — "not set up" until the first save, "no one has earned anything yet" — and form limits pinned to the API
+  schema by a test).
   Its own session provider (`CreatorSessionProvider`, mounted in `app/creator/layout.tsx`, `GET /creator/me`) and
   `creatorFetch` (attaches the creator token, never the Discord one). The commands/timers tables and dialogs are the
   Discord dashboard's own components, made data-source-agnostic through `lib/dashboard/twitch-chat-backend.ts`
   (hooks passed as a `backend` prop: guild routes vs creator routes). `apps/web/src/middleware.ts` only gates
   `/dashboard`, so `/creator` (the public landing) is untouched.
 - **Privacy**: a creator session holds the Twitch id/login/display name/avatar for up to 7 days (sliding); the
-  sign-in token is never stored (`apps/web/src/content/legal.ts`). No new env vars.
+  sign-in token is never stored (`apps/web/src/content/legal.ts`). A streamer's channel currency (phase 2a) keeps
+  per-viewer wallets (Twitch id, display name, balance, transaction history) per Twitch channel, whether or not a
+  Discord server is linked. No new env vars.
 
 ## 20. Brand tokens: gold-and-black
 

@@ -2,8 +2,9 @@
 // instantiation) owner of the EventSub WebSocket connection and the reconcile loop that keeps its subscriptions
 // matching every enabled `TwitchChatChannel` row whose guild has the `integrations` plugin enabled — plus every
 // enabled GUILDLESS row (`guildId === null`, set up from the creator dashboard, ARCHITECTURE.md §19e), which runs on
-// its own `enabled` flag alone: custom commands, timers and the built-ins work, while everything that needs a
-// Discord server (economy commands/earning, the Discord bridge, DISCORD/TTS reward actions) is quietly unavailable.
+// its own `enabled` flag alone: custom commands, timers, the built-ins and the channel's own currency (economy
+// commands + chat earning, `ChannelEconomy`, §18b) work, while everything that needs a Discord server (the Discord
+// bridge, DISCORD/TTS reward actions) is quietly unavailable.
 //
 // Since the channel-points extension, a channel can carry up to TWO independent EventSub subscriptions —
 // `channel.chat.message` (always, on the bot identity's token) and `channel.channel_points_custom_reward_
@@ -11,11 +12,12 @@
 // the BROADCASTER's own token) — so the bookkeeping below tracks them separately per channel rather than
 // assuming 1:1, and `forgetSubscription`/the reconcile diff operate per subscription type: a channel can lose
 // its rewards subscription (rewards turned off, scope revoked) while chat keeps running, and vice versa.
-import type { TwitchChatChannel, TwitchChatCommand, TwitchChatReward } from '@pavisie/database';
+import type { ChannelEconomy, TwitchChatChannel, TwitchChatCommand, TwitchChatReward } from '@pavisie/database';
 import { randomUUID } from 'node:crypto';
 import { MessageFlags, WebhookClient, type Guild } from 'discord.js';
 import { decryptSecret, redisKey } from '@pavisie/core';
 import { resolveTextChannel, type PluginContext, type TwitchChatRuntimeStatus, type TwitchChatService } from '../../sdk';
+import { creditChannel } from '../../channel-economy/ledger';
 import { postAlert } from '../embeds';
 import {
   EVENTSUB_WS_URL,
@@ -39,6 +41,7 @@ import {
 } from './helix';
 import { CommandCooldowns, handleChatMessage } from './engine';
 import { handleEconomyChatCommand, type EconomyCommandResult } from './economy-commands';
+import { createEconomyChatPort } from './economy-port';
 import { earnCooldownKey, isExcludedChatBotLogin, reserveDailyEarnBudget } from './economy-earn';
 import { RewardCooldowns, matchRewardActions, type RewardAction } from './rewards';
 import { synthesizeTts } from './tts';
@@ -68,6 +71,10 @@ const REWARDS_SCOPE_MISSING_ERROR =
 /** How long a `getStream` liveness result is trusted for the Twitch chat-earning gate before it's re-checked —
  * keeps a busy chat from costing one Helix call per message (ARCHITECTURE.md §18b/§19a). */
 const LIVENESS_CACHE_TTL_MS = 60_000;
+/** How long a channel's `ChannelEconomy` row (settings + on/off) is trusted in memory. Every non-command chat
+ * message needs it for the earning gate, so it is cached (negative results too) rather than read per message; a
+ * streamer's change on the creator dashboard therefore takes effect within this window. */
+const ECONOMY_CACHE_TTL_MS = 30_000;
 
 type SubscriptionKind = 'chat' | 'rewards';
 
@@ -165,6 +172,9 @@ export class TwitchChatManager {
    * most every `LIVENESS_CACHE_TTL_MS` (see `isChannelLive`) so a busy chat costs at most one Helix call per
    * minute rather than one per message. */
   private readonly livenessCache = new Map<string, { isLive: boolean; fetchedAtMs: number }>();
+  /** The channel's own currency (`ChannelEconomy`), by broadcaster user id — `null` means "none, or switched off".
+   * See `ECONOMY_CACHE_TTL_MS`. */
+  private readonly economyCache = new Map<string, { economy: ChannelEconomy | null; fetchedAtMs: number }>();
 
   constructor(private readonly wsCtor: WebSocketConstructorLike = defaultWebSocketConstructor) {}
 
@@ -831,29 +841,38 @@ export class TwitchChatManager {
     });
   }
 
+  /** The channel's own currency (ARCHITECTURE.md §18b/§19e), or `null` when it has none or it is switched off.
+   * Independent of any Discord server: a guildless channel has one just like a guild-linked one. Cached for
+   * `ECONOMY_CACHE_TTL_MS`; a failed read throws (and is never cached) so the caller's own catch logs it. */
+  private async loadEnabledChannelEconomy(
+    ctx: PluginContext,
+    broadcasterUserId: string,
+    now: number,
+  ): Promise<ChannelEconomy | null> {
+    const cached = this.economyCache.get(broadcasterUserId);
+    if (cached && now - cached.fetchedAtMs < ECONOMY_CACHE_TTL_MS) return cached.economy;
+
+    const row = await ctx.prisma.channelEconomy.findUnique({
+      where: { platform_channelUserId: { platform: 'TWITCH', channelUserId: broadcasterUserId } },
+    });
+    const economy = row && row.enabled ? row : null;
+    this.economyCache.set(broadcasterUserId, { economy, fetchedAtMs: now });
+    return economy;
+  }
+
   /** Routes one Twitch chat message to a reserved economy command (!balance/!bal/!daily/!give/!top), if
    * eligible. Delegates all parsing/gating/dispatch to the pure `handleEconomyChatCommand`
-   * (economy-commands.ts) — this method's only job is resolving the ctx-backed dependencies that function
-   * needs: whether the `economy` plugin is enabled for this guild, the registered `economy` service, this
-   * guild's economy config, and this channel's currently-enabled custom command names (so an existing custom
-   * command with a reserved name still wins). Returns `{ handled: false }` whenever `economy` is
-   * disabled/unavailable/unconfigured, so the caller always falls through to the engine in that case. */
+   * (economy-commands.ts) — this method's only job is supplying the channel-backed dependencies that function
+   * needs: this channel's currently-enabled custom command names (so an existing custom command with a reserved
+   * name still wins) and a lazy loader for the channel's own currency (`ChannelEconomy`), which only runs once the
+   * message is known to be an economy command. Returns `{ handled: false }` whenever the channel has no enabled
+   * currency, so the caller always falls through to the engine in that case. Works for guildless channels too. */
   private async tryEconomyCommand(
     ctx: PluginContext,
     cached: ChannelCacheEntry,
     event: { chatterUserId: string; chatterDisplayName: string; messageText: string },
   ): Promise<EconomyCommandResult> {
-    // Economy is per-guild in this phase: a guildless channel has no wallet to read/write, so its reserved
-    // economy names simply fall through to the engine (which ignores an unknown name) — never an error reply.
-    const guildId = cached.channel.guildId;
-    if (!guildId) return { handled: false };
-
-    const economyEnabled = await ctx.isEnabled(guildId, 'economy');
-    const economyService = ctx.services.get('economy');
-    if (!economyEnabled || !economyService) return { handled: false };
-
-    const config = await economyService.getConfig(guildId).catch(() => null);
-    if (!config) return { handled: false };
+    const broadcasterUserId = cached.channel.broadcasterUserId;
 
     // `cached.commands` is already filtered to `enabled: true` rows (see `refreshChannelCache`'s query).
     const customCommandNames = new Set(cached.commands.map((c) => c.name));
@@ -862,21 +881,21 @@ export class TwitchChatManager {
       event,
       commandPrefix: cached.channel.commandPrefix,
       channelId: cached.channel.id,
-      guildId,
       customCommandNames,
-      economyEnabled,
-      config,
-      economyService,
+      loadEconomy: async () => {
+        const economy = await this.loadEnabledChannelEconomy(ctx, broadcasterUserId, Date.now());
+        return economy ? createEconomyChatPort(ctx.prisma, economy, this.botUserId) : null;
+      },
       botTwitchUserId: this.botUserId,
       helix: { getUserByLogin: (login) => getUserByLogin(ctx, login) },
       cooldowns: this.cooldowns,
     });
   }
 
-  /** Twitch chat earning (ARCHITECTURE.md §18b/§19a): credits `twitchEarnPerMessage` (capped by the viewer's
-   * remaining daily budget) to a viewer's TWITCH wallet for one eligible non-command chat message while the
-   * channel is live — silently (no chat reply), never logged, and never throws into the caller (every awaited
-   * step here is itself best-effort; the caller's own `.catch` is still the last line of defense). */
+  /** Twitch chat earning (ARCHITECTURE.md §18b/§19a/§19e): credits the channel's `earnPerMessage` (capped by the
+   * viewer's remaining daily budget) to a viewer's wallet in THIS channel's currency for one eligible non-command
+   * chat message while the channel is live — silently (no chat reply), never logged, and never throws into the
+   * caller (the caller's own `.catch` is the last line of defense). Guild-linked or not, the same rules apply. */
   private async tryEconomyEarn(
     ctx: PluginContext,
     cached: ChannelCacheEntry,
@@ -889,44 +908,33 @@ export class TwitchChatManager {
     if (event.chatterUserId === cached.channel.broadcasterUserId) return;
     if (isExcludedChatBotLogin(event.chatterLogin)) return;
 
-    // No guild, no wallet: a guildless channel never earns (economy is per-guild until the channel-owned
-    // currency ships — ARCHITECTURE.md §19e).
-    const guildId = cached.channel.guildId;
-    if (!guildId) return;
-
-    const economyEnabled = await ctx.isEnabled(guildId, 'economy');
-    if (!economyEnabled) return;
-    const economyService = ctx.services.get('economy');
-    if (!economyService) return;
-
-    const config = await economyService.getConfig(guildId).catch(() => null);
-    if (!config || !config.twitchEnabled || !config.twitchEarnEnabled) return;
-
     const now = Date.now();
+    const economy = await this.loadEnabledChannelEconomy(ctx, cached.channel.broadcasterUserId, now);
+    if (!economy || !economy.earnEnabled || economy.earnDailyCap <= 0) return;
+
     const isLive = await this.isChannelLive(ctx, cached.channel.broadcasterUserId, now);
     if (!isLive) return;
 
     const cooldownAcquired = await ctx.redis
-      .set(earnCooldownKey(guildId, event.chatterUserId), '1', 'EX', config.twitchEarnCooldownSeconds, 'NX')
+      .set(earnCooldownKey(economy.id, event.chatterUserId), '1', 'EX', economy.earnCooldownSeconds, 'NX')
       .catch(() => null);
     if (cooldownAcquired !== 'OK') return;
 
     const creditAmount = await reserveDailyEarnBudget(
       ctx.redis,
-      guildId,
+      economy.id,
       event.chatterUserId,
-      config.twitchEarnPerMessage,
-      config.twitchEarnDailyCap,
+      economy.earnPerMessage,
+      economy.earnDailyCap,
     );
     if (creditAmount <= 0) return;
 
-    await economyService.credit(
-      guildId,
-      'TWITCH',
-      event.chatterUserId,
+    await creditChannel(
+      ctx.prisma,
+      { economyId: economy.id, viewerUserId: event.chatterUserId },
       creditAmount,
       'twitch_chat_earn',
-      event.chatterDisplayName,
+      { displayName: event.chatterDisplayName },
     );
   }
 

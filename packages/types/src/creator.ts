@@ -53,3 +53,72 @@ export interface CreatorTwitchChannelStatusDto {
 
 export type CreatorTwitchCommandDto = TwitchChatCommandDto;
 export type CreatorTwitchTimerDto = TwitchChatTimerDto;
+
+// ---------------------------------------------------------------------------
+// Channel-owned currency (creator dashboard phase 2a, ARCHITECTURE.md §18b / §19e)
+// ---------------------------------------------------------------------------
+
+/** A channel's own virtual currency settings (mirrors `ChannelEconomy`). Virtual only: no purchase, no cash-out. */
+export interface CreatorChannelEconomySettingsDto {
+  /** Master switch: chat commands (!balance/!daily/!give/!top) and the Twitch extension panel. */
+  enabled: boolean;
+  currencyName: string;
+  currencySymbol: string;
+  dailyMinAmount: number;
+  dailyMaxAmount: number;
+  streakBonusPerDay: number;
+  streakBonusMax: number;
+  giveMinAmount: number;
+  giveMaxAmount: number;
+  /** Award currency for chatting while the stream is live. */
+  earnEnabled: boolean;
+  earnPerMessage: number;
+  earnCooldownSeconds: number;
+  /** Max a viewer can earn from chat per UTC day (0 = no earning). */
+  earnDailyCap: number;
+}
+
+/** `GET/PATCH /creator/twitch/economy`. `configured` is false until the streamer's first save; `settings` then
+ * carries the defaults a first save would start from (nothing is stored by merely viewing). */
+export interface CreatorChannelEconomyDto {
+  configured: boolean;
+  settings: CreatorChannelEconomySettingsDto;
+}
+
+export interface CreatorEconomyEarnedEntryDto {
+  viewerUserId: string;
+  displayName: string | null;
+  /** Lifetime earned (daily + chat earning), a decimal string. */
+  earned: string;
+}
+
+export interface CreatorEconomyBalanceEntryDto {
+  viewerUserId: string;
+  displayName: string | null;
+  /** Current balance, a decimal string. */
+  balance: string;
+}
+
+/** `GET /creator/twitch/economy/leaderboard` — empty arrays (not an error) before setup or before anyone earned. */
+export interface CreatorEconomyLeaderboardDto {
+  configured: boolean;
+  earned: CreatorEconomyEarnedEntryDto[];
+  balance: CreatorEconomyBalanceEntryDto[];
+}
+
+/** `POST /creator/twitch/economy/adjust` body. */
+export interface CreatorEconomyAdjustInput {
+  /** The viewer's Twitch login (a leading @ is fine). */
+  login: string;
+  direction: 'add' | 'remove';
+  amount: number;
+  /** Why — recorded on the transaction. */
+  reason: string;
+}
+
+export interface CreatorEconomyAdjustResultDto {
+  viewer: { userId: string; login: string; displayName: string };
+  direction: 'add' | 'remove';
+  amount: string;
+  newBalance: string;
+}

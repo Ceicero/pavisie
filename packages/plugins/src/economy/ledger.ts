@@ -1,6 +1,10 @@
 // Platform-aware economy ledger functions. Every transaction explicitly sets platform;
 // wallets on different platforms never merge or transfer.
 // Uses the same $transaction + conditional-guard patterns as commands/economy.ts for concurrency safety.
+//
+// A Twitch channel's currency is NOT handled here any more: it is owned by the channel (ChannelEconomy) and lives in
+// ../channel-economy/ledger.ts (ARCHITECTURE.md §18b/§19e). `platform = 'TWITCH'` rows in these tables are legacy
+// (copied by migration 0015, kept unused until a later cleanup); the Discord leaderboards filter on DISCORD explicitly.
 
 import type { PrismaClient } from '@pavisie/database';
 import {

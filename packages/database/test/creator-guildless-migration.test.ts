@@ -30,11 +30,11 @@ function statements(text: string): string[] {
 }
 
 describe('migration 0014 (guildless Twitch chat channels)', () => {
-  it('is the latest migration and the numbering is contiguous', () => {
+  it('exists and the numbering is contiguous (later migrations may follow it)', () => {
     const names = readdirSync(`${prismaDir}migrations`)
       .filter((n) => /^\d{4}_/.test(n))
       .sort();
-    expect(names[names.length - 1]).toBe(migrationName);
+    expect(names).toContain(migrationName);
     names.forEach((name, i) => expect(name.slice(0, 4)).toBe(String(i + 1).padStart(4, '0')));
   });
 

@@ -267,6 +267,13 @@ enum EconomyPlatform {
   TWITCH
 }
 
+/// Streaming platform a creator-owned (channel-scoped) resource belongs to. Deliberately NOT EconomyPlatform: that
+/// one has DISCORD (guild wallets); this one only ever names a streaming site, so Kick is added here later without
+/// touching guild wallets. Only TWITCH exists today (ARCHITECTURE.md §19e).
+enum StreamPlatform {
+  TWITCH
+}
+
 // ---------------------------------------------------------------------------
 // Guild + core config
 // ---------------------------------------------------------------------------
@@ -1187,6 +1194,79 @@ model EconomyTransaction {
   @@index([guildId])
   @@index([guildId, createdAt])
   @@index([guildId, platform, type])
+}
+
+/// A streaming channel's OWN virtual currency (creator dashboard, ARCHITECTURE.md §18b/§19e): configured by the
+/// streamer, works with no Discord server. Keyed by the platform + broadcaster user id — deliberately NOT a
+/// foreign key to TwitchChatChannel, so disconnecting or deleting the chat bot never deletes anyone's balance.
+/// Created on the streamer's first save (or by the 0015 carry-over migration), never by merely viewing.
+/// Virtual-only, exactly like the guild economy: no purchase, no cash-out, no wagering.
+model ChannelEconomy {
+  id                  String         @id @default(cuid())
+  platform            StreamPlatform
+  /// The broadcaster's platform user id (a Twitch user id for TWITCH).
+  channelUserId       String
+  /// Master switch for the channel's chat commands (!balance/!daily/!give/!top) and the extension panel.
+  enabled             Boolean        @default(false)
+  currencyName        String         @default("Agis")
+  currencySymbol      String         @default("♦️")
+  dailyMinAmount      Int            @default(50)
+  dailyMaxAmount      Int            @default(150)
+  streakBonusPerDay   Int            @default(10)
+  streakBonusMax      Int            @default(200)
+  giveMinAmount       Int            @default(1)
+  giveMaxAmount       Int            @default(100000)
+  earnEnabled         Boolean        @default(false)
+  earnPerMessage      Int            @default(5)
+  earnCooldownSeconds Int            @default(60)
+  earnDailyCap        Int            @default(200)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  wallets      ChannelWallet[]
+  transactions ChannelTransaction[]
+
+  @@unique([platform, channelUserId])
+}
+
+/// One viewer's balance in one channel's currency. A derived/cached total: ChannelTransaction is the append-only
+/// ledger, and `packages/plugins/src/channel-economy/ledger.ts` is the only module allowed to write a balance.
+model ChannelWallet {
+  id           String         @id @default(cuid())
+  economyId    String
+  economy      ChannelEconomy @relation(fields: [economyId], references: [id], onDelete: Cascade)
+  /// The viewer's platform user id (a Twitch user id) — never a Discord id; wallets are never merged across platforms.
+  viewerUserId String
+  displayName  String?
+  balance      BigInt         @default(0)
+  lastDailyAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  transactions ChannelTransaction[]
+
+  @@unique([economyId, viewerUserId])
+  @@index([economyId, balance])
+}
+
+/// Append-only ledger of channel-currency balance changes (same `type` vocabulary as EconomyTransaction: daily,
+/// give, twitch_chat_earn, admin_add, admin_remove). Never updated or deleted by application code.
+model ChannelTransaction {
+  id         String          @id @default(cuid())
+  economyId  String
+  economy    ChannelEconomy  @relation(fields: [economyId], references: [id], onDelete: Cascade)
+  walletId   String?
+  wallet     ChannelWallet?  @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  fromUserId String?
+  toUserId   String?
+  amount     BigInt
+  type       String
+  note       String?
+  createdAt  DateTime        @default(now())
+
+  @@index([economyId, createdAt])
+  @@index([economyId, type])
+  @@index([walletId])
 }
 
 model AfkStatus {

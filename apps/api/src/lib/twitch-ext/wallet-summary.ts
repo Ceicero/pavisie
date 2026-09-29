@@ -1,9 +1,8 @@
-// Read-only Twitch-wallet summary for the extension panel. Deliberately separate from
-// `packages/plugins/src/economy/ledger.ts`'s `getOrCreateWallet` — that function UPSERTS (creates a wallet on
-// first read), which is correct for a Discord `/economy balance` check but wrong here: ARCHITECTURE.md §19d
-// says viewing the panel must never create a wallet, only claiming daily/earning/receiving a `!give` should.
-// So this reads `EconomyAccount`/`EconomyTransaction` directly and treats "no row" as a zero balance, exactly
-// the shape `claimDaily` would already show if the viewer claims next.
+// Read-only wallet summary for the extension panel. Deliberately separate from `channel-economy/ledger.ts`'s
+// `getOrCreateChannelWallet` — that function UPSERTS (creates a wallet on first read), which is wrong here:
+// ARCHITECTURE.md §19d says viewing the panel must never create a wallet, only claiming daily/earning/receiving a
+// `!give` should. So this reads `ChannelWallet`/`ChannelTransaction` directly and treats "no row" as a zero balance,
+// exactly the shape `claimChannelDaily` would already show if the viewer claims next.
 
 import { DAILY_COOLDOWN_MS, STREAK_CONTINUES_WITHIN_MS, parseStreakFromNote } from '@pavisie/plugins/economy/service';
 import type { ZodFastifyInstance } from '../http';
@@ -44,20 +43,20 @@ export function computeWalletSummary(
 }
 
 /** Reads the raw rows and delegates to {@link computeWalletSummary}. Never creates a wallet. */
-export async function readTwitchWalletSummary(
+export async function readChannelWalletSummary(
   app: ZodFastifyInstance,
-  guildId: string,
-  userId: string,
+  economyId: string,
+  viewerUserId: string,
   now: Date = new Date(),
 ): Promise<TwitchWalletSummary> {
-  const account = await app.prisma.economyAccount.findUnique({
-    where: { guildId_platform_userId: { guildId, platform: 'TWITCH', userId } },
+  const account = await app.prisma.channelWallet.findUnique({
+    where: { economyId_viewerUserId: { economyId, viewerUserId } },
   });
 
   let lastDailyNote: string | null | undefined;
   if (account?.lastDailyAt) {
-    const lastDailyTx = await app.prisma.economyTransaction.findFirst({
-      where: { guildId, platform: 'TWITCH', toUserId: userId, type: 'daily' },
+    const lastDailyTx = await app.prisma.channelTransaction.findFirst({
+      where: { economyId, toUserId: viewerUserId, type: 'daily' },
       orderBy: { createdAt: 'desc' },
     });
     lastDailyNote = lastDailyTx?.note;

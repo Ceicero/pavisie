@@ -30,7 +30,7 @@ export interface UpdateManyWhere {
 }
 
 export interface FindManyAccountsArgs {
-  where?: { guildId?: string; id?: { in: string[] } };
+  where?: { guildId?: string; platform?: 'DISCORD' | 'TWITCH'; id?: { in: string[] } };
   orderBy?: { balance: 'desc' };
   take?: number;
 }
@@ -143,6 +143,7 @@ export function buildFakeEconomyPrisma(seedAccounts: FakeAccount[], seedTransact
     findMany: async ({ where, orderBy, take }: FindManyAccountsArgs) => {
       let rows = [...accounts.values()];
       if (where?.guildId !== undefined) rows = rows.filter((a) => a.guildId === where.guildId);
+      if (where?.platform !== undefined) rows = rows.filter((a) => a.platform === where.platform);
       if (where?.id !== undefined) rows = rows.filter((a) => where.id!.in.includes(a.id));
       if (orderBy?.balance === 'desc') rows = [...rows].sort((a, b) => (a.balance < b.balance ? 1 : a.balance > b.balance ? -1 : 0));
       if (take !== undefined) rows = rows.slice(0, take);

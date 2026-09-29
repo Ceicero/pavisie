@@ -1,5 +1,5 @@
 // Twitch chat earning — Redis-backed per-viewer cooldown key + UTC-day earn-budget math, used by
-// `TwitchChatManager.tryEconomyEarn` (ARCHITECTURE.md §18b/§19a). Kept separate from `manager.ts` so the
+// `TwitchChatManager.tryEconomyEarn` (ARCHITECTURE.md §18b/§19a/§19e). Kept separate from `manager.ts` so the
 // cap/cooldown arithmetic is unit-testable without a full EventSub notification round trip.
 import type Redis from 'ioredis';
 import { redisKey } from '@pavisie/core';
@@ -17,14 +17,16 @@ export function msUntilNextUtcMidnight(now = new Date()): number {
   return next - now.getTime();
 }
 
-/** Per-viewer-per-guild earn cooldown key (`SET ... EX <twitchEarnCooldownSeconds> NX`). */
-export function earnCooldownKey(guildId: string, viewerId: string): string {
-  return redisKey('economy', 'twitchearn-cooldown', guildId, viewerId);
+/** Per-viewer-per-CHANNEL earn cooldown key (`SET ... EX <earnCooldownSeconds> NX`), scoped by the channel
+ * economy's id — the currency is channel-owned, not guild-owned (ARCHITECTURE.md §19e). The old
+ * `economy:twitchearn-*` guild-scoped keys are no longer read and expire on their own. */
+export function earnCooldownKey(economyId: string, viewerId: string): string {
+  return redisKey('channel-economy', 'earn-cooldown', economyId, viewerId);
 }
 
-/** UTC-day earn budget counter key for one viewer in one guild. */
-export function earnDailyBudgetKey(guildId: string, viewerId: string, now = new Date()): string {
-  return redisKey('economy', 'twitchearn-daily', guildId, viewerId, utcDateStamp(now));
+/** UTC-day earn budget counter key for one viewer in one channel economy. */
+export function earnDailyBudgetKey(economyId: string, viewerId: string, now = new Date()): string {
+  return redisKey('channel-economy', 'earn-daily', economyId, viewerId, utcDateStamp(now));
 }
 
 /**
@@ -41,7 +43,7 @@ export function earnDailyBudgetKey(guildId: string, viewerId: string, now = new 
  */
 export async function reserveDailyEarnBudget(
   redis: Redis,
-  guildId: string,
+  economyId: string,
   viewerId: string,
   perMessage: number,
   cap: number,
@@ -49,7 +51,7 @@ export async function reserveDailyEarnBudget(
 ): Promise<number> {
   if (perMessage <= 0 || cap <= 0) return 0;
 
-  const key = earnDailyBudgetKey(guildId, viewerId, now);
+  const key = earnDailyBudgetKey(economyId, viewerId, now);
   const ttlMs = msUntilNextUtcMidnight(now);
 
   const results = await redis.multi().incrby(key, perMessage).pexpire(key, ttlMs).exec();

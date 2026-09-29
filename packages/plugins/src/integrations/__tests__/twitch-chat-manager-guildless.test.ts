@@ -1,15 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RedisMock from 'ioredis-mock';
 import { createTestContext } from '../../sdk/testing';
-import type { EconomyGetConfigResult, EconomyService, PluginContext } from '../../sdk';
+import type { PluginContext } from '../../sdk';
 import { TwitchChatManager } from '../twitch-chat/manager';
 import { fireDueTimers } from '../twitch-chat/timers';
 import type { WebSocketConstructorLike, WebSocketLike } from '../twitch-chat/socket';
 
 // Guildless Twitch chat channels (`TwitchChatChannel.guildId === null`, set up from the creator dashboard —
-// ARCHITECTURE.md §19e) run on their own `enabled` flag alone. Custom commands, timers and the built-ins work;
-// everything that needs a Discord server (economy commands/earning, the Discord bridge, DISCORD/TTS reward
-// actions) is quietly unavailable — never a crash, never an error message into Twitch chat. Guild-linked
+// ARCHITECTURE.md §19e) run on their own `enabled` flag alone. Custom commands, timers, the built-ins AND the
+// channel's own currency (`ChannelEconomy`: economy commands + chat earning, §18b) work; everything that needs a
+// Discord server (the Discord bridge, DISCORD/TTS reward actions) is quietly unavailable — never a crash, never an
+// error message into Twitch chat. Guild-linked
 // channels are exercised alongside as a control so "unchanged" is asserted, not assumed. Same `vi.hoisted`/
 // FakeWebSocket harness as `twitch-chat-manager.test.ts` / `twitch-chat-manager-rewards.test.ts`.
 const mocks = vi.hoisted(() => ({
@@ -30,6 +31,17 @@ const mocks = vi.hoisted(() => ({
   clearBridgeWebhook: vi.fn(),
   webhookCtor: vi.fn(),
 }));
+
+// The channel-economy ledger is mocked so these tests assert WHICH ledger call the manager makes for a guildless
+// channel (its own unit tests live in `channel-economy/__tests__`). Same hoisting rationale as `mocks` above.
+const ledgerMocks = vi.hoisted(() => ({
+  getOrCreateChannelWallet: vi.fn(),
+  claimChannelDaily: vi.fn(),
+  giveChannel: vi.fn(),
+  creditChannel: vi.fn(),
+  getChannelEarnedLeaderboard: vi.fn(),
+}));
+vi.mock('../../channel-economy/ledger', () => ledgerMocks);
 
 vi.mock('../twitch-chat/helix', () => ({
   getBotIdentityRow: mocks.getBotIdentityRow,
@@ -203,24 +215,27 @@ function redemptionFrame() {
   };
 }
 
-function makeEconomyService(): EconomyService {
-  const config: EconomyGetConfigResult = {
+/** A `ChannelEconomy` row — the channel's own currency, independent of any Discord server. */
+function makeEconomyRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'economy-1',
+    platform: 'TWITCH',
+    channelUserId: 'b-1',
+    enabled: true,
     currencyName: 'Agis',
     currencySymbol: 'A',
-    twitchEnabled: true,
-    twitchEarnEnabled: true,
-    twitchEarnPerMessage: 5,
-    twitchEarnCooldownSeconds: 60,
-    twitchEarnDailyCap: 200,
+    dailyMinAmount: 50,
+    dailyMaxAmount: 150,
+    streakBonusPerDay: 10,
+    streakBonusMax: 200,
+    giveMinAmount: 1,
+    giveMaxAmount: 100000,
+    earnEnabled: true,
+    earnPerMessage: 5,
+    earnCooldownSeconds: 60,
+    earnDailyCap: 200,
+    ...overrides,
   };
-  return {
-    getConfig: vi.fn(async () => config),
-    getOrCreateWallet: vi.fn(async () => ({ balance: 100n, lastDailyAt: null })),
-    claimDaily: vi.fn(async () => ({ ok: true as const, amount: 10n, streak: 1 })),
-    give: vi.fn(async () => ({ ok: true as const })),
-    credit: vi.fn(async () => ({ ok: true as const, newBalance: 0n })),
-    getLeaderboard: vi.fn(async () => []),
-  } as unknown as EconomyService;
 }
 
 interface SetupOptions {
@@ -228,7 +243,8 @@ interface SetupOptions {
   commands?: Record<string, unknown>[];
   rewards?: Record<string, unknown>[];
   isEnabled?: PluginContext['isEnabled'];
-  economyService?: EconomyService;
+  /** The channel's `ChannelEconomy` row; omit for "the channel has no currency". */
+  economy?: Record<string, unknown> | null;
   logger?: ReturnType<typeof makeLogger>;
 }
 
@@ -251,9 +267,9 @@ async function setup(opts: SetupOptions = {}) {
       },
       twitchChatCommand: { findMany: async () => opts.commands ?? [] },
       twitchChatReward: { findMany: async () => opts.rewards ?? [] },
+      channelEconomy: { findUnique: async () => opts.economy ?? null },
     },
   });
-  if (opts.economyService) ctx.services.register('economy', opts.economyService);
 
   await manager.start(ctx);
   const ws = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
@@ -290,6 +306,11 @@ beforeEach(async () => {
   mocks.checkBridgeChannelAccess.mockResolvedValue({ ok: true });
   mocks.ensureBridgeWebhook.mockResolvedValue({ ok: true, client: { send: vi.fn() } });
   mocks.clearBridgeWebhook.mockResolvedValue(undefined);
+  ledgerMocks.getOrCreateChannelWallet.mockResolvedValue({ balance: 100n });
+  ledgerMocks.claimChannelDaily.mockResolvedValue({ ok: true, amount: 10n, streak: 1 });
+  ledgerMocks.giveChannel.mockResolvedValue({ ok: true });
+  ledgerMocks.creditChannel.mockResolvedValue({ ok: true, newBalance: 0n });
+  ledgerMocks.getChannelEarnedLeaderboard.mockResolvedValue([]);
 });
 
 describe('guildless channel: reconcile runs on its own `enabled` flag', () => {
@@ -371,41 +392,101 @@ describe('guildless channel: what works', () => {
 });
 
 describe('guildless channel: Discord-dependent features are skipped cleanly', () => {
-  it('economy commands are unavailable: no economy call, no reply, no error, no crash', async () => {
-    const economyService = makeEconomyService();
+  it('economy commands WORK on the channel\'s own currency: no guild, no guild-scoped enablement check', async () => {
     const logger = makeLogger();
-    const { ws, isEnabled } = await setup({ economyService, logger });
+    const { ws, ctx, isEnabled } = await setup({ economy: makeEconomyRow(), logger });
 
-    for (const text of ['!balance', '!bal', '!daily', '!give someone 5', '!top']) {
-      ws.emit('notification', chatFrame(text));
-      await flush();
-    }
+    ws.emit('notification', chatFrame('!balance'));
+    await flush();
 
-    expect(economyService.getConfig).not.toHaveBeenCalled();
-    expect(economyService.getOrCreateWallet).not.toHaveBeenCalled();
-    expect(economyService.claimDaily).not.toHaveBeenCalled();
-    expect(economyService.give).not.toHaveBeenCalled();
-    expect(economyService.getLeaderboard).not.toHaveBeenCalled();
+    expect(ledgerMocks.getOrCreateChannelWallet).toHaveBeenCalledWith(
+      expect.anything(),
+      { economyId: 'economy-1', viewerUserId: 'viewer-1' },
+      'ViewerOne',
+    );
+    expect(mocks.sendChatMessage).toHaveBeenCalledWith(ctx, 'b-1', '@ViewerOne, you have 100 A');
     expect(isEnabled).not.toHaveBeenCalledWith(null, 'economy');
-    // Nothing is said in chat (not even an error), and nothing was logged as an error.
-    expect(mocks.sendChatMessage).not.toHaveBeenCalled();
+    expect(isEnabled).not.toHaveBeenCalledWith(expect.anything(), 'economy');
     expect(logger.error).not.toHaveBeenCalled();
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it('economy chat earning never credits a guildless channel\'s viewers', async () => {
-    mocks.getStream.mockResolvedValue({ ok: true, value: { title: 'live' } });
-    const economyService = makeEconomyService();
+  it('!daily, !give and !top run against the channel economy too', async () => {
+    mocks.getUserByLogin.mockResolvedValueOnce({ ok: true, value: { id: 'target-1', login: 'someone', displayName: 'Someone' } });
+    const { ws } = await setup({ economy: makeEconomyRow() });
+
+    for (const text of ['!daily', '!give someone 5', '!top']) {
+      ws.emit('notification', chatFrame(text));
+      await flush();
+    }
+
+    expect(ledgerMocks.claimChannelDaily).toHaveBeenCalledTimes(1);
+    expect(ledgerMocks.giveChannel).toHaveBeenCalledWith(
+      expect.anything(),
+      'economy-1',
+      'viewer-1',
+      'target-1',
+      5,
+      { giveMinAmount: 1, giveMaxAmount: 100000 },
+      expect.objectContaining({ botUserId: 'bot-1', fromDisplayName: 'ViewerOne', toDisplayName: 'Someone' }),
+    );
+    expect(ledgerMocks.getChannelEarnedLeaderboard).toHaveBeenCalledWith(expect.anything(), 'economy-1', 5);
+    expect(mocks.sendChatMessage).toHaveBeenCalledTimes(3);
+  });
+
+  it('a guildless channel with no currency (or a switched-off one) stays silent: no ledger call, no reply, no error', async () => {
     const logger = makeLogger();
-    const { ws } = await setup({ economyService, logger });
+    for (const economy of [null, makeEconomyRow({ enabled: false })]) {
+      vi.clearAllMocks();
+      mocks.getBotIdentityRow.mockResolvedValue({ botUserId: 'bot-1', botLogin: 'pavisiebot' });
+      mocks.createChatSubscription.mockResolvedValue({ ok: true, subscriptionId: 'sub-1' });
+      mocks.sendChatMessage.mockResolvedValue({ ok: true });
+      FakeWebSocket.instances = [];
+      const { ws } = await setup({ economy, logger });
+
+      for (const text of ['!balance', '!bal', '!daily', '!give someone 5', '!top']) {
+        ws.emit('notification', chatFrame(text));
+        await flush();
+      }
+
+      expect(ledgerMocks.getOrCreateChannelWallet).not.toHaveBeenCalled();
+      expect(ledgerMocks.claimChannelDaily).not.toHaveBeenCalled();
+      expect(ledgerMocks.giveChannel).not.toHaveBeenCalled();
+      expect(ledgerMocks.getChannelEarnedLeaderboard).not.toHaveBeenCalled();
+      expect(mocks.sendChatMessage).not.toHaveBeenCalled();
+    }
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('chat earning credits a guildless channel\'s viewers in the channel currency, silently', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { title: 'live' } });
+    const logger = makeLogger();
+    const { ws } = await setup({ economy: makeEconomyRow({ earnPerMessage: 7 }), logger });
 
     ws.emit('notification', chatFrame('just chatting'));
     await flush();
 
-    expect(economyService.getConfig).not.toHaveBeenCalled();
-    expect(economyService.credit).not.toHaveBeenCalled();
-    expect(mocks.getStream).not.toHaveBeenCalled(); // never even asked whether the channel is live
+    expect(ledgerMocks.creditChannel).toHaveBeenCalledWith(
+      expect.anything(),
+      { economyId: 'economy-1', viewerUserId: 'viewer-1' },
+      7,
+      'twitch_chat_earn',
+      { displayName: 'ViewerOne' },
+    );
+    expect(mocks.sendChatMessage).not.toHaveBeenCalled();
     expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('chat earning stays off when the channel currency has earning switched off, and never asks Twitch if live', async () => {
+    mocks.getStream.mockResolvedValue({ ok: true, value: { title: 'live' } });
+    const { ws } = await setup({ economy: makeEconomyRow({ earnEnabled: false }) });
+
+    ws.emit('notification', chatFrame('just chatting'));
+    await flush();
+
+    expect(ledgerMocks.creditChannel).not.toHaveBeenCalled();
+    expect(mocks.getStream).not.toHaveBeenCalled();
   });
 
   it('the Discord bridge never runs, even if the row carries stray bridge settings', async () => {
@@ -455,11 +536,10 @@ describe('guildless channel: Discord-dependent features are skipped cleanly', ()
 });
 
 describe('guild-linked channel: behaviour unchanged (control)', () => {
-  it('still routes !balance to the economy service and posts DISCORD reward actions', async () => {
-    const economyService = makeEconomyService();
+  it('routes !balance to the channel economy (same as a guildless channel) and posts DISCORD reward actions', async () => {
     const { ws } = await setup({
       channels: [makeChannelRow({ guildId: 'guild-1', rewardsEnabled: true, connectionId: 'conn-1' })],
-      economyService,
+      economy: makeEconomyRow(),
       rewards: [
         makeRewardRow({ id: 'r-discord', action: 'DISCORD', chatTemplate: null, discordChannelId: '123456789012345678', discordTemplate: 'x' }),
       ],
@@ -467,7 +547,11 @@ describe('guild-linked channel: behaviour unchanged (control)', () => {
 
     ws.emit('notification', chatFrame('!balance'));
     await flush();
-    expect(economyService.getOrCreateWallet).toHaveBeenCalledWith('guild-1', 'TWITCH', 'viewer-1', 'ViewerOne');
+    expect(ledgerMocks.getOrCreateChannelWallet).toHaveBeenCalledWith(
+      expect.anything(),
+      { economyId: 'economy-1', viewerUserId: 'viewer-1' },
+      'ViewerOne',
+    );
 
     ws.emit('notification', redemptionFrame());
     await flush();

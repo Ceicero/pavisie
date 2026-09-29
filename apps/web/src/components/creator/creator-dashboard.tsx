@@ -5,6 +5,7 @@ import { LogOut, Twitch } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle, Button, Card, CardContent, PageHeader, Skeleton, useToast } from '@pavisie/ui';
 import { useCreatorSession } from '@/lib/creator/session';
 import { CreatorChatBot } from './creator-chat-bot';
+import { CreatorCurrency } from './creator-currency';
 
 /** Messages for the `?error=` codes the API's OAuth callback redirects back with. */
 const ERROR_MESSAGES: Record<string, string> = {
@@ -14,7 +15,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 /**
  * The whole `/creator` page. Signed out: a short explanation and a "Sign in with Twitch" button. Signed in: who
- * you are + sign out, then the chat bot section. Honest by construction — nothing here shows numbers or activity
+ * you are + sign out, then the chat bot and currency sections. Honest by construction — nothing here shows numbers or activity
  * that does not come from the API.
  */
 export function CreatorDashboard() {
@@ -56,7 +57,7 @@ export function CreatorDashboard() {
               <h1 className="text-3xl font-semibold tracking-tight">Use Pavisie on your stream</h1>
               <p className="text-muted-foreground">
                 No Discord server needed. Sign in with Twitch to add Pavisie to your chat: custom commands,
-                timers, and more streaming features as they arrive.
+                timers, your own viewer currency, and more streaming features as they arrive.
               </p>
             </div>
 
@@ -117,7 +118,10 @@ export function CreatorDashboard() {
         </Alert>
       ) : null}
 
-      <CreatorChatBot />
+      <div className="space-y-10">
+        <CreatorChatBot />
+        <CreatorCurrency />
+      </div>
     </div>
   );
 }

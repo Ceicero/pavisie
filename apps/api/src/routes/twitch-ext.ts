@@ -16,13 +16,13 @@
 // ONLY to `/twitch-ext/*` — never widening CORS for any other route.
 
 import { AppError, env } from '@pavisie/core';
-import { claimDaily, getPlatformLeaderboard, type EconomyPlatform } from '@pavisie/plugins/economy/ledger';
+import { claimChannelDaily, getChannelEarnedLeaderboard } from '@pavisie/plugins/channel-economy/ledger';
+import { pickChannelEconomySettings, toRollDailyConfig } from '@pavisie/plugins/channel-economy/settings';
 import type { ZodFastifyInstance } from '../lib/http';
 import { requireTwitchExtensionAuth, twitchExtensionRateLimitKey } from '../lib/twitch-ext/auth';
-import { resolveTwitchExtGuildContext } from '../lib/twitch-ext/context';
-import { readTwitchWalletSummary } from '../lib/twitch-ext/wallet-summary';
+import { resolveTwitchExtChannelContext } from '../lib/twitch-ext/context';
+import { readChannelWalletSummary } from '../lib/twitch-ext/wallet-summary';
 
-const TWITCH: EconomyPlatform = 'TWITCH';
 const LEADERBOARD_LIMIT = 10;
 
 function extensionOrigin(): string | null {
@@ -89,13 +89,13 @@ export default async function twitchExtRoutes(app: ZodFastifyInstance): Promise<
     },
     async (request): Promise<SummaryResponse> => {
       const payload = request.twitchExt!;
-      const guildContext = await resolveTwitchExtGuildContext(app, payload.channelId);
-      if (!guildContext) return { enabled: false };
+      const channelContext = await resolveTwitchExtChannelContext(app, payload.channelId);
+      if (!channelContext) return { enabled: false };
 
-      const { guildId, economyConfig } = guildContext;
+      const { economy } = channelContext;
       const identityShared = payload.userId !== null;
 
-      const leaderboardRows = await getPlatformLeaderboard(app.prisma, guildId, TWITCH, LEADERBOARD_LIMIT);
+      const leaderboardRows = await getChannelEarnedLeaderboard(app.prisma, economy.id, LEADERBOARD_LIMIT);
       const leaderboard = leaderboardRows.map((row) => ({
         displayName: row.displayName ?? 'Twitch viewer',
         earned: row.earned.toString(),
@@ -103,15 +103,15 @@ export default async function twitchExtRoutes(app: ZodFastifyInstance): Promise<
 
       const response: SummaryResponse = {
         enabled: true,
-        currencyName: economyConfig.currencyName,
-        currencySymbol: economyConfig.currencySymbol,
+        currencyName: economy.currencyName,
+        currencySymbol: economy.currencySymbol,
         identityShared,
         leaderboard,
       };
 
       // Never create a wallet just for viewing — read-only, absent wallet reads as a zero balance.
       if (identityShared) {
-        const summary = await readTwitchWalletSummary(app, guildId, payload.userId!);
+        const summary = await readChannelWalletSummary(app, economy.id, payload.userId!);
         response.wallet = {
           balance: summary.balance.toString(),
           dailyAvailableAt: summary.dailyAvailableAt ? summary.dailyAvailableAt.toISOString() : null,
@@ -140,19 +140,14 @@ export default async function twitchExtRoutes(app: ZodFastifyInstance): Promise<
         );
       }
 
-      const guildContext = await resolveTwitchExtGuildContext(app, payload.channelId);
-      if (!guildContext) return { ok: false };
+      const channelContext = await resolveTwitchExtChannelContext(app, payload.channelId);
+      if (!channelContext) return { ok: false };
 
-      const { guildId, economyConfig } = guildContext;
-      const result = await claimDaily(
+      const { economy } = channelContext;
+      const result = await claimChannelDaily(
         app.prisma,
-        { guildId, platform: TWITCH, userId: payload.userId },
-        {
-          dailyMinAmount: economyConfig.dailyMinAmount,
-          dailyMaxAmount: economyConfig.dailyMaxAmount,
-          streakBonusPerDay: economyConfig.streakBonusPerDay,
-          streakBonusMax: economyConfig.streakBonusMax,
-        },
+        { economyId: economy.id, viewerUserId: payload.userId },
+        toRollDailyConfig(pickChannelEconomySettings(economy)),
         new Date(),
         Math.random,
       );

@@ -236,8 +236,8 @@ function CreatorChannelCard({ channel }: { channel: CreatorTwitchChannelDto }) {
 
         {!channel.discordLinked ? (
           <p className="text-xs text-muted-foreground">
-            Currency commands and the Discord chat bridge need a linked Discord server, so they are not available
-            here yet.
+            The Discord chat bridge needs a linked Discord server, so it is not available here yet. Your channel
+            currency works without one; set it up in the Currency section below.
           </p>
         ) : null}
 

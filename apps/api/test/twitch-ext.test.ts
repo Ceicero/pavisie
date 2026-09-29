@@ -9,20 +9,8 @@ import type { ZodFastifyInstance } from '../src/lib/http';
 import { createFakeQueues } from './helpers/build-test-app';
 import { buildTwitchExtFakePrisma, type TwitchExtFakePrismaOptions } from './helpers/twitch-ext-fakes';
 
-// `GuildConfigStore`'s Redis cache (`cfg:<guildId>:economy` / `plugin:<guildId>:economy`, TTL 300s) is keyed
-// by guildId, and `ioredis-mock` instances constructed with the same (default) options share one underlying
-// in-memory store process-wide (see the identical caveat in `apps/api/src/app.ts`'s `overlaySubscriber` doc
-// comment) — so a FIXED guildId reused across many `it()` blocks in this file would let one test's cached
-// enable/config state leak into a later test that expects different state, even though each test builds its
-// own fresh fake Prisma. A fresh guildId per test sidesteps that entirely.
-let GUILD_ID = '700000000000000001';
-let guildIdCounter = 0;
-beforeEach(() => {
-  guildIdCounter += 1;
-  GUILD_ID = `70000000${String(guildIdCounter).padStart(10, '0')}`;
-});
-
 const CHANNEL_ID = '900000000001'; // Twitch numeric broadcaster user id
+const ECONOMY_ID = 'econ-1'; // the channel's own currency (`ChannelEconomy.id`) for CHANNEL_ID
 const OPAQUE_USER_ID = 'AU_opaque_viewer_1';
 const VIEWER_USER_ID = '900000000002'; // Twitch numeric viewer user id
 
@@ -96,23 +84,24 @@ async function buildTwitchExtTestApp(prismaOptions: TwitchExtFakePrismaOptions =
   return { app, fakePrisma, logs };
 }
 
-/** A guild whose economy plugin is enabled + `twitchEnabled`, linked to `CHANNEL_ID`. Deterministic daily
- * amount (min=max=100, no streak bonus) so `/daily` tests don't need to special-case a random range. */
-function enabledGuildPrismaOptions(overrides: Partial<TwitchExtFakePrismaOptions> = {}): TwitchExtFakePrismaOptions {
+/** A channel with its OWN enabled currency (`ChannelEconomy`) — no Discord server, no linked chat-bot channel, no guild
+ * economy plugin involved anywhere. Deterministic daily amount (min=max=100, no streak bonus) so `/daily` tests
+ * don't need to special-case a random range. */
+function enabledChannelPrismaOptions(overrides: Partial<TwitchExtFakePrismaOptions> = {}): TwitchExtFakePrismaOptions {
   return {
-    channels: [{ id: 'chan-1', guildId: GUILD_ID, broadcasterUserId: CHANNEL_ID, enabled: true }],
-    pluginStates: { [`${GUILD_ID}:economy`]: true },
-    pluginConfigs: {
-      [`${GUILD_ID}:economy`]: {
+    economies: [
+      {
+        id: ECONOMY_ID,
+        channelUserId: CHANNEL_ID,
+        enabled: true,
         currencyName: 'Agis',
         currencySymbol: '♦️',
-        twitchEnabled: true,
         dailyMinAmount: 100,
         dailyMaxAmount: 100,
         streakBonusPerDay: 0,
         streakBonusMax: 0,
       },
-    },
+    ],
     ...overrides,
   };
 }
@@ -123,7 +112,7 @@ describe('GET /twitch-ext/summary', () => {
   it('503s "Extension not configured" when the extension env vars are unset', async () => {
     env.TWITCH_EXTENSION_CLIENT_ID = undefined;
     env.TWITCH_EXTENSION_SECRET = undefined;
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
 
     const res = await app.inject({
       method: 'GET',
@@ -137,14 +126,14 @@ describe('GET /twitch-ext/summary', () => {
   });
 
   it('401s with no Authorization header', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const res = await app.inject({ method: 'GET', url: '/twitch-ext/summary' });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
 
   it('401s with a garbage bearer token', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const res = await app.inject({
       method: 'GET',
       url: '/twitch-ext/summary',
@@ -157,7 +146,7 @@ describe('GET /twitch-ext/summary', () => {
   });
 
   it('401s a token signed with the wrong secret', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const wrongSecret = Buffer.from('a-different-secret').toString('base64');
     const headerB64 = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
     const payloadB64 = b64url(
@@ -171,8 +160,8 @@ describe('GET /twitch-ext/summary', () => {
     await app.close();
   });
 
-  it('returns { enabled: false } for a channel with no linked guild', async () => {
-    const { app } = await buildTwitchExtTestApp({ channels: [] });
+  it('returns { enabled: false } for a channel that has no currency set up', async () => {
+    const { app } = await buildTwitchExtTestApp({ economies: [] });
     const res = await app.inject({
       method: 'GET',
       url: '/twitch-ext/summary',
@@ -183,38 +172,47 @@ describe('GET /twitch-ext/summary', () => {
     await app.close();
   });
 
-  it('returns { enabled: false } for a guildless channel (creator dashboard only, no Discord server linked)', async () => {
-    const options = enabledGuildPrismaOptions({
-      channels: [{ id: 'chan-1', guildId: null, broadcasterUserId: CHANNEL_ID, enabled: true }],
+  it('returns { enabled: false } when the streamer has switched the currency off', async () => {
+    const options = enabledChannelPrismaOptions();
+    options.economies![0]!.enabled = false;
+    const { app } = await buildTwitchExtTestApp(options);
+    const res = await app.inject({ method: 'GET', url: '/twitch-ext/summary', headers: { authorization: `Bearer ${signToken()}` } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ enabled: false });
+    await app.close();
+  });
+
+  it("works for a channel with no Discord server at all: resolved straight from the channel's own currency", async () => {
+    // The fake has no TwitchChatChannel model whatsoever — the panel needs neither a linked guild nor a chat-bot row.
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
+    const res = await app.inject({ method: 'GET', url: '/twitch-ext/summary', headers: { authorization: `Bearer ${signToken()}` } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ enabled: true, currencyName: 'Agis', currencySymbol: '♦️' });
+    await app.close();
+  });
+
+  it("uses the channel's own currency name/symbol", async () => {
+    const options = enabledChannelPrismaOptions();
+    options.economies![0]!.currencyName = 'Gems';
+    options.economies![0]!.currencySymbol = '💎';
+    const { app } = await buildTwitchExtTestApp(options);
+    const res = await app.inject({ method: 'GET', url: '/twitch-ext/summary', headers: { authorization: `Bearer ${signToken()}` } });
+    expect(res.json()).toMatchObject({ enabled: true, currencyName: 'Gems', currencySymbol: '💎' });
+    await app.close();
+  });
+
+  it("does not resolve another channel's currency: the JWT's channel_id decides", async () => {
+    const options = enabledChannelPrismaOptions({
+      economies: [{ id: 'econ-other', channelUserId: '900000009999', enabled: true }],
     });
     const { app } = await buildTwitchExtTestApp(options);
     const res = await app.inject({ method: 'GET', url: '/twitch-ext/summary', headers: { authorization: `Bearer ${signToken()}` } });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: false });
-    await app.close();
-  });
-
-  it('returns { enabled: false } when the economy plugin is disabled for the linked guild', async () => {
-    const options = enabledGuildPrismaOptions({ pluginStates: { [`${GUILD_ID}:economy`]: false } });
-    const { app } = await buildTwitchExtTestApp(options);
-    const res = await app.inject({ method: 'GET', url: '/twitch-ext/summary', headers: { authorization: `Bearer ${signToken()}` } });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: false });
-    await app.close();
-  });
-
-  it('returns { enabled: false } when the economy plugin is enabled but twitchEnabled is false', async () => {
-    const options = enabledGuildPrismaOptions();
-    options.pluginConfigs![`${GUILD_ID}:economy`] = { ...options.pluginConfigs![`${GUILD_ID}:economy`], twitchEnabled: false };
-    const { app } = await buildTwitchExtTestApp(options);
-    const res = await app.inject({ method: 'GET', url: '/twitch-ext/summary', headers: { authorization: `Bearer ${signToken()}` } });
-    expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ enabled: false });
     await app.close();
   });
 
   it('without shared identity: no wallet in the response, no wallet ever created, leaderboard still present', async () => {
-    const { app, fakePrisma } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app, fakePrisma } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
 
     const res = await app.inject({ method: 'GET', url: '/twitch-ext/summary', headers: { authorization: `Bearer ${signToken()}` } });
 
@@ -226,25 +224,33 @@ describe('GET /twitch-ext/summary', () => {
     expect(body.currencyName).toBe('Agis');
     expect(Array.isArray(body.leaderboard)).toBe(true);
 
-    // The whole point: viewing the panel must never create an EconomyAccount row.
-    expect(fakePrisma.getAccount(`acct-${GUILD_ID}-TWITCH-${OPAQUE_USER_ID}`)).toBeUndefined();
-    expect([...(fakePrisma as unknown as { getTransactions: () => unknown[] }).getTransactions()]).toHaveLength(0);
+    // The whole point: viewing the panel must never create a ChannelWallet row.
+    expect(fakePrisma.getWallet(ECONOMY_ID, OPAQUE_USER_ID)).toBeUndefined();
+    expect(fakePrisma.allWallets()).toHaveLength(0);
+    expect(fakePrisma.getTransactions()).toHaveLength(0);
+    await app.close();
+  });
+
+  it('with shared identity but no wallet yet: reads as a zero balance and STILL creates nothing', async () => {
+    const { app, fakePrisma } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/twitch-ext/summary',
+      headers: { authorization: `Bearer ${signToken({ userId: VIEWER_USER_ID })}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().wallet).toEqual({ balance: '0', dailyAvailableAt: null, streak: 0 });
+    expect(fakePrisma.getWallet(ECONOMY_ID, VIEWER_USER_ID)).toBeUndefined();
+    expect(fakePrisma.allWallets()).toHaveLength(0);
+    expect(fakePrisma.getTransactions()).toHaveLength(0);
     await app.close();
   });
 
   it('with shared identity: returns the real wallet balance/streak, and the leaderboard', async () => {
-    const options = enabledGuildPrismaOptions({
-      seedAccounts: [
-        {
-          id: 'acct-existing',
-          guildId: GUILD_ID,
-          platform: 'TWITCH',
-          userId: VIEWER_USER_ID,
-          displayName: 'CoolViewer',
-          balance: 4200n,
-          lastDailyAt: null,
-        },
-      ],
+    const options = enabledChannelPrismaOptions({
+      wallets: [{ economyId: ECONOMY_ID, viewerUserId: VIEWER_USER_ID, displayName: 'CoolViewer', balance: 4200n }],
     });
     const { app } = await buildTwitchExtTestApp(options);
 
@@ -258,15 +264,33 @@ describe('GET /twitch-ext/summary', () => {
     await app.close();
   });
 
-  it('leaderboard reflects lifetime TWITCH earnings, top entries first', async () => {
-    const options = enabledGuildPrismaOptions({
-      seedAccounts: [
-        { id: 'a1', guildId: GUILD_ID, platform: 'TWITCH', userId: 'v1', displayName: 'Top', balance: 500n, lastDailyAt: null },
-        { id: 'a2', guildId: GUILD_ID, platform: 'TWITCH', userId: 'v2', displayName: 'Second', balance: 100n, lastDailyAt: null },
+  it("a viewer's wallet in ANOTHER channel's currency is never shown", async () => {
+    const options = enabledChannelPrismaOptions({
+      economies: [
+        ...enabledChannelPrismaOptions().economies!,
+        { id: 'econ-other', channelUserId: '900000009999', enabled: true },
       ],
-      seedTransactions: [
-        { id: 't1', guildId: GUILD_ID, platform: 'TWITCH', accountId: 'a1', toUserId: 'v1', amount: 500n, type: 'daily', createdAt: new Date() },
-        { id: 't2', guildId: GUILD_ID, platform: 'TWITCH', accountId: 'a2', toUserId: 'v2', amount: 100n, type: 'twitch_chat_earn', createdAt: new Date() },
+      wallets: [{ economyId: 'econ-other', viewerUserId: VIEWER_USER_ID, balance: 777n }],
+    });
+    const { app } = await buildTwitchExtTestApp(options);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/twitch-ext/summary',
+      headers: { authorization: `Bearer ${signToken({ userId: VIEWER_USER_ID })}` },
+    });
+    expect(res.json().wallet.balance).toBe('0');
+    await app.close();
+  });
+
+  it('leaderboard reflects lifetime earnings in this channel, top entries first', async () => {
+    const options = enabledChannelPrismaOptions({
+      wallets: [
+        { economyId: ECONOMY_ID, viewerUserId: 'v1', displayName: 'Top', balance: 500n },
+        { economyId: ECONOMY_ID, viewerUserId: 'v2', displayName: 'Second', balance: 100n },
+      ],
+      transactions: [
+        { economyId: ECONOMY_ID, walletId: `w-${ECONOMY_ID}-v1`, toUserId: 'v1', amount: 500n, type: 'daily' },
+        { economyId: ECONOMY_ID, walletId: `w-${ECONOMY_ID}-v2`, toUserId: 'v2', amount: 100n, type: 'twitch_chat_earn' },
       ],
     });
     const { app } = await buildTwitchExtTestApp(options);
@@ -286,44 +310,75 @@ describe('POST /twitch-ext/daily', () => {
   it('503s when the extension env vars are unset', async () => {
     env.TWITCH_EXTENSION_CLIENT_ID = undefined;
     env.TWITCH_EXTENSION_SECRET = undefined;
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const res = await app.inject({ method: 'POST', url: '/twitch-ext/daily', headers: { authorization: `Bearer ${signToken()}` } });
     expect(res.statusCode).toBe(503);
     await app.close();
   });
 
   it('403s with identity_not_shared when the JWT carries no user_id', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const res = await app.inject({ method: 'POST', url: '/twitch-ext/daily', headers: { authorization: `Bearer ${signToken()}` } });
     expect(res.statusCode).toBe(403);
     expect(res.json().error.code).toBe('identity_not_shared');
     await app.close();
   });
 
-  it('returns { ok: false } for a channel with no linked/enabled guild, even with identity shared', async () => {
-    const { app } = await buildTwitchExtTestApp({ channels: [] });
+  it('returns { ok: false } for a channel with no enabled currency, even with identity shared (and creates nothing)', async () => {
+    const { app, fakePrisma } = await buildTwitchExtTestApp({ economies: [] });
     const token = signToken({ userId: VIEWER_USER_ID });
     const res = await app.inject({ method: 'POST', url: '/twitch-ext/daily', headers: { authorization: `Bearer ${token}` } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: false });
+    expect(fakePrisma.allWallets()).toHaveLength(0);
     await app.close();
   });
 
   it('claims successfully (deterministic amount via fixed min=max config) and reflects the new balance on a follow-up summary', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app, fakePrisma } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const token = signToken({ userId: VIEWER_USER_ID });
 
     const claimRes = await app.inject({ method: 'POST', url: '/twitch-ext/daily', headers: { authorization: `Bearer ${token}` } });
     expect(claimRes.statusCode).toBe(200);
     expect(claimRes.json()).toEqual({ ok: true, amount: '100', streak: 1 });
+    expect(fakePrisma.getWallet(ECONOMY_ID, VIEWER_USER_ID)?.balance).toBe(100n);
+    expect(fakePrisma.getTransactions()).toHaveLength(1);
+    expect(fakePrisma.getTransactions()[0]).toMatchObject({ economyId: ECONOMY_ID, type: 'daily', toUserId: VIEWER_USER_ID });
 
     const summaryRes = await app.inject({ method: 'GET', url: '/twitch-ext/summary', headers: { authorization: `Bearer ${token}` } });
     expect(summaryRes.json().wallet.balance).toBe('100');
     await app.close();
   });
 
+  it("pays out the channel's own daily settings (min/max/streak bonus)", async () => {
+    const options = enabledChannelPrismaOptions();
+    Object.assign(options.economies![0]!, { dailyMinAmount: 250, dailyMaxAmount: 250, streakBonusPerDay: 10, streakBonusMax: 30 });
+    const { app } = await buildTwitchExtTestApp(options);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/twitch-ext/daily',
+      headers: { authorization: `Bearer ${signToken({ userId: VIEWER_USER_ID })}` },
+    });
+    expect(res.json()).toEqual({ ok: true, amount: '260', streak: 1 }); // 250 + streak(1) * 10
+    await app.close();
+  });
+
+  it('does nothing when the streamer has switched the currency off', async () => {
+    const options = enabledChannelPrismaOptions();
+    options.economies![0]!.enabled = false;
+    const { app, fakePrisma } = await buildTwitchExtTestApp(options);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/twitch-ext/daily',
+      headers: { authorization: `Bearer ${signToken({ userId: VIEWER_USER_ID })}` },
+    });
+    expect(res.json()).toEqual({ ok: false });
+    expect(fakePrisma.allWallets()).toHaveLength(0);
+    await app.close();
+  });
+
   it('a second claim within the cooldown window is rejected with a retryAfterMs > 0', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const token = signToken({ userId: VIEWER_USER_ID });
 
     const first = await app.inject({ method: 'POST', url: '/twitch-ext/daily', headers: { authorization: `Bearer ${token}` } });
@@ -338,7 +393,7 @@ describe('POST /twitch-ext/daily', () => {
   });
 
   it('is not blocked by CSRF protection despite being a mutating (POST) route with no session/CSRF header', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const token = signToken({ userId: VIEWER_USER_ID });
 
     const res = await app.inject({ method: 'POST', url: '/twitch-ext/daily', headers: { authorization: `Bearer ${token}` } });
@@ -356,7 +411,7 @@ describe('/twitch-ext CORS', () => {
   beforeEach(() => configureExtensionEnv());
 
   it('reflects the extension origin on /twitch-ext/summary, with no Allow-Credentials header', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const res = await app.inject({
       method: 'GET',
       url: '/twitch-ext/summary',
@@ -368,7 +423,7 @@ describe('/twitch-ext CORS', () => {
   });
 
   it('answers an OPTIONS preflight for /twitch-ext/daily with the extension origin reflected', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const res = await app.inject({
       method: 'OPTIONS',
       url: '/twitch-ext/daily',
@@ -385,7 +440,7 @@ describe('/twitch-ext CORS', () => {
   });
 
   it('does NOT reflect an unrelated origin on /twitch-ext routes', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const res = await app.inject({
       method: 'GET',
       url: '/twitch-ext/summary',
@@ -396,7 +451,7 @@ describe('/twitch-ext CORS', () => {
   });
 
   it('does NOT set the extension-origin CORS header on a non-/twitch-ext route', async () => {
-    const { app } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const res = await app.inject({ method: 'GET', url: '/health', headers: { origin: EXT_ORIGIN } });
     expect(res.headers['access-control-allow-origin']).not.toBe(EXT_ORIGIN);
     await app.close();
@@ -407,7 +462,7 @@ describe('/twitch-ext logging never includes the token or secret', () => {
   beforeEach(() => configureExtensionEnv());
 
   it('an invalid bearer token never appears in any log line, and neither does the configured secret', async () => {
-    const { app, logs } = await buildTwitchExtTestApp(enabledGuildPrismaOptions());
+    const { app, logs } = await buildTwitchExtTestApp(enabledChannelPrismaOptions());
     const distinctiveMarker = 'MARKER_SHOULD_NEVER_BE_LOGGED_abc123xyz';
     const fakeToken = `${b64url(JSON.stringify({ alg: 'HS256' }))}.${b64url(JSON.stringify({ marker: distinctiveMarker }))}.${b64url(distinctiveMarker)}`;
 

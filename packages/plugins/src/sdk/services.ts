@@ -297,38 +297,6 @@ export interface TwitchChatService {
   stop(): Promise<void>;
 }
 
-export interface EconomyGetConfigResult {
-  currencyName: string;
-  currencySymbol: string;
-  twitchEnabled: boolean;
-  twitchEarnEnabled: boolean;
-  twitchEarnPerMessage: number;
-  twitchEarnCooldownSeconds: number;
-  twitchEarnDailyCap: number;
-}
-
-export interface EconomyWalletInfo {
-  balance: bigint;
-  lastDailyAt: Date | null;
-}
-
-/** Registered by the `economy` plugin. */
-export interface EconomyService {
-  /** Get economy config for a guild. */
-  getConfig(guildId: string): Promise<EconomyGetConfigResult>;
-  /** Get or create a wallet; for TWITCH, updates displayName. */
-  getOrCreateWallet(guildId: string, platform: 'DISCORD' | 'TWITCH', userId: string, displayName?: string): Promise<EconomyWalletInfo>;
-  /** Claim daily reward for a wallet. */
-  claimDaily(guildId: string, platform: 'DISCORD' | 'TWITCH', userId: string): Promise<{ ok: true; amount: bigint; streak: number } | { ok: false; retryAfterMs: number }>;
-  /** Give between two wallets on the same platform. `toUserId` must already be resolved (a Discord snowflake,
-   * or a Twitch numeric user id resolved from a login via Helix) — this service never resolves a login itself. */
-  give(guildId: string, fromUserId: string, toUserId: string, amount: number, platform: 'DISCORD' | 'TWITCH'): Promise<{ ok: true } | { ok: false; reason: string }>;
-  /** Credit earnings (e.g. twitch_chat_earn). Returns the new balance or an error. */
-  credit(guildId: string, platform: 'DISCORD' | 'TWITCH', userId: string, amount: number, type: string, displayName?: string): Promise<{ ok: true; newBalance: bigint } | { ok: false; reason: string }>;
-  /** Get top wallets on the TWITCH platform by lifetime earned. */
-  getLeaderboard(guildId: string, limit?: number): Promise<Array<{ displayName: string; earned: bigint }>>;
-}
-
 export interface HostEnableActor {
   id: string;
   source: 'bot' | 'dashboard' | 'system';
@@ -389,7 +357,6 @@ export interface ServiceMap {
   host: HostService;
   enforcer: EnforcerService;
   twitchChat: TwitchChatService;
-  economy: EconomyService;
 }
 
 /** Registry of cross-plugin services. Consumers call `.get(key)` and no-op gracefully when the provider isn't loaded. */

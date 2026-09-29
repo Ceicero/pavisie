@@ -14,7 +14,6 @@ import {
   validateGive,
 } from '../service';
 import {
-  type EconomyPlatform,
   type WalletKey,
   getOrCreateWallet,
   getPlatformLeaderboard,
@@ -22,6 +21,7 @@ import {
   give as ledgerGive,
   adminAdjust as ledgerAdminAdjust,
 } from '../ledger';
+import { getChannelBalanceLeaderboard, getChannelEarnedLeaderboard } from '../../channel-economy/ledger';
 
 // Escape markdown special characters in a string (for Twitch names in leaderboard display)
 function escapeMarkdown(text: string): string {
@@ -111,42 +111,6 @@ const data = new SlashCommandBuilder()
           .setRequired(false)
           .setMinValue(1),
       )
-      .addBooleanOption((opt) =>
-        opt
-          .setName('twitch-enabled')
-          .setDescription('Turn on !balance/!bal/!daily/!give/!top in the linked Twitch chat')
-          .setRequired(false),
-      )
-      .addBooleanOption((opt) =>
-        opt
-          .setName('twitch-earn-enabled')
-          .setDescription('Award currency for chatting on Twitch while the stream is live')
-          .setRequired(false),
-      )
-      .addIntegerOption((opt) =>
-        opt
-          .setName('twitch-earn-per-message')
-          .setDescription('Currency earned per eligible Twitch chat message')
-          .setRequired(false)
-          .setMinValue(1)
-          .setMaxValue(1000),
-      )
-      .addIntegerOption((opt) =>
-        opt
-          .setName('twitch-earn-cooldown-seconds')
-          .setDescription('Seconds between earn credits for the same Twitch viewer')
-          .setRequired(false)
-          .setMinValue(10)
-          .setMaxValue(3600),
-      )
-      .addIntegerOption((opt) =>
-        opt
-          .setName('twitch-earn-daily-cap')
-          .setDescription('Max currency a Twitch viewer can earn from chat per UTC day (0 = no earning)')
-          .setRequired(false)
-          .setMinValue(0)
-          .setMaxValue(1_000_000),
-      ),
   )
   .addSubcommandGroup((group) =>
     group
@@ -280,48 +244,119 @@ async function handleGive(c: CommandContext): Promise<void> {
   });
 }
 
+/** A Twitch row of a leaderboard: one viewer in one linked channel's own currency. */
+interface TwitchBoardRow {
+  displayName: string | null;
+  symbol: string;
+  amount: bigint;
+}
+
+/**
+ * The enabled Twitch-channel currencies of the channels linked to this server. A streamer's Twitch currency is
+ * owned by the Twitch channel (`ChannelEconomy`, ARCHITECTURE.md §18b/§19e), not by the server: the server only
+ * ever READS the currencies of channels it has linked, and only ones the streamer has switched on.
+ */
+async function loadLinkedTwitchEconomies(c: CommandContext) {
+  const channels = await c.ctx.prisma.twitchChatChannel.findMany({
+    where: { guildId: c.guildId },
+    select: { broadcasterUserId: true },
+  });
+  if (channels.length === 0) return [];
+  return c.ctx.prisma.channelEconomy.findMany({
+    where: { platform: 'TWITCH', enabled: true, channelUserId: { in: channels.map((ch) => ch.broadcasterUserId) } },
+  });
+}
+
+/** Top viewers across the linked channels, ranked together by `amount` (each row keeps its own channel's symbol). */
+function rankTwitchRows(rows: TwitchBoardRow[], limit: number): TwitchBoardRow[] {
+  return [...rows].sort((a, b) => (a.amount < b.amount ? 1 : a.amount > b.amount ? -1 : 0)).slice(0, limit);
+}
+
+function twitchLine(row: TwitchBoardRow, index: number): string {
+  return `**${index + 1}.** ${escapeMarkdown(row.displayName || 'Twitch viewer')} (Twitch) — ${formatCurrency(row.amount, row.symbol)}`;
+}
+
 async function handleLeaderboard(c: CommandContext): Promise<void> {
   const config = await c.config<EconomyConfig>();
   const platformOption = (c.interaction.options.getString('platform') ?? 'global') as 'global' | 'discord' | 'twitch';
 
   if (platformOption === 'global') {
-    // Global leaderboard: top 10 by current balance across all platforms
-    const rows = await c.ctx.prisma.economyAccount.findMany({
-      where: { guildId: c.guildId },
-      orderBy: { balance: 'desc' },
-      take: 10,
-    });
-    const lines = rows.map((row, i) => {
-      const userStr =
-        row.platform === 'TWITCH'
-          ? `${escapeMarkdown(row.displayName || 'Twitch viewer')} (Twitch)`
-          : `<@${row.userId}>`;
-      return `**${i + 1}.** ${userStr} — ${formatCurrency(row.balance, config.currencySymbol)}`;
-    });
+    // Global leaderboard: top 10 by current balance — this server's Discord wallets plus the wallets of the Twitch
+    // channels linked to it (each in its own currency; wallets are never merged across platforms).
+    const [discordRows, economies] = await Promise.all([
+      c.ctx.prisma.economyAccount.findMany({
+        where: { guildId: c.guildId, platform: 'DISCORD' },
+        orderBy: { balance: 'desc' },
+        take: 10,
+      }),
+      loadLinkedTwitchEconomies(c),
+    ]);
+    const twitchRows: TwitchBoardRow[] = [];
+    for (const economy of economies) {
+      const top = await getChannelBalanceLeaderboard(c.ctx.prisma, economy.id, 10);
+      for (const row of top) {
+        twitchRows.push({ displayName: row.displayName, symbol: economy.currencySymbol, amount: row.balance });
+      }
+    }
+
+    const combined: Array<{ amount: bigint; render: () => string }> = [
+      ...discordRows.map((row) => ({
+        amount: row.balance,
+        render: () => `<@${row.userId}> — ${formatCurrency(row.balance, config.currencySymbol)}`,
+      })),
+      ...twitchRows.map((row) => ({
+        amount: row.amount,
+        render: () =>
+          `${escapeMarkdown(row.displayName || 'Twitch viewer')} (Twitch) — ${formatCurrency(row.amount, row.symbol)}`,
+      })),
+    ];
+    const lines = combined
+      .sort((a, b) => (a.amount < b.amount ? 1 : a.amount > b.amount ? -1 : 0))
+      .slice(0, 10)
+      .map((row, i) => `**${i + 1}.** ${row.render()}`);
+
     await c.interaction.reply({
       embeds: [listEmbed(c.t('leaderboardTitle'), lines)],
       ephemeral: true,
     });
-  } else {
-    // Platform-specific leaderboard: top 10 by lifetime earned (sum of earned transaction types)
-    const platform: EconomyPlatform = platformOption === 'discord' ? 'DISCORD' : 'TWITCH';
-    const titleKey = platformOption === 'discord' ? 'leaderboardDiscordTitle' : 'leaderboardTwitchTitle';
+    return;
+  }
 
-    const rows = await getPlatformLeaderboard(c.ctx.prisma, c.guildId, platform, 10);
-
-    const lines = rows.map((row, i) => {
-      const userStr =
-        row.platform === 'TWITCH'
-          ? `${escapeMarkdown(row.displayName || 'Twitch viewer')} (Twitch)`
-          : `<@${row.userId}>`;
-      return `**${i + 1}.** ${userStr} — ${formatCurrency(row.earned, config.currencySymbol)}`;
-    });
-
+  if (platformOption === 'twitch') {
+    // Twitch board: lifetime earned in the linked channels' own currencies. Honest empty state when no channel is
+    // linked (or none has switched its currency on) — never an empty-looking board that hides the reason.
+    const economies = await loadLinkedTwitchEconomies(c);
+    if (economies.length === 0) {
+      await c.interaction.reply({
+        embeds: [infoEmbed(c.t('leaderboardTwitchTitle'), c.t('leaderboardTwitchNone'))],
+        ephemeral: true,
+      });
+      return;
+    }
+    const rows: TwitchBoardRow[] = [];
+    for (const economy of economies) {
+      const top = await getChannelEarnedLeaderboard(c.ctx.prisma, economy.id, 10);
+      for (const row of top) {
+        rows.push({ displayName: row.displayName, symbol: economy.currencySymbol, amount: row.earned });
+      }
+    }
+    const lines = rankTwitchRows(rows, 10).map(twitchLine);
     await c.interaction.reply({
-      embeds: [listEmbed(c.t(titleKey, { platform: platformOption }), lines)],
+      embeds: [listEmbed(c.t('leaderboardTwitchTitle'), lines)],
       ephemeral: true,
     });
+    return;
   }
+
+  // Discord board: top 10 by lifetime earned (sum of earned transaction types).
+  const rows = await getPlatformLeaderboard(c.ctx.prisma, c.guildId, 'DISCORD', 10);
+  const lines = rows.map(
+    (row, i) => `**${i + 1}.** <@${row.userId}> — ${formatCurrency(row.earned, config.currencySymbol)}`,
+  );
+  await c.interaction.reply({
+    embeds: [listEmbed(c.t('leaderboardDiscordTitle', { platform: platformOption }), lines)],
+    ephemeral: true,
+  });
 }
 
 async function handleConfig(c: CommandContext): Promise<void> {
@@ -333,22 +368,12 @@ async function handleConfig(c: CommandContext): Promise<void> {
   const dailyMax = interaction.options.getInteger('daily-max');
   const giveMin = interaction.options.getInteger('give-min');
   const giveMax = interaction.options.getInteger('give-max');
-  const twitchEnabled = interaction.options.getBoolean('twitch-enabled');
-  const twitchEarnEnabled = interaction.options.getBoolean('twitch-earn-enabled');
-  const twitchEarnPerMessage = interaction.options.getInteger('twitch-earn-per-message');
-  const twitchEarnCooldownSeconds = interaction.options.getInteger('twitch-earn-cooldown-seconds');
-  const twitchEarnDailyCap = interaction.options.getInteger('twitch-earn-daily-cap');
   if (currencyName !== null) patch.currencyName = currencyName;
   if (currencySymbol !== null) patch.currencySymbol = currencySymbol;
   if (dailyMin !== null) patch.dailyMinAmount = dailyMin;
   if (dailyMax !== null) patch.dailyMaxAmount = dailyMax;
   if (giveMin !== null) patch.giveMinAmount = giveMin;
   if (giveMax !== null) patch.giveMaxAmount = giveMax;
-  if (twitchEnabled !== null) patch.twitchEnabled = twitchEnabled;
-  if (twitchEarnEnabled !== null) patch.twitchEarnEnabled = twitchEarnEnabled;
-  if (twitchEarnPerMessage !== null) patch.twitchEarnPerMessage = twitchEarnPerMessage;
-  if (twitchEarnCooldownSeconds !== null) patch.twitchEarnCooldownSeconds = twitchEarnCooldownSeconds;
-  if (twitchEarnDailyCap !== null) patch.twitchEarnDailyCap = twitchEarnDailyCap;
 
   const config =
     Object.keys(patch).length > 0
@@ -363,12 +388,6 @@ async function handleConfig(c: CommandContext): Promise<void> {
           `Currency: **${config.currencyName}** (${config.currencySymbol})`,
           `Daily reward: ${config.dailyMinAmount}-${config.dailyMaxAmount} (+streak bonus, ${config.streakBonusPerDay}/day up to ${config.streakBonusMax})`,
           `Give limits: ${config.giveMinAmount}-${config.giveMaxAmount}`,
-          `Twitch chat commands: ${config.twitchEnabled ? 'on' : 'off'}`,
-          `Twitch chat earning: ${
-            config.twitchEarnEnabled
-              ? `on — ${config.twitchEarnPerMessage}/message, ${config.twitchEarnCooldownSeconds}s cooldown, ${config.twitchEarnDailyCap}/day cap`
-              : 'off'
-          }`,
         ].join('\n'),
       ),
     ],

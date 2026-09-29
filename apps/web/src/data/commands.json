@@ -4127,36 +4127,6 @@
                   "description": "Maximum /economy give amount",
                   "required": false,
                   "type": "Integer"
-                },
-                {
-                  "name": "twitch-enabled",
-                  "description": "Turn on !balance/!bal/!daily/!give/!top in the linked Twitch chat",
-                  "required": false,
-                  "type": "Boolean"
-                },
-                {
-                  "name": "twitch-earn-enabled",
-                  "description": "Award currency for chatting on Twitch while the stream is live",
-                  "required": false,
-                  "type": "Boolean"
-                },
-                {
-                  "name": "twitch-earn-per-message",
-                  "description": "Currency earned per eligible Twitch chat message",
-                  "required": false,
-                  "type": "Integer"
-                },
-                {
-                  "name": "twitch-earn-cooldown-seconds",
-                  "description": "Seconds between earn credits for the same Twitch viewer",
-                  "required": false,
-                  "type": "Integer"
-                },
-                {
-                  "name": "twitch-earn-daily-cap",
-                  "description": "Max currency a Twitch viewer can earn from chat per UTC day (0 = no earning)",
-                  "required": false,
-                  "type": "Integer"
                 }
               ]
             },

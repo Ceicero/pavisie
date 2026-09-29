@@ -1,7 +1,15 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreatorTwitchChannelDto, CreatorTwitchChannelStatusDto } from '@pavisie/types/creator';
+import type {
+  CreatorChannelEconomyDto,
+  CreatorChannelEconomySettingsDto,
+  CreatorEconomyAdjustInput,
+  CreatorEconomyAdjustResultDto,
+  CreatorEconomyLeaderboardDto,
+  CreatorTwitchChannelDto,
+  CreatorTwitchChannelStatusDto,
+} from '@pavisie/types/creator';
 import type {
   CreateTwitchChatCommandInput,
   CreateTwitchChatTimerInput,
@@ -19,9 +27,12 @@ export const creatorQueryKeys = {
   twitchChannel: () => ['creator', 'twitch', 'channel'] as const,
   twitchCommands: () => ['creator', 'twitch', 'commands'] as const,
   twitchTimers: () => ['creator', 'twitch', 'timers'] as const,
+  twitchEconomy: () => ['creator', 'twitch', 'economy'] as const,
+  twitchEconomyLeaderboard: () => ['creator', 'twitch', 'economy', 'leaderboard'] as const,
 };
 
 const CHANNEL_PATH = '/creator/twitch/channel';
+const ECONOMY_PATH = '/creator/twitch/economy';
 
 /** Queries only run for a signed-in creator (otherwise they would just 401). */
 function useSignedIn(): boolean {
@@ -65,6 +76,53 @@ export function useDisconnectCreatorTwitchChannel() {
     mutationFn: () => creatorFetch<void>(CHANNEL_PATH, { method: 'DELETE' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['creator', 'twitch'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The channel's own currency (`ChannelEconomy`) — owned by the Twitch channel, works with no Discord server
+// ---------------------------------------------------------------------------
+
+export function useCreatorEconomy() {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: creatorQueryKeys.twitchEconomy(),
+    queryFn: () => creatorFetch<CreatorChannelEconomyDto>(ECONOMY_PATH),
+    enabled: signedIn,
+  });
+}
+
+/** Saves a partial update; the FIRST save is what creates the currency (nothing is stored by merely viewing). */
+export function useUpdateCreatorEconomy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<CreatorChannelEconomySettingsDto>) =>
+      creatorFetch<CreatorChannelEconomyDto>(ECONOMY_PATH, { method: 'PATCH', body: patch }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(creatorQueryKeys.twitchEconomy(), saved);
+      void queryClient.invalidateQueries({ queryKey: creatorQueryKeys.twitchEconomyLeaderboard() });
+    },
+  });
+}
+
+/** Top viewers by lifetime earned and by current balance. Only runs once the currency exists. */
+export function useCreatorEconomyLeaderboard(enabled: boolean) {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: creatorQueryKeys.twitchEconomyLeaderboard(),
+    queryFn: () => creatorFetch<CreatorEconomyLeaderboardDto>(`${ECONOMY_PATH}/leaderboard`),
+    enabled: signedIn && enabled,
+  });
+}
+
+export function useAdjustCreatorEconomy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreatorEconomyAdjustInput) =>
+      creatorFetch<CreatorEconomyAdjustResultDto>(`${ECONOMY_PATH}/adjust`, { method: 'POST', body: input }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: creatorQueryKeys.twitchEconomyLeaderboard() });
     },
   });
 }

@@ -10,11 +10,10 @@ export const configSchema = z.object({
   streakBonusMax: z.number().int().min(0).max(1_000_000).default(200),
   giveMinAmount: z.number().int().min(1).max(1_000_000_000).default(1),
   giveMaxAmount: z.number().int().min(1).max(1_000_000_000).default(100_000),
-  twitchEnabled: z.boolean().default(false),
-  twitchEarnEnabled: z.boolean().default(false),
-  twitchEarnPerMessage: z.number().int().min(1).max(1000).default(5),
-  twitchEarnCooldownSeconds: z.number().int().min(10).max(3600).default(60),
-  twitchEarnDailyCap: z.number().int().min(0).max(1_000_000).default(200),
+  // The old `twitch*` keys (twitchEnabled, twitchEarn*) are gone: a streamer's Twitch currency is owned by the
+  // Twitch channel and configured on the creator dashboard (ARCHITECTURE.md §18b/§19e, `ChannelEconomy`). This
+  // object is non-strict, so stale copies of those keys still sitting in a guild's stored config are ignored
+  // (stripped on read), never an error; migration 0015 already copied them into the channel's own settings.
 });
 
 export type EconomyConfig = z.infer<typeof configSchema>;
@@ -34,5 +33,6 @@ export const manifest = defineManifest({
   privacyNotes: [
     'Every balance change is recorded as an append-only EconomyTransaction (who, amount, type, and an optional note) — balances themselves are a derived/cached total, never edited without a matching transaction.',
     'This currency has no real-world value: it cannot be purchased with real money, cashed out, transferred off-platform, or used for wagering of any kind.',
+    'A linked Twitch channel has its own separate currency, held per Twitch channel (not per server); /economy leaderboard can show it for the channels linked to this server.',
   ],
 });

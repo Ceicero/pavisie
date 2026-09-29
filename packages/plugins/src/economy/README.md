@@ -13,7 +13,7 @@ Stripe or any payment processor, and no feature converts the currency to or from
 | `/economy balance [user]`                        | Check a balance (default: your own)                                                            | Everyone   |
 | `/economy daily`                                 | Claim your daily reward (20h cooldown, streak bonus for claiming within 48h of the last claim) | Everyone   |
 | `/economy give <user> <amount>`                  | Give some of your balance to another member                                                    | Everyone   |
-| `/economy leaderboard`                           | Show the top 10 balances                                                                       | Everyone   |
+| `/economy leaderboard [platform]`                | Top 10: `global` (default), `discord`, or `twitch` (linked channels' own currencies)           | Everyone   |
 | `/economy config [...]`                          | View or change the currency name/symbol and reward amounts                                     | Moderator+ |
 | `/economy admin add <user> <amount> [reason]`    | Add to a member's balance                                                                      | Moderator+ |
 | `/economy admin remove <user> <amount> [reason]` | Remove from a member's balance (never below zero)                                              | Moderator+ |
@@ -34,12 +34,22 @@ giveMaxAmount         number  Maximum /economy give amount (default: 100000)
 There is no dedicated dashboard page for this plugin — its settings are edited through the plugin config drawer
 on `/dashboard/[guildId]/plugins` (auto-generated from `configSchema`), same as any other plugin's config.
 
+## Twitch currency is not configured here
+
+A streamer's Twitch currency is **owned by the Twitch channel** (`ChannelEconomy`, ARCHITECTURE.md §18b/§19e) and
+configured on the creator dashboard (pavisie.com/creator). This plugin has no Twitch settings and does not run the
+Twitch chat commands; it only READS the currencies of the Twitch channels linked to the server, for
+`/economy leaderboard platform:twitch` and `global`. (Stale `twitch*` keys still in a server's stored config are
+ignored.)
+
 ## Data model
 
 - `EconomyAccount.balance` is a derived/cached total (`BigInt`), never edited without a matching
   `EconomyTransaction` row in the same database transaction.
 - `EconomyTransaction` is an append-only ledger: every `daily`, `give`, `admin_add`, and `admin_remove` movement is
   recorded with its amount, type, and (for daily claims) the resulting streak count in `note`.
+- Rows with `platform = TWITCH` in these tables are legacy (copied into the channel economy by migration 0015 and no
+  longer used); they are removed in a later cleanup.
 - The daily-claim streak is not stored as its own column — it's read back from the most recent `daily`
   transaction's `note` field (`{"streak": n}`) rather than a separate mutable counter, keeping the ledger the
   single source of truth for the account's history.

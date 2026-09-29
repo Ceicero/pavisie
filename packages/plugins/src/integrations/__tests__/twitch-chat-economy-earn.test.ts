@@ -11,7 +11,7 @@ import {
   utcDateStamp,
 } from '../twitch-chat/economy-earn';
 
-const GUILD_ID = 'guild-1';
+const ECONOMY_ID = 'economy-1';
 const VIEWER_ID = 'viewer-1';
 const NOON_UTC = new Date('2026-01-01T12:00:00.000Z');
 
@@ -26,11 +26,11 @@ describe('economy-earn — pure helpers', () => {
     expect(msUntilNextUtcMidnight(new Date('2026-01-01T23:59:59.000Z'))).toBe(1000);
   });
 
-  it('cooldown and daily-budget keys are namespaced per guild/viewer(/date)', () => {
-    expect(earnCooldownKey(GUILD_ID, VIEWER_ID)).toContain(GUILD_ID);
-    expect(earnCooldownKey(GUILD_ID, VIEWER_ID)).toContain(VIEWER_ID);
-    expect(earnDailyBudgetKey(GUILD_ID, VIEWER_ID, NOON_UTC)).toContain('2026-01-01');
-    expect(earnDailyBudgetKey(GUILD_ID, VIEWER_ID, new Date('2026-01-02T00:00:00.000Z'))).toContain('2026-01-02');
+  it('cooldown and daily-budget keys are namespaced per channel-economy/viewer(/date)', () => {
+    expect(earnCooldownKey(ECONOMY_ID, VIEWER_ID)).toContain(ECONOMY_ID);
+    expect(earnCooldownKey(ECONOMY_ID, VIEWER_ID)).toContain(VIEWER_ID);
+    expect(earnDailyBudgetKey(ECONOMY_ID, VIEWER_ID, NOON_UTC)).toContain('2026-01-01');
+    expect(earnDailyBudgetKey(ECONOMY_ID, VIEWER_ID, new Date('2026-01-02T00:00:00.000Z'))).toContain('2026-01-02');
   });
 });
 
@@ -45,7 +45,7 @@ describe('reserveDailyEarnBudget', () => {
   }
 
   it('credits the full perMessage amount when far under the cap', async () => {
-    const credited = await reserveDailyEarnBudget(redis(), GUILD_ID, VIEWER_ID, 5, 200, NOON_UTC);
+    const credited = await reserveDailyEarnBudget(redis(), ECONOMY_ID, VIEWER_ID, 5, 200, NOON_UTC);
     expect(credited).toBe(5);
   });
 
@@ -53,7 +53,7 @@ describe('reserveDailyEarnBudget', () => {
     const r = redis();
     let total = 0;
     for (let i = 0; i < 50; i++) {
-      const credited = await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 5, 22, NOON_UTC);
+      const credited = await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 5, 22, NOON_UTC);
       total += credited;
     }
     expect(total).toBe(22); // 4 full credits of 5 (20) + one partial credit of 2, then zero forever after
@@ -61,38 +61,38 @@ describe('reserveDailyEarnBudget', () => {
 
   it('credits exactly 0 once the cap is already reached', async () => {
     const r = redis();
-    await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 10, 10, NOON_UTC); // hits the cap exactly
-    const credited = await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 10, 10, NOON_UTC);
+    await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 10, 10, NOON_UTC); // hits the cap exactly
+    const credited = await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 10, 10, NOON_UTC);
     expect(credited).toBe(0);
   });
 
-  it('is per-viewer and per-guild independent', async () => {
+  it('is per-viewer and per-channel-economy independent', async () => {
     const r = redis();
-    const a = await reserveDailyEarnBudget(r, GUILD_ID, 'viewer-a', 5, 10, NOON_UTC);
-    const b = await reserveDailyEarnBudget(r, GUILD_ID, 'viewer-b', 5, 10, NOON_UTC);
-    const otherGuild = await reserveDailyEarnBudget(r, 'guild-2', 'viewer-a', 5, 10, NOON_UTC);
-    expect([a, b, otherGuild]).toEqual([5, 5, 5]);
+    const a = await reserveDailyEarnBudget(r, ECONOMY_ID, 'viewer-a', 5, 10, NOON_UTC);
+    const b = await reserveDailyEarnBudget(r, ECONOMY_ID, 'viewer-b', 5, 10, NOON_UTC);
+    const otherEconomy = await reserveDailyEarnBudget(r, 'economy-2', 'viewer-a', 5, 10, NOON_UTC);
+    expect([a, b, otherEconomy]).toEqual([5, 5, 5]);
   });
 
   it('resets on a new UTC day (different date-scoped key)', async () => {
     const r = redis();
-    await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 10, 10, NOON_UTC); // hits the cap for day 1
-    const day2 = await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 10, 10, new Date('2026-01-02T00:00:01.000Z'));
+    await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 10, 10, NOON_UTC); // hits the cap for day 1
+    const day2 = await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 10, 10, new Date('2026-01-02T00:00:01.000Z'));
     expect(day2).toBe(10);
   });
 
   it('returns 0 without touching Redis state when perMessage or cap is non-positive', async () => {
     const r = redis();
-    expect(await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 0, 200, NOON_UTC)).toBe(0);
-    expect(await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 5, 0, NOON_UTC)).toBe(0);
-    const key = earnDailyBudgetKey(GUILD_ID, VIEWER_ID, NOON_UTC);
+    expect(await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 0, 200, NOON_UTC)).toBe(0);
+    expect(await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 5, 0, NOON_UTC)).toBe(0);
+    const key = earnDailyBudgetKey(ECONOMY_ID, VIEWER_ID, NOON_UTC);
     expect(await r.get(key)).toBeNull();
   });
 
   it('sets a TTL on the daily counter so it expires at UTC midnight', async () => {
     const r = redis();
-    await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 5, 200, NOON_UTC);
-    const key = earnDailyBudgetKey(GUILD_ID, VIEWER_ID, NOON_UTC);
+    await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 5, 200, NOON_UTC);
+    const key = earnDailyBudgetKey(ECONOMY_ID, VIEWER_ID, NOON_UTC);
     const ttlMs = await r.pttl(key);
     expect(ttlMs).toBeGreaterThan(0);
     expect(ttlMs).toBeLessThanOrEqual(12 * 60 * 60 * 1000);
@@ -100,14 +100,14 @@ describe('reserveDailyEarnBudget', () => {
 
   it('still carries a TTL on the clamp path (partial-final-credit / over-cap), never a persistent key', async () => {
     const r = redis();
-    const key = earnDailyBudgetKey(GUILD_ID, VIEWER_ID, NOON_UTC);
+    const key = earnDailyBudgetKey(ECONOMY_ID, VIEWER_ID, NOON_UTC);
 
     // Drive the counter past the cap so the clamp (`SET ... PX`) branch runs.
-    await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 10, 10, NOON_UTC); // exactly hits the cap
+    await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 10, 10, NOON_UTC); // exactly hits the cap
     let ttlMs = await r.pttl(key);
     expect(ttlMs).toBeGreaterThan(0);
 
-    await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 10, 10, NOON_UTC); // over cap -> clamp branch
+    await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 10, 10, NOON_UTC); // over cap -> clamp branch
     ttlMs = await r.pttl(key);
     expect(ttlMs).toBeGreaterThan(0); // never -1 (no TTL) or -2 (missing)
     expect(ttlMs).toBeLessThanOrEqual(12 * 60 * 60 * 1000);
@@ -119,8 +119,8 @@ describe('reserveDailyEarnBudget', () => {
     // MULTI-based implementation: immediately after the call, the key has BOTH a value and a TTL — the two
     // writes that used to be separate round trips are indistinguishable from one atomic operation here.
     const r = redis();
-    const key = earnDailyBudgetKey(GUILD_ID, VIEWER_ID, NOON_UTC);
-    await reserveDailyEarnBudget(r, GUILD_ID, VIEWER_ID, 5, 200, NOON_UTC);
+    const key = earnDailyBudgetKey(ECONOMY_ID, VIEWER_ID, NOON_UTC);
+    await reserveDailyEarnBudget(r, ECONOMY_ID, VIEWER_ID, 5, 200, NOON_UTC);
     expect(await r.get(key)).toBe('5');
     expect(await r.pttl(key)).toBeGreaterThan(0);
   });

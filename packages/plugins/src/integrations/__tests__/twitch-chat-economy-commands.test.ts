@@ -1,34 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { EconomyGetConfigResult, EconomyService } from '../../sdk';
 import { CommandCooldowns } from '../twitch-chat/engine';
 import {
   ECONOMY_COMMAND_NAMES,
   handleEconomyChatCommand,
+  type EconomyChatPort,
   type EconomyCommandHelix,
   type EconomyCommandInput,
 } from '../twitch-chat/economy-commands';
 
-const GUILD_ID = 'guild-1';
 const CHANNEL_ID = 'channel-1';
 const BOT_TWITCH_USER_ID = 'bot-twitch-1';
 
-const CONFIG: EconomyGetConfigResult = {
-  currencyName: 'Agis',
-  currencySymbol: '♦️',
-  twitchEnabled: true,
-  twitchEarnEnabled: false,
-  twitchEarnPerMessage: 5,
-  twitchEarnCooldownSeconds: 60,
-  twitchEarnDailyCap: 200,
-};
-
-function makeEconomyService(overrides: Partial<EconomyService> = {}): EconomyService {
+function makePort(overrides: Partial<EconomyChatPort> = {}): EconomyChatPort {
   return {
-    getConfig: vi.fn(async () => CONFIG),
-    getOrCreateWallet: vi.fn(async () => ({ balance: 0n, lastDailyAt: null })),
+    currencySymbol: '♦️',
+    getOrCreateWallet: vi.fn(async () => ({ balance: 0n })),
     claimDaily: vi.fn(async () => ({ ok: true as const, amount: 50n, streak: 1 })),
     give: vi.fn(async () => ({ ok: true as const })),
-    credit: vi.fn(async () => ({ ok: true as const, newBalance: 0n })),
     getLeaderboard: vi.fn(async () => []),
     ...overrides,
   };
@@ -41,127 +29,98 @@ function makeHelix(overrides: Partial<EconomyCommandHelix> = {}): EconomyCommand
   };
 }
 
-function baseInput(overrides: Partial<EconomyCommandInput> = {}): EconomyCommandInput {
+/** `port` doubles as the lazy loader's result: `null` means "no enabled currency for this channel". */
+function baseInput(
+  overrides: Partial<Omit<EconomyCommandInput, 'loadEconomy'>> & { port?: EconomyChatPort | null } = {},
+): EconomyCommandInput {
+  const { port, ...rest } = overrides;
+  const resolved = port === undefined ? makePort() : port;
   return {
     event: { chatterUserId: 'viewer-1', chatterDisplayName: 'ViewerOne', messageText: '' },
     commandPrefix: '!',
     channelId: CHANNEL_ID,
-    guildId: GUILD_ID,
     customCommandNames: new Set(),
-    economyEnabled: true,
-    config: CONFIG,
-    economyService: makeEconomyService(),
+    loadEconomy: vi.fn(async () => resolved),
     botTwitchUserId: BOT_TWITCH_USER_ID,
     helix: makeHelix(),
     cooldowns: new CommandCooldowns(),
-    ...overrides,
+    ...rest,
   };
 }
 
 describe('handleEconomyChatCommand — fallthrough conditions', () => {
   it('does not handle a message that does not start with the prefix', async () => {
-    const result = await handleEconomyChatCommand(
-      baseInput({ event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: 'balance please' } }),
-    );
-    expect(result).toEqual({ handled: false });
+    const input = baseInput({ event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: 'balance please' } });
+    expect(await handleEconomyChatCommand(input)).toEqual({ handled: false });
+    expect(input.loadEconomy).not.toHaveBeenCalled();
   });
 
-  it('does not handle a non-reserved command name', async () => {
-    const result = await handleEconomyChatCommand(
-      baseInput({ event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: '!hello' } }),
-    );
-    expect(result).toEqual({ handled: false });
+  it('does not handle a non-reserved command name, and never loads the currency for it', async () => {
+    const input = baseInput({ event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: '!hello' } });
+    expect(await handleEconomyChatCommand(input)).toEqual({ handled: false });
+    expect(input.loadEconomy).not.toHaveBeenCalled();
   });
 
   it('does not handle when an enabled custom command already owns the name (custom commands win)', async () => {
-    const economyService = makeEconomyService();
-    const result = await handleEconomyChatCommand(
-      baseInput({
-        event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: '!balance' },
-        customCommandNames: new Set(['balance']),
-        economyService,
-      }),
-    );
-    expect(result).toEqual({ handled: false });
-    expect(economyService.getOrCreateWallet).not.toHaveBeenCalled();
+    const port = makePort();
+    const input = baseInput({
+      event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: '!balance' },
+      customCommandNames: new Set(['balance']),
+      port,
+    });
+    expect(await handleEconomyChatCommand(input)).toEqual({ handled: false });
+    expect(input.loadEconomy).not.toHaveBeenCalled();
+    expect(port.getOrCreateWallet).not.toHaveBeenCalled();
   });
 
-  it('does not handle when the economy plugin is disabled for the guild', async () => {
+  it('does not handle when the channel has no enabled currency (loader returns null)', async () => {
     const result = await handleEconomyChatCommand(
-      baseInput({
-        event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: '!balance' },
-        economyEnabled: false,
-      }),
+      baseInput({ event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: '!balance' }, port: null }),
     );
     expect(result).toEqual({ handled: false });
   });
 
-  it('does not handle when config could not be read', async () => {
+  it('handles an economy command whenever a currency is available (no Discord server involved)', async () => {
     const result = await handleEconomyChatCommand(
-      baseInput({ event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: '!balance' }, config: null }),
-    );
-    expect(result).toEqual({ handled: false });
-  });
-
-  it('does not handle when twitchEnabled is off, even though economy is enabled', async () => {
-    const result = await handleEconomyChatCommand(
-      baseInput({
-        event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: '!balance' },
-        config: { ...CONFIG, twitchEnabled: false },
-      }),
-    );
-    expect(result).toEqual({ handled: false });
-  });
-
-  it('still works when twitchEnabled is true but twitchEarnEnabled is false (commands are independent of earning)', async () => {
-    const result = await handleEconomyChatCommand(
-      baseInput({
-        event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: '!balance' },
-        config: { ...CONFIG, twitchEnabled: true, twitchEarnEnabled: false },
-      }),
+      baseInput({ event: { chatterUserId: 'v', chatterDisplayName: 'V', messageText: '!balance' } }),
     );
     expect(result.handled).toBe(true);
   });
 });
 
 describe.each(['balance', 'bal'] as const)('handleEconomyChatCommand — !%s', (name) => {
-  it('replies with the caller\'s balance', async () => {
-    const economyService = makeEconomyService({
-      getOrCreateWallet: vi.fn(async () => ({ balance: 1234n, lastDailyAt: null })),
-    });
+  it("replies with the caller's balance in the channel's currency", async () => {
+    const port = makePort({ currencySymbol: '💎', getOrCreateWallet: vi.fn(async () => ({ balance: 1234n })) });
     const result = await handleEconomyChatCommand(
       baseInput({
         event: { chatterUserId: 'viewer-1', chatterDisplayName: 'ViewerOne', messageText: `!${name}` },
-        economyService,
+        port,
       }),
     );
-    expect(result).toEqual({ handled: true, reply: '@ViewerOne, you have 1,234 ♦️' });
-    expect(economyService.getOrCreateWallet).toHaveBeenCalledWith(GUILD_ID, 'TWITCH', 'viewer-1', 'ViewerOne');
+    expect(result).toEqual({ handled: true, reply: '@ViewerOne, you have 1,234 💎' });
+    expect(port.getOrCreateWallet).toHaveBeenCalledWith('viewer-1', 'ViewerOne');
   });
 });
 
 describe('handleEconomyChatCommand — !daily', () => {
   it('replies with the claimed amount and streak on success', async () => {
-    const economyService = makeEconomyService({
-      claimDaily: vi.fn(async () => ({ ok: true as const, amount: 75n, streak: 3 })),
-    });
+    const port = makePort({ claimDaily: vi.fn(async () => ({ ok: true as const, amount: 75n, streak: 3 })) });
     const result = await handleEconomyChatCommand(
       baseInput({
         event: { chatterUserId: 'viewer-1', chatterDisplayName: 'ViewerOne', messageText: '!daily' },
-        economyService,
+        port,
       }),
     );
     expect(result).toEqual({ handled: true, reply: '@ViewerOne, you claimed 75 ♦️! Streak: 3 day(s).' });
+    expect(port.claimDaily).toHaveBeenCalledWith('viewer-1', 'ViewerOne');
   });
 
   it('replies with time remaining on cooldown', async () => {
-    const economyService = makeEconomyService({
-      claimDaily: vi.fn(async () => ({ ok: false as const, retryAfterMs: 2 * 60 * 60 * 1000 })),
-    });
+    const port = makePort({ claimDaily: vi.fn(async () => ({ ok: false as const, retryAfterMs: 2 * 60 * 60 * 1000 })) });
     const result = await handleEconomyChatCommand(
       baseInput({
         event: { chatterUserId: 'viewer-1', chatterDisplayName: 'ViewerOne', messageText: '!daily' },
-        economyService,
+        port,
       }),
     );
     expect(result).toEqual({
@@ -252,33 +211,27 @@ describe('handleEconomyChatCommand — !give', () => {
         return { ok: true, value: { id: 'target-1', login: 'someone', displayName: 'Someone' } };
       }),
     });
-    const economyService = makeEconomyService({ give: vi.fn(async () => ({ ok: true as const })) });
-    const result = await handleEconomyChatCommand(
-      baseInput({ event: giveEvent('!give @SomeOne 10'), helix, economyService }),
-    );
+    const port = makePort({ give: vi.fn(async () => ({ ok: true as const })) });
+    const result = await handleEconomyChatCommand(baseInput({ event: giveEvent('!give @SomeOne 10'), helix, port }));
     expect(result).toEqual({ handled: true, reply: '@ViewerOne, gave 10 ♦️ to Someone.' });
   });
 
-  it('rejects giving to the bot account without calling economyService.give', async () => {
+  it('rejects giving to the bot account without calling give', async () => {
     const helix = makeHelix({
       getUserByLogin: vi.fn(async () => ({ ok: true, value: { id: BOT_TWITCH_USER_ID, login: 'pavisiebot', displayName: 'PavisieBot' } })),
     });
-    const economyService = makeEconomyService();
-    const result = await handleEconomyChatCommand(
-      baseInput({ event: giveEvent('!give pavisiebot 10'), helix, economyService }),
-    );
+    const port = makePort();
+    const result = await handleEconomyChatCommand(baseInput({ event: giveEvent('!give pavisiebot 10'), helix, port }));
     expect(result).toEqual({ handled: true, reply: "@ViewerOne, you can't give to the bot." });
-    expect(economyService.give).not.toHaveBeenCalled();
+    expect(port.give).not.toHaveBeenCalled();
   });
 
   it('rejects giving to self, surfaced via the ledger reason', async () => {
     const helix = makeHelix({
       getUserByLogin: vi.fn(async () => ({ ok: true, value: { id: 'viewer-1', login: 'viewerone', displayName: 'ViewerOne' } })),
     });
-    const economyService = makeEconomyService({ give: vi.fn(async () => ({ ok: false, reason: 'self' })) });
-    const result = await handleEconomyChatCommand(
-      baseInput({ event: giveEvent('!give viewerone 10'), helix, economyService }),
-    );
+    const port = makePort({ give: vi.fn(async () => ({ ok: false, reason: 'self' })) });
+    const result = await handleEconomyChatCommand(baseInput({ event: giveEvent('!give viewerone 10'), helix, port }));
     expect(result).toEqual({ handled: true, reply: "@ViewerOne, you can't give to yourself." });
   });
 
@@ -286,35 +239,44 @@ describe('handleEconomyChatCommand — !give', () => {
     ['below_min', 'that amount is too small.'],
     ['above_max', 'that amount is too large.'],
     ['insufficient_balance', "you don't have enough for that."],
+    ['invalid_amount', 'give a valid whole-number amount.'],
   ] as const)('surfaces the %s ledger rejection', async (reason, expectedTail) => {
     const helix = makeHelix({
       getUserByLogin: vi.fn(async () => ({ ok: true, value: { id: 'target-1', login: 'someone', displayName: 'Someone' } })),
     });
-    const economyService = makeEconomyService({ give: vi.fn(async () => ({ ok: false, reason })) });
-    const result = await handleEconomyChatCommand(
-      baseInput({ event: giveEvent('!give someone 10'), helix, economyService }),
-    );
+    const port = makePort({ give: vi.fn(async () => ({ ok: false, reason })) });
+    const result = await handleEconomyChatCommand(baseInput({ event: giveEvent('!give someone 10'), helix, port }));
     expect(result).toEqual({ handled: true, reply: `@ViewerOne, ${expectedTail}` });
   });
 
-  it('refreshes both wallets\' display names and gives on success', async () => {
+  it('an unknown ledger reason gets a fixed generic reply (never the raw reason)', async () => {
     const helix = makeHelix({
       getUserByLogin: vi.fn(async () => ({ ok: true, value: { id: 'target-1', login: 'someone', displayName: 'Someone' } })),
     });
-    const economyService = makeEconomyService({ give: vi.fn(async () => ({ ok: true as const })) });
-    const result = await handleEconomyChatCommand(
-      baseInput({ event: giveEvent('!give someone 25'), helix, economyService }),
-    );
+    const port = makePort({ give: vi.fn(async () => ({ ok: false, reason: 'weird_internal_reason' })) });
+    const result = await handleEconomyChatCommand(baseInput({ event: giveEvent('!give someone 10'), helix, port }));
+    expect(result).toEqual({ handled: true, reply: "@ViewerOne, that didn't work." });
+  });
+
+  it('gives on success, handing both display names to the ledger (which stores them only after validation)', async () => {
+    const helix = makeHelix({
+      getUserByLogin: vi.fn(async () => ({ ok: true, value: { id: 'target-1', login: 'someone', displayName: 'Someone' } })),
+    });
+    const port = makePort({ give: vi.fn(async () => ({ ok: true as const })) });
+    const result = await handleEconomyChatCommand(baseInput({ event: giveEvent('!give someone 25'), helix, port }));
     expect(result).toEqual({ handled: true, reply: '@ViewerOne, gave 25 ♦️ to Someone.' });
-    expect(economyService.getOrCreateWallet).toHaveBeenCalledWith(GUILD_ID, 'TWITCH', 'viewer-1', 'ViewerOne');
-    expect(economyService.getOrCreateWallet).toHaveBeenCalledWith(GUILD_ID, 'TWITCH', 'target-1', 'Someone');
-    expect(economyService.give).toHaveBeenCalledWith(GUILD_ID, 'viewer-1', 'target-1', 25, 'TWITCH');
+    expect(port.give).toHaveBeenCalledWith('viewer-1', 'target-1', 25, {
+      fromDisplayName: 'ViewerOne',
+      toDisplayName: 'Someone',
+    });
+    // The handler itself never pre-creates wallets (no bystander wallet on a rejected give).
+    expect(port.getOrCreateWallet).not.toHaveBeenCalled();
   });
 });
 
 describe('handleEconomyChatCommand — !top', () => {
   it('replies with a one-line ranking', async () => {
-    const economyService = makeEconomyService({
+    const port = makePort({
       getLeaderboard: vi.fn(async () => [
         { displayName: 'Alice', earned: 200n },
         { displayName: 'Bob', earned: 100n },
@@ -323,21 +285,22 @@ describe('handleEconomyChatCommand — !top', () => {
     const result = await handleEconomyChatCommand(
       baseInput({
         event: { chatterUserId: 'viewer-1', chatterDisplayName: 'ViewerOne', messageText: '!top' },
-        economyService,
+        port,
       }),
     );
     expect(result).toEqual({
       handled: true,
       reply: 'Top Twitch earners: 1. Alice (200 ♦️), 2. Bob (100 ♦️)',
     });
+    expect(port.getLeaderboard).toHaveBeenCalledWith(5);
   });
 
   it('replies gracefully when no one has earned anything', async () => {
-    const economyService = makeEconomyService({ getLeaderboard: vi.fn(async () => []) });
+    const port = makePort({ getLeaderboard: vi.fn(async () => []) });
     const result = await handleEconomyChatCommand(
       baseInput({
         event: { chatterUserId: 'viewer-1', chatterDisplayName: 'ViewerOne', messageText: '!top' },
-        economyService,
+        port,
       }),
     );
     expect(result).toEqual({ handled: true, reply: 'No one has earned anything from Twitch chat yet.' });

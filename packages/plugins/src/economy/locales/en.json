@@ -6,6 +6,7 @@
   "leaderboardTitle": "Global Leaderboard (All Platforms)",
   "leaderboardDiscordTitle": "Discord Leaderboard (Lifetime Earned)",
   "leaderboardTwitchTitle": "Twitch Leaderboard (Lifetime Earned)",
+  "leaderboardTwitchNone": "No Twitch channel linked to this server has a currency switched on yet. A streamer turns theirs on at pavisie.com/creator.",
   "configTitle": "Economy settings",
   "give": {
     "self": "You can't give to yourself.",
