@@ -252,7 +252,7 @@ describe('TwitchChatManager reconcile — reward subscriptions (independent of c
     expect(chatUpdate).toBeDefined();
 
     const scopeErrorUpdate = updates.find(
-      (u) => typeof u.data.lastError === 'string' && /re-link/i.test(u.data.lastError as string),
+      (u) => typeof u.data.lastError === 'string' && /authorize channel points again/i.test(u.data.lastError as string),
     );
     expect(scopeErrorUpdate).toBeDefined();
     expect(scopeErrorUpdate?.data.lastError).toMatch(/channel:read:redemptions/);

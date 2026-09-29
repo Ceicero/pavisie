@@ -231,12 +231,8 @@ export async function completeDiscordCreatorConnect(
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Link / unlink (shared with the Discord dashboard's own "remove the Twitch channel" action)
+// Link / unlink (unlink is shared with the Discord dashboard's own "Unlink" action)
 // ---------------------------------------------------------------------------------------------------------------
-
-/** The plugin that owns the Twitch chat bot; while a server is linked, the bot only runs for the channel while this
- * plugin is enabled in that server (`TwitchChatManager.computeDesiredChannels`). */
-const TWITCH_CHAT_PLUGIN_ID = 'integrations' as const;
 
 export function alreadyLinkedElsewhereError(): AppError {
   return new AppError(
@@ -258,13 +254,13 @@ const NO_BRIDGE_DATA = {
 /**
  * Links the creator's channel to a Discord server they just proved they manage. The CALLER has already checked
  * that `guildId` is in the creator's stashed candidate list; this re-checks bot presence, refuses a different
- * already-linked server, makes sure the server's Integrations plugin is on, and records who linked it.
+ * already-linked server, and records who linked it.
  *
- * Integrations plugin: the chat bot only runs for a server-linked channel while that plugin is enabled in the server
- * (the Discord bridge and the Discord reward posts live in it too), and it is OFF by default. A streamer who links a
- * server would otherwise see their working chat bot silently stop, so linking turns the plugin on (through the normal
- * `GuildConfigStore.setEnabled`, which writes its own `plugin.enable` audit entry) when the linker — who has just
- * proved Manage Server there — did not have it on. Unlinking does NOT turn it back off (the server may use it).
+ * Integrations plugin: linking deliberately does NOT touch the server's plugin settings (creator-dashboard phase 4;
+ * before it, linking switched the plugin on because the chat bot stopped whenever it was off). The chat bot belongs to
+ * the streamer and no longer depends on it. Only the features that act inside the server — the Discord bridge and the
+ * Discord reward posts — still need the server's Integrations plugin on; a server admin turns that on themselves, and
+ * the creator dashboard says so while it is off (`integrationsEnabled` in the status).
  *
  * Idempotent per server: linking the SAME server again refreshes who/when and re-mirrors the child rows (this is also
  * what repairs a link whose child-row mirroring was interrupted). Not transactional — the channel row (the source
@@ -279,12 +275,6 @@ export async function linkChannelToGuild(
 
   const guild = await app.prisma.guild.findUnique({ where: { id: guildId } });
   if (!guild || !guild.botPresent) throw new NotFoundError('Pavisie is not in this server.');
-
-  let integrationsEnabledByLink = false;
-  if (!(await app.configStore.isEnabled(guildId, TWITCH_CHAT_PLUGIN_ID))) {
-    await app.configStore.setEnabled(guildId, TWITCH_CHAT_PLUGIN_ID, true, { id: discordUserId, source: 'dashboard' });
-    integrationsEnabledByLink = true;
-  }
 
   const alreadyLinked = channel.guildId === guildId;
   const updated = await app.prisma.twitchChatChannel.update({
@@ -313,7 +303,6 @@ export async function linkChannelToGuild(
     after: {
       broadcasterLogin: channel.broadcasterLogin,
       linkedFrom: 'creator-dashboard',
-      integrationsEnabledByLink,
     },
   });
 
@@ -323,9 +312,9 @@ export async function linkChannelToGuild(
 
 /**
  * Unlinks the Discord server from a channel (the channel and everything guild-independent stay: commands, timers,
- * currency, channel-point rewards, overlay). Used by the creator dashboard's Disconnect and by the Discord dashboard
- * when it is asked to remove a channel whose link the creator made themselves (the streamer's channel is not the
- * server admin's to delete). What happens, in an order that leaves the channel row — the marker — for last, so a
+ * currency, channel-point rewards, overlay). Used by the creator dashboard's Disconnect and by the Discord dashboard's
+ * Unlink (`routes/twitch-chat.ts`: a server admin can always disconnect THEIR server, never delete the streamer's
+ * channel). What happens, in an order that leaves the channel row — the marker — for last, so a
  * failed attempt can simply be retried:
  *
  * - the bridge webhook is deleted from Discord (best-effort) and the bridge is switched off and cleared;

@@ -13,7 +13,7 @@ covering moderation, automod, the Enforcer dispute/ledger workflow, logging, tic
 onboarding/verification, engagement (leveling/reputation/starboard/temp-voice), community (polls/
 giveaways/suggestions/announcements/reminders/events), Steam-linked game-stats leaderboards, a
 virtual-currency economy, utility commands, integrations (OAuth connections + inbound/outbound
-webhooks + alert connectors + a Twitch chat bot with custom commands/timers), and an optional AI
+webhooks + alert connectors; the Twitch chat bot, channel points and currency run for streamers and are managed on the creator dashboard), and an optional AI
 assistant. The dashboard covers every plugin with a settings page, the marketplace enable/disable
 grid, a JSON-schema-driven config drawer, audit log viewer, and privacy controls (export/delete/
 retention). The public website covers the full command reference (generated from the plugin
@@ -58,7 +58,11 @@ set` (and the equivalent dashboard action) changes a member's stored XP/level im
   operator's actual review before it stops being a template, which is outside engineering scope.
 - **Twitch chat bot is live.** The `integrations` plugin joins a streamer's Twitch chat (EventSub
   WebSocket + Helix send, custom `!commands`/timers, built-in `!commands`/`!uptime`/`!title`) once a
-  streamer links their channel from the dashboard. The one-time authorization of the platform's dedicated
+  streamer connects their channel from the creator dashboard (`pavisie.com/creator`, no Discord server needed). Since
+  creator-dashboard phase 4 the Discord side of `integrations` is notifications/alerts only: there is no `/twitch`
+  command and no Twitch chat tab on the Discord dashboard (which keeps a read-only "linked channel" notice with an Unlink
+  button). The bot keeps running whatever the linked server's Integrations plugin state; only the Discord bridge and
+  Discord reward posts need that plugin on. The one-time authorization of the platform's dedicated
   Twitch bot account is done on the hosted deployment; self-hosters do it once via
   `POST /owner/twitch-bot/connect`. Until that step, the feature honestly reports itself as not configured
   rather than failing silently. No Twitch-side moderation actions (ban/timeout/delete) ship in v1 —
@@ -66,9 +70,8 @@ set` (and the equivalent dashboard action) changes a member's stored XP/level im
 - **Twitch channel-point rewards are live.** Viewers redeeming a custom Twitch channel-point reward triggers
   one of four actions: play a sound on the streamer's OBS overlay, speak text via TTS (using the channel's own
   OpenAI key, else the linked guild's own key, or unavailable if neither is configured), post to Twitch chat, or
-  post to a Discord channel. Configured per-channel from `/twitch reward add|remove|list`, the Discord dashboard's
-  "Rewards" tab, or — with no Discord server at all — the creator dashboard's "Channel points" section (everything
-  but the Discord action, which appears once a Discord server is connected from the creator dashboard). The streamer's broadcaster token (`channel:read:redemptions`) is kept per channel; a
+  post to a Discord channel. Configured per-channel from the creator dashboard's "Channel points" section (no Discord server needed
+  for everything but the Discord action, which appears once a Discord server is connected there). The streamer's broadcaster token (`channel:read:redemptions`) is kept per channel; a
   channel without that permission (never granted, or revoked) must authorize again — the reconcile loop reports this
   plainly rather than silently failing. TTS synthesis is server-side (OBS's
   embedded browser has no voices), and sound URLs are validated by the existing SSRF guard at write time. Viewer

@@ -276,7 +276,7 @@ export interface EnforcerService {
   repairChannels(guildId: string): Promise<{ muteApplied: number; muteFailed: number }>;
 }
 
-/** Snapshot of the Twitch chat bot's EventSub WebSocket connection, for `/twitch status` and the plugin's `health()`. */
+/** Snapshot of the Twitch chat bot's EventSub WebSocket connection, for the plugin's `health()`. */
 export interface TwitchChatRuntimeStatus {
   /** False when TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET are unset or no `TwitchBotIdentity` row exists — everything else no-ops. */
   enabled: boolean;

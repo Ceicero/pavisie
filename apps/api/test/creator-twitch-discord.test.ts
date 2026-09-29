@@ -335,7 +335,7 @@ describe('GET /auth/discord/callback — creator branch', () => {
 });
 
 describe('POST /creator/twitch/discord/link', () => {
-  it('links a candidate server: records who, mirrors child rows, turns the Integrations plugin on, audits in that server', async () => {
+  it('links a candidate server: records who, mirrors child rows, audits in that server, and leaves the plugin settings of the server alone', async () => {
     const t = await setup();
     ownChannel(t);
     seedCommand(t.fixture, { id: 'c1', channelId: 'chan-a', name: 'hi' });
@@ -350,7 +350,7 @@ describe('POST /creator/twitch/discord/link', () => {
       linked: true,
       verified: true,
       server: { id: G_OK, name: 'Guild 1' },
-      integrationsEnabled: true,
+      integrationsEnabled: false, // linking does not switch the server's Integrations plugin on (phase 4)
     });
 
     expect(t.fixture.channels.get('chan-a')).toMatchObject({ guildId: G_OK, discordLinkedBy: DISCORD_USER });
@@ -359,12 +359,13 @@ describe('POST /creator/twitch/discord/link', () => {
     expect(t.fixture.timers.get('t1')!.guildId).toBe(G_OK);
     expect(t.fixture.rewards.get('r1')!.guildId).toBe(G_OK);
 
-    const state = [...t.fixture.pluginStates.values()].find((p) => p.guildId === G_OK && p.pluginId === 'integrations');
-    expect(state).toMatchObject({ enabled: true, updatedBy: DISCORD_USER });
+    // Phase 4: the chat bot no longer depends on the server's Integrations plugin, so linking leaves it alone.
+    expect(t.fixture.pluginStates.size).toBe(0);
     const audits = [...t.fixture.auditLogs.values()].filter((a) => a.guildId === G_OK).map((a) => a.action);
-    expect(audits).toContain('plugin.enable');
+    expect(audits).not.toContain('plugin.enable');
     const linkAudit = [...t.fixture.auditLogs.values()].find((a) => a.action === 'integration.twitch_chat.discord.link')!;
     expect(linkAudit).toMatchObject({ guildId: G_OK, actorId: DISCORD_USER, targetId: 'chan-a' });
+    expect(linkAudit.after).toEqual({ broadcasterLogin: expect.any(String), linkedFrom: 'creator-dashboard' });
 
     // One Discord sign-in proves one link: the stash is gone.
     const cands = await t.app.inject({ method: 'GET', url: '/creator/twitch/discord/candidates', headers: t.read });
@@ -372,13 +373,16 @@ describe('POST /creator/twitch/discord/link', () => {
     await t.app.close();
   });
 
-  it('leaves the Integrations plugin alone when the server already has it on', async () => {
+  it('leaves the Integrations plugin exactly as the server admin set it (on stays on, and the status reports it)', async () => {
     const t = await setup();
     ownChannel(t);
     t.fixture.pluginStates.set('ps-x', { id: 'ps-x', guildId: G_OK, pluginId: 'integrations', enabled: true });
     stubDiscord();
     await signIntoDiscord(t);
-    expect((await link(t, G_OK)).statusCode).toBe(200);
+    const res = await link(t, G_OK);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ integrationsEnabled: true });
+    expect(t.fixture.pluginStates.get('ps-x')).toMatchObject({ enabled: true });
     expect([...t.fixture.auditLogs.values()].map((a) => a.action)).not.toContain('plugin.enable');
     await t.app.close();
   });
@@ -543,7 +547,7 @@ describe('GET /creator/twitch/discord — status', () => {
       verified: true,
       server: { id: G_OK, name: 'Guild 1' },
       linkedAt: '2026-09-29T00:00:00.000Z',
-      integrationsEnabled: false, // shown honestly: the chat bot is paused while it is off
+      integrationsEnabled: false, // shown honestly: the bridge and Discord posts are paused while it is off
     });
     await t.app.close();
   });
@@ -557,35 +561,36 @@ describe('GET /creator/twitch/discord — status', () => {
   });
 });
 
-describe('DELETE /creator/twitch/discord/link — unlink', () => {
-  function linkedChannel(t: Setup, extra: Record<string, unknown> = {}) {
-    const row = ownChannel(t, {
-      guildId: G_OK,
-      discordLinkedBy: DISCORD_USER,
-      discordLinkedAt: new Date(),
-      bridgeDiscordChannelId: TEXT_CH,
-      bridgeDiscordToTwitch: true,
-      bridgeTwitchToDiscord: true,
-      bridgeWebhookId: '880000000000000001',
-      bridgeWebhookTokenEnc: encryptSecret('webhook-token'),
-      bridgeLastError: 'x',
-      ...extra,
-    });
-    seedCommand(t.fixture, { id: 'c1', channelId: 'chan-a', guildId: G_OK, name: 'hi' });
-    seedTimer(t.fixture, { id: 't1', channelId: 'chan-a', guildId: G_OK, name: 'tick' });
-    seedReward(t.fixture, { id: 'r-sound', channelId: 'chan-a', guildId: G_OK, rewardTitle: 'Air', action: 'SOUND', soundUrl: 'https://cdn.example.com/a.mp3' });
-    seedReward(t.fixture, {
-      id: 'r-disc',
-      channelId: 'chan-a',
-      guildId: G_OK,
-      rewardTitle: 'Post',
-      action: 'DISCORD',
-      discordChannelId: TEXT_CH,
-      discordTemplate: 'x',
-    });
-    return row;
-  }
+/** A channel linked (and verified) to `G_OK` with a bridge, a webhook credential and one of each child row. */
+function linkedChannel(t: Setup, extra: Record<string, unknown> = {}) {
+  const row = ownChannel(t, {
+    guildId: G_OK,
+    discordLinkedBy: DISCORD_USER,
+    discordLinkedAt: new Date(),
+    bridgeDiscordChannelId: TEXT_CH,
+    bridgeDiscordToTwitch: true,
+    bridgeTwitchToDiscord: true,
+    bridgeWebhookId: '880000000000000001',
+    bridgeWebhookTokenEnc: encryptSecret('webhook-token'),
+    bridgeLastError: 'x',
+    ...extra,
+  });
+  seedCommand(t.fixture, { id: 'c1', channelId: 'chan-a', guildId: G_OK, name: 'hi' });
+  seedTimer(t.fixture, { id: 't1', channelId: 'chan-a', guildId: G_OK, name: 'tick' });
+  seedReward(t.fixture, { id: 'r-sound', channelId: 'chan-a', guildId: G_OK, rewardTitle: 'Air', action: 'SOUND', soundUrl: 'https://cdn.example.com/a.mp3' });
+  seedReward(t.fixture, {
+    id: 'r-disc',
+    channelId: 'chan-a',
+    guildId: G_OK,
+    rewardTitle: 'Post',
+    action: 'DISCORD',
+    discordChannelId: TEXT_CH,
+    discordTemplate: 'x',
+  });
+  return row;
+}
 
+describe('DELETE /creator/twitch/discord/link — unlink', () => {
   it('clears the link and the bridge, deletes the webhook (best-effort), removes DISCORD rewards, keeps everything else, audits in the server', async () => {
     const t = await setup();
     linkedChannel(t);
@@ -656,37 +661,229 @@ describe('DELETE /creator/twitch/discord/link — unlink', () => {
     await t.app.close();
   });
 
-  it('the Discord dashboard "remove channel" on a creator-linked channel only disconnects the server (the streamer keeps the channel)', async () => {
-    const t = await setup();
-    linkedChannel(t);
-    stubDiscord();
-    const admin = await loginAs(t.app, t.redis, { userId: DISCORD_USER });
-    await seedUserGuilds(t.redis, DISCORD_USER, [{ id: G_OK, owner: false, permissions: '32' }]);
-    const res = await t.app.inject({
-      method: 'DELETE',
-      url: `/guilds/${G_OK}/integrations/twitch-chat/channels/chan-a`,
-      headers: { cookie: admin.cookieHeader, 'x-csrf-token': admin.session.csrfToken },
+});
+
+// Creator dashboard phase 4: the Discord dashboard keeps only a read-only "which channel is linked" notice and the
+// server admin's right to unlink THEIR server (never to delete the streamer's channel).
+describe('Discord dashboard: linked-channel notice and unlink (/guilds/:guildId/integrations/twitch-chat)', () => {
+  const NOTICE = `/guilds/${G_OK}/integrations/twitch-chat`;
+
+  async function asAdmin(
+    t: Setup,
+    opts: { userId?: string; guilds?: { id: string; owner: boolean; permissions: string }[] } = {},
+  ) {
+    const userId = opts.userId ?? DISCORD_USER;
+    const admin = await loginAs(t.app, t.redis, { userId });
+    await seedUserGuilds(t.redis, userId, opts.guilds ?? [{ id: G_OK, owner: false, permissions: '32' }]);
+    return { cookie: admin.cookieHeader, csrf: admin.session.csrfToken };
+  }
+
+  describe('GET (read-only notice)', () => {
+    it('401 without a Discord session (a creator session does not count); 403 without manage access to the guild', async () => {
+      const t = await setup();
+      linkedChannel(t);
+      expect((await t.app.inject({ method: 'GET', url: NOTICE })).statusCode).toBe(401);
+      expect((await t.app.inject({ method: 'GET', url: NOTICE, headers: t.read })).statusCode).toBe(401);
+      const member = await asAdmin(t, {
+        userId: '850000000000000009',
+        guilds: [{ id: G_OK, owner: false, permissions: '0' }],
+      });
+      expect((await t.app.inject({ method: 'GET', url: NOTICE, headers: { cookie: member.cookie } })).statusCode).toBe(403);
+      await t.app.close();
     });
-    expect(res.statusCode).toBe(204);
-    expect(t.fixture.channels.get('chan-a')).toMatchObject({ guildId: null, discordLinkedBy: null });
-    expect(t.fixture.commands.has('c1')).toBe(true);
-    expect([...t.fixture.auditLogs.values()].map((a) => a.action)).toContain('integration.twitch_chat.discord.unlink');
-    await t.app.close();
+
+    it('is empty when no Twitch channel is linked to this server', async () => {
+      const t = await setup();
+      ownChannel(t); // guildless: not this server's
+      const admin = await asAdmin(t);
+      const res = await t.app.inject({ method: 'GET', url: NOTICE, headers: { cookie: admin.cookie } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ channels: [] });
+      await t.app.close();
+    });
+
+    it('lists only the channels of THIS server, with just login and link/bot status: never ids, tokens, bridge or overlay fields', async () => {
+      const t = await setup();
+      linkedChannel(t, {
+        overlayTokenEnc: encryptSecret('overlay-secret'),
+        ttsOpenAiKeyEnc: encryptSecret('sk-secret'),
+        broadcasterLogin: 'linkedstreamer',
+      });
+      seedChannel(t.fixture, {
+        id: 'chan-other',
+        broadcasterUserId: CREATOR_B,
+        guildId: G_OTHER,
+        broadcasterLogin: 'elsewhere',
+      });
+      const admin = await asAdmin(t);
+      const res = await t.app.inject({ method: 'GET', url: NOTICE, headers: { cookie: admin.cookie } });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.channels).toHaveLength(1);
+      expect(body.channels[0]).toEqual({
+        id: 'chan-a',
+        broadcasterLogin: 'linkedstreamer',
+        linkedByStreamer: true,
+        linkedAt: expect.any(String),
+        enabled: true,
+        status: expect.stringMatching(/^(connected|disconnected|error|pending)$/),
+      });
+      for (const secret of ['overlay-secret', 'sk-secret', CREATOR_A, DISCORD_USER, 'elsewhere', 'bridge', 'webhook', 'Enc']) {
+        expect(res.body).not.toContain(secret);
+      }
+      await t.app.close();
+    });
   });
 
-  it('the Discord dashboard still deletes a channel that was linked from the Discord dashboard (original behaviour)', async () => {
-    const t = await setup();
-    ownChannel(t, { guildId: G_OK }); // discordLinkedBy null
-    const admin = await loginAs(t.app, t.redis, { userId: DISCORD_USER });
-    await seedUserGuilds(t.redis, DISCORD_USER, [{ id: G_OK, owner: false, permissions: '32' }]);
-    const res = await t.app.inject({
-      method: 'DELETE',
-      url: `/guilds/${G_OK}/integrations/twitch-chat/channels/chan-a`,
-      headers: { cookie: admin.cookieHeader, 'x-csrf-token': admin.session.csrfToken },
+  describe('DELETE .../channels/:channelId (unlink this server)', () => {
+    const del = (t: Setup, channelId: string, headers: Record<string, string>, guildId = G_OK) =>
+      t.app.inject({
+        method: 'DELETE',
+        url: `/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}`,
+        headers,
+      });
+
+    it('401 without a session; 403 without manage access; 403 without or with a wrong CSRF token or origin; nothing changes', async () => {
+      const t = await setup();
+      linkedChannel(t);
+      stubDiscord();
+      expect((await del(t, 'chan-a', {})).statusCode).toBe(401);
+
+      const member = await asAdmin(t, {
+        userId: '850000000000000009',
+        guilds: [{ id: G_OK, owner: false, permissions: '0' }],
+      });
+      expect((await del(t, 'chan-a', { cookie: member.cookie, 'x-csrf-token': member.csrf })).statusCode).toBe(403);
+
+      const admin = await asAdmin(t);
+      expect((await del(t, 'chan-a', { cookie: admin.cookie })).statusCode).toBe(403); // no CSRF token
+      expect((await del(t, 'chan-a', { cookie: admin.cookie, 'x-csrf-token': 'not-the-token' })).statusCode).toBe(403);
+      // The creator's CSRF token is not the Discord session's, so it does not satisfy this route either.
+      expect(
+        (await del(t, 'chan-a', { cookie: admin.cookie, 'x-csrf-token': t.creator.session.csrfToken })).statusCode,
+      ).toBe(403);
+      // A cross-site Origin is refused even with the right token.
+      expect(
+        (await del(t, 'chan-a', { cookie: admin.cookie, 'x-csrf-token': admin.csrf, origin: 'https://evil.example' }))
+          .statusCode,
+      ).toBe(403);
+
+      expect(t.fixture.channels.get('chan-a')).toMatchObject({ guildId: G_OK, discordLinkedBy: DISCORD_USER });
+      expect(t.fixture.auditLogs.size).toBe(0);
+      await t.app.close();
     });
-    expect(res.statusCode).toBe(204);
-    expect(t.fixture.channels.has('chan-a')).toBe(false);
-    await t.app.close();
+
+    it('404 for a channel of another server or a guildless one (never touched); manage access elsewhere does not reach it', async () => {
+      const t = await setup();
+      linkedChannel(t);
+      seedChannel(t.fixture, { id: 'chan-other', broadcasterUserId: CREATOR_B, guildId: G_OTHER });
+      seedChannel(t.fixture, { id: 'chan-free', broadcasterUserId: '840000000003' });
+      stubDiscord();
+      const admin = await asAdmin(t);
+      const headers = { cookie: admin.cookie, 'x-csrf-token': admin.csrf };
+      expect((await del(t, 'chan-other', headers)).statusCode).toBe(404);
+      expect((await del(t, 'chan-free', headers)).statusCode).toBe(404);
+      expect((await del(t, 'no-such-channel', headers)).statusCode).toBe(404);
+      expect(t.fixture.channels.get('chan-other')!.guildId).toBe(G_OTHER);
+
+      const otherAdmin = await asAdmin(t, {
+        userId: '850000000000000010',
+        guilds: [{ id: G_OTHER, owner: false, permissions: '32' }],
+      });
+      expect((await del(t, 'chan-a', { cookie: otherAdmin.cookie, 'x-csrf-token': otherAdmin.csrf })).statusCode).toBe(403);
+      expect(t.fixture.channels.get('chan-a')!.guildId).toBe(G_OK);
+      await t.app.close();
+    });
+
+    it('unlinks exactly like the creator-side disconnect: the streamer keeps the channel; bridge and Discord rewards go; the audit names the Discord admin', async () => {
+      const t = await setup();
+      linkedChannel(t);
+      const calls = stubDiscord();
+      const admin = await asAdmin(t);
+
+      const res = await del(t, 'chan-a', { cookie: admin.cookie, 'x-csrf-token': admin.csrf });
+      expect(res.statusCode).toBe(204);
+
+      expect(t.fixture.channels.get('chan-a')).toMatchObject({
+        guildId: null,
+        discordLinkedBy: null,
+        discordLinkedAt: null,
+        bridgeDiscordChannelId: null,
+        bridgeDiscordToTwitch: false,
+        bridgeTwitchToDiscord: false,
+        bridgeWebhookId: null,
+        bridgeWebhookTokenEnc: null,
+      });
+      expect(calls.some((c) => c.method === 'DELETE' && c.url.startsWith('https://discord.com/api/v10/webhooks/'))).toBe(
+        true,
+      );
+      expect(t.fixture.rewards.has('r-disc')).toBe(false);
+      expect(t.fixture.rewards.get('r-sound')).toMatchObject({ guildId: null });
+      expect(t.fixture.commands.get('c1')!.guildId).toBeNull();
+      expect(t.fixture.timers.get('t1')!.guildId).toBeNull();
+
+      const audit = [...t.fixture.auditLogs.values()].find((a) => a.action === 'integration.twitch_chat.discord.unlink')!;
+      expect(audit).toMatchObject({ guildId: G_OK, actorId: DISCORD_USER, targetId: 'chan-a' });
+      expect(audit.after).toMatchObject({ unlinkedBy: 'discord', deletedDiscordRewards: 1 });
+
+      // A second unlink has nothing left to disconnect from this server.
+      expect((await del(t, 'chan-a', { cookie: admin.cookie, 'x-csrf-token': admin.csrf })).statusCode).toBe(404);
+      await t.app.close();
+    });
+
+    it('also unlinks a link a server admin made earlier from the Discord dashboard: it no longer DELETES the channel', async () => {
+      const t = await setup();
+      ownChannel(t, { guildId: G_OK }); // discordLinkedBy null: the old, admin-made link
+      seedCommand(t.fixture, { id: 'c1', channelId: 'chan-a', name: 'hi', guildId: G_OK });
+      const admin = await asAdmin(t);
+      const res = await del(t, 'chan-a', { cookie: admin.cookie, 'x-csrf-token': admin.csrf });
+      expect(res.statusCode).toBe(204);
+      expect(t.fixture.channels.get('chan-a')).toMatchObject({ guildId: null, discordLinkedBy: null });
+      expect(t.fixture.commands.get('c1')!.guildId).toBeNull();
+      expect([...t.fixture.auditLogs.values()].map((a) => a.action)).toContain('integration.twitch_chat.discord.unlink');
+      await t.app.close();
+    });
+
+    it('nudges the bot to reconcile', async () => {
+      const t = await setup();
+      linkedChannel(t);
+      stubDiscord();
+      const admin = await asAdmin(t);
+      await del(t, 'chan-a', { cookie: admin.cookie, 'x-csrf-token': admin.csrf });
+      expect(
+        t.queues.calls.some(
+          (c) => c.queue === 'bot-actions' && (c.data as { type: string }).type === 'twitchChat.reconcile',
+        ),
+      ).toBe(true);
+      await t.app.close();
+    });
+  });
+
+  describe('the removed guild-side chat routes are gone', () => {
+    it.each([
+      ['POST', `/guilds/${G_OK}/integrations/twitch-chat/connect`],
+      ['PATCH', `/guilds/${G_OK}/integrations/twitch-chat/channels/chan-a`],
+      ['GET', `/guilds/${G_OK}/integrations/twitch-chat/channels/chan-a/commands`],
+      ['GET', `/guilds/${G_OK}/integrations/twitch-chat/channels/chan-a/timers`],
+      ['GET', `/guilds/${G_OK}/integrations/twitch-chat/channels/chan-a/rewards`],
+      ['GET', `/guilds/${G_OK}/integrations/twitch-chat/channels/chan-a/overlay`],
+      ['POST', `/guilds/${G_OK}/integrations/twitch-chat/channels/chan-a/overlay/regenerate`],
+    ])('%s %s is a 404', async (method, url) => {
+      const t = await setup();
+      linkedChannel(t);
+      const admin = await asAdmin(t);
+      const res = await t.app.inject({
+        method: method as 'GET',
+        url,
+        headers: { cookie: admin.cookie, 'x-csrf-token': admin.csrf },
+        ...(method === 'GET' ? {} : { payload: {} }),
+      });
+      // 404 for a path that no longer exists; the one exception is `POST .../connect`, which the still-generic
+      // `/:guildId/integrations/:provider/connect` route rejects (400) because `twitch-chat` is not a provider.
+      expect([400, 404]).toContain(res.statusCode);
+      expect(res.json().url).toBeUndefined();
+      await t.app.close();
+    });
   });
 });
 

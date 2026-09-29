@@ -1,7 +1,6 @@
-// Small pieces shared by the two route trees that manage Twitch chat commands/timers/rewards: the guild-scoped
-// Discord dashboard routes (`routes/twitch-chat.ts`) and the creator dashboard routes (`routes/creator-twitch*.ts`,
-// ARCHITECTURE.md §19e). Kept here so the two can never drift apart on error codes, level mapping or the reward
-// validation rules (SSRF guard, per-action field spec).
+// Small pieces shared by the creator dashboard's Twitch chat routes (`routes/creator-twitch*.ts`, ARCHITECTURE.md
+// §19e) that manage commands, timers and rewards: error codes, level mapping and the reward validation rules (SSRF guard,
+// per-action field spec). (Before phase 4 the guild-scoped Discord dashboard routes shared them too.)
 import { AppError, SsrfError, ValidationError, assertPublicHttpUrl } from '@pavisie/core';
 import {
   Prisma,

@@ -1,9 +1,7 @@
-// Shared zod input schemas for the Twitch chat bot (routes/twitch-chat.ts). Kept in this small module
-// rather than inline in the route file — unlike the rest of `routes/integrations.ts` (which declares its
-// zod schemas inline per-route) — because the Discord `/twitch` command (packages/plugins/src/integrations/
-// commands/twitch.ts) must validate identically to the API and can't import from `apps/api`; keeping these
-// isolated here at least gives the routes a single place to import from, and documents the exact rules the
-// command implementation has to mirror by hand.
+// Shared zod input schemas for the Twitch chat bot, used by the creator dashboard's routes
+// (routes/creator-twitch*.ts). Kept in this small module rather than inline in the route files — unlike the rest of
+// `routes/integrations.ts` (which declares its zod schemas inline per-route) — so the chat-bot, timer and reward
+// routes validate identically from one place.
 import { z } from 'zod';
 import {
   TWITCH_CHAT_LEVELS,
@@ -208,5 +206,5 @@ export const updateTwitchChatRewardSchema = z
   })
   .superRefine((data, ctx) => validateRewardActionFields(data, ctx, { partial: true }));
 
-/** Per-channel reward cap — mirrored in the dashboard table and `commands/twitch.ts` (channel-points spec v1). */
+/** Per-channel reward cap — mirrored in the creator dashboard's rewards table (channel-points spec v1). */
 export const TWITCH_CHAT_MAX_REWARDS_PER_CHANNEL = 25;

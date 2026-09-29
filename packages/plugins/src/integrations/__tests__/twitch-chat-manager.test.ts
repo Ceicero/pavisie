@@ -330,7 +330,7 @@ describe('TwitchChatManager idle states', () => {
 });
 
 describe('TwitchChatManager reconcile (subscription diffing)', () => {
-  it('subscribes only channels whose guild has the integrations plugin enabled, and updates the row to CONNECTED', async () => {
+  it('subscribes every enabled channel whatever the integrations plugin state of its guild, and updates the row to CONNECTED', async () => {
     const channelEnabledGuild = makeChannelRow({ id: 'channel-a', guildId: 'guild-1', broadcasterUserId: 'b-1' });
     const channelDisabledGuild = makeChannelRow({ id: 'channel-b', guildId: 'guild-2', broadcasterUserId: 'b-2' });
     const updates: { where: { id: string }; data: Record<string, unknown> }[] = [];
@@ -358,9 +358,10 @@ describe('TwitchChatManager reconcile (subscription diffing)', () => {
     ws.emit('session_welcome', { session: { id: 'sess-1', status: 'connected', keepalive_timeout_seconds: 10, reconnect_url: null } });
     await flush();
 
-    expect(mocks.createChatSubscription).toHaveBeenCalledTimes(1);
+    expect(mocks.createChatSubscription).toHaveBeenCalledTimes(2);
     expect(mocks.createChatSubscription).toHaveBeenCalledWith(ctx, 'sess-1', 'b-1');
-    expect(manager.connectedChannelIds()).toEqual(['channel-a']);
+    expect(mocks.createChatSubscription).toHaveBeenCalledWith(ctx, 'sess-1', 'b-2');
+    expect(manager.connectedChannelIds().sort()).toEqual(['channel-a', 'channel-b']);
 
     const connectedUpdate = updates.find((u) => u.where.id === 'channel-a');
     expect(connectedUpdate?.data.status).toBe('CONNECTED');

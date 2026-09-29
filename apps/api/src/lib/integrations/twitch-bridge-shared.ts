@@ -1,7 +1,7 @@
-// The Discord <-> Twitch chat bridge's validation and webhook tidying, shared by the two route trees that configure
-// it: the guild-scoped Discord dashboard (`routes/twitch-chat.ts`) and the creator dashboard
-// (`routes/creator-twitch-discord.ts`, ARCHITECTURE.md §19e). One implementation so the two can never drift apart on
-// what a valid bridge is.
+// The Discord <-> Twitch chat bridge's validation and webhook tidying, used by the creator dashboard's bridge route
+// (`routes/creator-twitch-discord.ts`, ARCHITECTURE.md §19e) and by the unlink flow (`lib/creator/discord-link.ts`,
+// which the Discord dashboard's Unlink also uses). Since phase 4 the bridge is configured ONLY from the creator
+// dashboard.
 import type { TwitchChatChannel } from '@pavisie/database';
 import { ValidationError, decryptSecret } from '@pavisie/core';
 import type { ZodFastifyInstance } from '../http';

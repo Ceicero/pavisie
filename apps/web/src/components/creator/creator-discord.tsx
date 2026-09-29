@@ -195,7 +195,7 @@ function PickServerCard({ onDone }: { onDone: () => void }) {
     setLinkingId(server.id);
     link.mutate(server.id, {
       onSuccess: () => {
-        toast({ title: `Connected ${server.name}`, description: 'Pavisie has been turned on for chat there.', variant: 'success' });
+        toast({ title: `Connected ${server.name}`, description: 'You can now set up the chat bridge and Discord reward posts for it below.', variant: 'success' });
         onDone();
       },
       onError: (err) => {
@@ -317,10 +317,11 @@ function LinkedCard({ status }: { status: CreatorDiscordStatusDto }) {
 
         {!status.integrationsEnabled ? (
           <Alert variant="warning">
-            <AlertTitle>Your chat bot is paused</AlertTitle>
+            <AlertTitle>The bridge and Discord posts are paused</AlertTitle>
             <AlertDescription>
-              Pavisie&apos;s Integrations plugin is off in this Discord server, and the chat bot only runs while it is on.
-              Turn it back on from the server&apos;s Pavisie dashboard, or disconnect the server.
+              Pavisie&apos;s Integrations plugin is off in this Discord server, so the chat bridge and channel-point
+              rewards that post to Discord don&apos;t run. A server admin can turn it on from the server&apos;s Pavisie
+              dashboard. Your chat bot, commands, currency and other rewards are not affected.
             </AlertDescription>
           </Alert>
         ) : null}

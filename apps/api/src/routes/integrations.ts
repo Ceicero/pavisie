@@ -67,11 +67,11 @@ function webhookPathFor(endpointId: string): string {
   return `/webhooks/generic/${endpointId}`;
 }
 
-/** True when `config` is the shape the twitch-chat OAuth callback stamps onto a connection (`{ kind: 'chat' }`
- * — see `oauth-integrations.ts`). Such a connection belongs entirely to `TwitchChatChannel`/`routes/twitch-chat.ts`
- * and must never surface as a generic connection or an alert watch — it carries none of the fields either UI
- * expects, and disconnecting/deleting one out from under its `TwitchChatChannel` silently breaks the chat
- * integration (the channel keeps its `connectionId`, now pointing at a dead connection). */
+/** True when `config` is the shape the (since removed, creator-dashboard phase 4) Discord-side Twitch chat connect
+ * stamped onto a connection (`{ kind: 'chat' }`). Rows made by it still exist. Such a connection belongs to a
+ * `TwitchChatChannel` and must never surface as a generic connection or an alert watch — it carries none of the
+ * fields either UI expects, and disconnecting/deleting one out from under its `TwitchChatChannel` silently breaks the
+ * chat integration (the channel keeps its `connectionId`, now pointing at a dead connection). */
 function isChatKindConnection(config: unknown): boolean {
   return Boolean(config && typeof config === 'object' && (config as Record<string, unknown>).kind === 'chat');
 }
@@ -297,9 +297,9 @@ export default async function integrationsRoutes(app: ZodFastifyInstance): Promi
       const existing = await app.prisma.integrationConnection.findFirst({
         where: { id: connectionId, guildId, deletedAt: null },
       });
-      // A chat-kind connection isn't a generic connection at all — it belongs to `routes/twitch-chat.ts`'s
-      // channel DELETE, which also retires the connection. Treat it as not-found here rather than letting a
-      // generic disconnect tear its token out from under the still-linked `TwitchChatChannel`.
+      // A chat-kind connection isn't a generic connection at all — it belongs to a `TwitchChatChannel` (managed
+      // from the creator dashboard). Treat it as not-found here rather than letting a generic disconnect tear its
+      // state out from under the still-linked channel.
       if (!existing || isChatKindConnection(existing.config)) {
         throw new NotFoundError('Integration connection not found.');
       }

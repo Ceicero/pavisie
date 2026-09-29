@@ -40,8 +40,8 @@ import { getGameStats, getPlayerSummary, resolveSteamId } from '../steam';
 
 const LEADERBOARD_PAGE_SIZE = 10;
 
-/** True for Prisma's unique-constraint-violation error (P2002) — same check as
- *  `integrations/commands/twitch.ts`'s `isUniqueViolation`. Used here for the `@@unique([guildId, provider,
+/** True for Prisma's unique-constraint-violation error (P2002) — same check the
+ *  integrations plugin uses for its own unique keys. Used here for the `@@unique([guildId, provider,
  *  externalId])` race: two members linking the same Steam account at almost the same moment can both pass the
  *  proactive `findFirst` duplicate check below before either upsert commits. */
 function isUniqueViolation(err: unknown): boolean {

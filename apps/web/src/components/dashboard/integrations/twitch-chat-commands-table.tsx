@@ -34,7 +34,7 @@ export const TWITCH_CHAT_LEVEL_LABEL: Record<TwitchChatLevelId, string> = {
 };
 
 export interface TwitchChatCommandsTableProps {
-  /** Where the commands are read/written — the Discord dashboard's guild routes or the creator dashboard's own. */
+  /** Where the commands are read/written — the creator dashboard's routes. */
   backend: TwitchChatCommandsBackend;
   channelId: string;
   /** This channel's current command prefix, only for the empty-state built-ins hint (e.g. "!commands"). */

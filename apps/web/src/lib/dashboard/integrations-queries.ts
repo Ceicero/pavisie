@@ -3,25 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Paginated } from '@pavisie/types';
 import type {
-  ConnectOAuthResponseDto,
   CreateAlertConnectionInput,
   CreateOutboundEndpointInput,
-  CreateTwitchChatCommandInput,
-  CreateTwitchChatRewardInput,
-  CreateTwitchChatTimerInput,
   IntegrationConnectionDetailDto,
   IntegrationLiveStatusDto,
   IntegrationProviderInfoDto,
-  TwitchChatChannelDto,
-  TwitchChatCommandDto,
-  TwitchChatRewardDto,
-  TwitchChatStatusDto,
-  TwitchChatTimerDto,
-  TwitchOverlayInfoDto,
-  UpdateTwitchChatChannelInput,
-  UpdateTwitchChatCommandInput,
-  UpdateTwitchChatRewardInput,
-  UpdateTwitchChatTimerInput,
+  TwitchChatGuildLinksDto,
   WebhookDeliveryDto,
   WebhookEndpointDetailDto,
 } from '@pavisie/types/integrations';
@@ -37,15 +24,7 @@ export const integrationsQueryKeys = {
   outboundWebhooks: (guildId: string) => ['guilds', guildId, 'integrations', 'webhooks', 'outbound'] as const,
   deliveries: (guildId: string, endpointId: string) =>
     ['guilds', guildId, 'integrations', 'webhooks', 'outbound', endpointId, 'deliveries'] as const,
-  twitchChatStatus: (guildId: string) => ['guilds', guildId, 'integrations', 'twitch-chat', 'status'] as const,
-  twitchChatCommands: (guildId: string, channelId: string) =>
-    ['guilds', guildId, 'integrations', 'twitch-chat', 'channels', channelId, 'commands'] as const,
-  twitchChatTimers: (guildId: string, channelId: string) =>
-    ['guilds', guildId, 'integrations', 'twitch-chat', 'channels', channelId, 'timers'] as const,
-  twitchChatRewards: (guildId: string, channelId: string) =>
-    ['guilds', guildId, 'integrations', 'twitch-chat', 'channels', channelId, 'rewards'] as const,
-  twitchChatOverlay: (guildId: string, channelId: string) =>
-    ['guilds', guildId, 'integrations', 'twitch-chat', 'channels', channelId, 'overlay'] as const,
+  twitchChatLinks: (guildId: string) => ['guilds', guildId, 'integrations', 'twitch-chat', 'links'] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -295,287 +274,27 @@ export function useOutboundDeliveries(guildId: string, endpointId: string | unde
 }
 
 // ---------------------------------------------------------------------------
-// Twitch chat bot (Pavisie joining a streamer's Twitch chat) — lives inside this same `integrations`
-// plugin rather than as its own tab-worth of unrelated infra. See @pavisie/types/integrations for the DTOs.
+// Twitch chat, channel points and currency are managed on the creator dashboard (ARCHITECTURE.md §19e, phase 4).
+// All this dashboard keeps is a read-only "which Twitch channel is linked to this server" lookup and the server
+// admin's right to unlink their own server.
 // ---------------------------------------------------------------------------
 
-export function useTwitchChatStatus(guildId: string | undefined) {
+export function useTwitchChatGuildLinks(guildId: string | undefined) {
   return useQuery({
-    queryKey: integrationsQueryKeys.twitchChatStatus(guildId ?? ''),
-    queryFn: () => apiFetch<TwitchChatStatusDto>(`/guilds/${guildId}/integrations/twitch-chat`),
+    queryKey: integrationsQueryKeys.twitchChatLinks(guildId ?? ''),
+    queryFn: () => apiFetch<TwitchChatGuildLinksDto>(`/guilds/${guildId}/integrations/twitch-chat`),
     enabled: Boolean(guildId),
   });
 }
 
-export function useConnectTwitchChat(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () =>
-      apiFetch<ConnectOAuthResponseDto>(`/guilds/${guildId}/integrations/twitch-chat/connect`, {
-        method: 'POST',
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: integrationsQueryKeys.twitchChatStatus(guildId) });
-    },
-  });
-}
-
-export function useUpdateTwitchChatChannel(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ channelId, patch }: { channelId: string; patch: UpdateTwitchChatChannelInput }) =>
-      apiFetch<TwitchChatChannelDto>(`/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}`, {
-        method: 'PATCH',
-        body: patch,
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: integrationsQueryKeys.twitchChatStatus(guildId) });
-    },
-  });
-}
-
-export function useDeleteTwitchChatChannel(guildId: string) {
+/** Unlinks this server from a streamer's Twitch channel (the channel itself stays with the streamer). */
+export function useUnlinkTwitchChatChannel(guildId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (channelId: string) =>
-      apiFetch<void>(`/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}`, {
-        method: 'DELETE',
-      }),
+      apiFetch<void>(`/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: integrationsQueryKeys.twitchChatStatus(guildId) });
-    },
-  });
-}
-
-export function useTwitchChatCommands(guildId: string | undefined, channelId: string | undefined) {
-  return useQuery({
-    queryKey: integrationsQueryKeys.twitchChatCommands(guildId ?? '', channelId ?? ''),
-    queryFn: () =>
-      apiFetch<TwitchChatCommandDto[]>(
-        `/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}/commands`,
-      ),
-    enabled: Boolean(guildId && channelId),
-  });
-}
-
-export function useCreateTwitchChatCommand(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ channelId, input }: { channelId: string; input: CreateTwitchChatCommandInput }) =>
-      apiFetch<TwitchChatCommandDto>(
-        `/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}/commands`,
-        { method: 'POST', body: input },
-      ),
-    onSuccess: (_data, { channelId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: integrationsQueryKeys.twitchChatCommands(guildId, channelId),
-      });
-    },
-  });
-}
-
-export function useUpdateTwitchChatCommand(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      commandId,
-      patch,
-    }: {
-      commandId: string;
-      /** Not sent to the API — used only to invalidate the right channel's commands list. */
-      channelId: string;
-      patch: UpdateTwitchChatCommandInput;
-    }) =>
-      apiFetch<TwitchChatCommandDto>(`/guilds/${guildId}/integrations/twitch-chat/commands/${commandId}`, {
-        method: 'PATCH',
-        body: patch,
-      }),
-    onSuccess: (_data, { channelId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: integrationsQueryKeys.twitchChatCommands(guildId, channelId),
-      });
-    },
-  });
-}
-
-export function useDeleteTwitchChatCommand(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ commandId }: { commandId: string; channelId: string }) =>
-      apiFetch<void>(`/guilds/${guildId}/integrations/twitch-chat/commands/${commandId}`, {
-        method: 'DELETE',
-      }),
-    onSuccess: (_data, { channelId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: integrationsQueryKeys.twitchChatCommands(guildId, channelId),
-      });
-    },
-  });
-}
-
-export function useTwitchChatTimers(guildId: string | undefined, channelId: string | undefined) {
-  return useQuery({
-    queryKey: integrationsQueryKeys.twitchChatTimers(guildId ?? '', channelId ?? ''),
-    queryFn: () =>
-      apiFetch<TwitchChatTimerDto[]>(
-        `/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}/timers`,
-      ),
-    enabled: Boolean(guildId && channelId),
-  });
-}
-
-export function useCreateTwitchChatTimer(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ channelId, input }: { channelId: string; input: CreateTwitchChatTimerInput }) =>
-      apiFetch<TwitchChatTimerDto>(
-        `/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}/timers`,
-        { method: 'POST', body: input },
-      ),
-    onSuccess: (_data, { channelId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: integrationsQueryKeys.twitchChatTimers(guildId, channelId),
-      });
-    },
-  });
-}
-
-export function useUpdateTwitchChatTimer(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      timerId,
-      patch,
-    }: {
-      timerId: string;
-      /** Not sent to the API — used only to invalidate the right channel's timers list. */
-      channelId: string;
-      patch: UpdateTwitchChatTimerInput;
-    }) =>
-      apiFetch<TwitchChatTimerDto>(`/guilds/${guildId}/integrations/twitch-chat/timers/${timerId}`, {
-        method: 'PATCH',
-        body: patch,
-      }),
-    onSuccess: (_data, { channelId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: integrationsQueryKeys.twitchChatTimers(guildId, channelId),
-      });
-    },
-  });
-}
-
-export function useDeleteTwitchChatTimer(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ timerId }: { timerId: string; channelId: string }) =>
-      apiFetch<void>(`/guilds/${guildId}/integrations/twitch-chat/timers/${timerId}`, {
-        method: 'DELETE',
-      }),
-    onSuccess: (_data, { channelId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: integrationsQueryKeys.twitchChatTimers(guildId, channelId),
-      });
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Twitch chat channel-point rewards
-// ---------------------------------------------------------------------------
-
-export function useTwitchChatRewards(guildId: string | undefined, channelId: string | undefined) {
-  return useQuery({
-    queryKey: integrationsQueryKeys.twitchChatRewards(guildId ?? '', channelId ?? ''),
-    queryFn: () =>
-      apiFetch<TwitchChatRewardDto[]>(
-        `/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}/rewards`,
-      ),
-    enabled: Boolean(guildId && channelId),
-  });
-}
-
-export function useCreateTwitchChatReward(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ channelId, input }: { channelId: string; input: CreateTwitchChatRewardInput }) =>
-      apiFetch<TwitchChatRewardDto>(
-        `/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}/rewards`,
-        { method: 'POST', body: input },
-      ),
-    onSuccess: (_data, { channelId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: integrationsQueryKeys.twitchChatRewards(guildId, channelId),
-      });
-    },
-  });
-}
-
-export function useUpdateTwitchChatReward(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      rewardId,
-      patch,
-    }: {
-      rewardId: string;
-      /** Not sent to the API — used only to invalidate the right channel's rewards list. */
-      channelId: string;
-      patch: UpdateTwitchChatRewardInput;
-    }) =>
-      apiFetch<TwitchChatRewardDto>(`/guilds/${guildId}/integrations/twitch-chat/rewards/${rewardId}`, {
-        method: 'PATCH',
-        body: patch,
-      }),
-    onSuccess: (_data, { channelId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: integrationsQueryKeys.twitchChatRewards(guildId, channelId),
-      });
-    },
-  });
-}
-
-export function useDeleteTwitchChatReward(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ rewardId }: { rewardId: string; channelId: string }) =>
-      apiFetch<void>(`/guilds/${guildId}/integrations/twitch-chat/rewards/${rewardId}`, {
-        method: 'DELETE',
-      }),
-    onSuccess: (_data, { channelId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: integrationsQueryKeys.twitchChatRewards(guildId, channelId),
-      });
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Twitch chat overlay (rewards alerts)
-// ---------------------------------------------------------------------------
-
-export function useTwitchChatOverlay(guildId: string | undefined, channelId: string | undefined) {
-  return useQuery({
-    queryKey: integrationsQueryKeys.twitchChatOverlay(guildId ?? '', channelId ?? ''),
-    queryFn: () =>
-      apiFetch<TwitchOverlayInfoDto>(
-        `/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}/overlay`,
-      ),
-    enabled: Boolean(guildId && channelId),
-  });
-}
-
-export function useRegenerateTwitchChatOverlay(guildId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ channelId }: { channelId: string }) =>
-      apiFetch<TwitchOverlayInfoDto>(
-        `/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}/overlay/regenerate`,
-        { method: 'POST' },
-      ),
-    onSuccess: (_data, { channelId }) => {
-      void queryClient.invalidateQueries({
-        queryKey: integrationsQueryKeys.twitchChatOverlay(guildId, channelId),
-      });
+      void queryClient.invalidateQueries({ queryKey: integrationsQueryKeys.twitchChatLinks(guildId) });
     },
   });
 }

@@ -64,7 +64,7 @@ export const manifest = defineManifest({
     'Alert connectors (Twitch/YouTube/Reddit/Steam) only read publicly available data about the watched target — no message content or member data is sent to any provider.',
     "Instagram reads only the connected account's own media via the official Instagram API with Instagram Login (own-account OAuth connect, not the watched-target model above) — it cannot look up or read any other account's posts.",
     'Outbound webhook payloads are whatever the triggering platform event carries (case numbers, user ids, reasons) — never raw message content.',
-    'Twitch chat bot: chat messages are parsed in memory only, to match a command — never persisted, logged, or sent to Discord.',
-    'Discord ↔ Twitch chat bridge (opt-in, off by default per direction): when a server turns a direction on, messages posted in the linked Discord channel and/or Twitch chat are shown on the other platform — text and display names are relayed in memory only, never stored or logged by Pavisie.',
+    'Twitch chat bot (run for the streamer and managed on the creator dashboard, not in this server): chat messages are parsed in memory only, to match a command — never persisted, logged, or sent to Discord.',
+    'Discord ↔ Twitch chat bridge (opt-in, off by default per direction, set up by the streamer on the creator dashboard for a server they connected): messages posted in the bridged Discord channel and/or Twitch chat are shown on the other platform — text and display names are relayed in memory only, never stored or logged by Pavisie. It only runs while this plugin is on in the server.',
   ],
 });

@@ -262,8 +262,8 @@ describe('GET /integrations/twitch/callback — creator connect', () => {
   });
 });
 
-describe('guild link flow vs a guildless channel', () => {
-  it('a Discord admin linking a broadcaster that already has a guildless (creator) channel is refused as already-linked', async () => {
+describe('the removed Discord-side chat connect vs a guildless channel', () => {
+  it('a legacy guild `twitch_chat` state is refused with a pointer to the creator dashboard; the guildless channel is untouched', async () => {
     const fixture = creatorFixture();
     seedChannel(fixture, { id: 'chan-guildless', broadcasterUserId: CREATOR_A, guildId: null });
     const { app, redis, queues } = await buildTestApp(fixture.overrides);
@@ -281,10 +281,8 @@ describe('guild link flow vs a guildless channel', () => {
       url: '/integrations/twitch/callback?code=abc&state=guild-state',
       headers: { cookie: discord.cookieHeader },
     });
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe(
-      `${env.DASHBOARD_URL}/dashboard/${GUILD_ID}/integrations?error=twitch-chat-already-linked`,
-    );
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toMatch(/creator dashboard/i);
     expect(fixture.channels.size).toBe(1);
     expect(fixture.channels.get('chan-guildless')!.guildId).toBeNull();
     expect(fixture.connections.size).toBe(0);
@@ -660,7 +658,7 @@ describe('timers', () => {
 });
 
 describe('Discord dashboard routes never see guildless channels', () => {
-  it('lists only the guild-linked channels, and cannot address a guildless row by id', async () => {
+  it('lists only the guild-linked channels (login/status only), and cannot address a guildless row by id', async () => {
     const fixture = creatorFixture();
     seedChannel(fixture, { id: 'guildless', broadcasterUserId: CREATOR_A, guildId: null });
     seedChannel(fixture, { id: 'linked', broadcasterUserId: CREATOR_B, guildId: GUILD_ID });

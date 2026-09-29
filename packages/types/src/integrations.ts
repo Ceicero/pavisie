@@ -143,8 +143,9 @@ export type OutboundPlatformEvent = (typeof OUTBOUND_PLATFORM_EVENTS)[number];
 
 // ---------------------------------------------------------------------------
 // Twitch chat bot — Pavisie joins a streamer's Twitch chat; lives inside the `integrations` plugin
-// rather than as its own 15th plugin. Runtime lives in packages/plugins/src/integrations/twitch-chat/;
-// API routes in apps/api/src/routes/twitch-chat.ts.
+// rather than as its own 15th plugin. Runtime lives in packages/plugins/src/integrations/twitch-chat/; it is managed
+// ONLY from the creator dashboard (apps/api/src/routes/creator-twitch*.ts, ARCHITECTURE.md §19e). The Discord side
+// keeps just a read-only "linked channel" notice + unlink (apps/api/src/routes/twitch-chat.ts).
 // ---------------------------------------------------------------------------
 
 /** Chat-privilege ladder for custom commands, matching (lowercased) the `TwitchChatLevel` Prisma enum. */
@@ -167,37 +168,23 @@ export const TWITCH_CHAT_RESERVED_COMMAND_NAMES = [
   'top',
 ] as const;
 
-/** One linked Twitch channel's chat-bot config, as returned to the dashboard/bot. */
-export interface TwitchChatChannelDto {
+/** One Twitch channel linked to a Discord server, as the Discord dashboard's read-only notice shows it. Deliberately
+ * tiny: no Twitch user id, no bridge/Discord channel ids or credentials, no settings — those are the streamer's,
+ * managed on the creator dashboard (ARCHITECTURE.md §19e, phase 4). */
+export interface TwitchChatGuildChannelDto {
   id: string;
   broadcasterLogin: string;
-  broadcasterUserId: string;
+  /** True when the streamer connected this server from their creator dashboard (proved they manage it); false for a
+   * link a server admin made earlier from this dashboard, before that flow existed. */
+  linkedByStreamer: boolean;
+  linkedAt: string | null;
   enabled: boolean;
   status: 'connected' | 'disconnected' | 'error' | 'pending';
-  lastError: string | null;
-  commandPrefix: string;
-  /** Whether channel-point reward redemptions are turned on for this channel (channel-points spec v1). */
-  rewardsEnabled: boolean;
-  /** Discord <-> Twitch chat bridge (opt-in, off by default per direction) — the linked Discord text channel,
-   * or null if none is set. Never accompanied by the bridge webhook id/token: those are internal/credential
-   * fields and are never exposed in any DTO. */
-  bridgeDiscordChannelId: string | null;
-  bridgeDiscordToTwitch: boolean;
-  bridgeTwitchToDiscord: boolean;
-  /** Set by the bot process's reconcile pass when it can't access/manage the bridge channel (missing
-   * permissions, channel deleted, etc.) — never a raw exception message. */
-  bridgeLastError: string | null;
-  createdAt: string;
 }
 
-/** `GET /guilds/:guildId/integrations/twitch-chat` — overall chat-bot availability + this guild's channels. */
-export interface TwitchChatStatusDto {
-  /** Whether Pavisie's own Twitch bot account (`TwitchBotIdentity`) has been authorized by the bot owner. */
-  botConfigured: boolean;
-  botLogin: string | null;
-  /** Whether TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET are set on this deployment at all. */
-  envConfigured: boolean;
-  channels: TwitchChatChannelDto[];
+/** `GET /guilds/:guildId/integrations/twitch-chat` — the Twitch channels linked to this server (usually none or one). */
+export interface TwitchChatGuildLinksDto {
+  channels: TwitchChatGuildChannelDto[];
 }
 
 export interface TwitchChatCommandDto {
@@ -218,21 +205,6 @@ export interface TwitchChatTimerDto {
   enabled: boolean;
   lastFiredAt: string | null;
   createdAt: string;
-}
-
-export interface UpdateTwitchChatChannelInput {
-  enabled?: boolean;
-  /** Exactly one printable, non-space, non-`/` character. */
-  commandPrefix?: string;
-  /** Turns channel-point reward redemptions on/off for this channel (channel-points spec v1). */
-  rewardsEnabled?: boolean;
-  /** Sets (or, passed `null`, clears) the Discord <-> Twitch bridge's target Discord text channel. */
-  bridgeDiscordChannelId?: string | null;
-  /** Turns the Discord -> Twitch relay direction on/off. Requires `bridgeDiscordChannelId` to be set (either
-   * already on the row, or in the same request) — enforced at the route layer, since only it has the existing row. */
-  bridgeDiscordToTwitch?: boolean;
-  /** Turns the Twitch -> Discord relay direction on/off. Same `bridgeDiscordChannelId` requirement as above. */
-  bridgeTwitchToDiscord?: boolean;
 }
 
 export interface CreateTwitchChatCommandInput {
@@ -277,7 +249,7 @@ export interface TwitchBotIdentityDto {
 // Twitch channel-point rewards — extends the twitch-chat feature above (channel-points spec v1). A viewer
 // redeeming a configured channel-point reward triggers an action: an OBS overlay SOUND/TTS, a TWITCH CHAT
 // message, or a DISCORD post. Runtime lives alongside twitch-chat in
-// packages/plugins/src/integrations/twitch-chat/; API routes extend apps/api/src/routes/twitch-chat.ts.
+// packages/plugins/src/integrations/twitch-chat/; API routes: apps/api/src/routes/creator-twitch-rewards.ts.
 // ---------------------------------------------------------------------------
 
 /** What a redeemed reward triggers, matching (lowercased) the `TwitchRewardActionKind` Prisma enum. */

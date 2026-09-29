@@ -208,9 +208,9 @@ describe('alert connections', () => {
 });
 
 // ---------------------------------------------------------------------------------------------------------
-// Chat-kind connections (`config.kind === 'chat'`, created by the twitch-chat OAuth callback — see
-// `oauth-integrations.ts`) must never surface as a generic connection or an alert watch, and must be
-// undeletable via either of those routes — they belong entirely to `routes/twitch-chat.ts`.
+// Chat-kind connections (`config.kind === 'chat'`, created by the removed Discord-side Twitch chat connect; legacy
+// rows still exist) must never surface as a generic connection or an alert watch, and must be undeletable via
+// either of those routes — they belong to a `TwitchChatChannel`, managed from the creator dashboard.
 // ---------------------------------------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test fixture row, mirrors the `create()` defaults above

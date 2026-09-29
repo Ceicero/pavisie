@@ -1,77 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, FormField, Switch, useToast } from '@pavisie/ui';
-import type { TwitchChatChannelDto } from '@pavisie/types/integrations';
-import { useUpdateTwitchChatChannel } from '@/lib/dashboard/integrations-queries';
-import { ApiClientError } from '@/lib/dashboard/api';
-import { DiscordChannelSelect } from '../discord-selects';
-
-export interface TwitchChatBridgePanelProps {
-  guildId: string;
-  channel: TwitchChatChannelDto;
-}
-
-/** Discord <-> Twitch chat bridge (opt-in, off by default per direction) — modelled on
- * `twitch-chat-overlay-panel.tsx` for the labeled-sub-section-with-its-own-save-action style. */
-export function TwitchChatBridgePanel({ guildId, channel }: TwitchChatBridgePanelProps) {
-  const update = useUpdateTwitchChatChannel(guildId);
-  const { toast } = useToast();
-
-  function reportError(title: string) {
-    return (err: unknown) =>
-      toast({
-        title,
-        description: err instanceof ApiClientError ? err.message : 'Please try again.',
-        variant: 'destructive',
-      });
-  }
-
-  function setBridgeChannel(next: string | null) {
-    update.mutate(
-      { channelId: channel.id, patch: { bridgeDiscordChannelId: next } },
-      { onError: reportError('Could not update the bridge channel') },
-    );
-  }
-
-  function toggleDiscordToTwitch() {
-    update.mutate(
-      { channelId: channel.id, patch: { bridgeDiscordToTwitch: !channel.bridgeDiscordToTwitch } },
-      { onError: reportError('Could not update the bridge') },
-    );
-  }
-
-  function toggleTwitchToDiscord() {
-    update.mutate(
-      { channelId: channel.id, patch: { bridgeTwitchToDiscord: !channel.bridgeTwitchToDiscord } },
-      { onError: reportError('Could not update the bridge') },
-    );
-  }
-
-  return (
-    <TwitchChatBridgeCard
-      channelSelect={
-        <DiscordChannelSelect
-          guildId={guildId}
-          value={channel.bridgeDiscordChannelId}
-          onChange={setBridgeChannel}
-          placeholder="Select a channel…"
-          disabled={update.isPending}
-        />
-      }
-      hasChannel={Boolean(channel.bridgeDiscordChannelId)}
-      discordToTwitch={channel.bridgeDiscordToTwitch}
-      twitchToDiscord={channel.bridgeTwitchToDiscord}
-      onToggleDiscordToTwitch={toggleDiscordToTwitch}
-      onToggleTwitchToDiscord={toggleTwitchToDiscord}
-      pending={update.isPending}
-      lastError={channel.bridgeLastError}
-    />
-  );
-}
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, FormField, Switch } from '@pavisie/ui';
 
 export interface TwitchChatBridgeCardProps {
-  /** The Discord channel picker (the Discord dashboard's or the creator dashboard's). */
+  /** The Discord channel picker (the creator dashboard's, reading the connected server's channels). */
   channelSelect: React.ReactNode;
   /** A bridge channel is chosen (the direction switches stay disabled until then). */
   hasChannel: boolean;
@@ -83,8 +16,9 @@ export interface TwitchChatBridgeCardProps {
   lastError: string | null;
 }
 
-/** The bridge form itself, independent of where its data lives: shared by the Discord dashboard (above) and the
- * creator dashboard's "Discord server" section. */
+/** The Discord <-> Twitch chat bridge form (opt-in, off by default per direction). It only takes props, so it does not
+ * care where its data lives; since creator-dashboard phase 4 the creator dashboard's "Discord server" section is its
+ * only user. */
 export function TwitchChatBridgeCard({
   channelSelect,
   hasChannel,

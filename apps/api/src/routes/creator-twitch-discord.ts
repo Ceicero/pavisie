@@ -186,7 +186,9 @@ export default async function creatorTwitchDiscordRoutes(app: ZodFastifyInstance
           iconUrl: buildGuildIconUrl(guildId, guild?.iconHash),
         },
         linkedAt: updated.discordLinkedAt?.toISOString() ?? null,
-        integrationsEnabled: true,
+        // Linking never changes the server's plugin settings (phase 4): report what the server admin has set, so the
+        // dashboard can say the bridge and Discord posts are paused while the Integrations plugin is off.
+        integrationsEnabled: await app.configStore.isEnabled(guildId, 'integrations'),
       };
     },
   );

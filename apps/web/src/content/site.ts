@@ -139,7 +139,7 @@ export const siteCopy = {
           'All moderator commands',
           '+setup, +config, +plugin, +permissions, +pavisie, +ai',
           '+starboard, +statschannel, +channelauto',
-          '+integration, +twitch (also accept Manage Server permission as an alternative)',
+          '+integration (also accepts Manage Server permission as an alternative)',
           '+tag trigger, +tempvoice setup, +birthday config',
         ],
         detail: '',

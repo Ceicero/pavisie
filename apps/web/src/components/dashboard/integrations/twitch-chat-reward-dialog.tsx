@@ -27,7 +27,7 @@ import type {
 import { TWITCH_REWARD_ACTION_KINDS } from '@pavisie/types/integrations';
 import { ApiClientError } from '@/lib/dashboard/api';
 import type { TwitchChatRewardsBackend } from '@/lib/dashboard/twitch-chat-backend';
-import { DiscordChannelSelect, type DiscordChannelSelectComponent } from '../discord-selects';
+import type { DiscordChannelSelectComponent } from '../discord-selects';
 
 /** Client-side validation mirrors the server in `apps/api/src/lib/integrations/twitch-chat-schemas.ts`. */
 const TITLE_MIN = 1;
@@ -47,14 +47,10 @@ const ACTION_LABELS: Record<TwitchRewardActionKindId, string> = {
 };
 
 export interface TwitchChatRewardDialogProps {
-  /** Where rewards are written - the Discord dashboard's guild routes or the creator dashboard's own. */
+  /** Where rewards are written (the creator dashboard's routes). */
   backend: TwitchChatRewardsBackend;
-  /** The linked Discord server, when there is one AND the caller may post into it (the Discord dashboard). It is
-   * what makes the "Send to Discord" action available; without it (the creator dashboard) that action is not
-   * offered at all. */
-  discordGuildId?: string | null;
-  /** Alternative to `discordGuildId` for a caller that has a connected Discord server but supplies its own channel
-   * picker (the creator dashboard). Also makes "Send to Discord" available. */
+  /** The channel picker for a Discord server the streamer connected and verified. Its presence is what makes the
+   * "Send to Discord" action available; without one that action is not offered at all. */
   discordChannelSelect?: DiscordChannelSelectComponent;
   channelId: string;
   open: boolean;
@@ -65,14 +61,13 @@ export interface TwitchChatRewardDialogProps {
 
 export function TwitchChatRewardDialog({
   backend,
-  discordGuildId,
   discordChannelSelect,
   channelId,
   open,
   onOpenChange,
   reward,
 }: TwitchChatRewardDialogProps) {
-  const ChannelSelect = discordChannelSelect ?? DiscordChannelSelect;
+  const ChannelSelect = discordChannelSelect;
   const isEdit = Boolean(reward);
   const [title, setTitle] = React.useState('');
   const [action, setAction] = React.useState<TwitchRewardActionKindId>('sound');
@@ -86,7 +81,7 @@ export function TwitchChatRewardDialog({
 
   const create = backend.useCreate();
   const update = backend.useUpdate();
-  const actionKinds = TWITCH_REWARD_ACTION_KINDS.filter((kind) => kind !== 'discord' || Boolean(discordGuildId) || Boolean(discordChannelSelect));
+  const actionKinds = TWITCH_REWARD_ACTION_KINDS.filter((kind) => kind !== 'discord' || Boolean(discordChannelSelect));
   const { toast } = useToast();
   const saving = create.isPending || update.isPending;
 
@@ -335,11 +330,9 @@ export function TwitchChatRewardDialog({
           {action === 'discord' ? (
             <>
               <FormField label="Discord channel" required>
-                <ChannelSelect
-                  guildId={discordGuildId ?? ''}
-                  value={discordChannelId}
-                  onChange={setDiscordChannelId}
-                />
+                {ChannelSelect ? (
+                  <ChannelSelect guildId="" value={discordChannelId} onChange={setDiscordChannelId} />
+                ) : null}
               </FormField>
               <FormField
                 label="Message template"

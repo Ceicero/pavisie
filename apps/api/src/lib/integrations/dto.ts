@@ -4,7 +4,6 @@
 import type {
   IntegrationConnection,
   TwitchBotIdentity,
-  TwitchChatChannel,
   TwitchChatCommand,
   TwitchChatLevel,
   TwitchChatReward,
@@ -16,7 +15,6 @@ import type {
 import type {
   IntegrationConnectionDetailDto,
   TwitchBotIdentityDto,
-  TwitchChatChannelDto,
   TwitchChatCommandDto,
   TwitchChatLevelId,
   TwitchChatRewardDto,
@@ -66,7 +64,7 @@ export function toWebhookDeliveryDto(row: WebhookDelivery): WebhookDeliveryDto {
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// Twitch chat bot (routes/twitch-chat.ts, routes/twitch-bot.ts) — DTO mappers only; input->enum mapping for
+// Twitch chat bot (routes/creator-twitch*.ts, routes/twitch-bot.ts) — DTO mappers only; input->enum mapping for
 // writes (the reverse of TWITCH_CHAT_LEVEL_MAP) lives next to the routes that need it.
 // ---------------------------------------------------------------------------------------------------------
 
@@ -77,26 +75,6 @@ export const TWITCH_CHAT_LEVEL_MAP: Record<TwitchChatLevel, TwitchChatLevelId> =
   MODERATOR: 'moderator',
   BROADCASTER: 'broadcaster',
 };
-
-export function toTwitchChatChannelDto(row: TwitchChatChannel): TwitchChatChannelDto {
-  return {
-    id: row.id,
-    broadcasterLogin: row.broadcasterLogin,
-    broadcasterUserId: row.broadcasterUserId,
-    enabled: row.enabled,
-    status: CONNECTION_STATUS_MAP[row.status],
-    lastError: row.lastError,
-    commandPrefix: row.commandPrefix,
-    rewardsEnabled: row.rewardsEnabled,
-    // Discord <-> Twitch chat bridge — plain passthrough columns, no enum mapping needed. `bridgeWebhookId`/
-    // `bridgeWebhookTokenEnc` are deliberately never mapped here: those are internal/credential fields.
-    bridgeDiscordChannelId: row.bridgeDiscordChannelId,
-    bridgeDiscordToTwitch: row.bridgeDiscordToTwitch,
-    bridgeTwitchToDiscord: row.bridgeTwitchToDiscord,
-    bridgeLastError: row.bridgeLastError,
-    createdAt: row.createdAt.toISOString(),
-  };
-}
 
 export function toTwitchChatCommandDto(row: TwitchChatCommand): TwitchChatCommandDto {
   return {
@@ -126,7 +104,7 @@ export function toTwitchChatTimerDto(row: TwitchChatTimer): TwitchChatTimerDto {
 // Twitch channel-point rewards (channel-points spec v1) — extends the twitch-chat mappers above.
 // ---------------------------------------------------------------------------------------------------------
 
-/** Reverse of `TWITCH_REWARD_ACTION_ENUM_MAP` (routes/twitch-chat.ts) — Prisma enum -> input action id, for reads. */
+/** Reverse of `TWITCH_REWARD_ACTION_ENUM_MAP` (lib/integrations/twitch-chat-shared.ts) — Prisma enum -> input action id, for reads. */
 export const TWITCH_REWARD_ACTION_MAP: Record<TwitchRewardActionKind, TwitchRewardActionKindId> = {
   SOUND: 'sound',
   TTS: 'tts',

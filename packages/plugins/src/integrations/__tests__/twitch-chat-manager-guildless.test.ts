@@ -247,6 +247,8 @@ interface SetupOptions {
   /** The channel's `ChannelEconomy` row; omit for "the channel has no currency". */
   economy?: Record<string, unknown> | null;
   logger?: ReturnType<typeof makeLogger>;
+  /** A fake discord.js client, for the tests that reach the bridge reconcile's guild lookup. */
+  client?: unknown;
 }
 
 async function setup(opts: SetupOptions = {}) {
@@ -256,7 +258,12 @@ async function setup(opts: SetupOptions = {}) {
   const logger = opts.logger ?? makeLogger();
   const manager = new TwitchChatManager(FakeWebSocketCtor);
   const { ctx } = createTestContext({
-    overrides: { env: makeEnv(), isEnabled, logger: logger as unknown as PluginContext['logger'] },
+    overrides: {
+      env: makeEnv(),
+      isEnabled,
+      logger: logger as unknown as PluginContext['logger'],
+      ...(opts.client ? { client: opts.client as PluginContext['client'] } : {}),
+    },
     prismaOverrides: {
       twitchChatChannel: {
         findMany: async () => channels,
@@ -327,7 +334,7 @@ describe('guildless channel: reconcile runs on its own `enabled` flag', () => {
     expect(isEnabled).not.toHaveBeenCalled();
   });
 
-  it('guild-linked channels are gated exactly as before, alongside a guildless one', async () => {
+  it('guild-linked channels are NOT gated on the integrations plugin of their server any more (the chat bot belongs to the streamer)', async () => {
     const { manager, isEnabled } = await setup({
       channels: [
         makeChannelRow({ id: 'guildless', guildId: null, broadcasterUserId: 'b-1' }),
@@ -337,10 +344,9 @@ describe('guildless channel: reconcile runs on its own `enabled` flag', () => {
       isEnabled: async (guildId: string) => guildId === 'guild-on',
     });
 
-    expect(manager.connectedChannelIds().sort()).toEqual(['guildless', 'linked-on']);
-    expect(isEnabled).toHaveBeenCalledWith('guild-on');
-    expect(isEnabled).toHaveBeenCalledWith('guild-off');
-    expect(isEnabled).not.toHaveBeenCalledWith(null);
+    expect(manager.connectedChannelIds().sort()).toEqual(['guildless', 'linked-off', 'linked-on']);
+    // The reconcile never consults the plugin state to decide who runs; only the Discord-side features do.
+    expect(isEnabled).not.toHaveBeenCalled();
   });
 });
 
@@ -605,5 +611,82 @@ describe('guild-linked channel: behaviour unchanged (control)', () => {
       expect.objectContaining({ id: 'channel-a', guildId: 'guild-1', ttsOpenAiKeyEnc: null }),
       'say ViewerOne',
     );
+  });
+});
+
+describe('guild-linked channel whose server has the integrations plugin OFF', () => {
+  const linkedOff = () => makeChannelRow({ guildId: 'guild-1', rewardsEnabled: true, connectionId: 'conn-1' });
+
+  it('keeps the chat bot, currency and non-Discord rewards running', async () => {
+    const { ws, manager, ctx } = await setup({
+      channels: [linkedOff()],
+      commands: [makeCommandRow({ guildId: 'guild-1' })],
+      economy: makeEconomyRow(),
+      isEnabled: async () => false,
+    });
+
+    expect(manager.connectedChannelIds()).toEqual(['channel-a']);
+
+    ws.emit('notification', chatFrame('!hello'));
+    await flush();
+    expect(mocks.sendChatMessage).toHaveBeenCalledWith(expect.anything(), 'b-1', 'Hi ViewerOne!');
+
+    mocks.sendChatMessage.mockClear();
+    ws.emit('notification', chatFrame('!balance'));
+    await flush();
+    expect(mocks.sendChatMessage).toHaveBeenCalledWith(ctx, 'b-1', '@ViewerOne, you have 100 A');
+  });
+
+  it('skips the DISCORD reward action (the server switched the integrations plugin off) but runs CHAT and SOUND', async () => {
+    const { ws, ctx } = await setup({
+      channels: [linkedOff()],
+      rewards: [
+        makeRewardRow({ id: 'r-discord', guildId: 'guild-1', action: 'DISCORD', chatTemplate: null, discordChannelId: '123456789012345678', discordTemplate: 'x' }),
+        makeRewardRow({ id: 'r-sound', guildId: 'guild-1', action: 'SOUND', chatTemplate: null, soundUrl: 'https://cdn.example.com/a.mp3', volume: 30 }),
+        makeRewardRow({ id: 'r-chat', guildId: 'guild-1', action: 'CHAT' }),
+      ],
+      isEnabled: async () => false,
+    });
+    const publishSpy = vi.spyOn(ctx.redis, 'publish');
+
+    ws.emit('notification', redemptionFrame());
+    await flush();
+
+    expect(mocks.postAlert).not.toHaveBeenCalled();
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+    expect(mocks.sendChatMessage).toHaveBeenCalledWith(expect.anything(), 'b-1', 'Thanks ViewerOne!');
+  });
+
+  it('does not relay Twitch chat into Discord or touch the bridge webhook while the plugin is off, and resumes when it is back on', async () => {
+    let on = false;
+    const fakeGuild = { id: 'guild-1' };
+    const { ws, manager, ctx } = await setup({
+      client: { guilds: { cache: { get: () => fakeGuild }, fetch: async () => fakeGuild } },
+      channels: [
+        makeChannelRow({
+          guildId: 'guild-1',
+          bridgeDiscordChannelId: 'discord-chan-1',
+          bridgeTwitchToDiscord: true,
+          bridgeWebhookId: 'wh-1',
+          bridgeWebhookTokenEnc: 'enc:secret',
+        }),
+      ],
+      isEnabled: async () => on,
+    });
+    mocks.checkBridgeChannelAccess.mockClear();
+    await manager.reconcile(ctx);
+
+    ws.emit('notification', chatFrame('hello discord'));
+    await flush();
+
+    expect(mocks.checkBridgeChannelAccess).not.toHaveBeenCalled();
+    expect(mocks.ensureBridgeWebhook).not.toHaveBeenCalled();
+    expect(mocks.webhookCtor).not.toHaveBeenCalled();
+    expect(manager.connectedChannelIds()).toEqual(['channel-a']); // the chat bot itself never paused
+
+    on = true;
+    mocks.checkBridgeChannelAccess.mockClear();
+    await manager.reconcile(ctx);
+    expect(mocks.checkBridgeChannelAccess).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,11 +1,12 @@
 // TwitchChatManager — the process-wide (one per bot process; see `../index.ts`'s module-level singleton
 // instantiation) owner of the EventSub WebSocket connection and the reconcile loop that keeps its subscriptions
-// matching every enabled `TwitchChatChannel` row whose guild has the `integrations` plugin enabled — plus every
-// enabled GUILDLESS row (`guildId === null`, set up from the creator dashboard, ARCHITECTURE.md §19e), which runs on
-// its own `enabled` flag alone: custom commands, timers, the built-ins and the channel's own currency (economy
-// commands + chat earning, `ChannelEconomy`, §18b) and channel-point SOUND/CHAT/TTS rewards (the broadcaster token
-// lives in `TwitchBroadcasterToken`, TTS runs on the channel's own OpenAI key) work, while everything that needs a
-// Discord server (the Discord bridge, DISCORD reward actions) is quietly unavailable.
+// matching every enabled `TwitchChatChannel` row. The chat bot belongs to the STREAMER (ARCHITECTURE.md §19e, phase
+// 4), so a channel runs on its own `enabled` flag alone, whether or not it is linked to a Discord server and whatever
+// that server's `integrations` plugin state is: custom commands, timers, the built-ins, the channel's own currency
+// (economy commands + chat earning, `ChannelEconomy`, §18b) and channel-point SOUND/CHAT/TTS rewards (the broadcaster
+// token lives in `TwitchBroadcasterToken`, TTS runs on the channel's own OpenAI key). Only what acts INSIDE a Discord
+// server (the Discord bridge, DISCORD reward actions) needs a linked server AND that server's `integrations` plugin
+// on — a server admin's off switch still governs what Pavisie does in their server — and is otherwise quietly skipped.
 //
 // Since the channel-points extension, a channel can carry up to TWO independent EventSub subscriptions —
 // `channel.chat.message` (always, on the bot identity's token) and `channel.channel_points_custom_reward_
@@ -71,9 +72,9 @@ const START_RETRY_MAX_MS = 60_000;
 /** Twitch's own idle-socket message. Shown to the operator instead of Twitch's raw wording. */
 const NO_CHANNELS_IDLE_REASON = 'no linked Twitch channels yet';
 /** Written to `TwitchChatChannel.lastError` when rewards are enabled but the broadcaster hasn't (re-)granted
- * `channel:read:redemptions` — surfaced in the dashboard and `/twitch status` rather than failing silently. */
+ * `channel:read:redemptions` — surfaced on the creator dashboard rather than failing silently. */
 const REWARDS_SCOPE_MISSING_ERROR =
-  'Channel-point rewards are on, but Pavisie does not have channel-point redemption permission (channel:read:redemptions) for this channel. Re-link the channel from the Discord dashboard, or authorize channel points again from the creator dashboard.';
+  'Channel-point rewards are on, but Pavisie does not have channel-point redemption permission (channel:read:redemptions) for this channel. Authorize channel points again from the creator dashboard.';
 /** How long a `getStream` liveness result is trusted for the Twitch chat-earning gate before it's re-checked —
  * keeps a busy chat from costing one Helix call per message (ARCHITECTURE.md §18b/§19a). */
 const LIVENESS_CACHE_TTL_MS = 60_000;
@@ -279,19 +280,26 @@ export class TwitchChatManager {
     };
   }
 
-  /** Every enabled `TwitchChatChannel` row whose guild currently has the `integrations` plugin enabled
-   * (`ctx.isEnabled`, same per-guild-enablement contract every other plugin job uses — e.g.
-   * `community/jobs/stats-refresh.ts`), uncapped. A guildless row (`guildId === null`) has no guild whose plugin
-   * state could gate it, so it is desired purely on its own `enabled` flag (already applied by the query).
+  /** Every enabled `TwitchChatChannel` row, uncapped. There is deliberately NO per-guild plugin gate here (removed in
+   * creator-dashboard phase 4): the chat bot belongs to the streamer, so turning the `integrations` plugin off in a
+   * linked Discord server must not stop it. The guild's plugin state is instead consulted at each point that acts
+   * inside that server (`isGuildIntegrationsOn`).
    * Shared by `tryConnect` (which only needs to know whether this is empty, to decide whether opening a socket is
    * even worthwhile) and `reconcile` (which needs the full list to diff against). */
   private async computeDesiredChannels(ctx: PluginContext): Promise<TwitchChatChannel[]> {
-    const rows = await ctx.prisma.twitchChatChannel.findMany({ where: { enabled: true } });
-    const desired: TwitchChatChannel[] = [];
-    for (const row of rows) {
-      if (row.guildId === null || (await ctx.isEnabled(row.guildId))) desired.push(row);
+    return ctx.prisma.twitchChatChannel.findMany({ where: { enabled: true } });
+  }
+
+  /** Whether a Discord-server-side feature may act for this channel: it needs a linked server AND that server's
+   * `integrations` plugin on (`ctx.isEnabled`, the same per-guild enablement contract every other plugin uses). Never
+   * throws — a lookup failure counts as "not enabled" so a Discord-side action is skipped rather than guessed. */
+  private async isGuildIntegrationsOn(ctx: PluginContext, guildId: string | null): Promise<boolean> {
+    if (!guildId) return false;
+    try {
+      return await ctx.isEnabled(guildId);
+    } catch {
+      return false;
     }
-    return desired;
   }
 
   /**
@@ -431,8 +439,8 @@ export class TwitchChatManager {
       // The broadcaster's token/scope is re-checked BEFORE the already-subscribed short-circuit below, and
       // that ordering is load-bearing: a broadcaster can revoke `channel:read:redemptions` (or re-link
       // without it) long after the subscription was created. Checking only on creation would leave a
-      // silently dead rewards subscription behind a stale `lastError`, with nothing in `/twitch status` or
-      // the dashboard telling the admin why redemptions stopped firing. Costs one cached-token read per
+      // silently dead rewards subscription behind a stale `lastError`, with nothing on the creator
+      // dashboard telling the streamer why redemptions stopped firing. Costs one cached-token read per
       // rewards-enabled channel per tick, which is the right trade for not failing silently.
       const token = await getBroadcasterAccessToken(ctx, channel);
       if (!token) {
@@ -506,6 +514,10 @@ export class TwitchChatManager {
         this.bridgeWebhookClients.delete(channel.id);
         continue;
       }
+
+      // The server's admin has the `integrations` plugin switched off: leave the bridge alone this pass (no webhook
+      // provisioning, no announcements, no access checks) — it resumes on its own the moment the plugin is back on.
+      if (!(await this.isGuildIntegrationsOn(ctx, guildId))) continue;
 
       const guild =
         ctx.client.guilds.cache.get(guildId) ?? (await ctx.client.guilds.fetch(guildId).catch(() => null));
@@ -1013,6 +1025,7 @@ export class TwitchChatManager {
     if (event.chatterUserId === this.botUserId) return; // self-ignore (safety rule 1) — never bounce our own relayed messages back
     if (event.messageText.startsWith(channel.commandPrefix)) return; // safety rule 3
     if (!channel.bridgeWebhookId || !channel.bridgeWebhookTokenEnc) return; // not provisioned yet; do nothing rather than guess
+    if (!(await this.isGuildIntegrationsOn(ctx, channel.guildId))) return; // the server's admin switched the plugin off
 
     // Spend a token only for a message that was actually going to be relayed — everything above this line is a
     // cheap early-out, so gating here (rather than at the top of the method) never wastes bucket capacity on a
@@ -1103,6 +1116,13 @@ export class TwitchChatManager {
             ctx.logger.debug(
               { rewardId: action.reward.id },
               'integrations/twitch-chat: DISCORD reward action skipped (channel has no linked Discord server)',
+            );
+            return;
+          }
+          if (!(await this.isGuildIntegrationsOn(ctx, channel.guildId))) {
+            ctx.logger.debug(
+              { rewardId: action.reward.id },
+              'integrations/twitch-chat: DISCORD reward action skipped (the linked server has the integrations plugin off)',
             );
             return;
           }

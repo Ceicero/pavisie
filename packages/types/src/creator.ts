@@ -25,8 +25,8 @@ export interface CreatorMeDto {
   csrfToken: string;
 }
 
-/** A creator's own Twitch chat-bot channel. Deliberately narrower than `TwitchChatChannelDto`: no Discord bridge
- * or reward fields — those belong to the Discord dashboard (and later phases). */
+/** A creator's own Twitch chat-bot channel. Deliberately narrow: no Discord bridge or reward fields — those have their
+ * own creator-dashboard sections. */
 export interface CreatorTwitchChannelDto {
   id: string;
   broadcasterLogin: string;
@@ -185,7 +185,8 @@ export interface CreatorDiscordStatusDto {
   server: CreatorDiscordServerDto | null;
   /** When it was linked (verified links only). */
   linkedAt: string | null;
-  /** The server's Integrations plugin is on. It must be for the chat bot to run while a server is linked. */
+  /** The server's Integrations plugin is on. It must be for the Discord bridge and Discord reward posts to run in that
+   * server (the chat bot itself does not depend on it). */
   integrationsEnabled: boolean;
 }
 

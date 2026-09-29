@@ -39,20 +39,6 @@ interface HelixEventSubCreateResponse {
   data: { id: string }[];
 }
 
-interface HelixCustomReward {
-  id: string;
-  title: string;
-}
-
-interface HelixCustomRewardsResponse {
-  data: HelixCustomReward[];
-}
-
-export interface CustomRewardInfo {
-  id: string;
-  title: string;
-}
-
 interface HelixStreamsResponse {
   data: { started_at: string }[];
 }
@@ -268,8 +254,8 @@ async function fetchWithReauth(
 }
 
 /** Same one-retry-on-401 shape as `fetchWithReauth`, but for calls authenticated with a channel's BROADCASTER
- * token (channel-points spec) rather than the bot identity's token — used by `createRewardRedemptionSubscription`
- * and `listCustomRewards`, which Twitch requires the broadcaster's own `channel:read:redemptions` grant for. */
+ * token (channel-points spec) rather than the bot identity's token — used by `createRewardRedemptionSubscription`,
+ * which Twitch requires the broadcaster's own `channel:read:redemptions` grant for. */
 async function fetchWithBroadcasterReauth(
   ctx: PluginContext,
   clientId: string,
@@ -436,39 +422,6 @@ export async function createRewardRedemptionSubscription(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, error: message };
-  }
-}
-
-/** Lists a channel's custom rewards (id + title only — used by the dashboard's reward picker so admins select
- * from a dropdown instead of typing titles by hand). Requires the broadcaster token, same as
- * `createRewardRedemptionSubscription`. Same `{ ok: false }` vs `{ ok: true, value }` distinction as
- * `getStream`/`getChannelInfo` — a failed lookup is not the same as "this channel has no custom rewards". */
-export async function listCustomRewards(
-  ctx: PluginContext,
-  channel: TwitchChatChannel,
-): Promise<EngineHelixResult<CustomRewardInfo[]>> {
-  const token = await getBroadcasterAccessToken(ctx, channel);
-  if (!token) return { ok: false };
-  const clientId = ctx.env.TWITCH_CLIENT_ID;
-  if (!clientId) return { ok: false };
-
-  try {
-    const res = await fetchWithBroadcasterReauth(ctx, clientId, channel, token, (headers) =>
-      fetch(
-        `${HELIX_BASE}/channel_points/custom_rewards?broadcaster_id=${encodeURIComponent(channel.broadcasterUserId)}`,
-        { headers },
-      ),
-    );
-    if (!res.ok) {
-      ctx.logger.warn({ status: res.status }, 'integrations/twitch-chat: list custom rewards failed');
-      return { ok: false };
-    }
-    const json = (await res.json()) as HelixCustomRewardsResponse;
-    return { ok: true, value: json.data.map((reward) => ({ id: reward.id, title: reward.title })) };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    ctx.logger.warn({ err: message }, 'integrations/twitch-chat: list custom rewards request threw');
-    return { ok: false };
   }
 }
 

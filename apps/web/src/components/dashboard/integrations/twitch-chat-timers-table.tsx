@@ -25,7 +25,7 @@ import { TwitchChatTimerDialog } from './twitch-chat-timer-dialog';
 const MAX_TIMERS_PER_CHANNEL = 10;
 
 export interface TwitchChatTimersTableProps {
-  /** Where the timers are read/written — the Discord dashboard's guild routes or the creator dashboard's own. */
+  /** Where the timers are read/written — the creator dashboard's routes. */
   backend: TwitchChatTimersBackend;
   channelId: string;
 }

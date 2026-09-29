@@ -131,9 +131,8 @@ export function isOAuthProviderConfigured(providerId: OAuthProviderId): boolean 
  * Builds the provider's OAuth2 authorize URL with the given anti-CSRF `state`.
  *
  * `scopeOverride` lets a caller request a different scope than the provider's default `cfg.scope` for this one
- * authorize URL, without touching that default — used by the Twitch chat-bot flows (`routes/twitch-chat.ts`'s
- * per-guild `channel:bot` connect, `routes/twitch-bot.ts`'s owner-only `user:read:chat user:write:chat user:bot`
- * connect) so the existing generic Twitch integration's consent screen (`cfg.scope === ''`) never changes.
+ * authorize URL, without touching that default — used by the Twitch chat-bot flows (the creator dashboard's
+ * `channel:bot` connect, `routes/twitch-bot.ts`'s owner-only `user:read:chat user:write:chat user:bot` connect) so the existing generic Twitch integration's consent screen (`cfg.scope === ''`) never changes.
  */
 export function buildProviderAuthorizeUrl(
   providerId: OAuthProviderId,

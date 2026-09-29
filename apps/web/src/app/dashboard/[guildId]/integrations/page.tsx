@@ -39,17 +39,13 @@ import { InboundWebhooksList } from '@/components/dashboard/integrations/inbound
 import { OutboundWebhookDialog } from '@/components/dashboard/integrations/outbound-webhook-dialog';
 import { OutboundWebhooksList } from '@/components/dashboard/integrations/outbound-webhooks-list';
 import { SecretRevealDialog } from '@/components/dashboard/integrations/secret-reveal-dialog';
-import { TwitchChatTab } from '@/components/dashboard/integrations/twitch-chat-tab';
+import { TwitchChatMovedNotice } from '@/components/dashboard/integrations/twitch-chat-moved-notice';
 
-/** Readable messages for the `?error=` codes `routes/oauth-integrations.ts` redirects back with when an
- * OAuth callback bails out instead of completing (e.g. the same Twitch broadcaster already linked into a
- * different guild — a real EventSub constraint, not an arbitrary cap; see that route's doc comment). Falls
- * back to a generic message for any code not in this table, so a future new error redirect never renders as
- * a raw, un-mapped code either. */
-const OAUTH_CALLBACK_ERROR_MESSAGES: Record<string, string> = {
-  'twitch-chat-already-linked':
-    "That Twitch channel's chat is already linked to a different Pavisie server — Twitch only allows one server per channel at a time.",
-};
+/** Readable messages for the `?error=` codes an OAuth callback redirects back with when it bails out instead of
+ * completing. Falls back to a generic message for any code not in this table, so a new error redirect never renders as
+ * a raw, un-mapped code. The old `twitch-chat-already-linked` code went away with the Discord-side Twitch chat connect
+ * (creator-dashboard phase 4), so a stale link carrying it just gets the generic message. */
+const OAUTH_CALLBACK_ERROR_MESSAGES: Record<string, string> = {};
 
 export default function IntegrationsPage() {
   const { guildId } = useParams<{ guildId: string }>();
@@ -73,8 +69,7 @@ export default function IntegrationsPage() {
   /** The connection currently mid-disconnect, so only that row's button (not every row's) shows "Disconnecting…". */
   const [disconnectingConnectionId, setDisconnectingConnectionId] = React.useState<string | null>(null);
 
-  // Surfaces the OAuth callback's `?error=...` redirect (e.g. the already-linked-Twitch-broadcaster bounce)
-  // as a readable toast instead of leaving it as a silent, unexplained query string — then strips it from the
+  // Surfaces the OAuth callback's `?error=...` redirect as a readable toast instead of leaving it as a silent, unexplained query string — then strips it from the
   // URL so refreshing the page doesn't re-show the same toast.
   React.useEffect(() => {
     const error = searchParams.get('error');
@@ -143,7 +138,7 @@ export default function IntegrationsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Integrations"
-        description="Connect Twitch, YouTube, Instagram, Reddit, Steam, calendars, and your own webhooks. Every connector is optional and off until you set it up."
+        description="Get Twitch, YouTube, Instagram, Reddit and Steam alerts, calendar reminders, and your own webhooks in Discord. Every connector is optional and off until you set it up."
       />
 
       <Card>
@@ -180,12 +175,13 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
+      <TwitchChatMovedNotice guildId={guildId} />
+
       <Tabs defaultValue="alerts">
         <TabsList>
           <TabsTrigger value="alerts">Alerts</TabsTrigger>
           <TabsTrigger value="inbound">Inbound webhooks</TabsTrigger>
           <TabsTrigger value="outbound">Outbound webhooks</TabsTrigger>
-          <TabsTrigger value="twitch-chat">Twitch chat</TabsTrigger>
         </TabsList>
 
         <TabsContent value="alerts" className="space-y-4 pt-4">
@@ -215,9 +211,6 @@ export default function IntegrationsPage() {
           <OutboundWebhooksList guildId={guildId} />
         </TabsContent>
 
-        <TabsContent value="twitch-chat" className="pt-4">
-          <TwitchChatTab guildId={guildId} />
-        </TabsContent>
       </Tabs>
 
       <AlertFormDialog

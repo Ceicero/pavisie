@@ -8,7 +8,7 @@ import { buildProviderAuthorizeUrl, isOAuthProviderConfigured } from '../lib/int
 import { nudgeTwitchChatReconcile } from '../lib/integrations/twitch-chat-reconcile';
 
 /** Scopes for Pavisie's own Twitch bot account (ARCHITECTURE.md §19/§J) — never the generic Twitch
- * integration's scope, and never the per-guild `channel:bot` chat-channel scope (`routes/twitch-chat.ts`). */
+ * integration's scope, and never the streamer's `channel:bot` chat-channel scope (creator dashboard, `lib/creator/oauth.ts`). */
 const TWITCH_BOT_SCOPE = 'user:read:chat user:write:chat user:bot';
 
 /**
@@ -40,8 +40,8 @@ export default async function twitchBotRoutes(app: ZodFastifyInstance): Promise<
       }
 
       const state = randomBytes(24).toString('hex');
-      // No `guildId` — this flow authorizes Pavisie's own account, not a per-guild channel link (contrast
-      // `routes/twitch-chat.ts`'s `connect`, whose state carries `guildId`).
+      // No `guildId` — this flow authorizes Pavisie's own account, not a per-guild link (unlike the generic
+      // per-guild connect flow, whose state carries `guildId`).
       await app.redis.set(
         redisKey('oauthstate', 'integration', state),
         JSON.stringify({ provider: 'twitch', userId: session.userId, kind: 'twitch_bot' }),

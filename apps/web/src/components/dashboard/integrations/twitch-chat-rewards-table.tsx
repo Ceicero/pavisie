@@ -26,12 +26,10 @@ import { TwitchChatRewardDialog } from './twitch-chat-reward-dialog';
 const MAX_REWARDS_PER_CHANNEL = 25;
 
 export interface TwitchChatRewardsTableProps {
-  /** Where rewards are read/written - the Discord dashboard's guild routes or the creator dashboard's own. */
+  /** Where rewards are read/written (the creator dashboard's routes). */
   backend: TwitchChatRewardsBackend;
-  /** The linked Discord server, only when the caller may post into it (the Discord dashboard). Without it (the
-   * creator dashboard) "Send to Discord" is not offered, and existing Discord-post rewards are shown read-only. */
-  discordGuildId?: string | null;
-  /** A connected Discord server with the caller's own channel picker (the creator dashboard); enables "Send to Discord". */
+  /** The channel picker for a Discord server the streamer connected and verified; enables "Send to Discord". Without
+   * it that action is not offered, and existing Discord-post rewards are shown read-only. */
   discordChannelSelect?: DiscordChannelSelectComponent;
   channelId: string;
   /** The per-channel cap (the API reports it; falls back to the built-in default). */
@@ -40,14 +38,13 @@ export interface TwitchChatRewardsTableProps {
 
 export function TwitchChatRewardsTable({
   backend,
-  discordGuildId,
   discordChannelSelect,
   channelId,
   maxRewards = MAX_REWARDS_PER_CHANNEL,
 }: TwitchChatRewardsTableProps) {
   const { data, isLoading, error, refetch } = backend.useList();
   const del = backend.useRemove();
-  const discordAvailable = Boolean(discordGuildId) || Boolean(discordChannelSelect);
+  const discordAvailable = Boolean(discordChannelSelect);
   const { toast } = useToast();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -144,7 +141,7 @@ export function TwitchChatRewardsTable({
                 </TableCell>
                 <TableCell className="space-x-1 whitespace-nowrap">
                   {reward.action === 'discord' && !discordAvailable ? (
-                    <span className="text-xs text-muted-foreground">Managed in the Discord dashboard</span>
+                    <span className="text-xs text-muted-foreground">Connect your Discord server to edit</span>
                   ) : (
                     <>
                       <Button size="sm" variant="ghost" onClick={() => openEdit(reward)}>
@@ -164,7 +161,6 @@ export function TwitchChatRewardsTable({
 
       <TwitchChatRewardDialog
         backend={backend}
-        discordGuildId={discordGuildId}
         discordChannelSelect={discordChannelSelect}
         channelId={channelId}
         open={dialogOpen}

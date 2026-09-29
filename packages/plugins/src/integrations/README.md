@@ -25,68 +25,34 @@ degrades independently when its env vars are unset — the plugin itself never b
   pre-existing endpoints don't start erroring, but there is no longer a `github` provider to handle the result —
   `jobs/inbound.ts` logs "inbound event for a provider with no handleInbound" and drops it.
 
-## Twitch chat bot
+## Twitch chat bot, channel points and currency (runtime only; managed on the creator dashboard)
 
-Pavisie joining a streamer's Twitch chat to answer commands — a distinct feature from the Twitch stream-live
-alert watcher above, sharing only the `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` env vars. Lives in
-`twitch-chat/` (`helix.ts`, `socket.ts`, `manager.ts`, `engine.ts`, `timers.ts`) + the `twitch-chat-tick` job.
-See `docs/ARCHITECTURE.md` §19a for the full runtime contract.
+Since creator-dashboard phase 4 (`docs/ARCHITECTURE.md` §19e) the Discord side of this plugin is **notifications
+and alerts only**. The Twitch chat bot, channel-point rewards (OBS overlay, TTS), the channel's virtual currency,
+the Discord <-> Twitch chat bridge and the link to a Discord server are all managed ONLY by the streamer, on the
+creator dashboard (`pavisie.com/creator`, `apps/api/src/routes/creator-twitch*.ts`). There is no `/twitch` slash
+command and no "Twitch chat" tab on `/dashboard/[guildId]/integrations` any more — that page only shows a read-only
+notice naming the linked channel (if any), with a button that lets a server admin unlink their server.
 
-- **How it works**: Pavisie runs as ONE dedicated Twitch bot account, authorized once by Brandon (owner-only
-  `POST /owner/twitch-bot/connect`, `routes/twitch-bot.ts`). A streamer links their channel from the dashboard's
-  "Twitch chat" tab (`POST /:guildId/integrations/twitch-chat/connect`, OAuth scope `channel:bot`). Chat
-  messages arrive over the official EventSub WebSocket (`channel.chat.message` v1, Node 22's built-in global
-  `WebSocket` — no new dependency); replies go out through Helix "Send Chat Message". All chat reads/sends run
-  on the bot identity's token, never the broadcaster's.
-- **Features**: per-channel custom `!commands` (name, response with `{user}`/`{channel}` placeholders, cooldown,
-  minimum chat level everyone/subscriber/vip/moderator/broadcaster), recurring timers, and built-ins
-  `!commands`/`!uptime`/`!title`. Configured from `/twitch` or the dashboard's Twitch chat tab (max 50 commands
-  and 10 timers per channel).
-- **What is stored**: the bot identity's and each linked channel's OAuth tokens (encrypted, same as every other
-  connection), and the command/timer definitions themselves (name, response text, cooldown, level, interval).
-- **What is NOT stored**: chat message content or chatter identity. Messages are parsed **in memory only**, to
-  match a command, and are never written to a database row, a log line, or Discord. No Twitch-side moderation
-  actions (ban/timeout/delete) ship in v1 — no moderator scopes are requested.
-- **Degradation**: with `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` unset, or before Brandon authorizes the bot
-  account, the feature reports itself as not configured (`/twitch status`, the dashboard tab, and this plugin's
-  `health()`) instead of failing silently or erroring.
+What still lives in this package is the **runtime**: `twitch-chat/` (`helix.ts`, `socket.ts`, `manager.ts`,
+`engine.ts`, `timers.ts`, `rewards.ts`, `tts.ts`, `broadcaster-token.ts`, the economy and bridge modules) plus the
+`twitch-chat-tick` job. See `docs/ARCHITECTURE.md` §19a (chat bot), §19b (channel points) and §18b (currency).
 
-## Twitch channel-point rewards
-
-A viewer redeeming a Twitch channel-point reward can trigger an action in Pavisie. Lives in `twitch-chat/`
-(`rewards.ts`, `tts.ts`, `broadcaster-token.ts`, `manager.ts`) with overlay routes in `apps/api`. Shares the
-same `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` vars and EventSub socket as the chat bot above. See
-`docs/ARCHITECTURE.md` §19b for the full runtime contract.
-
-- **How it works**: a streamer enables rewards on a linked channel and grants `channel:read:redemptions` scope
-  (must re-link — existing channels have only `channel:bot`). When a viewer redeems the reward in chat, Pavisie
-  matches it against configured `TwitchChatReward` rows by reward title or id, applies per-reward cooldowns, and
-  runs the configured action. Four action kinds: SOUND (play an audio URL on the overlay), TTS (speak text via
-  server-side synthesis on the overlay), CHAT (post to Twitch chat), DISCORD (post to a Discord channel). Text
-  templates support `{user}`, `{input}` (viewer's text), and `{reward}` — no other interpolation.
-- **Overlay**: served at `/overlay/:token` (the token is a capability — treat the URL like a password; it can
-  be regenerated without re-linking). An HTML page held open by Server-Sent Events, with a queue of SOUND/TTS
-  actions playing in sequence. Dedupes by action id so reconnects don't replay. Volume is clamped 0-100.
-  Strict CSP (`default-src: none`), no user input, no attack surface — serves "link expired" on bad token.
-- **TTS synthesis**: OBS's embedded browser has no `speechSynthesis` API, so synthesis is server-side via
-  OpenAI's `/v1/audio/speech`. Uses the **guild's own configured OpenAI key** (same key as the `ai` plugin),
-  trying `gpt-4o-mini-tts` then falling back to `tts-1`. Returns `null` (never throws) when: the guild has no
-  OpenAI key, the provider is not OpenAI (e.g. Anthropic), or the request fails. Actions are logged and skipped,
-  reported honestly to admins.
-- **Sound effects**: admin-supplied public HTTPS URLs, validated by the existing SSRF guard at write time. No
-  file upload or blob storage — the platform has no place to store arbitrary audio.
-- **Commands**: `/twitch reward add|remove|list` (staff level admin). Add requires: reward title, action kind,
-  and action-specific fields (soundUrl for SOUND, text template for TTS/CHAT/DISCORD, Discord channel for
-  DISCORD). Dashboard "Rewards" tab has a "List rewards from Twitch" picker to auto-populate reward ids.
-- **What is stored**: the OAuth tokens (broadcaster's, encrypted, same as every other connection), and the
-  reward row (title, id, action, payloads, cooldown). Max 25 rewards per channel.
-- **What is NOT stored**: viewer reward-input text, redeemer display name, or any redemption event detail beyond
-  the reward title and action kind (in logs). Same privacy stance as chat message handling.
-- **Degradation**: without `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET`, or if the broadcaster's token lacks
-  `channel:read:redemptions`, rewards don't function. The channel's `lastError` reports the scope gap plainly.
-  With an invalid soundUrl or Discord channel id, that action is skipped (logged), while others run. With no
-  OpenAI key, TTS actions are skipped; other reward types still work. No silent failures — admins know what's
-  working and what isn't from `/twitch status` or the dashboard.
+- **Ownership**: the chat bot belongs to the streamer. `TwitchChatChannel` rows run on their own `enabled` flag,
+  guild-linked or not — a server admin switching the `integrations` plugin off does NOT stop a linked channel's chat
+  bot, commands, timers, currency or SOUND/CHAT/TTS rewards.
+- **What still respects the server's plugin switch**: only the features that act INSIDE a Discord server — the
+  Discord <-> Twitch chat bridge (both directions, including the "now bridged" announcements and webhook provisioning)
+  and the DISCORD channel-point reward action. With the plugin off in the linked server they are skipped quietly and
+  resume when it is back on.
+- **Identity**: ONE dedicated Twitch bot account, authorized once by the operator (owner-only
+  `POST /owner/twitch-bot/connect`); a streamer connects their channel from `/creator` (scope `channel:bot`, plus
+  `channel:read:redemptions` if they enable channel points).
+- **What is NOT stored**: chat message content or chatter identity. Messages are parsed **in memory only**, to match a
+  command, and are never written to a database row, a log line, or Discord (outside the opt-in bridge, which relays
+  text in memory only). Viewer reward-input text is never stored or logged either.
+- **Degradation**: with `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` unset, or before the operator authorizes the bot
+  account, the manager stays idle and this plugin's `health()` says why.
 
 ## Commands
 
@@ -98,9 +64,6 @@ connection immediately if `target`+`channel` are given.
 per target).
 `/integration webhook create|list|delete` — inbound endpoints; the secret is shown exactly once, at creation.
 `/integration outbound create|list|delete|test` — outbound endpoints.
-`/twitch status|setup|off`, `/twitch command add|remove|list`, `/twitch timer add|remove|list` — the Twitch chat
-bot, above.
-`/twitch reward add|remove|list` — channel-point reward actions, above.
 
 ## Config keys
 
@@ -124,13 +87,14 @@ None.
 - Alert connectors only read publicly available data about the watched target; no member data or message content
   is ever sent to a provider.
 - Stripe events never carry card data — only price ids and the Discord user id from checkout metadata.
-- Twitch chat messages are parsed in memory only, to match a command — never persisted, logged, or sent to
-  Discord.
+- Twitch chat messages (handled by the streamer-owned chat bot runtime above) are parsed in memory only, to match a
+  command — never persisted or logged; the opt-in Discord bridge relays them in memory only.
 
 ## Dashboard page
 
 `/dashboard/[guildId]/integrations` — provider cards with connect/disconnect + setup hints (missing env vars),
-alert watch management, and inbound/outbound webhook tabs with deliveries.
+alert watch management, inbound/outbound webhook tabs with deliveries, and a read-only "Twitch chat, channel points
+and currency moved to the creator dashboard" notice (with the linked channel and an Unlink button when applicable).
 
 ## Known limitations / design notes
 
@@ -145,7 +109,7 @@ alert watch management, and inbound/outbound webhook tabs with deliveries.
   `apps/api/src/lib/integrations/providers.ts` (pre-existing, not changed here); that dashboard OAuth flow links
   the connecting staff member's own account but isn't required for alerts to work — `/integration alerts add`
   (app-token based) is what actually watches a target. The **Twitch chat bot** (above) is the exception: it
-  genuinely runs on real per-connection user OAuth — the broadcaster's `channel:bot` grant plus Pavisie's own
-  dedicated bot-account token — not the app-level client-credentials grant the alert watcher uses.
+  genuinely runs on real user OAuth — the broadcaster's `channel:bot` grant plus Pavisie's own dedicated
+  bot-account token — not the app-level client-credentials grant the alert watcher uses.
 - GitHub's optional `repo:`/`branch:` filters are encoded as extra entries in `WebhookEndpoint.events` (there's no
   dedicated filter column on that model) rather than a real event-type allowlist plus separate filter fields.

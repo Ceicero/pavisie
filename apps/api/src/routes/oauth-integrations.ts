@@ -26,7 +26,6 @@ import {
   type OAuthProviderId,
 } from '../lib/integrations/providers';
 import { nudgeTwitchChatReconcile } from '../lib/integrations/twitch-chat-reconcile';
-import { storeBroadcasterToken } from '../lib/creator/broadcaster-token';
 
 const paramsSchema = z.object({
   provider: z.enum(OAUTH_PROVIDER_IDS as [OAuthProviderId, ...OAuthProviderId[]]),
@@ -39,12 +38,14 @@ const querySchema = z.object({ code: z.string().min(1), state: z.string().min(1)
  * adopt this id for the (so far nonexistent) real singleton. */
 const TWITCH_BOT_IDENTITY_ID = 'twitch-bot-identity';
 
-/** Distinguishes the Twitch chat-bot flows from the original generic per-guild connect flow below, which is
- * unchanged and still carries no `kind` at all. See docs/ARCHITECTURE.md §J/§19. */
+/** Distinguishes the owner-only bot-identity flow from the original generic per-guild connect flow below, which is
+ * unchanged and still carries no `kind` at all. `'twitch_chat'` is LEGACY: the Discord dashboard's "connect a Twitch
+ * channel" flow was removed in creator-dashboard phase 4 (ARCHITECTURE.md §19e); a state issued by it just before that
+ * shipped (10-minute TTL) is refused explicitly below rather than falling into the generic flow. */
 type TwitchChatOAuthKind = 'twitch_chat' | 'twitch_bot';
 
 interface OAuthStatePayload {
-  /** Present for every guild-scoped flow (the generic connect flow, and `kind: 'twitch_chat'`); absent for the
+  /** Present for every guild-scoped flow (the generic connect flow); absent for the
    * owner-only `kind: 'twitch_bot'` flow, which authorizes Pavisie's own account, not a per-guild link. */
   guildId?: string;
   provider: OAuthProviderId;
@@ -62,15 +63,8 @@ interface OAuthStatePayload {
  *   additionally identifies the account via Helix and stores it as `externalAccountId`/`externalAccountName`
  *   (the login) — see the comment at that branch for why, and why every other provider here doesn't. A
  *   re-connect of an account already linked to this guild updates that row instead of creating a duplicate.
- * - `'twitch_chat'` (`routes/twitch-chat.ts`'s connect): identifies the broadcaster via Helix, then:
- *     - if this exact broadcaster is already linked from a *different* guild, bails out with an error
- *       redirect and creates nothing (one broadcaster's chat can only be linked into one guild at a time —
- *       otherwise Twitch's own EventSub subscription for that broadcaster would collide across guilds).
- *     - if this guild already had a connection for this broadcaster (a re-link), retires it first — status
- *       DISCONNECTED + `oAuthToken.deleteMany` — exactly like `routes/twitch-chat.ts`'s DELETE, so re-linking
- *       never orphans the previous connection/token.
- *     - creates the new connection + token, and upserts the guild's `TwitchChatChannel` row (status PENDING
- *       until the chat-bot manager's next reconcile tick subscribes it, nudged along below).
+ * - `'twitch_chat'` (LEGACY, the removed Discord-dashboard chat-channel connect): refused with a message pointing at the
+ *   creator dashboard. Nothing is written.
  * - `'twitch_bot'` (`routes/twitch-bot.ts`'s owner-only connect): identifies Pavisie's own Twitch account and
  *   upserts the single `TwitchBotIdentity` row (fixed id, see `TWITCH_BOT_IDENTITY_ID`), replacing
  *   tokens/scopes/expiry on re-auth.
@@ -145,6 +139,12 @@ export default async function oauthIntegrationsRoutes(app: ZodFastifyInstance): 
         );
       }
 
+      if (payload.kind === 'twitch_chat') {
+        throw new ValidationError(
+          'Connecting a Twitch chat channel from a Discord server is no longer available. Streamers connect their channel from the creator dashboard at pavisie.com/creator.',
+        );
+      }
+
       const redirectUri = `${env.API_BASE_URL ?? ''}/integrations/${provider}/callback`;
       const token = await exchangeProviderCode(provider, code, redirectUri);
 
@@ -185,93 +185,6 @@ export default async function oauthIntegrationsRoutes(app: ZodFastifyInstance): 
         return `<!doctype html><html><head><meta charset="utf-8"><title>Twitch bot connected</title></head><body style="font-family:system-ui,sans-serif;padding:2rem;text-align:center"><h1>Twitch bot connected</h1><p>Pavisie's Twitch bot account (@${twitchUser.login}) is authorized. You can close this tab.</p></body></html>`;
       }
 
-      if (payload.kind === 'twitch_chat') {
-        if (!payload.guildId) throw new ValidationError('Missing guild id on this integration link.');
-        const guildId = payload.guildId;
-        const twitchUser = await identifyTwitchUser(token.accessToken);
-
-        // A broadcaster's Twitch chat can only be linked into one guild at a time (Twitch's own EventSub
-        // subscription for that broadcaster is global, not per-guild — a second guild linking the same
-        // broadcaster would otherwise fail with a cryptic 409 from Twitch once the chat-bot manager tried to
-        // subscribe it there too). Look up every guild's link for this broadcaster once, up front.
-        const existingLinksForBroadcaster = await app.prisma.twitchChatChannel.findMany({
-          where: { broadcasterUserId: twitchUser.id },
-        });
-        const linkedToAnotherGuild = existingLinksForBroadcaster.find((row) => row.guildId !== guildId);
-        if (linkedToAnotherGuild) {
-          reply.redirect(
-            `${env.DASHBOARD_URL}/dashboard/${guildId}/integrations?error=twitch-chat-already-linked`,
-          );
-          return;
-        }
-
-        // A re-link of this guild's own existing broadcaster: retire the old connection + token first —
-        // exactly like `routes/twitch-chat.ts`'s DELETE — so re-linking never leaves the previous
-        // connection/token dangling (CONNECTED forever, tokens never revoked from our side) once the new one
-        // takes over below.
-        const existingChannel = existingLinksForBroadcaster.find((row) => row.guildId === guildId);
-        if (existingChannel?.connectionId) {
-          await app.prisma.integrationConnection.update({
-            where: { id: existingChannel.connectionId },
-            data: { status: 'DISCONNECTED' },
-          });
-          await app.prisma.oAuthToken.deleteMany({ where: { connectionId: existingChannel.connectionId } });
-        }
-
-        const connection = await app.prisma.integrationConnection.create({
-          data: {
-            guildId,
-            provider: PROVIDER_ENUM_MAP.twitch,
-            label: `Twitch chat: ${twitchUser.login}`,
-            status: 'CONNECTED',
-            config: { kind: 'chat' },
-            connectedBy: payload.userId,
-          },
-        });
-
-        // Keyed on the broadcaster alone (`broadcasterUserId` is globally unique — one Pavisie chat-bot config
-        // per Twitch channel). The checks above already guarantee any existing row for this broadcaster belongs
-        // to THIS guild: a row linked elsewhere — another guild, or none at all because the streamer set the
-        // channel up from the creator dashboard (`guildId` null) — bailed out with `twitch-chat-already-linked`.
-        const channel = await app.prisma.twitchChatChannel.upsert({
-          where: { broadcasterUserId: twitchUser.id },
-          create: {
-            guildId,
-            broadcasterUserId: twitchUser.id,
-            broadcasterLogin: twitchUser.login,
-            status: 'PENDING',
-            connectionId: connection.id,
-            createdBy: payload.userId,
-          },
-          update: {
-            broadcasterLogin: twitchUser.login,
-            status: 'PENDING',
-            lastError: null,
-            connectionId: connection.id,
-          },
-        });
-
-        // The broadcaster's token (channel-point rewards) lives with the CHANNEL, not the guild-scoped
-        // connection — a creator-dashboard channel has no connection at all (ARCHITECTURE.md §19b/§19e). A re-link
-        // replaces it wholesale; a grant without `channel:read:redemptions` is useless for rewards, so it is not
-        // kept and any previous token is dropped (rewards then report "re-link needed", as before).
-        await storeBroadcasterToken(app.prisma, channel.id, token);
-
-        await writeDashboardAudit(app.prisma, {
-          guildId,
-          actorId: payload.userId,
-          action: AuditAction.IntegrationConnect,
-          targetType: 'integration_connection',
-          targetId: connection.id,
-          after: { provider: 'twitch', kind: 'chat', broadcasterLogin: twitchUser.login },
-        });
-
-        nudgeTwitchChatReconcile(app, guildId);
-
-        reply.redirect(`${env.DASHBOARD_URL}/dashboard/${guildId}/integrations?connected=twitch-chat`);
-        return;
-      }
-
       // Original generic connect flow. Twitch additionally identifies the account via Helix so the dashboard
       // can show a real handle instead of "Account <id>" (multi-account-integrations spec, section B), and so
       // `GET .../integrations/live` has a login to resolve at all — a generic Twitch connection is never
@@ -282,8 +195,7 @@ export default async function oauthIntegrationsRoutes(app: ZodFastifyInstance): 
       let externalAccountId: string | null = null;
       let externalAccountName: string | null = null;
       if (provider === 'twitch') {
-        // Non-fatal on purpose, unlike the `twitch_chat` branch above, which genuinely cannot proceed without
-        // the broadcaster id. Here the identity is a nicety — the display name and the live pill — so a Helix
+        // Non-fatal on purpose: the identity is a nicety — the display name and the live pill — so a Helix
         // blip must not throw away an OAuth grant the user already completed and make them redo the whole
         // consent flow. Failing leaves both fields null: the card falls back to `Account <id>` and the live
         // lookup reports `live: null`, and reconnecting later fills them in.
@@ -305,9 +217,8 @@ export default async function oauthIntegrationsRoutes(app: ZodFastifyInstance): 
       // A re-connect of an account already linked to this guild updates that row in place instead of leaving
       // it next to a second, now-stale-looking one — the multi-account model still allows several *different*
       // accounts per guild/provider (`ProviderCard` renders a list), just not two rows for the same one.
-      // Scoped to this guild only: unlike the `twitch_chat` kind above, a generic connection has no global
-      // per-broadcaster subscription to collide across guilds, so there is no cross-guild guard to preserve
-      // here (nor to weaken).
+      // Scoped to this guild only: a generic connection has no global per-broadcaster chat subscription to collide
+      // across guilds, so there is no cross-guild guard to preserve here (nor to weaken).
       const existingForAccount = externalAccountId
         ? await app.prisma.integrationConnection.findFirst({
             where: {
@@ -343,7 +254,7 @@ export default async function oauthIntegrationsRoutes(app: ZodFastifyInstance): 
           });
 
       // `OAuthToken.connectionId` is unique (one token per connection) — a re-connect must clear the old
-      // token row before creating the new one, exactly like the `twitch_chat` re-link above.
+      // token row before creating the new one, the same way as any re-link.
       if (existingForAccount) {
         await app.prisma.oAuthToken.deleteMany({ where: { connectionId: connection.id } });
       }

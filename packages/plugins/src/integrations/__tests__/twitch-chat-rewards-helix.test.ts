@@ -9,7 +9,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 let encryptSecret: typeof import('@pavisie/core').encryptSecret;
 let createTestContext: typeof import('../../sdk/testing').createTestContext;
 let createRewardRedemptionSubscription: typeof import('../twitch-chat/helix').createRewardRedemptionSubscription;
-let listCustomRewards: typeof import('../twitch-chat/helix').listCustomRewards;
 
 beforeAll(async () => {
   process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? randomBytes(32).toString('base64');
@@ -17,7 +16,7 @@ beforeAll(async () => {
   process.env.TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET ?? 'test-client-secret';
   ({ encryptSecret } = await import('@pavisie/core'));
   ({ createTestContext } = await import('../../sdk/testing'));
-  ({ createRewardRedemptionSubscription, listCustomRewards } = await import('../twitch-chat/helix'));
+  ({ createRewardRedemptionSubscription } = await import('../twitch-chat/helix'));
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test fixture stands in for the full Prisma model.
@@ -164,72 +163,5 @@ describe('createRewardRedemptionSubscription', () => {
 
     expect(result).toEqual({ ok: true, subscriptionId: 'sub-456' });
     expect(tokenUpdates).toHaveLength(1); // exactly one forced refresh happened
-  });
-});
-
-describe('listCustomRewards', () => {
-  const originalFetch = globalThis.fetch;
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-    vi.restoreAllMocks();
-  });
-
-  it('GETs custom rewards for the broadcaster and returns id+title pairs', async () => {
-    let capturedUrl: string | undefined;
-    let capturedInit: RequestInit | undefined;
-    globalThis.fetch = vi.fn(async (url: unknown, init?: RequestInit) => {
-      capturedUrl = String(url);
-      capturedInit = init;
-      return new Response(
-        JSON.stringify({ data: [{ id: 'reward-1', title: 'Hydrate!' }, { id: 'reward-2', title: 'Do a flip' }] }),
-        { status: 200 },
-      );
-    }) as unknown as typeof fetch;
-
-    const token = makeToken();
-    const { ctx } = createTestContext({
-      prismaOverrides: { twitchBroadcasterToken: { findUnique: async () => token } },
-    });
-
-    const result = await listCustomRewards(ctx, makeChannel());
-
-    expect(result).toEqual({
-      ok: true,
-      value: [
-        { id: 'reward-1', title: 'Hydrate!' },
-        { id: 'reward-2', title: 'Do a flip' },
-      ],
-    });
-    expect(capturedUrl).toContain('/channel_points/custom_rewards');
-    expect(capturedUrl).toContain('broadcaster_id=broadcaster-1');
-    const headers = capturedInit?.headers as Record<string, string>;
-    expect(headers.Authorization).toBe('Bearer broadcaster-access-token');
-  });
-
-  it('returns ok:false when there is no usable broadcaster token', async () => {
-    const fetchSpy = vi.fn();
-    globalThis.fetch = fetchSpy as unknown as typeof fetch;
-    const { ctx } = createTestContext({
-      prismaOverrides: { twitchBroadcasterToken: { findUnique: async () => null } },
-    });
-
-    const result = await listCustomRewards(ctx, makeChannel());
-
-    expect(result).toEqual({ ok: false });
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('returns ok:false when the Helix request fails', async () => {
-    globalThis.fetch = vi.fn(async () => new Response(null, { status: 500 })) as unknown as typeof fetch;
-
-    const token = makeToken();
-    const { ctx } = createTestContext({
-      prismaOverrides: { twitchBroadcasterToken: { findUnique: async () => token } },
-    });
-
-    const result = await listCustomRewards(ctx, makeChannel());
-
-    expect(result).toEqual({ ok: false });
   });
 });
