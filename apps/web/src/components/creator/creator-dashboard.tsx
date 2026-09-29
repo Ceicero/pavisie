@@ -7,6 +7,7 @@ import { useCreatorSession } from '@/lib/creator/session';
 import { CreatorChannelPoints } from './creator-channel-points';
 import { CreatorChatBot } from './creator-chat-bot';
 import { CreatorCurrency } from './creator-currency';
+import { CreatorDiscord } from './creator-discord';
 
 /** Messages for the `?error=` codes the API's OAuth callback redirects back with. */
 const ERROR_MESSAGES: Record<string, string> = {
@@ -25,6 +26,9 @@ export function CreatorDashboard() {
   const { status, creator, loginUrl, logout } = useCreatorSession();
   const { toast } = useToast();
   const [notice, setNotice] = React.useState<string | null>(null);
+  // The Discord sign-in finished (`?discord=pick`): show the "pick a server" step until it is used or dismissed.
+  const [pickDiscord, setPickDiscord] = React.useState(false);
+  const donePickingDiscord = React.useCallback(() => setPickDiscord(false), []);
 
   // The API's OAuth callback lands here with `?connected=twitch-chat` or `?error=<code>`. Read it once, show it,
   // and strip it so a refresh does not repeat it.
@@ -32,7 +36,8 @@ export function CreatorDashboard() {
     const params = new URLSearchParams(window.location.search);
     const connected = params.get('connected');
     const error = params.get('error');
-    if (!connected && !error) return;
+    if (params.get('discord') === 'pick') setPickDiscord(true);
+    if (!connected && !error && params.get('discord') !== 'pick') return;
     if (connected === 'twitch-chat') {
       toast({ title: 'Pavisie is joining your chat', description: 'It can take up to a minute to appear.', variant: 'success' });
     }
@@ -132,6 +137,7 @@ export function CreatorDashboard() {
         <CreatorChatBot />
         <CreatorChannelPoints />
         <CreatorCurrency />
+        <CreatorDiscord pickRequested={pickDiscord} onPickDone={donePickingDiscord} />
       </div>
     </div>
   );

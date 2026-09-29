@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { AppError, NotFoundError, ValidationError, encryptSecret } from '@pavisie/core';
+import type { TwitchChatChannel } from '@pavisie/database';
 import type { TwitchChatRewardDto, TwitchOverlayInfoDto } from '@pavisie/types/integrations';
 import type { CreatorRewardsStatusDto, CreatorTtsKeyStatusDto } from '@pavisie/types/creator';
+import { getCachedGuildChannels } from '../lib/discord';
 import type { ZodFastifyInstance } from '../lib/http';
 import { TWITCH_REDEMPTIONS_SCOPE } from '../lib/creator/broadcaster-token';
 import { requireTwitchCreator } from '../lib/creator/auth';
@@ -30,23 +32,12 @@ const CREATOR_SENSITIVE_RATE_LIMIT = { config: { rateLimit: { max: 20, timeWindo
 
 const rewardParamSchema = z.object({ rewardId: z.string().min(1) });
 
-/** Posting a reward into a Discord channel is authorized by Discord permissions (a Discord admin of the linked
- * server), which a signed-in Twitch creator does not have — so a DISCORD action can be neither created nor edited
- * from the creator dashboard (phase 3's "connect a Discord server" adds a proper, verified Discord connection). */
+/** Posting a reward into a Discord channel is authorized by Discord permissions, which a signed-in Twitch creator
+ * does not have by default. It is therefore offered only once the creator has CONNECTED a Discord server from this
+ * dashboard (`routes/creator-twitch-discord.ts` - they signed into Discord and proved they manage it), and only into a
+ * text channel of THAT server. */
 const DISCORD_ACTION_MESSAGE =
-  'Posting a reward to Discord is set up from the Discord dashboard, not the creator dashboard.';
-
-const noDiscordAction = (data: { action?: string }): boolean => data.action !== 'discord';
-const noDiscordFields = (data: { discordChannelId?: unknown; discordTemplate?: unknown }): boolean =>
-  data.discordChannelId === undefined && data.discordTemplate === undefined;
-
-const createCreatorRewardSchema = createTwitchChatRewardSchema
-  .refine(noDiscordAction, { path: ['action'], message: DISCORD_ACTION_MESSAGE })
-  .refine(noDiscordFields, { path: ['discordChannelId'], message: DISCORD_ACTION_MESSAGE });
-
-const updateCreatorRewardSchema = updateTwitchChatRewardSchema
-  .refine(noDiscordAction, { path: ['action'], message: DISCORD_ACTION_MESSAGE })
-  .refine(noDiscordFields, { path: ['discordChannelId'], message: DISCORD_ACTION_MESSAGE });
+  'Posting a reward to Discord needs a Discord server connected from the creator dashboard first. Use "Connect a Discord server" in the Discord server section.';
 
 /** Only the master switch is a creator setting here (everything else has its own route). */
 const updateRewardsSettingsSchema = z.object({ rewardsEnabled: z.boolean() }).strict();
@@ -97,6 +88,21 @@ export default async function creatorTwitchRewardsRoutes(app: ZodFastifyInstance
     return Boolean(token && token.scopes.includes(TWITCH_REDEMPTIONS_SCOPE) && token.status !== 'ERROR');
   }
 
+  /** The Discord server the creator connected from this dashboard (verified link), or `null`. */
+  function verifiedGuildId(channel: TwitchChatChannel): string | null {
+    return channel.guildId && channel.discordLinkedBy ? channel.guildId : null;
+  }
+
+  /** The Discord reward action's target must be a text channel of the creator's connected server. The Discord
+   * dashboard's route does not check this (a Discord admin manages the server); here the creator's authority comes
+   * only from the connected server, so the channel is validated against THAT server's channel list. */
+  async function assertDiscordTargetChannel(guildId: string, discordChannelId: string): Promise<void> {
+    const channels = await getCachedGuildChannels(app.redis, guildId);
+    const match = channels.find((c) => c.id === discordChannelId);
+    if (!match) throw new ValidationError('That channel was not found in your connected Discord server.');
+    if (match.type !== 0 && match.type !== 5) throw new ValidationError('Pick a text channel.');
+  }
+
   function nudge(channel: { guildId: string | null }): void {
     nudgeTwitchChatReconcile(app, channel.guildId ?? '');
   }
@@ -120,6 +126,7 @@ export default async function creatorTwitchRewardsRoutes(app: ZodFastifyInstance
           hasOverlay: false,
           ttsKeyConfigured: false,
           discordLinked: false,
+          discordVerified: false,
           maxRewards: TWITCH_CHAT_MAX_REWARDS_PER_CHANNEL,
         };
       }
@@ -133,6 +140,7 @@ export default async function creatorTwitchRewardsRoutes(app: ZodFastifyInstance
         hasOverlay: Boolean(channel.overlayTokenEnc),
         ttsKeyConfigured: Boolean(channel.ttsOpenAiKeyEnc),
         discordLinked: channel.guildId !== null,
+        discordVerified: verifiedGuildId(channel) !== null,
         maxRewards: TWITCH_CHAT_MAX_REWARDS_PER_CHANNEL,
       };
     },
@@ -208,7 +216,7 @@ export default async function creatorTwitchRewardsRoutes(app: ZodFastifyInstance
 
   app.post(
     '/items',
-    { ...CREATOR_ROUTE_RATE_LIMIT, schema: { body: createCreatorRewardSchema }, preHandler: requireTwitchCreator },
+    { ...CREATOR_ROUTE_RATE_LIMIT, schema: { body: createTwitchChatRewardSchema }, preHandler: requireTwitchCreator },
     async (request, reply): Promise<TwitchChatRewardDto> => {
       const creator = request.creator!;
       const body = request.body;
@@ -217,6 +225,12 @@ export default async function creatorTwitchRewardsRoutes(app: ZodFastifyInstance
       // The zod schema only checks URL shape (https, well-formed) — the live DNS lookup that catches
       // private/internal/metadata targets happens here.
       if (body.soundUrl) await assertSafeSoundUrl(body.soundUrl);
+
+      if (body.action === 'discord') {
+        const guildId = verifiedGuildId(channel);
+        if (!guildId) throw new ValidationError(DISCORD_ACTION_MESSAGE);
+        await assertDiscordTargetChannel(guildId, body.discordChannelId!);
+      }
 
       const action = TWITCH_REWARD_ACTION_ENUM_MAP[body.action];
       const clash = await app.prisma.twitchChatReward.findUnique({
@@ -248,8 +262,8 @@ export default async function creatorTwitchRewardsRoutes(app: ZodFastifyInstance
             volume: body.volume ?? 80,
             ttsTemplate: body.ttsTemplate ?? null,
             chatTemplate: body.chatTemplate ?? null,
-            discordChannelId: null,
-            discordTemplate: null,
+            discordChannelId: body.discordChannelId ?? null,
+            discordTemplate: body.discordTemplate ?? null,
             cooldownSeconds: body.cooldownSeconds ?? 0,
             createdBy: creator.platformUserId,
           },
@@ -269,7 +283,7 @@ export default async function creatorTwitchRewardsRoutes(app: ZodFastifyInstance
     '/items/:rewardId',
     {
       ...CREATOR_ROUTE_RATE_LIMIT,
-      schema: { params: rewardParamSchema, body: updateCreatorRewardSchema },
+      schema: { params: rewardParamSchema, body: updateTwitchChatRewardSchema },
       preHandler: requireTwitchCreator,
     },
     async (request): Promise<TwitchChatRewardDto> => {
@@ -279,21 +293,39 @@ export default async function creatorTwitchRewardsRoutes(app: ZodFastifyInstance
 
       const existing = await app.prisma.twitchChatReward.findFirst({ where: { id: rewardId, channelId: channel.id } });
       if (!existing) throw new NotFoundError('Twitch chat reward not found.');
-      if (existing.action === 'DISCORD') throw new ValidationError(DISCORD_ACTION_MESSAGE);
+
+      // Anything that touches the Discord action (an existing Discord reward, switching TO it, or Discord fields)
+      // needs the connected, verified server.
+      const effectiveActionId = body.action ?? TWITCH_REWARD_ACTION_MAP[existing.action];
+      const touchesDiscord =
+        existing.action === 'DISCORD' ||
+        body.action === 'discord' ||
+        body.discordChannelId !== undefined ||
+        body.discordTemplate !== undefined;
+      const discordGuildId = verifiedGuildId(channel);
+      if (touchesDiscord && !discordGuildId) throw new ValidationError(DISCORD_ACTION_MESSAGE);
+      if (
+        effectiveActionId !== 'discord' &&
+        (body.discordChannelId !== undefined || body.discordTemplate !== undefined)
+      ) {
+        throw new ValidationError('Discord fields only apply to the "Send to Discord" action.');
+      }
+      if (body.discordChannelId && discordGuildId) {
+        await assertDiscordTargetChannel(discordGuildId, body.discordChannelId);
+      }
 
       if (body.soundUrl) await assertSafeSoundUrl(body.soundUrl);
 
       // The schema only saw this request body in isolation; validate the reward's RESULTING state (existing row
       // merged with the patch), e.g. switching to "sound" without a sound URL must not save a silent reward.
-      const effectiveActionId = body.action ?? TWITCH_REWARD_ACTION_MAP[existing.action];
       const spec = REWARD_ACTION_FIELD_SPEC[effectiveActionId];
       const merged: Record<RewardActionField, unknown> = {
         soundUrl: body.soundUrl !== undefined ? body.soundUrl : existing.soundUrl,
         volume: body.volume !== undefined ? body.volume : existing.volume,
         ttsTemplate: body.ttsTemplate !== undefined ? body.ttsTemplate : existing.ttsTemplate,
         chatTemplate: body.chatTemplate !== undefined ? body.chatTemplate : existing.chatTemplate,
-        discordChannelId: existing.discordChannelId,
-        discordTemplate: existing.discordTemplate,
+        discordChannelId: body.discordChannelId !== undefined ? body.discordChannelId : existing.discordChannelId,
+        discordTemplate: body.discordTemplate !== undefined ? body.discordTemplate : existing.discordTemplate,
       };
       for (const field of spec.required) {
         if (merged[field] === null || merged[field] === undefined) {
@@ -333,6 +365,8 @@ export default async function creatorTwitchRewardsRoutes(app: ZodFastifyInstance
             ...(body.volume !== undefined ? { volume: body.volume } : {}),
             ...(body.ttsTemplate !== undefined ? { ttsTemplate: body.ttsTemplate } : {}),
             ...(body.chatTemplate !== undefined ? { chatTemplate: body.chatTemplate } : {}),
+            ...(body.discordChannelId !== undefined ? { discordChannelId: body.discordChannelId } : {}),
+            ...(body.discordTemplate !== undefined ? { discordTemplate: body.discordTemplate } : {}),
             ...(body.cooldownSeconds !== undefined ? { cooldownSeconds: body.cooldownSeconds } : {}),
           },
         });
@@ -355,7 +389,9 @@ export default async function creatorTwitchRewardsRoutes(app: ZodFastifyInstance
 
       const existing = await app.prisma.twitchChatReward.findFirst({ where: { id: rewardId, channelId: channel.id } });
       if (!existing) throw new NotFoundError('Twitch chat reward not found.');
-      if (existing.action === 'DISCORD') throw new ValidationError(DISCORD_ACTION_MESSAGE);
+      if (existing.action === 'DISCORD' && !verifiedGuildId(channel)) {
+        throw new ValidationError(DISCORD_ACTION_MESSAGE);
+      }
 
       await app.prisma.twitchChatReward.delete({ where: { id: rewardId } });
 

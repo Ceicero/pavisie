@@ -1431,6 +1431,12 @@ model TwitchChatChannel {
   bridgeWebhookId        String?
   bridgeWebhookTokenEnc  String?
   bridgeLastError        String?
+  // Set only when the Discord server was linked FROM THE CREATOR DASHBOARD (ARCHITECTURE.md §19e, phase 3): the
+  // Discord user id that proved, by signing into Discord, that they can manage `guildId`, and when. Audit trail for
+  // the link, and the marker that lets the creator dashboard configure the bridge / DISCORD rewards for that server.
+  // NULL on a `guildId` that a Discord admin linked from the Discord dashboard (unverified from the creator's side).
+  discordLinkedBy        String?
+  discordLinkedAt        DateTime?
   createdBy         String
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt

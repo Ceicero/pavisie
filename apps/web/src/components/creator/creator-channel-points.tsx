@@ -36,6 +36,7 @@ import {
 import { isPlausibleOpenAiKey } from '@/lib/creator/tts-key';
 import { ConfirmDialog } from '@/components/dashboard/confirm-dialog';
 import { ErrorState } from '@/components/dashboard/error-state';
+import { CreatorDiscordChannelSelect } from './creator-discord';
 import { TwitchChatRewardsTable } from '@/components/dashboard/integrations/twitch-chat-rewards-table';
 
 function errorToast(toast: ReturnType<typeof useToast>['toast'], title: string) {
@@ -77,7 +78,7 @@ export function CreatorChannelPoints() {
         </h2>
         <p className="text-sm text-muted-foreground">
           Turn your channel-point rewards into actions on stream: play a sound on your OBS overlay, read the
-          viewer&apos;s message aloud, or post to your chat.
+          viewer&apos;s message aloud, post to your chat, or (with a Discord server connected below) post to Discord.
         </p>
       </div>
 
@@ -95,6 +96,7 @@ export function CreatorChannelPoints() {
             <CardContent>
               <TwitchChatRewardsTable
                 backend={creatorTwitchRewardsBackend}
+                discordChannelSelect={status.discordVerified ? CreatorDiscordChannelSelect : undefined}
                 channelId={channelId}
                 maxRewards={status.maxRewards}
               />

@@ -146,6 +146,9 @@ export interface CreatorRewardsStatusDto {
   ttsKeyConfigured: boolean;
   /** The channel is also linked to a Discord server (which may hold its own TTS key as a fallback). */
   discordLinked: boolean;
+  /** The Discord server was connected from the creator dashboard (the creator proved they manage it), so the
+   * "Send to Discord" reward action is available (phase 3, ARCHITECTURE.md §19e). */
+  discordVerified: boolean;
   /** Per-channel reward cap. */
   maxRewards: number;
 }
@@ -153,4 +156,59 @@ export interface CreatorRewardsStatusDto {
 /** `PUT /creator/twitch/rewards/tts-key` and `DELETE` answer with this; the key itself is never returned. */
 export interface CreatorTtsKeyStatusDto {
   ttsKeyConfigured: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Connect a Discord server (creator dashboard phase 3, ARCHITECTURE.md §19e)
+// ---------------------------------------------------------------------------
+
+/** A Discord server the creator manages and where Pavisie is a member. */
+export interface CreatorDiscordServerDto {
+  id: string;
+  name: string;
+  iconUrl: string | null;
+}
+
+/** `GET /creator/twitch/discord`. */
+export interface CreatorDiscordStatusDto {
+  /** Discord sign-in is configured on this deployment (otherwise "Connect" is unavailable). */
+  configured: boolean;
+  /** The creator has a Pavisie chat channel row (the Discord link is stored on it). */
+  hasChannel: boolean;
+  /** A Discord server is linked to the channel. */
+  linked: boolean;
+  /** The link was made from the creator dashboard (the creator proved they manage the server). `false` for a link a
+   * Discord admin made from the Discord dashboard: it works, but the bridge and the Discord reward action can only be
+   * managed here after the creator disconnects and connects it again. */
+  verified: boolean;
+  /** The linked server (only for a verified link; `null` otherwise). */
+  server: CreatorDiscordServerDto | null;
+  /** When it was linked (verified links only). */
+  linkedAt: string | null;
+  /** The server's Integrations plugin is on. It must be for the chat bot to run while a server is linked. */
+  integrationsEnabled: boolean;
+}
+
+/** `GET /creator/twitch/discord/candidates`: the servers found right after the creator signed into Discord. */
+export interface CreatorDiscordCandidatesDto {
+  /** A Discord sign-in was completed recently and its result is still held (it expires after a few minutes). */
+  pending: boolean;
+  /** Servers the creator manages where Pavisie is present. Empty (honestly) when there are none. */
+  candidates: CreatorDiscordServerDto[];
+}
+
+/** The Discord <-> Twitch chat bridge of a linked channel. Both directions are off unless the creator turns them on. */
+export interface CreatorDiscordBridgeDto {
+  discordChannelId: string | null;
+  discordToTwitch: boolean;
+  twitchToDiscord: boolean;
+  /** A problem the bot found reaching the Discord channel (permissions, deleted channel...). */
+  lastError: string | null;
+}
+
+/** `PATCH /creator/twitch/discord/bridge` body (partial). */
+export interface UpdateCreatorDiscordBridgeInput {
+  discordChannelId?: string | null;
+  discordToTwitch?: boolean;
+  twitchToDiscord?: boolean;
 }

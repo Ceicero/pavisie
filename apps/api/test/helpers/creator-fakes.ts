@@ -56,6 +56,11 @@ function makeModel(store: Map<string, any>, idPrefix: string, applyDefaults: (pa
       store.delete(existing.id);
       return existing;
     },
+    updateMany: async (args: any) => {
+      const hit = [...store.values()].filter((r) => matchWhere(r, args?.where));
+      for (const r of hit) store.set(r.id, { ...r, ...args.data });
+      return { count: hit.length };
+    },
     deleteMany: async (args: any) => {
       const doomed = [...store.entries()].filter(([, r]) => matchWhere(r, args?.where));
       for (const [id] of doomed) store.delete(id);
@@ -94,6 +99,8 @@ export function channelDefaults(partial: any) {
     bridgeWebhookId: null,
     bridgeWebhookTokenEnc: null,
     bridgeLastError: null,
+    discordLinkedBy: null,
+    discordLinkedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...partial,
@@ -162,6 +169,10 @@ export function creatorFixture() {
   const oauthTokens = new Map<string, any>();
   const rewards = new Map<string, any>();
   const broadcasterTokens = new Map<string, any>();
+  // Discord side (phase 3): the bot's Guild table, per-guild plugin enablement and the guild audit log.
+  const guilds = new Map<string, any>();
+  const pluginStates = new Map<string, any>();
+  const auditLogs = new Map<string, any>();
 
   const overrides: PrismaStubOverrides = {
     twitchChatChannel: makeModel(channels, 'chan', channelDefaults),
@@ -172,9 +183,40 @@ export function creatorFixture() {
     oAuthToken: makeModel(oauthTokens, 'token', (p) => p),
     twitchChatReward: makeModel(rewards, 'reward', rewardDefaults),
     twitchBroadcasterToken: makeModel(broadcasterTokens, 'btok', broadcasterTokenDefaults),
+    guild: makeModel(guilds, 'guild', (p) => ({ botPresent: true, iconHash: null, ...p })),
+    pluginState: {
+      ...makeModel(pluginStates, 'ps', (p) => p),
+      // `GuildConfigStore` addresses the row by the compound `guildId_pluginId` key.
+      findUnique: async (args: any) => {
+        const k = args.where.guildId_pluginId;
+        return [...pluginStates.values()].find((r) => r.guildId === k.guildId && r.pluginId === k.pluginId) ?? null;
+      },
+      upsert: async (args: any) => {
+        const k = args.where.guildId_pluginId;
+        const found = [...pluginStates.values()].find((r) => r.guildId === k.guildId && r.pluginId === k.pluginId);
+        const id = found?.id ?? `ps${pluginStates.size + 1}`;
+        const row = { ...(found ?? args.create), ...(found ? args.update : {}), id };
+        pluginStates.set(id, row);
+        return row;
+      },
+    },
+    auditLog: makeModel(auditLogs, 'audit', (p) => p),
   };
 
-  return { channels, commands, timers, botIdentities, connections, oauthTokens, rewards, broadcasterTokens, overrides };
+  return {
+    channels,
+    commands,
+    timers,
+    botIdentities,
+    connections,
+    oauthTokens,
+    rewards,
+    broadcasterTokens,
+    guilds,
+    pluginStates,
+    auditLogs,
+    overrides,
+  };
 }
 
 export function seedChannel(

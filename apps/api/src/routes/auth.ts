@@ -14,6 +14,7 @@ import { ensureGuild } from '@pavisie/database';
 import { snowflakeSchema } from '../lib/schemas';
 import type { SessionUser } from '@pavisie/types';
 import { buildAuthorizeUrl, buildAvatarUrl, exchangeCode, fetchDiscordUser } from '../lib/discord';
+import { completeDiscordCreatorConnect, detectCreatorDiscordCallback } from '../lib/creator/discord-link';
 import { requireAuth } from '../lib/guild-access';
 import {
   SESSION_COOKIE_NAME,
@@ -114,6 +115,15 @@ export default async function authRoutes(app: ZodFastifyInstance): Promise<void>
       throw new ValidationError('Missing or invalid OAuth code/state.');
     }
     const { code, state } = parsed.data;
+
+    // The creator dashboard's "connect a Discord server" flow (ARCHITECTURE.md §19e) reuses this already-registered
+    // redirect URI. Its own state namespace + browser-binding cookie are checked FIRST; a hit is handled entirely by
+    // `completeDiscordCreatorConnect` (it needs the creator `csid` session, never creates a Discord `sid` session and
+    // never stores the Discord token). Anything else is the dashboard login below, byte-for-byte unchanged.
+    if (await detectCreatorDiscordCallback(app.redis, request, state)) {
+      await completeDiscordCreatorConnect(app, request, reply, { code, state });
+      return;
+    }
 
     const cookieState = readSignedCookie(request, OAUTH_STATE_COOKIE_NAME);
     if (!cookieState || cookieState !== state) {

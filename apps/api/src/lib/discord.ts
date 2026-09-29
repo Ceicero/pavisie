@@ -100,6 +100,28 @@ export async function exchangeCode(code: string): Promise<DiscordTokenResponse> 
   );
 }
 
+/** Best-effort revoke of an OAuth access token (`POST /oauth2/token/revoke`). Never throws: used to discard a
+ * short-lived token the creator dashboard's "connect a Discord server" flow needed for one read (ARCHITECTURE.md
+ * §19e) — a failed revoke only means the token expires on its own schedule, and it was never stored anywhere. */
+export async function revokeDiscordToken(accessToken: string): Promise<void> {
+  try {
+    const { clientId, clientSecret } = requireOAuthEnv();
+    await fetch(`${DISCORD_API_BASE}/oauth2/token/revoke`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        token: accessToken,
+        token_type_hint: 'access_token',
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    // Swallowed on purpose — see doc comment above.
+  }
+}
+
 /** Refreshes an expired/expiring access token. */
 export async function refreshAccessToken(refreshToken: string): Promise<DiscordTokenResponse> {
   const { clientId, clientSecret } = requireOAuthEnv();
@@ -161,7 +183,7 @@ async function parseRetryAfterMs(res: Response): Promise<number> {
  * Fetches the authenticated user's guild list directly from Discord (`guilds` scope), bypassing the cache.
  * On a 429, waits out `retry_after` (capped at 5s) and retries exactly once before giving up.
  */
-async function fetchDiscordUserGuildsUncached(accessToken: string): Promise<DiscordUserGuild[]> {
+export async function fetchDiscordUserGuildsUncached(accessToken: string): Promise<DiscordUserGuild[]> {
   const res = await requestUserGuilds(accessToken);
   if (res.status === 429) {
     await sleep(await parseRetryAfterMs(res));

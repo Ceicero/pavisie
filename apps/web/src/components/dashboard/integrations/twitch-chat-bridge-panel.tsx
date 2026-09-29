@@ -48,8 +48,53 @@ export function TwitchChatBridgePanel({ guildId, channel }: TwitchChatBridgePane
     );
   }
 
-  const hasChannel = Boolean(channel.bridgeDiscordChannelId);
+  return (
+    <TwitchChatBridgeCard
+      channelSelect={
+        <DiscordChannelSelect
+          guildId={guildId}
+          value={channel.bridgeDiscordChannelId}
+          onChange={setBridgeChannel}
+          placeholder="Select a channel…"
+          disabled={update.isPending}
+        />
+      }
+      hasChannel={Boolean(channel.bridgeDiscordChannelId)}
+      discordToTwitch={channel.bridgeDiscordToTwitch}
+      twitchToDiscord={channel.bridgeTwitchToDiscord}
+      onToggleDiscordToTwitch={toggleDiscordToTwitch}
+      onToggleTwitchToDiscord={toggleTwitchToDiscord}
+      pending={update.isPending}
+      lastError={channel.bridgeLastError}
+    />
+  );
+}
 
+export interface TwitchChatBridgeCardProps {
+  /** The Discord channel picker (the Discord dashboard's or the creator dashboard's). */
+  channelSelect: React.ReactNode;
+  /** A bridge channel is chosen (the direction switches stay disabled until then). */
+  hasChannel: boolean;
+  discordToTwitch: boolean;
+  twitchToDiscord: boolean;
+  onToggleDiscordToTwitch: () => void;
+  onToggleTwitchToDiscord: () => void;
+  pending: boolean;
+  lastError: string | null;
+}
+
+/** The bridge form itself, independent of where its data lives: shared by the Discord dashboard (above) and the
+ * creator dashboard's "Discord server" section. */
+export function TwitchChatBridgeCard({
+  channelSelect,
+  hasChannel,
+  discordToTwitch,
+  twitchToDiscord,
+  onToggleDiscordToTwitch,
+  onToggleTwitchToDiscord,
+  pending,
+  lastError,
+}: TwitchChatBridgeCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -57,30 +102,22 @@ export function TwitchChatBridgePanel({ guildId, channel }: TwitchChatBridgePane
         <CardDescription>Show messages from each platform in the other, live</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <FormField label="Bridge Discord channel">
-          <DiscordChannelSelect
-            guildId={guildId}
-            value={channel.bridgeDiscordChannelId}
-            onChange={setBridgeChannel}
-            placeholder="Select a channel…"
-            disabled={update.isPending}
-          />
-        </FormField>
+        <FormField label="Bridge Discord channel">{channelSelect}</FormField>
 
         <FormField label="Relay Discord → Twitch">
           <Switch
-            checked={channel.bridgeDiscordToTwitch}
-            onCheckedChange={toggleDiscordToTwitch}
-            disabled={update.isPending || !hasChannel}
+            checked={discordToTwitch}
+            onCheckedChange={onToggleDiscordToTwitch}
+            disabled={pending || !hasChannel}
             aria-label="Relay Discord messages into Twitch chat"
           />
         </FormField>
 
         <FormField label="Relay Twitch → Discord">
           <Switch
-            checked={channel.bridgeTwitchToDiscord}
-            onCheckedChange={toggleTwitchToDiscord}
-            disabled={update.isPending || !hasChannel}
+            checked={twitchToDiscord}
+            onCheckedChange={onToggleTwitchToDiscord}
+            disabled={pending || !hasChannel}
             aria-label="Relay Twitch chat messages into Discord"
           />
         </FormField>
@@ -90,7 +127,7 @@ export function TwitchChatBridgePanel({ guildId, channel }: TwitchChatBridgePane
           Pavisie does not store or log this text — only names/ids from other features are ever saved.
         </p>
 
-        {channel.bridgeLastError ? <p className="text-xs text-destructive">{channel.bridgeLastError}</p> : null}
+        {lastError ? <p className="text-xs text-destructive">{lastError}</p> : null}
       </CardContent>
     </Card>
   );

@@ -27,7 +27,7 @@ import type {
 import { TWITCH_REWARD_ACTION_KINDS } from '@pavisie/types/integrations';
 import { ApiClientError } from '@/lib/dashboard/api';
 import type { TwitchChatRewardsBackend } from '@/lib/dashboard/twitch-chat-backend';
-import { DiscordChannelSelect } from '../discord-selects';
+import { DiscordChannelSelect, type DiscordChannelSelectComponent } from '../discord-selects';
 
 /** Client-side validation mirrors the server in `apps/api/src/lib/integrations/twitch-chat-schemas.ts`. */
 const TITLE_MIN = 1;
@@ -53,6 +53,9 @@ export interface TwitchChatRewardDialogProps {
    * what makes the "Send to Discord" action available; without it (the creator dashboard) that action is not
    * offered at all. */
   discordGuildId?: string | null;
+  /** Alternative to `discordGuildId` for a caller that has a connected Discord server but supplies its own channel
+   * picker (the creator dashboard). Also makes "Send to Discord" available. */
+  discordChannelSelect?: DiscordChannelSelectComponent;
   channelId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -63,11 +66,13 @@ export interface TwitchChatRewardDialogProps {
 export function TwitchChatRewardDialog({
   backend,
   discordGuildId,
+  discordChannelSelect,
   channelId,
   open,
   onOpenChange,
   reward,
 }: TwitchChatRewardDialogProps) {
+  const ChannelSelect = discordChannelSelect ?? DiscordChannelSelect;
   const isEdit = Boolean(reward);
   const [title, setTitle] = React.useState('');
   const [action, setAction] = React.useState<TwitchRewardActionKindId>('sound');
@@ -81,7 +86,7 @@ export function TwitchChatRewardDialog({
 
   const create = backend.useCreate();
   const update = backend.useUpdate();
-  const actionKinds = TWITCH_REWARD_ACTION_KINDS.filter((kind) => kind !== 'discord' || Boolean(discordGuildId));
+  const actionKinds = TWITCH_REWARD_ACTION_KINDS.filter((kind) => kind !== 'discord' || Boolean(discordGuildId) || Boolean(discordChannelSelect));
   const { toast } = useToast();
   const saving = create.isPending || update.isPending;
 
@@ -330,7 +335,7 @@ export function TwitchChatRewardDialog({
           {action === 'discord' ? (
             <>
               <FormField label="Discord channel" required>
-                <DiscordChannelSelect
+                <ChannelSelect
                   guildId={discordGuildId ?? ''}
                   value={discordChannelId}
                   onChange={setDiscordChannelId}

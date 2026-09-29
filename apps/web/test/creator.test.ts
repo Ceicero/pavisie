@@ -101,3 +101,23 @@ describe('creator API client', () => {
     expect(creatorLoginUrl('twitch')).toBe(`${API_BASE_URL}/creator/auth/twitch/login`);
   });
 });
+
+describe('creator dashboard: connect a Discord server (phase 3)', () => {
+  it('"Connect a Discord server" is a plain link to the API, which starts the Discord sign-in', async () => {
+    const { creatorDiscordConnectUrl } = await import('../src/lib/creator/queries');
+    expect(creatorDiscordConnectUrl).toBe(`${API_BASE_URL}/creator/twitch/discord/connect`);
+  });
+
+  it('the Discord routes are creator-session routes: the creator token is attached, never the Discord dashboard one', async () => {
+    setCsrfToken('discord-dashboard-token');
+    setCreatorCsrfToken('creator-token');
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await creatorFetch('/creator/twitch/discord/link', { method: 'DELETE' });
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(new Headers(init.headers).get('X-CSRF-Token')).toBe('creator-token');
+    vi.unstubAllGlobals();
+    setCsrfToken(null);
+    setCreatorCsrfToken(null);
+  });
+});

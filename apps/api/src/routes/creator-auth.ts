@@ -1,6 +1,7 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import type { CreatorMeDto } from '@pavisie/types/creator';
 import { requireCreatorAuth } from '../lib/creator/auth';
+import { clearDiscordCandidates } from '../lib/creator/discord-link';
 import { toCreatorIdentityDto } from '../lib/creator/dto';
 import { startTwitchCreatorLogin } from '../lib/creator/oauth';
 import { clearCreatorSessionCookie, currentCreatorSid, destroyCreatorSession } from '../lib/creator/session';
@@ -30,6 +31,7 @@ export default async function creatorAuthRoutes(app: ZodFastifyInstance): Promis
     const sid = currentCreatorSid(request);
     if (sid) {
       await destroyCreatorSession(app.redis, sid);
+      await clearDiscordCandidates(app.redis, sid);
     }
     clearCreatorSessionCookie(reply);
     return { ok: true };

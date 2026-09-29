@@ -6,7 +6,6 @@ import {
   ExternalServiceError,
   NotFoundError,
   ValidationError,
-  decryptSecret,
   env,
   redisKey,
 } from '@pavisie/core';
@@ -19,7 +18,7 @@ import type {
   TwitchOverlayInfoDto,
 } from '@pavisie/types/integrations';
 import { writeDashboardAudit } from '../lib/audit';
-import { getCachedGuildChannels } from '../lib/discord';
+import { unlinkChannelFromGuild } from '../lib/creator/discord-link';
 import { requireGuildAccess } from '../lib/guild-access';
 import {
   TWITCH_REWARD_ACTION_MAP,
@@ -29,6 +28,7 @@ import {
   toTwitchChatTimerDto,
 } from '../lib/integrations/dto';
 import { buildProviderAuthorizeUrl, isOAuthProviderConfigured } from '../lib/integrations/providers';
+import { prepareBridgeUpdate } from '../lib/integrations/twitch-bridge-shared';
 import { nudgeTwitchChatReconcile } from '../lib/integrations/twitch-chat-reconcile';
 import {
   REWARD_ACTION_FIELDS,
@@ -79,27 +79,6 @@ const updateChannelWithRewardsSchema = updateTwitchChatChannelSchema.extend({
 // `TWITCH_CHAT_LEVEL_ENUM_MAP`, `isUniqueViolation`, `commandExistsError`, `timerExistsError` and the reward helpers
 // (`REWARD_ACTION_FIELD_SPEC`, `assertSafeSoundUrl`, `rewardExistsError`, ...) live in
 // lib/integrations/twitch-chat-shared.ts — shared with the creator dashboard's routes (routes/creator-twitch*.ts).
-
-/**
- * Best-effort delete of a Discord <-> Twitch bridge webhook, called right before its stored credential is
- * cleared because the bridge Discord channel is changing/being cleared. Discord's `DELETE /webhooks/{id}/
- * {token}` endpoint authenticates via the webhook's own token in the URL — no bot `Authorization` header or
- * live discord.js client needed, so a plain `fetch` works fine from this process. Never throws: a failed delete
- * (webhook already gone, network hiccup, Discord downtime) must never block the actual field-clearing update
- * that follows it, since that update is what matters for correctness — this is pure tidiness.
- */
-async function deleteBridgeWebhookBestEffort(webhookId: string, webhookTokenEnc: string): Promise<void> {
-  try {
-    const token = decryptSecret(webhookTokenEnc);
-    // Time-boxed: this runs before the settings update is saved, so a hung Discord request must not hang the save.
-    await fetch(`https://discord.com/api/v10/webhooks/${webhookId}/${token}`, {
-      method: 'DELETE',
-      signal: AbortSignal.timeout(5000),
-    });
-  } catch {
-    // Swallowed on purpose — see doc comment above.
-  }
-}
 
 /**
  * `/guilds/:guildId/integrations/twitch-chat` — Pavisie joining a streamer's Twitch chat (ARCHITECTURE.md
@@ -172,46 +151,9 @@ export default async function twitchChatRoutes(app: ZodFastifyInstance): Promise
       const existing = await app.prisma.twitchChatChannel.findFirst({ where: { id: channelId, guildId } });
       if (!existing) throw new NotFoundError('Twitch chat channel not found.');
 
-      // Discord <-> Twitch chat bridge — best the API process can honestly check without a live discord.js
-      // client is that the channel exists in this guild and is a text-capable type, same boundary already
-      // documented at the bottom of this file for the "list rewards from Twitch" endpoint. The REAL permission
-      // check (View Channel / Send Messages / Manage Webhooks) only the bot process can do, during its
-      // reconcile pass (packages/plugins/src/integrations/twitch-chat/manager.ts's `runBridgeReconcile`) —
-      // failures there are reported back via `bridgeLastError`.
-      if (body.bridgeDiscordChannelId !== undefined && body.bridgeDiscordChannelId !== null) {
-        const channels = await getCachedGuildChannels(app.redis, guildId);
-        const match = channels.find((c) => c.id === body.bridgeDiscordChannelId);
-        if (!match) throw new ValidationError('That channel was not found in this server.');
-        if (match.type !== 0 && match.type !== 5) {
-          throw new ValidationError('The bridge channel must be a text channel.');
-        }
-      }
-
-      // Validate the *resulting* state (existing row merged with this patch) — a direction toggle can never end
-      // up `true` with no bridge channel set, same "merge onto the existing row" pattern the reward PATCH route
-      // uses below for its own resulting-state check.
-      const resultingChannelId =
-        body.bridgeDiscordChannelId !== undefined ? body.bridgeDiscordChannelId : existing.bridgeDiscordChannelId;
-      const resultingDiscordToTwitch =
-        body.bridgeDiscordToTwitch !== undefined ? body.bridgeDiscordToTwitch : existing.bridgeDiscordToTwitch;
-      const resultingTwitchToDiscord =
-        body.bridgeTwitchToDiscord !== undefined ? body.bridgeTwitchToDiscord : existing.bridgeTwitchToDiscord;
-      if ((resultingDiscordToTwitch || resultingTwitchToDiscord) && !resultingChannelId) {
-        throw new ValidationError('Pick a Discord channel before turning on the bridge.');
-      }
-
-      // The bridge channel is changing (or being cleared) — best-effort delete the OLD webhook from Discord's
-      // side below before nulling the stored credential, so it doesn't sit around in the old channel's
-      // "Integrations" list forever. Not load-bearing either way (resolving an orphaned webhook still requires
-      // its own token, same "orphaned index entry is fine" precedent as the overlay-token-regenerate route
-      // below) — the delete is just tidiness, and the bot creates a fresh webhook in the new channel on its next
-      // reconcile regardless of whether this delete succeeds.
-      const channelIsChanging =
-        body.bridgeDiscordChannelId !== undefined && body.bridgeDiscordChannelId !== existing.bridgeDiscordChannelId;
-
-      if (channelIsChanging && existing.bridgeWebhookId && existing.bridgeWebhookTokenEnc) {
-        await deleteBridgeWebhookBestEffort(existing.bridgeWebhookId, existing.bridgeWebhookTokenEnc);
-      }
+      // Discord <-> Twitch chat bridge validation + old-webhook tidying — shared with the creator dashboard
+      // (`lib/integrations/twitch-bridge-shared.ts`).
+      const bridgeData = await prepareBridgeUpdate(app, guildId, existing, body);
 
       const updated = await app.prisma.twitchChatChannel.update({
         where: { id: channelId },
@@ -219,12 +161,7 @@ export default async function twitchChatRoutes(app: ZodFastifyInstance): Promise
           ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
           ...(body.commandPrefix !== undefined ? { commandPrefix: body.commandPrefix } : {}),
           ...(body.rewardsEnabled !== undefined ? { rewardsEnabled: body.rewardsEnabled } : {}),
-          ...(body.bridgeDiscordChannelId !== undefined
-            ? { bridgeDiscordChannelId: body.bridgeDiscordChannelId }
-            : {}),
-          ...(body.bridgeDiscordToTwitch !== undefined ? { bridgeDiscordToTwitch: body.bridgeDiscordToTwitch } : {}),
-          ...(body.bridgeTwitchToDiscord !== undefined ? { bridgeTwitchToDiscord: body.bridgeTwitchToDiscord } : {}),
-          ...(channelIsChanging ? { bridgeWebhookId: null, bridgeWebhookTokenEnc: null, bridgeLastError: null } : {}),
+          ...bridgeData,
         },
       });
 
@@ -268,6 +205,15 @@ export default async function twitchChatRoutes(app: ZodFastifyInstance): Promise
 
       const existing = await app.prisma.twitchChatChannel.findFirst({ where: { id: channelId, guildId } });
       if (!existing) throw new NotFoundError('Twitch chat channel not found.');
+
+      // A channel the STREAMER linked to this server from their creator dashboard (`discordLinkedBy` is set) is
+      // theirs, not the server admin's, to delete: removing it here only disconnects this server from it (the
+      // streamer keeps their commands, timers, currency and rewards). Everything else is the original behaviour.
+      if (existing.discordLinkedBy) {
+        await unlinkChannelFromGuild(app, { channel: existing, actor: { id: session.userId, platform: 'discord' } });
+        reply.status(204);
+        return null;
+      }
 
       // Mirrors `routes/integrations.ts`'s plain disconnect flow (POST `/:connectionId/disconnect`): mark the
       // linked connection disconnected and drop its tokens, rather than soft-deleting the connection outright.

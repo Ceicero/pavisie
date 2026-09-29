@@ -1,7 +1,13 @@
 'use client';
 
+import * as React from 'react';
 import { ChannelPicker, Input, RolePicker, type ChannelKind } from '@pavisie/ui';
 import { useGuildChannels, useGuildRoles } from '@/lib/dashboard/queries';
+
+/** Any single-channel picker with `DiscordChannelSelect`'s props: the Discord dashboard's own (below) or the creator
+ * dashboard's (`components/creator/creator-discord.tsx`, which reads the connected server's channels through the
+ * creator session and ignores `guildId`). Lets shared forms stay identical for both. */
+export type DiscordChannelSelectComponent = React.ComponentType<DiscordChannelSelectProps>;
 
 export interface DiscordChannelSelectProps {
   guildId: string;

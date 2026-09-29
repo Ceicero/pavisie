@@ -31,7 +31,12 @@ import {
 } from '@pavisie/ui';
 import type { CreatorChannelEconomySettingsDto, CreatorEconomyLeaderboardDto } from '@pavisie/types/creator';
 import { ApiClientError } from '@/lib/dashboard/api';
-import { useCreatorEconomy, useCreatorEconomyLeaderboard, useUpdateCreatorEconomy } from '@/lib/creator/queries';
+import {
+  useCreatorDiscordStatus,
+  useCreatorEconomy,
+  useCreatorEconomyLeaderboard,
+  useUpdateCreatorEconomy,
+} from '@/lib/creator/queries';
 import {
   ECONOMY_NAME_MAX,
   ECONOMY_NUMERIC_FIELDS,
@@ -270,6 +275,7 @@ function CurrencySettingsCard({
 
 function TopViewersCard({ configured, symbol }: { configured: boolean; symbol: string }) {
   const board = useCreatorEconomyLeaderboard(configured);
+  const discord = useCreatorDiscordStatus();
   const [adjusting, setAdjusting] = React.useState(false);
 
   return (
@@ -303,6 +309,12 @@ function TopViewersCard({ configured, symbol }: { configured: boolean; symbol: s
         ) : (
           <ViewersTabs data={board.data} symbol={symbol} />
         )}
+        {discord.data?.linked ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Your Discord server&apos;s <code>/economy leaderboard platform:global</code> shows Discord and Twitch
+            together, each in its own currency. Balances are never merged.
+          </p>
+        ) : null}
       </CardContent>
 
       <CreatorCurrencyAdjustDialog open={adjusting} onOpenChange={setAdjusting} symbol={symbol} />

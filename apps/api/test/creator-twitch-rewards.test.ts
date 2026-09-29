@@ -170,6 +170,7 @@ describe('GET /creator/twitch/rewards', () => {
       hasOverlay: false,
       ttsKeyConfigured: false,
       discordLinked: false,
+      discordVerified: false,
       maxRewards: 25,
     });
     expect(t.fixture.channels.size).toBe(0);
@@ -196,6 +197,7 @@ describe('GET /creator/twitch/rewards', () => {
       hasOverlay: true,
       ttsKeyConfigured: true,
       discordLinked: true,
+      discordVerified: false, // linked from a server's dashboard, not verified from here
     });
     for (const secret of ['overlay-secret-token', OPENAI_KEY, 'enc-access-SECRET', 'ttsOpenAiKeyEnc', 'overlayTokenEnc']) {
       expect(res.body).not.toContain(secret);
@@ -650,7 +652,7 @@ describe('rewards CRUD', () => {
     await t.app.close();
   });
 
-  it('does NOT offer the DISCORD action to a creator — guildless or Discord-linked — however it is sent', async () => {
+  it('does NOT offer the DISCORD action to a creator without a VERIFIED Discord connection (guildless, or linked from another server dashboard) — however it is sent', async () => {
     for (const extra of [{}, { guildId: GUILD_ID }]) {
       const t = await setup();
       ownChannel(t, extra);
@@ -666,7 +668,7 @@ describe('rewards CRUD', () => {
         },
       });
       expect(res.statusCode, JSON.stringify(extra)).toBe(400);
-      expect(res.body).toContain('Discord dashboard');
+      expect(res.body).toContain('Connect a Discord server');
       expect(t.fixture.rewards.size).toBe(0);
 
       // Discord fields smuggled onto another action are refused too.

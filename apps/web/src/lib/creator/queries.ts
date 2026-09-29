@@ -1,9 +1,13 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { DiscordChannelOption } from '@pavisie/types';
 import type {
   CreatorChannelEconomyDto,
   CreatorChannelEconomySettingsDto,
+  CreatorDiscordBridgeDto,
+  CreatorDiscordCandidatesDto,
+  CreatorDiscordStatusDto,
   CreatorEconomyAdjustInput,
   CreatorEconomyAdjustResultDto,
   CreatorEconomyLeaderboardDto,
@@ -11,6 +15,7 @@ import type {
   CreatorTtsKeyStatusDto,
   CreatorTwitchChannelDto,
   CreatorTwitchChannelStatusDto,
+  UpdateCreatorDiscordBridgeInput,
 } from '@pavisie/types/creator';
 import type {
   CreateTwitchChatCommandInput,
@@ -30,6 +35,7 @@ import type {
   TwitchChatTimersBackend,
 } from '@/lib/dashboard/twitch-chat-backend';
 import { creatorFetch } from './api';
+import { API_BASE_URL } from '@/lib/dashboard/api';
 import { useCreatorSession } from './session';
 
 /** Every creator query key starts with `['creator']` so a sign-out can clear them all in one call. */
@@ -42,11 +48,16 @@ export const creatorQueryKeys = {
   twitchRewards: () => ['creator', 'twitch', 'rewards'] as const,
   twitchRewardItems: () => ['creator', 'twitch', 'rewards', 'items'] as const,
   twitchRewardsOverlay: () => ['creator', 'twitch', 'rewards', 'overlay'] as const,
+  twitchDiscord: () => ['creator', 'twitch', 'discord'] as const,
+  twitchDiscordCandidates: () => ['creator', 'twitch', 'discord', 'candidates'] as const,
+  twitchDiscordChannels: () => ['creator', 'twitch', 'discord', 'channels'] as const,
+  twitchDiscordBridge: () => ['creator', 'twitch', 'discord', 'bridge'] as const,
 };
 
 const CHANNEL_PATH = '/creator/twitch/channel';
 const ECONOMY_PATH = '/creator/twitch/economy';
 const REWARDS_PATH = '/creator/twitch/rewards';
+const DISCORD_PATH = '/creator/twitch/discord';
 
 /** Queries only run for a signed-in creator (otherwise they would just 401). */
 function useSignedIn(): boolean {
@@ -387,5 +398,84 @@ export function useClearCreatorTtsKey() {
   return useMutation({
     mutationFn: () => creatorFetch<CreatorTtsKeyStatusDto>(`${REWARDS_PATH}/tts-key`, { method: 'DELETE' }),
     onSuccess: () => void invalidate(),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The optional Discord server (creator dashboard phase 3): connect, pick, disconnect, and the bridge. Everything is
+// the signed-in creator's own channel (implied by the session).
+// ---------------------------------------------------------------------------
+
+/** Where "Connect a Discord server" goes: the API starts the Discord sign-in (a top-level redirect, like sign-in). */
+export const creatorDiscordConnectUrl = `${API_BASE_URL}${DISCORD_PATH}/connect`;
+
+export function useCreatorDiscordStatus() {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: creatorQueryKeys.twitchDiscord(),
+    queryFn: () => creatorFetch<CreatorDiscordStatusDto>(DISCORD_PATH),
+    enabled: signedIn,
+  });
+}
+
+/** The servers found by the Discord sign-in just completed (held for a few minutes). Only fetched while picking. */
+export function useCreatorDiscordCandidates(enabled: boolean) {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: creatorQueryKeys.twitchDiscordCandidates(),
+    queryFn: () => creatorFetch<CreatorDiscordCandidatesDto>(`${DISCORD_PATH}/candidates`),
+    enabled: signedIn && enabled,
+    gcTime: 0,
+  });
+}
+
+export function useLinkCreatorDiscord() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (guildId: string) =>
+      creatorFetch<CreatorDiscordStatusDto>(`${DISCORD_PATH}/link`, { method: 'POST', body: { guildId } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['creator', 'twitch'] });
+    },
+  });
+}
+
+export function useUnlinkCreatorDiscord() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => creatorFetch<void>(`${DISCORD_PATH}/link`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['creator', 'twitch'] });
+    },
+  });
+}
+
+/** The connected server's channels for the pickers; only runs once a verified server is connected. */
+export function useCreatorDiscordChannels(enabled: boolean) {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: creatorQueryKeys.twitchDiscordChannels(),
+    queryFn: () => creatorFetch<DiscordChannelOption[]>(`${DISCORD_PATH}/channels`),
+    enabled: signedIn && enabled,
+  });
+}
+
+export function useCreatorDiscordBridge(enabled: boolean) {
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: creatorQueryKeys.twitchDiscordBridge(),
+    queryFn: () => creatorFetch<CreatorDiscordBridgeDto>(`${DISCORD_PATH}/bridge`),
+    enabled: signedIn && enabled,
+  });
+}
+
+export function useUpdateCreatorDiscordBridge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: UpdateCreatorDiscordBridgeInput) =>
+      creatorFetch<CreatorDiscordBridgeDto>(`${DISCORD_PATH}/bridge`, { method: 'PATCH', body: patch }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(creatorQueryKeys.twitchDiscordBridge(), saved);
+    },
   });
 }

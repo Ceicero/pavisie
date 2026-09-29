@@ -68,7 +68,7 @@ set` (and the equivalent dashboard action) changes a member's stored XP/level im
   OpenAI key, else the linked guild's own key, or unavailable if neither is configured), post to Twitch chat, or
   post to a Discord channel. Configured per-channel from `/twitch reward add|remove|list`, the Discord dashboard's
   "Rewards" tab, or — with no Discord server at all — the creator dashboard's "Channel points" section (everything
-  but the Discord action). The streamer's broadcaster token (`channel:read:redemptions`) is kept per channel; a
+  but the Discord action, which appears once a Discord server is connected from the creator dashboard). The streamer's broadcaster token (`channel:read:redemptions`) is kept per channel; a
   channel without that permission (never granted, or revoked) must authorize again — the reconcile loop reports this
   plainly rather than silently failing. TTS synthesis is server-side (OBS's
   embedded browser has no voices), and sound URLs are validated by the existing SSRF guard at write time. Viewer

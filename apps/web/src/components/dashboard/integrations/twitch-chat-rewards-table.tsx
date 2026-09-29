@@ -18,6 +18,7 @@ import type { TwitchChatRewardsBackend } from '@/lib/dashboard/twitch-chat-backe
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ConfirmDialog } from '../confirm-dialog';
 import { ErrorState } from '../error-state';
+import type { DiscordChannelSelectComponent } from '../discord-selects';
 import { TwitchChatRewardDialog } from './twitch-chat-reward-dialog';
 
 /** Max rewards per channel — mirrors `TWITCH_CHAT_MAX_REWARDS_PER_CHANNEL` in
@@ -30,6 +31,8 @@ export interface TwitchChatRewardsTableProps {
   /** The linked Discord server, only when the caller may post into it (the Discord dashboard). Without it (the
    * creator dashboard) "Send to Discord" is not offered, and existing Discord-post rewards are shown read-only. */
   discordGuildId?: string | null;
+  /** A connected Discord server with the caller's own channel picker (the creator dashboard); enables "Send to Discord". */
+  discordChannelSelect?: DiscordChannelSelectComponent;
   channelId: string;
   /** The per-channel cap (the API reports it; falls back to the built-in default). */
   maxRewards?: number;
@@ -38,11 +41,13 @@ export interface TwitchChatRewardsTableProps {
 export function TwitchChatRewardsTable({
   backend,
   discordGuildId,
+  discordChannelSelect,
   channelId,
   maxRewards = MAX_REWARDS_PER_CHANNEL,
 }: TwitchChatRewardsTableProps) {
   const { data, isLoading, error, refetch } = backend.useList();
   const del = backend.useRemove();
+  const discordAvailable = Boolean(discordGuildId) || Boolean(discordChannelSelect);
   const { toast } = useToast();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -108,7 +113,7 @@ export function TwitchChatRewardsTable({
         <EmptyState
           title="No rewards yet"
           description={
-            discordGuildId
+            discordAvailable
               ? 'Create a channel-point reward to trigger actions when viewers redeem it: play a sound, read text-to-speech, post to chat, or send to Discord.'
               : 'Create a channel-point reward to trigger actions when viewers redeem it: play a sound, read text-to-speech, or post to chat.'
           }
@@ -138,7 +143,7 @@ export function TwitchChatRewardsTable({
                   {reward.enabled ? 'Yes' : 'No'}
                 </TableCell>
                 <TableCell className="space-x-1 whitespace-nowrap">
-                  {reward.action === 'discord' && !discordGuildId ? (
+                  {reward.action === 'discord' && !discordAvailable ? (
                     <span className="text-xs text-muted-foreground">Managed in the Discord dashboard</span>
                   ) : (
                     <>
@@ -160,6 +165,7 @@ export function TwitchChatRewardsTable({
       <TwitchChatRewardDialog
         backend={backend}
         discordGuildId={discordGuildId}
+        discordChannelSelect={discordChannelSelect}
         channelId={channelId}
         open={dialogOpen}
         onOpenChange={setDialogOpen}

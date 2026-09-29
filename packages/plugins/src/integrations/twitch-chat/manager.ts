@@ -63,6 +63,11 @@ import {
 const MAX_CHANNELS = 150;
 const INITIAL_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 60_000;
+/** Retry schedule for a STARTUP that throws (not a socket that dies — that has its own `backoffMs`): on a deploy
+ * the bot can boot before the api's pre-deploy migration has finished, so the very first database read fails
+ * ("column does not exist"). Retried forever, 5s doubling up to 60s, until `stop()` or one attempt succeeds. */
+const START_RETRY_INITIAL_MS = 5000;
+const START_RETRY_MAX_MS = 60_000;
 /** Twitch's own idle-socket message. Shown to the operator instead of Twitch's raw wording. */
 const NO_CHANNELS_IDLE_REASON = 'no linked Twitch channels yet';
 /** Written to `TwitchChatChannel.lastError` when rewards are enabled but the broadcaster hasn't (re-)granted
@@ -139,6 +144,9 @@ export class TwitchChatManager {
    * `reconcile` avoid firing a second, parallel connect attempt while one is already mid-flight. */
   private connecting = false;
   private lastError: string | null = null;
+  /** Pending startup-retry timer and its current delay (see `START_RETRY_INITIAL_MS`). */
+  private startRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private startRetryMs = START_RETRY_INITIAL_MS;
   private envConfigured = false;
   private botConfigured = false;
   /** Whether the last desired-set check found at least one channel to serve. Idle (and reported `enabled: false`)
@@ -181,12 +189,46 @@ export class TwitchChatManager {
 
   /** Attempts an initial connection; never throws — a missing env/bot-identity/linked-channel just leaves the
    * manager idle with a reason `status()` reports, and every later `reconcile(ctx)` tick retries (so completing
-   * owner setup or linking the first channel later, with no bot restart, brings the manager up on its own). Must
-   * not be awaited by `onLoad` — this resolves once the *attempt* finishes, not once the socket is actually
+   * owner setup or linking the first channel later, with no bot restart, brings the manager up on its own). A
+   * startup that THROWS (typically the database not being migrated yet on a fresh deploy) is logged and retried on
+   * a capped backoff (5s doubling to 60s, forever, until `stop()`), and the minute `reconcile` tick retries the
+   * connect independently as well — so a transient failure never leaves Twitch chat dead until a manual restart.
+   * Must not be awaited by `onLoad` — this resolves once the *attempt* finishes, not once the socket is actually
    * connected. */
   async start(ctx: PluginContext): Promise<void> {
     this.stopped = false;
-    await this.tryConnect(ctx);
+    this.clearStartRetry();
+    this.startRetryMs = START_RETRY_INITIAL_MS;
+    await this.attemptStart(ctx);
+  }
+
+  private async attemptStart(ctx: PluginContext): Promise<void> {
+    if (this.stopped) return;
+    try {
+      await this.tryConnect(ctx);
+      // Whether it connected or went cleanly idle, the startup problem (if any) is over.
+      this.clearStartRetry();
+      this.startRetryMs = START_RETRY_INITIAL_MS;
+    } catch (err) {
+      const delayMs = this.startRetryMs;
+      this.startRetryMs = Math.min(this.startRetryMs * 2, START_RETRY_MAX_MS);
+      ctx.logger.error(
+        { err, retryInMs: delayMs },
+        'integrations/twitch-chat: manager failed to start; will retry',
+      );
+      if (this.stopped || this.startRetryTimer) return;
+      this.startRetryTimer = setTimeout(() => {
+        this.startRetryTimer = null;
+        void this.attemptStart(ctx);
+      }, delayMs);
+    }
+  }
+
+  private clearStartRetry(): void {
+    if (this.startRetryTimer) {
+      clearTimeout(this.startRetryTimer);
+      this.startRetryTimer = null;
+    }
   }
 
   /** Closes the socket (and any in-flight reconnect-follow socket) and stops scheduling reconnects. Safe to call
@@ -194,6 +236,7 @@ export class TwitchChatManager {
    * later (not currently done anywhere, but keeps the class honest about what "stop" means). */
   async stop(): Promise<void> {
     this.stopped = true;
+    this.clearStartRetry();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -654,7 +697,9 @@ export class TwitchChatManager {
         return;
       }
 
-      const identity = await getBotIdentityRow(ctx).catch(() => null);
+      // A failing lookup (database not migrated yet, transient outage) must THROW so the startup retry engages —
+      // swallowing it into `null` reported a healthy deployment as "owner setup pending" and never retried.
+      const identity = await getBotIdentityRow(ctx);
       if (this.stopped || this.socket) return; // stop()/another connect raced us while we were awaiting
       this.botConfigured = Boolean(identity);
       if (!identity) {
