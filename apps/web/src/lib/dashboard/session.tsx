@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { SessionUser } from '@pavisie/types';
 import { apiFetch, ApiClientError, setCsrfToken } from './api';
 
@@ -25,7 +25,6 @@ const SessionContext = React.createContext<SessionContextValue | null>(null);
 
 /** Fetches and caches the authenticated dashboard user (`GET /auth/me`) and mirrors the CSRF token into `apiFetch`. */
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const queryClient = useQueryClient();
   const query = useQuery<MeResponse, ApiClientError>({
     queryKey: ['auth', 'me'],
     queryFn: () => apiFetch<MeResponse>('/auth/me'),
@@ -43,10 +42,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       await apiFetch('/auth/logout', { method: 'POST' });
     } finally {
       setCsrfToken(null);
-      queryClient.setQueryData(['auth', 'me'], undefined);
-      await queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      // Leave the dashboard with a full navigation BEFORE the session query flips to "unauthenticated": the
+      // `/dashboard` layout sends unauthenticated visitors straight into Discord OAuth, and Discord's consent
+      // screen signs them right back in on one click — which made "Sign out" look like it did nothing.
+      window.location.assign('/');
     }
-  }, [queryClient]);
+  }, []);
 
   const status: SessionStatus = query.isLoading
     ? 'loading'
