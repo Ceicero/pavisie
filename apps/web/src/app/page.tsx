@@ -1,4 +1,4 @@
-import { ShieldCheck, ScrollText, EyeOff, Gauge } from 'lucide-react';
+import { ShieldCheck, ScrollText, EyeOff, Gauge, Twitch, Bot, Gift, Coins, Link2 } from 'lucide-react';
 import { Section } from '../components/Section';
 import { Glass } from '../components/Glass';
 import { Badge } from '../components/Badge';
@@ -9,13 +9,16 @@ import { siteCopy } from '../content/site';
 import { pluginCopy } from '../content/plugins';
 import { allPluginExports, totalCommandCount } from '../lib/commands';
 import { inviteUrl } from '../lib/site';
+import { creatorLoginUrl } from '../lib/creator/login-url';
 
 const TRUST_ICONS = [ShieldCheck, EyeOff, ScrollText, Gauge];
+const STREAMER_ICONS = [Bot, Gift, Coins, Link2];
 
 export default function HomePage() {
   const plugins = allPluginExports();
   const invite = inviteUrl();
   const commandCount = totalCommandCount();
+  const twitchLogin = creatorLoginUrl('twitch');
 
   return (
     <>
@@ -33,19 +36,48 @@ export default function HomePage() {
             {siteCopy.heroTitle}
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-grey-3">{siteCopy.heroSubtitle}</p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            {invite ? (
-              <ButtonLink href={invite} external variant="primary" size="lg">
-                Add to Discord
-              </ButtonLink>
-            ) : (
-              <ButtonLink href="/features" variant="primary" size="lg">
-                Explore features
-              </ButtonLink>
-            )}
-            <ButtonLink href="/dashboard" variant="outline" size="lg">
-              Open dashboard
-            </ButtonLink>
+
+          {/* Two entry points, side by side on desktop and stacked on mobile. */}
+          <div className="mt-10 grid grid-cols-1 gap-4 text-left sm:grid-cols-2">
+            <Glass className="flex flex-col p-6">
+              <h2 className="text-lg font-semibold text-grey-7">For Discord servers</h2>
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-grey-3">
+                Moderation, the Enforcer, tickets, roles and more, inside your server.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                {invite ? (
+                  <ButtonLink href={invite} external variant="primary" size="md">
+                    Add to Discord
+                  </ButtonLink>
+                ) : (
+                  <ButtonLink href="/features" variant="primary" size="md">
+                    Explore features
+                  </ButtonLink>
+                )}
+                <ButtonLink href="/dashboard" variant="outline" size="md">
+                  Open dashboard
+                </ButtonLink>
+              </div>
+            </Glass>
+            <Glass className="flex flex-col p-6">
+              <h2 className="text-lg font-semibold text-grey-7">{siteCopy.streamers.hero.title}</h2>
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-grey-3">{siteCopy.streamers.hero.body}</p>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                {/* `target="_self"` overrides ButtonLink's new-tab default for absolute URLs: sign-in is a same-tab redirect. */}
+                <ButtonLink
+                  href={twitchLogin}
+                  target="_self"
+                  variant="outline"
+                  size="md"
+                  icon={<Twitch className="h-4 w-4" aria-hidden="true" />}
+                >
+                  Sign in with Twitch
+                </ButtonLink>
+                <ButtonLink href="#streamers" variant="ghost" size="md">
+                  What you get
+                </ButtonLink>
+              </div>
+            </Glass>
           </div>
 
           {/* Start here: +help */}
@@ -73,6 +105,52 @@ export default function HomePage() {
             See the full command reference →
           </ButtonLink>
         </div>
+      </Section>
+
+      {/* For streamers */}
+      <Section
+        id="streamers"
+        eyebrow={siteCopy.streamers.eyebrow}
+        title={siteCopy.streamers.title}
+        subtitle={siteCopy.streamers.intro}
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {siteCopy.streamers.features.map((feature, i) => {
+            const Icon = STREAMER_ICONS[i % STREAMER_ICONS.length];
+            return (
+              <Glass key={feature.title} className="flex gap-4 p-6">
+                <Icon className="mt-0.5 h-5 w-5 shrink-0 text-grey-4" aria-hidden="true" />
+                <div>
+                  <h3 className="text-base font-semibold text-grey-7">{feature.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-grey-3">{feature.body}</p>
+                </div>
+              </Glass>
+            );
+          })}
+        </div>
+        <Glass className="mt-4 flex flex-col gap-6 p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-grey-7">How to start</h3>
+            <ol className="mt-2 list-inside list-decimal space-y-1 text-sm leading-relaxed text-grey-3">
+              {siteCopy.streamers.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            <p className="mt-3 text-xs text-grey-4">{siteCopy.streamers.comingSoon}</p>
+          </div>
+          <div className="flex shrink-0 flex-col items-start gap-2 md:items-end">
+            <ButtonLink
+              href={twitchLogin}
+              target="_self"
+              variant="primary"
+              size="lg"
+              icon={<Twitch className="h-5 w-5" aria-hidden="true" />}
+            >
+              Sign in with Twitch
+            </ButtonLink>
+            <p className="max-w-xs text-xs text-grey-4 md:text-right">{siteCopy.streamers.signInNote}</p>
+          </div>
+        </Glass>
       </Section>
 
       {/* Prefix and getting started */}

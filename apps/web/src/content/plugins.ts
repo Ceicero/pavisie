@@ -156,6 +156,7 @@ export const pluginCopy: Record<PluginId, PluginCopy> = {
       "Connect the server's own Instagram account and new posts show up in a channel automatically — no one has to remember to cross-post.",
       'Generic inbound/outbound webhooks connect a tournament bracket tool, a Google Form, or an internal ops system without custom code.',
       'Every OAuth token is encrypted at rest and scoped to the minimum the feature needs — connect and disconnect anytime from the dashboard.',
+      'On the Discord side, Twitch is alerts only. The Twitch chat bot, channel-point rewards and viewer currency are set up by the streamer at /creator, with just a Twitch sign-in.',
       'Disabled by default; each connector only activates once a server explicitly connects it.',
     ],
     highlights: ['Disabled by default', 'Encrypted tokens', 'Twitch/YouTube/Instagram', 'Generic webhooks'],

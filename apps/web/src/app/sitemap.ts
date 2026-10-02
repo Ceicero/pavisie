@@ -3,7 +3,7 @@ import { SITE_URL } from '../lib/site';
 import { allPluginExports } from '../lib/commands';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticRoutes = ['', '/features', '/enforcer', '/staff-roles', '/donate', '/support', '/privacy', '/terms'].map(
+  const staticRoutes = ['', '/features', '/enforcer', '/creator', '/staff-roles', '/donate', '/support', '/privacy', '/terms'].map(
     (path) => ({
       url: `${SITE_URL}${path}`,
       lastModified: new Date(),

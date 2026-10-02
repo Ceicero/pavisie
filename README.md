@@ -81,7 +81,7 @@ have it degrade gracefully instead of breaking — see `docs/PERMISSIONS.md` for
 | **Economy**            | Optional virtual-currency balance/daily/give/leaderboard — no real money, ever.                                          | Disabled             | —                               |
 | **Utility**            | `/help`, user/server info, timestamps, embed builder, AFK, translation, weather, bot health.                             | Enabled              | —                               |
 | **Music & Media**      | Playlist/queue management for a legal, user-authorized audio provider only. Unavailable until one is configured.         | Disabled             | —                               |
-| **Integrations**       | Secure connector framework: Twitch, YouTube, Instagram, Reddit, Steam, Google/Microsoft Calendar, webhooks. | Disabled             | —                               |
+| **Integrations**       | Secure connector framework for notifications and alerts: Twitch stream-live alerts, YouTube, Instagram, Reddit, Steam, Google/Microsoft Calendar, webhooks. | Disabled             | —                               |
 | **AI Assistant**       | Optional `/ask`, `/summarize`, `/draft`, `/mod-assist` — per-server opt-in, cooldowns, token budgets.                    | Disabled             | —                               |
 
 Full command list per plugin: `docs/commands.json` (generated, always current) or the website's

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useParams } from 'next/navigation';
-import { Menu, LogOut, User as UserIcon } from 'lucide-react';
+import { Menu, LogOut, Twitch, User as UserIcon } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,12 +18,14 @@ import { GuildSwitcher } from './dashboard/guild-switcher';
 import { ThemeToggle } from './dashboard/theme-toggle';
 import { useSession } from '@/lib/dashboard/session';
 import { inviteUrl } from '@/lib/site';
+import { creatorLoginUrl } from '@/lib/creator/login-url';
 
 /** The site's info pages, reachable from the hamburger on every page (dashboard included), and —
  * outside the dashboard — also shown inline on desktop, matching the old marketing `Nav`. */
-const SITE_LINKS = [
+export const SITE_LINKS = [
   { href: '/features', label: 'Commands' },
   { href: '/enforcer', label: 'Enforcer' },
+  { href: '/creator', label: 'Streamers' },
   { href: '/staff-roles', label: 'Staff roles' },
   { href: '/donate', label: 'Donate' },
   { href: '/support', label: 'Support' },
@@ -49,7 +51,7 @@ const SITE_LINKS = [
  *   equivalent concept. The marketing "Open dashboard"/"Add to Discord" CTAs and inline link row
  *   are the mirror image, shown only outside the dashboard.
  * - The one hamburger opens a single flat menu of the site's info pages (`SITE_LINKS`:
- *   Commands/Enforcer/Support/Donate) on every page, dashboard included — its one job is getting
+ *   Commands/Enforcer/Streamers/Support/Donate) on every page, dashboard included — its one job is getting
  *   back to the rest of the site. It used to also list the 16 dashboard sections in a "This
  *   server" group, but that was redundant: those sections are always reachable via `AppSidebar`
  *   (`lg` and up) or `DashboardTabStrip` (below `lg`, sticky beneath this bar), so the group was
@@ -98,6 +100,17 @@ export function TopBar() {
       <div className="ml-auto flex items-center gap-2">
         {!inApp ? (
           <>
+            {/* Secondary Twitch CTA, wide screens only: the nav row and the two buttons already fill narrower bars. */}
+            <ButtonLink
+              href={creatorLoginUrl('twitch')}
+              target="_self"
+              variant="ghost"
+              size="md"
+              icon={<Twitch className="h-4 w-4" aria-hidden="true" />}
+              className="hidden xl:inline-flex"
+            >
+              Sign in with Twitch
+            </ButtonLink>
             <ButtonLink href="/dashboard" variant="ghost" size="md" className="hidden sm:inline-flex">
               Open dashboard
             </ButtonLink>

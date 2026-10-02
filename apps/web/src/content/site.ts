@@ -168,6 +168,43 @@ export const siteCopy = {
       'Check the result with +config view, and audit the whole picture with +permissions. Until you attach a role to a tier, only the Discord server owner has those powers.',
     ownerNote: 'The Discord server owner is always the Owner tier and cannot be locked out.',
   },
+  // The second entry point: a streamer signs in with Twitch at /creator, no Discord server needed. Everything in
+  // `features` is live today; the Extension panel and Kick are not, so they only appear under `comingSoon`.
+  streamers: {
+    eyebrow: 'For streamers',
+    title: 'Pavisie for your Twitch channel',
+    intro:
+      'No Discord server needed. Sign in with Twitch, add the bot to your chat, and set up the rest from one page.',
+    hero: {
+      title: 'For streamers',
+      body: 'A Twitch chat bot, channel-point rewards and your own viewer currency. No Discord server needed.',
+    },
+    features: [
+      {
+        title: 'A chat bot for your channel',
+        body: 'Custom !commands, timers and the built-in commands, running in your Twitch chat.',
+      },
+      {
+        title: 'Channel-point rewards',
+        body: 'Turn a redemption into a sound, a chat message or text-to-speech (you bring your own OpenAI key), played through an OBS browser-source overlay.',
+      },
+      {
+        title: 'Your own viewer currency',
+        body: 'Viewers earn Agis (or whatever you name it) by chatting while you are live, and use !balance, !daily, !give and !top. You choose the name and the amounts, and you can adjust balances.',
+      },
+      {
+        title: 'Link a Discord server (optional)',
+        body: 'If you have one, link it to bridge chat between Discord and Twitch and post reward redemptions into a channel. Skip it and everything else still works.',
+      },
+    ],
+    steps: [
+      'Sign in with Twitch.',
+      'Connect the bot to your chat.',
+      'Set up your commands, currency and channel points.',
+    ],
+    comingSoon: 'Coming soon: a Twitch Extension panel under your stream, and Kick support.',
+    signInNote: 'Signing in only tells Pavisie who you are. It does not ask for access to your Twitch account.',
+  },
   donateCta: {
     title: 'Help keep Pavisie running',
     body: 'Pavisie is community-run. Donations fund hosting and development — they\'re one-time, non-refundable, and grant no perks or in-game advantages.',

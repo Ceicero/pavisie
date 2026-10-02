@@ -1,13 +1,16 @@
 'use client';
 
 import * as React from 'react';
-import { LogOut, Twitch } from 'lucide-react';
+import { Bot, Coins, Gift, Link2, LogOut, Twitch } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle, Button, Card, CardContent, PageHeader, Skeleton, useToast } from '@pavisie/ui';
+import { siteCopy } from '@/content/site';
 import { useCreatorSession } from '@/lib/creator/session';
 import { CreatorChannelPoints } from './creator-channel-points';
 import { CreatorChatBot } from './creator-chat-bot';
 import { CreatorCurrency } from './creator-currency';
 import { CreatorDiscord } from './creator-discord';
+
+const FEATURE_ICONS = [Bot, Gift, Coins, Link2];
 
 /** Messages for the `?error=` codes the API's OAuth callback redirects back with. */
 const ERROR_MESSAGES: Record<string, string> = {
@@ -67,13 +70,40 @@ export function CreatorDashboard() {
     return (
       <div className="mx-auto max-w-2xl px-6 py-16">
         <Card>
-          <CardContent className="space-y-6 p-8">
+          <CardContent className="space-y-8 p-8">
             <div className="space-y-3">
               <h1 className="text-3xl font-semibold tracking-tight">Use Pavisie on your stream</h1>
               <p className="text-muted-foreground">
-                No Discord server needed. Sign in with Twitch to add Pavisie to your chat: custom commands,
-                timers, channel-point rewards with an OBS overlay, your own viewer currency, and more streaming features as they arrive.
+                No Discord server needed. Sign in with Twitch to add Pavisie to your chat and manage everything
+                from this page.
               </p>
+            </div>
+
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">What you get</h2>
+              <ul className="space-y-4">
+                {siteCopy.streamers.features.map((feature, i) => {
+                  const Icon = FEATURE_ICONS[i % FEATURE_ICONS.length];
+                  return (
+                    <li key={feature.title} className="flex gap-3">
+                      <Icon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <div>
+                        <p className="text-sm font-medium">{feature.title}</p>
+                        <p className="text-sm text-muted-foreground">{feature.body}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">How to start</h2>
+              <ol className="list-inside list-decimal space-y-1 text-sm">
+                {siteCopy.streamers.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
             </div>
 
             {notice ? (
@@ -93,6 +123,7 @@ export function CreatorDashboard() {
                 Signing in only tells Pavisie who you are (your Twitch name and picture). It does not ask for
                 access to your account, and your Twitch sign-in token is not kept.
               </p>
+              <p className="text-xs text-muted-foreground">{siteCopy.streamers.comingSoon}</p>
             </div>
           </CardContent>
         </Card>

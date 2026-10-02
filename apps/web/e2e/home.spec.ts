@@ -19,6 +19,18 @@ test.describe('home page', () => {
     await expect(nav.getByRole('link', { name: 'Commands' })).toHaveAttribute('href', '/features');
     await expect(nav.getByRole('link', { name: 'Enforcer' })).toHaveAttribute('href', '/enforcer');
     await expect(nav.getByRole('link', { name: 'Donate' })).toHaveAttribute('href', '/donate');
+    await expect(nav.getByRole('link', { name: 'Streamers' })).toHaveAttribute('href', '/creator');
+  });
+
+  test('offers both entry points: Discord servers and streamers', async ({ page }) => {
+    await page.goto('/');
+
+    await expect(page.getByRole('heading', { name: 'For Discord servers', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'For streamers', level: 2 }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in with Twitch' }).first()).toHaveAttribute(
+      'href',
+      /\/creator\/auth\/twitch\/login$/,
+    );
   });
 });
 

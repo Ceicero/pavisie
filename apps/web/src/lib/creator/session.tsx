@@ -3,8 +3,9 @@
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreatorIdentityDto, CreatorMeDto } from '@pavisie/types/creator';
-import { ApiClientError, API_BASE_URL } from '@/lib/dashboard/api';
+import { ApiClientError } from '@/lib/dashboard/api';
 import { creatorFetch, setCreatorCsrfToken } from './api';
+import { creatorLoginUrl } from './login-url';
 
 export type CreatorSessionStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -21,10 +22,7 @@ const CreatorSessionContext = React.createContext<CreatorSessionContextValue | n
 
 export const CREATOR_ME_QUERY_KEY = ['creator', 'me'] as const;
 
-/** URL that starts a creator sign-in for a platform. Twitch only today; Kick will add its own route. */
-export function creatorLoginUrl(platform: 'twitch'): string {
-  return `${API_BASE_URL}/creator/auth/${platform}/login`;
-}
+export { creatorLoginUrl };
 
 /**
  * Fetches and caches the signed-in creator (`GET /creator/me`) and mirrors their CSRF token into `creatorFetch`.
