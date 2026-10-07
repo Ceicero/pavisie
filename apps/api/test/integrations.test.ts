@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { env } from '@pavisie/core';
 import type { PrismaStubOverrides } from '@pavisie/plugins/sdk/testing';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
@@ -453,6 +454,178 @@ describe('outbound webhooks', () => {
       ),
     ).toBe(true);
 
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// Twitch ALERTS need no Twitch login (app token only), so Twitch is an alert provider like YouTube/Reddit — not an
+// OAuth "Connect" provider. The OAuth machinery itself (bot identity, creator dashboard, callback) is untouched and
+// covered in oauth-integrations.test.ts / twitch-chat.test.ts / creator-twitch*.test.ts.
+// ---------------------------------------------------------------------------------------------------------
+
+const ORIGINAL_ENV = {
+  TWITCH_CLIENT_ID: env.TWITCH_CLIENT_ID,
+  TWITCH_CLIENT_SECRET: env.TWITCH_CLIENT_SECRET,
+  INSTAGRAM_CLIENT_ID: env.INSTAGRAM_CLIENT_ID,
+  INSTAGRAM_CLIENT_SECRET: env.INSTAGRAM_CLIENT_SECRET,
+};
+
+afterEach(() => {
+  Object.assign(env, ORIGINAL_ENV);
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+/** Stubs Twitch: the app-token grant plus `GET /helix/users?login=` knowing only `shroud` (case-insensitive). */
+function stubTwitchHelix() {
+  const requests: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string | URL) => {
+      const url = new URL(typeof input === 'string' ? input : input.toString());
+      requests.push(url.toString());
+      if (url.host === 'id.twitch.tv') {
+        return new Response(JSON.stringify({ access_token: 'app-token', expires_in: 3600 }), { status: 200 });
+      }
+      if (url.pathname === '/helix/users') {
+        const known = url.searchParams.get('login')?.toLowerCase() === 'shroud';
+        return new Response(
+          JSON.stringify({ data: known ? [{ id: '37522866', login: 'shroud', display_name: 'shroud' }] : [] }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch ${url.toString()}`);
+    }),
+  );
+  return requests;
+}
+
+describe('Twitch is an alert provider, not an OAuth one', () => {
+  it('reports twitch as a non-oauth alert provider while instagram and the calendars stay oauth', async () => {
+    const { app, cookieHeader } = await setupAuthedApp(guildOverrides());
+    const res = await app.inject({
+      method: 'GET',
+      url: `/guilds/${GUILD_ID}/integrations/providers`,
+      headers: { cookie: cookieHeader },
+    });
+    const body = res.json() as { id: string; kind: string; supportsAlerts: boolean }[];
+    const byId = new Map(body.map((p) => [p.id, p]));
+
+    expect(byId.get('twitch')).toMatchObject({ kind: 'apikey', supportsAlerts: true });
+    expect(byId.get('instagram')?.kind).toBe('oauth');
+    expect(byId.get('google_calendar')?.kind).toBe('oauth');
+    expect(byId.get('microsoft_calendar')?.kind).toBe('oauth');
+    await app.close();
+  });
+
+  it('refuses to start a per-server Twitch OAuth connect, pointing at "add a watch" instead', async () => {
+    const { app, cookieHeader, csrfToken } = await setupAuthedApp(guildOverrides());
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/integrations/twitch/connect`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain('Twitch alerts do not need a Twitch login');
+    await app.close();
+  });
+
+  it('still starts the OAuth flow for a provider that really needs it (Instagram)', async () => {
+    env.INSTAGRAM_CLIENT_ID = 'ig-client';
+    env.INSTAGRAM_CLIENT_SECRET = 'ig-secret';
+    const { app, cookieHeader, csrfToken } = await setupAuthedApp(guildOverrides());
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/integrations/instagram/connect`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { url: string }).url).toContain('https://www.instagram.com/oauth/authorize');
+    await app.close();
+  });
+
+  it('creates a Twitch alert with the normalized lowercase login and the verified Twitch identity', async () => {
+    env.TWITCH_CLIENT_ID = 'twitch-client';
+    env.TWITCH_CLIENT_SECRET = 'twitch-secret';
+    stubTwitchHelix();
+    const { overrides, rows } = integrationConnectionOverrides();
+    const { app, cookieHeader, csrfToken } = await setupAuthedApp(overrides);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/integrations/alerts`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: { provider: 'twitch', target: '@Shroud', channelId: '888888888888888888' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect((res.json() as { target: string }).target).toBe('shroud');
+    const row = [...rows.values()][0]!;
+    expect(row).toMatchObject({
+      provider: 'TWITCH',
+      status: 'CONNECTED',
+      label: 'shroud',
+      externalAccountId: '37522866',
+      config: { target: 'shroud', channelId: '888888888888888888' },
+    });
+    await app.close();
+  });
+
+  it('answers 400 "Twitch user X not found." and saves nothing for a login that does not exist', async () => {
+    env.TWITCH_CLIENT_ID = 'twitch-client';
+    env.TWITCH_CLIENT_SECRET = 'twitch-secret';
+    stubTwitchHelix();
+    const { overrides, rows } = integrationConnectionOverrides();
+    const { app, cookieHeader, csrfToken } = await setupAuthedApp(overrides);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/integrations/alerts`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: { provider: 'twitch', target: 'definitelynotauser', channelId: '888888888888888888' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('definitelynotauser');
+    expect(res.body).toContain('not found');
+    expect(rows.size).toBe(0);
+    await app.close();
+  });
+
+  it('answers 400 for a malformed login without calling Twitch', async () => {
+    env.TWITCH_CLIENT_ID = 'twitch-client';
+    env.TWITCH_CLIENT_SECRET = 'twitch-secret';
+    const requests = stubTwitchHelix();
+    const { overrides, rows } = integrationConnectionOverrides();
+    const { app, cookieHeader, csrfToken } = await setupAuthedApp(overrides);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/integrations/alerts`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: { provider: 'twitch', target: 'not a login!', channelId: '888888888888888888' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(requests).toHaveLength(0);
+    expect(rows.size).toBe(0);
+    await app.close();
+  });
+
+  it('does not validate other alert providers as Twitch logins', async () => {
+    const { overrides, rows } = integrationConnectionOverrides();
+    const { app, cookieHeader, csrfToken } = await setupAuthedApp(overrides);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/integrations/alerts`,
+      headers: { cookie: cookieHeader, 'x-csrf-token': csrfToken },
+      payload: { provider: 'reddit', target: 'r/Some Sub', channelId: '888888888888888888' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect([...rows.values()][0]).toMatchObject({ config: { target: 'r/Some Sub' } });
     await app.close();
   });
 });

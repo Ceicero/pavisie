@@ -13,9 +13,10 @@ import type { PluginContext } from '../../sdk';
 // `instagram.test.ts`: no top-level import of the provider module, so `process.env` can be seeded first.
 let twitchProvider: typeof import('../providers/twitch').twitchProvider;
 let ensureTwitchEventSub: typeof import('../providers/twitch').ensureTwitchEventSub;
+let resetTwitchEventSubState: typeof import('../providers/twitch').resetTwitchEventSubState;
 
 beforeAll(async () => {
-  ({ twitchProvider, ensureTwitchEventSub } = await import('../providers/twitch'));
+  ({ twitchProvider, ensureTwitchEventSub, resetTwitchEventSubState } = await import('../providers/twitch'));
 });
 
 const originalFetch = globalThis.fetch;
@@ -26,6 +27,7 @@ const CHANNEL_ID = '123456789012345678';
 // later test's "token fetch happened" assertion silently false instead of actually exercising the fetch call.
 beforeEach(async () => {
   await new RedisMock().flushall();
+  resetTwitchEventSubState(); // the subscription list is cached module-wide for a minute
 });
 
 afterEach(() => {
@@ -83,12 +85,17 @@ function eventSubCreateResponse(): Response {
  * requested so tests can assert exactly which calls did (and did not) happen. */
 function makeFetchMock() {
   const urls: string[] = [];
-  const fn = vi.fn(async (input: string | URL) => {
+  const fn = vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     urls.push(url);
     if (url.startsWith('https://id.twitch.tv/oauth2/token')) return tokenResponse();
     if (url.includes('/helix/users')) return usersResponse();
-    if (url.includes('/helix/eventsub/subscriptions')) return eventSubCreateResponse();
+    if (url.includes('/helix/eventsub/subscriptions')) {
+      // GET = the "what does the app already have" list (nothing yet); POST = create.
+      return init?.method === 'POST'
+        ? eventSubCreateResponse()
+        : new Response(JSON.stringify({ data: [] }), { status: 200 });
+    }
     throw new Error(`twitch-provider.test: unexpected fetch to ${url}`);
   });
   return { fn: fn as unknown as typeof fetch, urls };

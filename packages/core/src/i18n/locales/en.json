@@ -8,7 +8,7 @@
     "cooldown": "You're doing that too fast. Try again in {seconds}s.",
     "rate_limited": "Too many requests. Please slow down and try again shortly.",
     "guild_only": "This command can only be used in a server.",
-    "plugin_disabled": "The {plugin} plugin is disabled in this server.",
+    "plugin_disabled": "The {plugin} plugin is turned off in this server. An admin can turn it on with `/plugin enable plugin:{pluginId}` or in the dashboard: {url}",
     "plugin_unavailable": "The {plugin} plugin is not available: {reason}.",
     "validation": "That input isn't valid: {message}.",
     "not_found": "{thing} was not found.",

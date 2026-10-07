@@ -26,6 +26,17 @@ describe('integrations provider registry', () => {
     expect(typeof def?.poll).toBe('function');
   });
 
+  it('lists twitch as an app-credential alert provider, NOT an oauth one (alerts need no Twitch login)', () => {
+    const def = getProvider('twitch');
+    expect(def?.kind).toBe('apikey');
+    expect(def?.requiredEnv).toEqual(['TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET']);
+    expect(typeof def?.poll).toBe('function');
+    // The other genuinely-OAuth providers keep their kind.
+    expect(getProvider('instagram')?.kind).toBe('oauth');
+    expect(getProvider('google_calendar')?.kind).toBe('oauth');
+    expect(getProvider('microsoft_calendar')?.kind).toBe('oauth');
+  });
+
   it('maps instagram to the Prisma enum value both ways, and leaves the retired enum values unmapped', () => {
     expect(PROVIDER_ENUM_MAP.instagram).toBe('INSTAGRAM');
     expect(providerIdFromEnum('INSTAGRAM')).toBe('instagram');

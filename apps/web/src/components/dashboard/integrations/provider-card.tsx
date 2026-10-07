@@ -93,7 +93,11 @@ export function ProviderCard({
           </p>
         ) : null}
 
-        {provider.kind === 'oauth' && onConnect && onDisconnect ? (
+        {/* "Connect" (an OAuth sign-in) exists only for providers that really need one — `kind: 'oauth'`.
+            Alert providers (Twitch, YouTube, Reddit, Steam) are set up with "Add watch" below instead. Any
+            account-style connection a non-OAuth provider already has (an older Twitch one) is still listed here
+            so it can be disconnected. */}
+        {onDisconnect && ((provider.kind === 'oauth' && onConnect) || connections.length > 0) ? (
           <div className="space-y-2 pt-1">
             {connections.map((connection) => {
               const meta = STATUS_META[connection.status];
@@ -130,14 +134,16 @@ export function ProviderCard({
                 </div>
               );
             })}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onConnect}
-              disabled={!provider.available || connectPending}
-            >
-              {connectPending ? 'Starting…' : connections.length > 0 ? 'Connect another account' : 'Connect'}
-            </Button>
+            {provider.kind === 'oauth' && onConnect ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onConnect}
+                disabled={!provider.available || connectPending}
+              >
+                {connectPending ? 'Starting…' : connections.length > 0 ? 'Connect another account' : 'Connect'}
+              </Button>
+            ) : null}
           </div>
         ) : null}
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Cooldowns, MemoryRateLimiter, createPlatformEvents } from '@pavisie/core';
+import { Cooldowns, MemoryRateLimiter, createPlatformEvents, t as coreT } from '@pavisie/core';
 import {
   DEFAULT_GUILD_CONFIG,
   ServiceRegistry,
@@ -12,7 +12,7 @@ import {
   type PluginRegistry,
 } from '@pavisie/plugins';
 import type { PluginId } from '@pavisie/types';
-import { routeInteraction } from '../router';
+import { pluginsDashboardUrl, routeInteraction } from '../router';
 import type { LoadedHost } from '../loader';
 
 const GUILD_ID = 'guild-1';
@@ -262,5 +262,80 @@ describe('routeInteraction — unknown slash command', () => {
 
     await expect(routeInteraction(interaction as never, host, logger)).resolves.toBeUndefined();
     expect(interaction.reply).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('routeInteraction — plugin turned off in the server', () => {
+  function disabledPluginSetup(env: Record<string, unknown>) {
+    const execute = vi.fn(async () => undefined);
+    const command = {
+      data: { toJSON: () => ({ name: 'integration' }) },
+      requirement: undefined,
+      execute,
+    } as unknown as NonNullable<LoadedHost['commands'] extends Map<string, infer E> ? E : never>['command'];
+    const plugin = fakePlugin(
+      fakeManifest({ id: 'integrations' as PluginId, name: 'Integrations', alwaysEnabled: false }),
+    );
+    const ctx = {
+      // The real core translator, so the test reads the actual user-facing message from `en.json`.
+      t: (key: string, vars?: Record<string, string | number>, locale?: string) => coreT(key, vars, locale),
+      getConfig: async () => ({}),
+      env,
+    } as unknown as PluginContext;
+    const host = fakeHost({
+      commands: new Map([['integration', { plugin, command }]]),
+      contexts: new Map([['integrations' as PluginId, ctx]]),
+      availability: new Map([['integrations' as PluginId, { available: true }]]),
+    });
+    host.configStore.isEnabled = async () => false;
+    const interaction = {
+      isButton: () => false,
+      isAnySelectMenu: () => false,
+      isModalSubmit: () => false,
+      isChatInputCommand: () => true,
+      isContextMenuCommand: () => false,
+      isAutocomplete: () => false,
+      commandName: 'integration',
+      inCachedGuild: () => true,
+      locale: 'en-US',
+      user: { id: OWNER_ID },
+      guildId: GUILD_ID,
+      guild: { ownerId: 'guild-owner' },
+      member: fakeMember(OWNER_ID),
+      channel: null,
+      deferred: false,
+      replied: false,
+      reply: vi.fn(async (_payload: unknown) => undefined),
+      followUp: vi.fn(async () => undefined),
+    };
+    return { host, interaction, execute };
+  }
+
+  it('names the plugin and tells an admin both ways to turn it on (slash command + dashboard page)', async () => {
+    const { host, interaction, execute } = disabledPluginSetup({ DASHBOARD_URL: 'https://pavisie.com' });
+
+    await routeInteraction(interaction as never, host, logger);
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(interaction.reply).toHaveBeenCalledTimes(1);
+    const payload = interaction.reply.mock.calls[0]![0] as { embeds: { data: { description: string } }[] };
+    const message = payload.embeds[0]!.data.description;
+    expect(message).toContain('The Integrations plugin is turned off in this server.');
+    expect(message).toContain('/plugin enable plugin:integrations');
+    expect(message).toContain('https://pavisie.com/dashboard/guild-1/plugins');
+    // No raw placeholder leaked through.
+    expect(message).not.toMatch(/\{\w+\}/);
+  });
+
+  it('builds the dashboard link from DASHBOARD_URL, then WEB_URL, then the brand site, without a double slash', () => {
+    const ctxWith = (env: Record<string, unknown>) => ({ env }) as unknown as PluginContext;
+    expect(pluginsDashboardUrl(ctxWith({ DASHBOARD_URL: 'https://app.example.com/' }), 'g1')).toBe(
+      'https://app.example.com/dashboard/g1/plugins',
+    );
+    expect(pluginsDashboardUrl(ctxWith({ WEB_URL: 'https://web.example.com' }), 'g1')).toBe(
+      'https://web.example.com/dashboard/g1/plugins',
+    );
+    expect(pluginsDashboardUrl(ctxWith({}), 'g1')).toBe('https://pavisie.com/dashboard/g1/plugins');
+    expect(pluginsDashboardUrl(undefined, 'g1')).toBe('https://pavisie.com/dashboard/g1/plugins');
   });
 });

@@ -15,6 +15,7 @@ import {
 } from './jobs/poll';
 import { tokenRefreshJob } from './jobs/token-refresh';
 import { createTwitchChatTickJob } from './jobs/twitch-chat-tick';
+import { twitchEventSubCleanupJob } from './jobs/twitch-eventsub-cleanup';
 import { createIntegrationsService, registerOutboundEventBridge } from './service';
 import { TwitchChatManager, createTwitchChatService } from './twitch-chat/manager';
 import en from './locales/en.json';
@@ -45,6 +46,7 @@ export const plugin = definePlugin({
     pollInstagramJob,
     tokenRefreshJob,
     twitchChatTickJob,
+    twitchEventSubCleanupJob,
   ],
   async onLoad(ctx) {
     ctx.services.register('integrations', createIntegrationsService(ctx));

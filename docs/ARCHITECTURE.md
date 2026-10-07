@@ -548,7 +548,7 @@ with a configurable prefix, default `+`. For example: `/mod ban @user spam` can 
   - `routes/tickets.ts` — settings, panels CRUD, queue list, ticket get/close/assign, transcript download
   - `routes/roles.ts` — panels CRUD + `POST .../post` (enqueue bot-action), welcome/goodbye config, verification queue approve/deny
   - `routes/engagement.ts`, `routes/community.ts` — leveling config/leaderboard, giveaways/polls/suggestions lists
-  - `routes/integrations.ts` — list connections, `GET /:guildId/integrations/:provider/connect` (OAuth start), disconnect, webhook endpoints CRUD (secret shown once), status
+  - `routes/integrations.ts` — list connections, `POST /:guildId/integrations/:provider/connect` (OAuth start for the genuinely-OAuth providers — Instagram, Google/Microsoft Calendar; **refused with a 400 for `twitch`**, whose alerts need no login — see §19a-i), disconnect, webhook endpoints CRUD (secret shown once), status, `GET .../providers` (per-provider `kind`: `twitch` is `apikey`, so the dashboard shows an "Add watch" button, not an OAuth "Connect"), alert watches (`POST .../alerts` normalizes a Twitch login to lowercase and refuses a user Twitch does not know — `Twitch user "x" not found.`)
   - `routes/twitch-chat.ts` — the Discord dashboard's READ-ONLY view of the Twitch channel(s) linked to a server, under `/:guildId/integrations/twitch-chat` (§19e, phase 4): `GET` → `{ channels: [{ id, broadcasterLogin, linkedByStreamer, linkedAt, enabled, status }] }` (login and status only — never a token, Twitch user id, bridge field or credential) and `DELETE /channels/:channelId`, which UNLINKS that server from the channel (the same `unlinkChannelFromGuild` the creator-side Disconnect uses; never deletes the streamer's channel). Both need the Discord session + manage access to the guild; the `DELETE` also needs the session's CSRF token and writes an `integration.twitch_chat.discord.unlink` audit entry with the Discord user as actor. Everything else that used to live here (connect, channel PATCH, commands/timers/rewards CRUD, overlay, picker) was removed — those are creator-dashboard routes now
   - `routes/ai.ts` — settings + usage
   - `routes/analytics.ts` — `GET /:guildId/analytics?range=7d|30d|90d` (from GuildAnalyticsDaily; only if `GuildConfig.dataCollectionEnabled`)
@@ -1001,6 +1001,41 @@ search(...) }` — used by the bot-action `enforcer.decide` (dashboard decisions
   test box) · Queue (pending flags with decision buttons + reason/duration dialog) · Ledger (search/filter table, detail
   drawer with context snapshot, CSV export) · Settings.
 - Website `/enforcer` page explains the workflow (from `src/content/enforcer.ts`).
+
+## 19a-i. Twitch stream-live alerts (inside the `integrations` plugin)
+
+What a server admin sets up to get a "going live" post in a channel. **No one signs into Twitch for this**: Helix user /
+stream lookups and the EventSub webhook subscriptions all use the bot's own client-credentials **app token**
+(`getTwitchAppToken`, `packages/plugins/src/integrations/providers/twitch.ts`). So the provider is `kind: 'apikey'` (set up
+like YouTube/Reddit/Steam), not `'oauth'`:
+
+- `/integration connect provider:twitch target:<login> channel:#x` and `/integration alerts add provider:twitch ...` both
+  call `createAlertConnection` (`connections.ts`), which normalizes the login (`Shroud`, `@shroud`, `twitch.tv/shroud` ->
+  `shroud`), looks it up on Helix and answers `Twitch user "x" not found.` for an unknown one (a Twitch outage during
+  that check does not block saving — the poll retries). Dashboard: Integrations -> Twitch card -> **Add watch** (login +
+  channel), `POST /guilds/:id/integrations/alerts`, same validation. Only Instagram and the two calendars still reply
+  with / show an OAuth link.
+- The shared OAuth redirect (`/integrations/twitch/callback`, `routes/oauth-integrations.ts`) is untouched and still
+  serves the owner-only bot identity (`twitch_bot`), the creator-dashboard sign-in / connect / channel-points flows
+  (§19e) and the legacy `twitch_chat` refusal. None of those start from the per-guild Integrations page.
+- **Delivery**: with `PUBLIC_WEBHOOK_BASE_URL` (or `API_BASE_URL`) + `TWITCH_EVENTSUB_SECRET` set, one `stream.online`
+  EventSub **webhook** subscription per broadcaster, callback `${base}/webhooks/twitch`; otherwise `poll-twitch` polls
+  Helix `/streams` every 2 minutes. The receiver (`routes/webhooks.ts`) verifies the HMAC signature only and is not
+  domain-specific, so deliveries are accepted on both `api.pavisie.com` and the retired `api.entrophybot.com`.
+- **`ensureTwitchEventSub`** (run by `poll-twitch` every 2 minutes for each alert, and immediately on creation) no longer
+  trusts "409 = already exists": it lists the app's `stream.online` subscriptions (`GET /eventsub/subscriptions?type=
+  stream.online`, paginated; ONE list per poll run, cached 60s in-process and kept in step with its own creates/deletes),
+  keeps a webhook subscription for the broadcaster whose callback equals the current one and whose status is `enabled`
+  (or `webhook_callback_verification_pending`, i.e. just created), and **deletes every other** webhook subscription for
+  that broadcaster (old callback domain, `*_failed`, `authorization_revoked`, `notification_failures_exceeded`, ...)
+  before creating a fresh one. A create answered 409 is still success; a list that cannot be read falls back to a plain
+  create and never deletes blind. A 429 backs the whole path off until Twitch's `Ratelimit-Reset`. A missing Twitch user
+  marks the connection `ERROR` ("Twitch user "x" not found.") and the poll no longer overwrites that with "synced".
+- **`twitch-eventsub-cleanup`** job (every 30 minutes): deletes `stream.online` **webhook** subscriptions that point at a
+  `/webhooks/twitch` receiver (any domain) whose broadcaster has no active alert connection in any guild (not
+  soft-deleted, not `DISCONNECTED`, not chat-kind, with a target). Connections with no recorded broadcaster id are
+  resolved by login first; if the list or that lookup can't be read, nothing is deleted. WebSocket-transport
+  subscriptions (the chat bot's, §19a) and every other subscription type are never touched. Logs counts only.
 
 ## 19a. Twitch chat bot (inside the `integrations` plugin)
 

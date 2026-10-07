@@ -353,10 +353,14 @@ interface ProviderMeta {
 }
 
 const PROVIDER_META: Record<CanonicalProviderId, ProviderMeta> = {
+  // Twitch ALERTS (the only thing this per-guild provider list is for) use the bot's own app credentials — no
+  // server admin signs into Twitch, so it is set up with a login + channel like YouTube/Reddit, not as an OAuth
+  // "Connect". The OAuth machinery above (`OAUTH_PROVIDERS.twitch`) stays: the owner-only bot identity and the
+  // creator dashboard share the `/integrations/twitch/callback` redirect URI.
   twitch: {
     id: 'twitch',
     name: 'Twitch',
-    kind: 'oauth',
+    kind: 'apikey',
     requiredEnv: ['TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET'],
   },
   youtube: { id: 'youtube', name: 'YouTube', kind: 'apikey', requiredEnv: ['YOUTUBE_API_KEY'] },

@@ -27,6 +27,7 @@ import {
   toWebhookEndpointDetailDto,
 } from '../lib/integrations/dto';
 import { fetchTwitchLiveStatuses, twitchLiveStatusContextFrom } from '../lib/integrations/live-status';
+import { lookupTwitchUser, normalizeTwitchLogin } from '@pavisie/plugins/integrations/providers/twitch';
 import { requireGuildAccess } from '../lib/guild-access';
 import {
   ALERT_PROVIDER_IDS,
@@ -221,6 +222,16 @@ export default async function integrationsRoutes(app: ZodFastifyInstance): Promi
       const guildId = request.guildId!;
       const session = request.session!;
       const { provider } = request.params as { provider: IntegrationProviderId };
+
+      // Twitch has no per-server OAuth connect any more: its alerts need no Twitch login (add a watch with a
+      // username + channel instead), and the Twitch chat bot / channel points live on the creator dashboard. The
+      // `/integrations/twitch/callback` route stays for the owner's bot-identity and the creator flows, which
+      // start their own state elsewhere — not here.
+      if (provider === 'twitch') {
+        throw new ValidationError(
+          "Twitch alerts do not need a Twitch login. Add a watch with the streamer's Twitch username and a Discord channel instead.",
+        );
+      }
 
       if (isOAuthProvider(provider)) {
         if (!isOAuthProviderConfigured(provider)) {
@@ -461,15 +472,38 @@ export default async function integrationsRoutes(app: ZodFastifyInstance): Promi
       const { provider, target, channelId, roleId, template } = request.body;
 
       const missingEnv = listProviderAvailability().find((p) => p.id === provider)?.missingEnv ?? [];
-      const config = { target, channelId, roleId: roleId ?? null, template: template ?? null };
+
+      // Twitch: store the normalized lowercase login (EventSub / inbound matching is on it) and, when Twitch is
+      // configured, refuse a user that does not exist right here rather than saving an alert that can never fire.
+      // A Twitch outage during the check does not block saving; the poll job retries.
+      let watchTarget = target;
+      let twitchUser: { id: string; displayName: string } | null = null;
+      if (provider === 'twitch') {
+        const login = normalizeTwitchLogin(target);
+        if (!login) {
+          throw new ValidationError(
+            'That is not a valid Twitch username (letters, numbers and underscores, up to 25 characters).',
+          );
+        }
+        watchTarget = login;
+        if (missingEnv.length === 0) {
+          const lookup = await lookupTwitchUser(twitchLiveStatusContextFrom(app), login);
+          if (lookup.status === 'not_found') throw new ValidationError(`Twitch user "${login}" not found.`);
+          if (lookup.status === 'found') twitchUser = { id: lookup.id, displayName: lookup.displayName };
+        }
+      }
+      const config = { target: watchTarget, channelId, roleId: roleId ?? null, template: template ?? null };
 
       const connection = await app.prisma.integrationConnection.create({
         data: {
           guildId,
           provider: CANONICAL_PROVIDER_ENUM_MAP[provider],
-          label: target,
+          label: watchTarget,
           status: missingEnv.length === 0 ? 'CONNECTED' : 'ERROR',
           config,
+          ...(twitchUser
+            ? { externalAccountId: twitchUser.id, externalAccountName: twitchUser.displayName }
+            : {}),
           connectedBy: session.userId,
           lastError:
             missingEnv.length > 0 ? `Missing environment variable(s): ${missingEnv.join(', ')}.` : null,
@@ -482,7 +516,7 @@ export default async function integrationsRoutes(app: ZodFastifyInstance): Promi
         action: AuditAction.IntegrationConnect,
         targetType: 'integration_connection',
         targetId: connection.id,
-        after: { provider, target, channelId },
+        after: { provider, target: watchTarget, channelId },
       });
 
       reply.status(201);

@@ -88,10 +88,21 @@ function collect(
   return out;
 }
 
+// A genuinely OAuth provider (Twitch stopped being one when its alerts moved to app credentials — see the
+// 'alert providers' describe below). Calendar/Instagram rows are the ones that still get a Connect button.
 const PROVIDER: IntegrationProviderInfoDto = {
+  id: 'google_calendar',
+  name: 'Google Calendar',
+  kind: 'oauth',
+  available: true,
+  missingEnv: [],
+  supportsAlerts: false,
+};
+
+const TWITCH_ALERT_PROVIDER: IntegrationProviderInfoDto = {
   id: 'twitch',
   name: 'Twitch',
-  kind: 'oauth',
+  kind: 'apikey',
   available: true,
   missingEnv: [],
   supportsAlerts: true,
@@ -134,7 +145,7 @@ describe('ProviderCard', () => {
     const withNone = ProviderCard({ provider: PROVIDER, connections: [], onConnect: () => {}, onDisconnect: vi.fn() });
 
     // Filtered on label, not just `variant: 'outline'` + position — the "Add watch" button (rendered when
-    // `provider.supportsAlerts`, as it is here) shares that same variant, so matching by position alone would
+    // `provider.supportsAlerts`) shares that same variant, so matching by position alone would
     // be fragile against reordering the card's sections.
     const connectButton = (tree: ReactElement) =>
       collect(
@@ -151,5 +162,48 @@ describe('ProviderCard', () => {
       'Connect another account',
     );
     expect((connectButton(withNone)?.props as { children?: string } | undefined)?.children).toBe('Connect');
+  });
+});
+
+describe('ProviderCard — alert providers (Twitch) have no OAuth Connect button', () => {
+  const buttonLabels = (tree: ReactElement) =>
+    collect(tree, (el) => el.type === Button)
+      .map((el) => (el.props as { children?: unknown }).children)
+      .filter((children): children is string => typeof children === 'string');
+
+  it('shows only "Add watch" for Twitch, even when the page passes onConnect/onDisconnect for every card', () => {
+    const tree = ProviderCard({
+      provider: TWITCH_ALERT_PROVIDER,
+      connections: [],
+      onConnect: () => {},
+      onDisconnect: vi.fn(),
+      onAddWatch: () => {},
+    });
+
+    const labels = buttonLabels(tree);
+    expect(labels).toContain('Add watch');
+    expect(labels).not.toContain('Connect');
+    expect(labels).not.toContain('Connect another account');
+  });
+
+  it('still lists (and can disconnect) a connection an older OAuth-style Twitch link left behind', () => {
+    const onDisconnect = vi.fn();
+    const tree = ProviderCard({
+      provider: TWITCH_ALERT_PROVIDER,
+      connections: [connection('legacy-1')],
+      onConnect: () => {},
+      onDisconnect,
+    });
+
+    const disconnectButtons = disconnectButtonsOf(tree);
+    expect(disconnectButtons).toHaveLength(1);
+    (disconnectButtons[0]!.props as { onClick: () => void }).onClick();
+    expect(onDisconnect).toHaveBeenCalledWith('legacy-1');
+    expect(buttonLabels(tree)).not.toContain('Connect another account');
+  });
+
+  it('keeps the Connect button for a real OAuth provider', () => {
+    const tree = ProviderCard({ provider: PROVIDER, connections: [], onConnect: () => {}, onDisconnect: vi.fn() });
+    expect(buttonLabels(tree)).toContain('Connect');
   });
 });

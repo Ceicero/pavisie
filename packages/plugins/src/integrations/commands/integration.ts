@@ -1,5 +1,5 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
-import { AuditAction, discordTimestamp } from '@pavisie/core';
+import { AuditAction, ValidationError, discordTimestamp } from '@pavisie/core';
 import type { AlertProviderId } from '@pavisie/types/integrations';
 import {
   assertStaffLevel,
@@ -232,6 +232,9 @@ async function handleConnect(c: Parameters<PluginCommand['execute']>[0]): Promis
     return;
   }
 
+  // Only providers that genuinely need the server admin to sign in elsewhere (Instagram, Google/Microsoft
+  // Calendar) are sent to the dashboard. Twitch is `apikey`: alerts use the bot's own app credentials, so it is
+  // connected right here like YouTube/Reddit/Steam, with just a login + channel.
   if (providerDef.kind === 'oauth') {
     const dashboardUrl = c.ctx.env.DASHBOARD_URL ?? 'the dashboard';
     const url = `${dashboardUrl}/dashboard/${c.guildId}/integrations`;
@@ -264,13 +267,14 @@ async function handleConnect(c: Parameters<PluginCommand['execute']>[0]): Promis
   const role = c.interaction.options.getRole('role');
   const template = c.interaction.options.getString('template');
 
-  const connection = await createAlertConnection(c.ctx, c.guildId, c.interaction.user.id, 'bot', {
+  const connection = await createAlertOrReplyError(c, {
     provider: providerId as AlertProviderId,
     target,
     channelId: channel.id,
     roleId: role?.id ?? null,
     template,
   });
+  if (!connection) return;
 
   const embed =
     connection.status === 'ERROR'
@@ -280,8 +284,31 @@ async function handleConnect(c: Parameters<PluginCommand['execute']>[0]): Promis
             missingEnv: providerDef.requiredEnv.join(', '),
           }),
         )
-      : successEmbed(c.t('connect.created', { provider: providerDef.name, target, channelId: channel.id }));
+      : successEmbed(
+          c.t('connect.created', {
+            provider: providerDef.name,
+            target: readAlertConfig(connection).target || target,
+            channelId: channel.id,
+          }),
+        );
   await c.interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
+/** `createAlertConnection`, but a user-input problem it reports (e.g. "Twitch user X not found.") becomes an
+ * ephemeral error reply instead of a thrown error. Returns `null` once that reply has been sent. */
+async function createAlertOrReplyError(
+  c: Parameters<PluginCommand['execute']>[0],
+  input: Parameters<typeof createAlertConnection>[4],
+) {
+  try {
+    return await createAlertConnection(c.ctx, c.guildId, c.interaction.user.id, 'bot', input);
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      await c.interaction.reply({ embeds: [errorEmbed(err.message)], ephemeral: true });
+      return null;
+    }
+    throw err;
+  }
 }
 
 async function handleDisconnect(c: Parameters<PluginCommand['execute']>[0]): Promise<void> {
@@ -403,13 +430,14 @@ async function handleAlertsAdd(c: Parameters<PluginCommand['execute']>[0]): Prom
   const role = c.interaction.options.getRole('role');
   const template = c.interaction.options.getString('template');
 
-  const connection = await createAlertConnection(c.ctx, c.guildId, c.interaction.user.id, 'bot', {
+  const connection = await createAlertOrReplyError(c, {
     provider: providerId,
     target,
     channelId: channel.id,
     roleId: role?.id ?? null,
     template,
   });
+  if (!connection) return;
 
   const embed =
     connection.status === 'ERROR'
@@ -419,7 +447,13 @@ async function handleAlertsAdd(c: Parameters<PluginCommand['execute']>[0]): Prom
             missingEnv: (getProvider(providerId)?.requiredEnv ?? []).join(', '),
           }),
         )
-      : successEmbed(c.t('alerts.added', { target, provider: providerId, channelId: channel.id }));
+      : successEmbed(
+          c.t('alerts.added', {
+            target: readAlertConfig(connection).target || target,
+            provider: providerId,
+            channelId: channel.id,
+          }),
+        );
   await c.interaction.reply({ embeds: [embed], ephemeral: true });
 }
 

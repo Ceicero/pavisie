@@ -42,6 +42,28 @@ describe('POST /webhooks/twitch', () => {
     await app.close();
   });
 
+  // The receiver's trust is the HMAC signature alone, never the Host header, so deliveries addressed to the
+  // OLD domain (api.entrophybot.com, still served by this same app until Twitch subscriptions migrate) and to the
+  // current one (api.pavisie.com) are both accepted.
+  it.each(['api.pavisie.com', 'api.entrophybot.com'])(
+    'accepts a signed delivery addressed to %s (nothing in the receiver is domain-specific)',
+    async (host) => {
+      const { app } = await buildTestApp();
+      const body = JSON.stringify({ challenge: 'xyz789', subscription: { type: 'stream.online' } });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/webhooks/twitch',
+        headers: { ...twitchHeaders(body, 'webhook_callback_verification', `msg-${host}`), host },
+        payload: body,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toBe('xyz789');
+      await app.close();
+    },
+  );
+
   it('errors every matching connection and drops the stale subscription id on revocation', async () => {
     const rows = new Map<string, Record<string, unknown>>();
     rows.set('conn1', {

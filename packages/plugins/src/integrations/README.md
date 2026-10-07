@@ -6,8 +6,10 @@ degrades independently when its env vars are unset — the plugin itself never b
 ## What it does
 
 - **Alert watchers** (poll on a cron, one Discord channel + optional role per watched target):
-  - **Twitch** — `stream.online` alerts. Uses EventSub (webhook push, near-instant) when `PUBLIC_WEBHOOK_BASE_URL`
-    and `TWITCH_EVENTSUB_SECRET` are set, else falls back to polling Helix `GET /streams` every 2 minutes.
+  - **Twitch** — `stream.online` alerts. Needs no Twitch login (app credentials only; `kind: 'apikey'`). Uses EventSub
+    (webhook push, near-instant) when `PUBLIC_WEBHOOK_BASE_URL` and `TWITCH_EVENTSUB_SECRET` are set, else falls back
+    to polling Helix `GET /streams` every 2 minutes. Stale/foreign-callback/failed subscriptions are replaced and
+    orphaned ones cleaned up by the `twitch-eventsub-cleanup` job (docs/ARCHITECTURE.md §19a-i).
   - **YouTube** — new upload alerts, polling the channel's uploads playlist every 10 minutes.
   - **Reddit** — new post alerts for a subreddit's `/new` feed every 5 minutes, with an NSFW filter.
   - **Steam** — app news alerts every 30 minutes.
@@ -56,9 +58,9 @@ What still lives in this package is the **runtime**: `twitch-chat/` (`helix.ts`,
 
 ## Commands
 
-`/integration connect <provider> [target] [channel] [role] [template]` — OAuth providers reply with a dashboard
-link (OAuth must start from a signed-in dashboard session); apikey/public providers (YouTube, Steam) create the
-connection immediately if `target`+`channel` are given.
+`/integration connect <provider> [target] [channel] [role] [template]` — OAuth providers (Instagram, Google/Microsoft
+Calendar) reply with a dashboard link (OAuth must start from a signed-in dashboard session); apikey/public providers
+(Twitch, YouTube, Reddit, Steam) create the connection immediately if `target`+`channel` are given.
 `/integration disconnect <connection>` · `/integration status [connection]` · `/integration list`
 `/integration alerts add|remove|list` — Twitch/YouTube/Reddit/Steam watch targets (one `IntegrationConnection` row
 per target).
@@ -105,10 +107,10 @@ and currency moved to the creator dashboard" notice (with the linked channel and
   cannot fix — flagged for a wiring-stage reconciliation pass.
 - Twitch **stream-live alerts** and Reddit are polled with **app-level** credentials (client-credentials
   grant), not a per-connection user OAuth token — matching SPEC.md §J's "client-credentials app token" /
-  "app-only OAuth" wording. `twitch` and `reddit` are still listed as OAuth providers in
-  `apps/api/src/lib/integrations/providers.ts` (pre-existing, not changed here); that dashboard OAuth flow links
-  the connecting staff member's own account but isn't required for alerts to work — `/integration alerts add`
-  (app-token based) is what actually watches a target. The **Twitch chat bot** (above) is the exception: it
+  "app-only OAuth" wording. `twitch` is therefore `kind: 'apikey'` (the per-server Twitch OAuth "Connect" was
+  removed; the OAuth machinery in `apps/api/src/lib/integrations/providers.ts` remains only for the owner's bot
+  identity and the creator dashboard). `reddit`'s per-guild OAuth link is still offered but isn't required for alerts
+  — `/integration alerts add` (app-token based) is what actually watches a target. The **Twitch chat bot** (above) is the exception: it
   genuinely runs on real user OAuth — the broadcaster's `channel:bot` grant plus Pavisie's own dedicated
   bot-account token — not the app-level client-credentials grant the alert watcher uses.
 - GitHub's optional `repo:`/`branch:` filters are encoded as extra entries in `WebhookEndpoint.events` (there's no

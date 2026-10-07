@@ -3,7 +3,7 @@ import type { IntegrationConnection, Prisma, WebhookEndpoint } from '@pavisie/da
 import { AuditAction, ValidationError, assertPublicHttpUrl, encryptSecret } from '@pavisie/core';
 import type { AlertProviderId } from '@pavisie/types/integrations';
 import type { PluginContext } from '../sdk';
-import { ensureTwitchEventSub } from './providers/twitch';
+import { ensureTwitchEventSub, lookupTwitchUser, normalizeTwitchLogin } from './providers/twitch';
 import { getProvider, isProviderEnvSatisfied, PROVIDER_ENUM_MAP } from './providers';
 import { OUTBOUND_PLATFORM_EVENTS } from './service';
 
@@ -27,22 +27,45 @@ export async function createAlertConnection(
   const providerDef = getProvider(input.provider);
   if (!providerDef) throw new ValidationError(`Unknown provider "${input.provider}".`);
 
+  const available = isProviderEnvSatisfied(providerDef.requiredEnv, ctx.env);
+
+  // Twitch alerts need no one's Twitch login (app token only), so the only thing to check up front is that the
+  // typed login is well-formed and belongs to a real Twitch user — a clear error now beats a connection that sits
+  // in ERROR. A Twitch outage during the check doesn't block creating the alert; the poll job retries it.
+  let target = input.target;
+  let twitchUser: { id: string; displayName: string } | null = null;
+  if (input.provider === 'twitch') {
+    const login = normalizeTwitchLogin(input.target);
+    if (!login) {
+      throw new ValidationError(
+        `"${input.target.trim().slice(0, 60)}" is not a valid Twitch username (letters, numbers and underscores, up to 25 characters).`,
+      );
+    }
+    target = login;
+    if (available) {
+      const lookup = await lookupTwitchUser(ctx, login);
+      if (lookup.status === 'not_found') throw new ValidationError(`Twitch user "${login}" not found.`);
+      if (lookup.status === 'found') twitchUser = { id: lookup.id, displayName: lookup.displayName };
+    }
+  }
+
   const parsed = providerDef.configSchema.parse({
-    target: input.target,
+    target,
     channelId: input.channelId,
     roleId: input.roleId ?? null,
     template: input.template ?? null,
   }) as Record<string, unknown>;
 
-  const available = isProviderEnvSatisfied(providerDef.requiredEnv, ctx.env);
-
   const connection = await ctx.prisma.integrationConnection.create({
     data: {
       guildId,
       provider: PROVIDER_ENUM_MAP[input.provider],
-      label: input.target,
+      label: target,
       status: available ? 'CONNECTED' : 'ERROR',
       config: parsed as Prisma.InputJsonValue,
+      ...(twitchUser
+        ? { externalAccountId: twitchUser.id, externalAccountName: twitchUser.displayName }
+        : {}),
       connectedBy: actorId,
       lastError: available ? null : `Missing environment variable(s): ${providerDef.requiredEnv.join(', ')}.`,
     },
@@ -55,12 +78,12 @@ export async function createAlertConnection(
     action: AuditAction.IntegrationConnect,
     targetType: 'integration_connection',
     targetId: connection.id,
-    after: { provider: input.provider, target: input.target, channelId: input.channelId },
+    after: { provider: input.provider, target, channelId: input.channelId },
     source,
   });
 
   if (input.provider === 'twitch' && available) {
-    await ensureTwitchEventSub(ctx, connection).catch((err) =>
+    await ensureTwitchEventSub(ctx, connection, { fresh: true }).catch((err) =>
       ctx.logger.warn({ err }, 'integrations: initial Twitch EventSub setup failed'),
     );
   }

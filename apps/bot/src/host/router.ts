@@ -12,7 +12,7 @@ import type {
   RepliableInteraction,
 } from 'discord.js';
 import type { Logger } from 'pino';
-import { isAppError, resolveLocale, t as coreT } from '@pavisie/core';
+import { BRAND, isAppError, resolveLocale, t as coreT } from '@pavisie/core';
 import {
   assertBotPermissions,
   errorEmbed,
@@ -171,6 +171,15 @@ async function checkAndConsume(params: {
   return true;
 }
 
+/** Where an admin turns plugins on: the dashboard's Plugins page for this guild. `DASHBOARD_URL` is the real
+ * dashboard origin (it equals `WEB_URL` in production); `BRAND.siteUrl` is the last-resort default. Tolerates a
+ * context without `env` (bare test doubles) rather than throwing in the middle of an error reply. */
+export function pluginsDashboardUrl(ctx: Pick<PluginContext, 'env'> | undefined, guildId: string): string {
+  const env = (ctx?.env ?? {}) as { DASHBOARD_URL?: string; WEB_URL?: string };
+  const base = (env.DASHBOARD_URL || env.WEB_URL || BRAND.siteUrl).replace(/\/+$/, '');
+  return `${base}/dashboard/${guildId}/plugins`;
+}
+
 /** Checks plugin availability (env/intents) and per-guild enablement, replying with an ephemeral message if either fails. */
 async function checkPluginGate(params: {
   interaction: RepliableInteraction;
@@ -181,6 +190,7 @@ async function checkPluginGate(params: {
   pluginName: string;
   alwaysEnabled: boolean | undefined;
   guildId: string;
+  dashboardPluginsUrl: string;
 }): Promise<boolean> {
   const { interaction, logger, ...gate } = params;
   const failure = await pluginGateFailure(gate);
@@ -201,8 +211,9 @@ async function pluginGateFailure(params: {
   pluginName: string;
   alwaysEnabled: boolean | undefined;
   guildId: string;
+  dashboardPluginsUrl: string;
 }): Promise<string | null> {
-  const { host, t, pluginId, pluginName, alwaysEnabled, guildId } = params;
+  const { host, t, pluginId, pluginName, alwaysEnabled, guildId, dashboardPluginsUrl } = params;
 
   const availability = host.availability.get(pluginId);
   if (!availability?.available) {
@@ -211,7 +222,9 @@ async function pluginGateFailure(params: {
 
   if (!alwaysEnabled) {
     const enabled = await host.configStore.isEnabled(guildId, pluginId);
-    if (!enabled) return t('errors.plugin_disabled', { plugin: pluginName });
+    if (!enabled) {
+      return t('errors.plugin_disabled', { plugin: pluginName, pluginId, url: dashboardPluginsUrl });
+    }
   }
 
   return null;
@@ -278,6 +291,7 @@ async function handleCommand(
     pluginName: plugin.manifest.name,
     alwaysEnabled: plugin.manifest.alwaysEnabled,
     guildId: interaction.guildId,
+    dashboardPluginsUrl: pluginsDashboardUrl(ctx, interaction.guildId),
   });
   if (!gateOk) return;
 
@@ -376,6 +390,7 @@ async function handleContextMenu(
     pluginName: plugin.manifest.name,
     alwaysEnabled: plugin.manifest.alwaysEnabled,
     guildId: interaction.guildId,
+    dashboardPluginsUrl: pluginsDashboardUrl(ctx, interaction.guildId),
   });
   if (!gateOk) return;
 
@@ -469,6 +484,7 @@ async function handleAutocomplete(
     pluginName: plugin.manifest.name,
     alwaysEnabled: plugin.manifest.alwaysEnabled,
     guildId: interaction.guildId,
+    dashboardPluginsUrl: pluginsDashboardUrl(ctx, interaction.guildId),
   });
   if (gateFailure) {
     await respondEmpty();
@@ -581,6 +597,7 @@ async function handleComponent(
     pluginName: plugin.manifest.name,
     alwaysEnabled: plugin.manifest.alwaysEnabled,
     guildId: interaction.guildId,
+    dashboardPluginsUrl: pluginsDashboardUrl(ctx, interaction.guildId),
   });
   if (!gateOk) return;
 
