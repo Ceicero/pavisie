@@ -188,7 +188,7 @@ function CreatorChannelCard({ channel }: { channel: CreatorTwitchChannelDto }) {
             )}
             {channel.discordLinked ? <Badge variant="secondary">linked to a Discord server</Badge> : null}
           </div>
-          {channel.status === 'error' && channel.lastError ? (
+          {channel.lastError ? (
             <p className="max-w-md text-xs text-destructive">{channel.lastError}</p>
           ) : null}
         </div>

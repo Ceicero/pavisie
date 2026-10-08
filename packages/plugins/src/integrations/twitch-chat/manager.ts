@@ -185,6 +185,11 @@ export class TwitchChatManager {
   /** The channel's own currency (`ChannelEconomy`), by broadcaster user id — `null` means "none, or switched off".
    * See `ECONOMY_CACHE_TTL_MS`. */
   private readonly economyCache = new Map<string, { economy: ChannelEconomy | null; fetchedAtMs: number }>();
+  /** The last error text written to `TwitchChatChannel.lastError` for each channel (from send-drops, scope
+   * revocations, etc.) — used to avoid redundant database writes when the error hasn't changed. Only drop-related
+   * errors and subscription revocation errors are cached here; other transient errors leave this as `null` so
+   * they're re-written on every occurrence. */
+  private readonly lastErrorByChannelId = new Map<string, string | null>();
 
   constructor(private readonly wsCtor: WebSocketConstructorLike = defaultWebSocketConstructor) {}
 
@@ -580,11 +585,19 @@ export class TwitchChatManager {
             allowedMentions: { parse: [] },
           });
         }
-        await sendChatMessage(
+        const sendResult = await sendChatMessage(
           ctx,
           channel.broadcasterUserId,
           'This chat now shows messages posted in the linked Discord channel.',
         );
+        if (!sendResult.ok && sendResult.dropCode) {
+          const errorMsg = this.dropCodeToUserMessage(sendResult.dropCode, sendResult.error);
+          ctx.logger.warn(
+            { channelId: channel.id, dropCode: sendResult.dropCode },
+            'integrations/twitch-chat: bridge announce dropped by Twitch',
+          );
+          await this.updateChannelLastErrorIfChanged(ctx, channel.id, errorMsg);
+        }
       } catch (err) {
         ctx.logger.warn(
           { err, channelId: channel.id },
@@ -605,11 +618,19 @@ export class TwitchChatManager {
             allowedMentions: { parse: [] },
           });
         }
-        await sendChatMessage(
+        const sendResult = await sendChatMessage(
           ctx,
           channel.broadcasterUserId,
           'This chat is now bridged to Discord — messages here will be shown there.',
         );
+        if (!sendResult.ok && sendResult.dropCode) {
+          const errorMsg = this.dropCodeToUserMessage(sendResult.dropCode, sendResult.error);
+          ctx.logger.warn(
+            { channelId: channel.id, dropCode: sendResult.dropCode },
+            'integrations/twitch-chat: bridge announce dropped by Twitch',
+          );
+          await this.updateChannelLastErrorIfChanged(ctx, channel.id, errorMsg);
+        }
       } catch (err) {
         ctx.logger.warn(
           { err, channelId: channel.id },
@@ -664,6 +685,7 @@ export class TwitchChatManager {
       // Also drops the bridge announce-once flags — can cause a harmless one-time re-announcement after a full
       // manager idle->reconnect cycle (rare, acceptable; not worth solving fully here).
       this.bridgeAnnounced.delete(channelId);
+      this.lastErrorByChannelId.delete(channelId);
     }
   }
 
@@ -673,6 +695,46 @@ export class TwitchChatManager {
   private forgetChannel(channelId: string, subs: ChannelSubscriptions): void {
     if (subs.chat) this.forgetSubscription(channelId, subs.chat.broadcasterUserId, 'chat');
     if (subs.rewards) this.forgetSubscription(channelId, subs.rewards.broadcasterUserId, 'rewards');
+    this.lastErrorByChannelId.delete(channelId);
+  }
+
+  /** Converts a Twitch drop-reason code to a user-friendly message for the creator dashboard. For known codes,
+   * gives a concrete fix suggestion; for others, falls back to Twitch's own message. */
+  private dropCodeToUserMessage(code: string, twitchMessage: string): string {
+    switch (code) {
+      case 'verified_phone_number':
+        return "Twitch won't let pavisiebot chat here (it needs a verified phone number). Fix: type /mod pavisiebot in your chat.";
+      case 'verified_email':
+        return "Twitch won't let pavisiebot chat here (it needs a verified email). Fix: type /mod pavisiebot in your chat.";
+      case 'follower_only':
+        return "Twitch won't let pavisiebot chat in follower-only mode. Fix: type /mod pavisiebot in your chat or disable follower-only mode.";
+      case 'slow_mode':
+        return "Twitch slow mode is preventing messages. Fix: type /mod pavisiebot in your chat or reduce the slow mode duration.";
+      case 'channel_suspended':
+        return 'Your channel is suspended and cannot send or receive messages.';
+      case 'emote_only':
+        return "Twitch won't let pavisiebot chat in emote-only mode. Fix: type /mod pavisiebot in your chat or disable emote-only mode.";
+      case 'subsonly':
+        return "Twitch won't let pavisiebot chat in subscribers-only mode. Fix: type /mod pavisiebot in your chat or disable subscribers-only mode.";
+      default:
+        return twitchMessage || `Twitch refused this message (${code}). Try again later or check your channel settings.`;
+    }
+  }
+
+  /** Updates `TwitchChatChannel.lastError` only when the new text differs from what is currently cached for this
+   * channel. Avoids redundant database writes when the same error is repeated. When `newError` is `null` (clearing
+   * a prior error), it's only written if the cached value is not already `null`. */
+  private async updateChannelLastErrorIfChanged(
+    ctx: PluginContext,
+    channelId: string,
+    newError: string | null,
+  ): Promise<void> {
+    const cached = this.lastErrorByChannelId.get(channelId);
+    if (cached === newError) return; // No change, skip the write
+    this.lastErrorByChannelId.set(channelId, newError);
+    await ctx.prisma.twitchChatChannel
+      .update({ where: { id: channelId }, data: { lastError: newError } })
+      .catch(() => undefined);
   }
 
   /** Closes the current (and any retiring) socket without going through the normal `onClosed`→backoff path —
@@ -886,7 +948,26 @@ export class TwitchChatManager {
       }
 
       if (reply) {
-        await sendChatMessage(ctx, cached.channel.broadcasterUserId, reply);
+        const sendResult = await sendChatMessage(ctx, cached.channel.broadcasterUserId, reply);
+        if (!sendResult.ok) {
+          if (sendResult.dropCode) {
+            // Twitch refused the message (verified_phone_number, follower-only, etc.) —
+            // log once per channel and surface to the creator dashboard
+            const errorMsg = this.dropCodeToUserMessage(sendResult.dropCode, sendResult.error);
+            ctx.logger.warn(
+              { channelId: cached.channel.id, dropCode: sendResult.dropCode },
+              'integrations/twitch-chat: message dropped by Twitch',
+            );
+            await this.updateChannelLastErrorIfChanged(ctx, cached.channel.id, errorMsg);
+          }
+        } else {
+          // Send succeeded — if there was a prior drop error, clear it
+          const cached_error = this.lastErrorByChannelId.get(cached.channel.id) ?? cached.channel.lastError;
+          // Only clear if the cached error looks like a drop error (starts with our drop message patterns)
+          if (cached_error && (cached_error.includes("Twitch won't let") || cached_error.includes('Twitch slow mode'))) {
+            await this.updateChannelLastErrorIfChanged(ctx, cached.channel.id, null);
+          }
+        }
       }
     }
 
@@ -1106,9 +1187,18 @@ export class TwitchChatManager {
   private async runRewardAction(ctx: PluginContext, channel: TwitchChatChannel, action: RewardAction): Promise<void> {
     try {
       switch (action.kind) {
-        case 'CHAT':
-          await sendChatMessage(ctx, channel.broadcasterUserId, action.text);
+        case 'CHAT': {
+          const sendResult = await sendChatMessage(ctx, channel.broadcasterUserId, action.text);
+          if (!sendResult.ok && sendResult.dropCode) {
+            const errorMsg = this.dropCodeToUserMessage(sendResult.dropCode, sendResult.error);
+            ctx.logger.warn(
+              { channelId: channel.id, dropCode: sendResult.dropCode, rewardId: action.reward.id },
+              'integrations/twitch-chat: reward CHAT action dropped by Twitch',
+            );
+            await this.updateChannelLastErrorIfChanged(ctx, channel.id, errorMsg);
+          }
           return;
+        }
         case 'DISCORD':
           // A Discord post needs a guild; a guildless channel treats the action as unavailable (skipped
           // quietly, never an error into Twitch chat).

@@ -1756,3 +1756,147 @@ describe('TwitchChatManager economy chat earning', () => {
     expect(findEconomy).toHaveBeenCalledTimes(1); // and the currency row is read once too, not per message
   });
 });
+
+describe('send chat message drop handling', () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function setupManager() {
+    const channel = makeChannelRow({ id: 'ch-1', broadcasterUserId: 'b-1' });
+    const manager = new TwitchChatManager(FakeWebSocketCtor);
+    const updates: unknown[] = [];
+
+    const { ctx } = createTestContext({
+      overrides: { env: makeEnv() },
+      prismaOverrides: {
+        twitchChatChannel: {
+          findMany: async () => [channel],
+          findUnique: async () => channel,
+          update: async (args: unknown) => {
+            updates.push((args as any).data);
+            return channel;
+          },
+        },
+        twitchChatCommand: { findMany: async () => [makeCommandRow()] },
+        twitchChatReward: { findMany: async () => [] },
+      },
+    });
+
+    await manager.start(ctx);
+    const ws = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    ws.emit('session_welcome', { session: { id: 'sess-1', status: 'connected', keepalive_timeout_seconds: 10, reconnect_url: null } });
+    await flush();
+
+    return { ctx, ws, channel, updates };
+  }
+
+  it('when sendChatMessage returns a drop code, lastError is written with user-friendly text', async () => {
+    mocks.sendChatMessage.mockResolvedValueOnce({
+      ok: false,
+      dropCode: 'verified_phone_number',
+      error: 'A verified phone number is required...',
+    });
+
+    const { ws, updates } = await setupManager();
+
+    // Send a message that will trigger a command reply
+    ws.emit('notification', notificationFrame({ message: { text: '!hello' } }));
+    await flush();
+
+    // Find drop-related updates (skip reconciliation updates)
+    const dropUpdates = updates.filter((u: any) => u.lastError?.includes("Twitch won't let"));
+    expect(dropUpdates.length).toBeGreaterThan(0);
+    expect(dropUpdates[0]).toEqual(expect.objectContaining({ lastError: expect.stringContaining("Twitch won't let") }));
+  });
+
+  it('repeated drops with the same error code do not rewrite the database row', async () => {
+    mocks.sendChatMessage.mockImplementation(async () => {
+      return {
+        ok: false,
+        dropCode: 'verified_phone_number',
+        error: 'A verified phone number is required...',
+      };
+    });
+
+    const { ws, updates } = await setupManager();
+
+    // Clear updates from reconciliation
+    updates.length = 0;
+
+    // First drop
+    ws.emit('notification', notificationFrame({ message: { text: '!hello' } }));
+    await flush();
+
+    const firstDropUpdates = updates.filter((u: any) => u.lastError?.includes("Twitch won't let"));
+    expect(firstDropUpdates.length).toBe(1);
+
+    updates.length = 0;
+
+    // Second drop (same error)
+    ws.emit('notification', notificationFrame({ message: { text: '!hello' } }));
+    await flush();
+
+    // Should NOT add a new update for the same error due to caching
+    const secondDropUpdates = updates.filter((u: any) => u.lastError?.includes("Twitch won't let"));
+    expect(secondDropUpdates.length).toBe(0);
+  });
+
+  it('successful send does not write error even after prior drops have been handled', async () => {
+    // First two calls: drop, drop; third call: success
+    const results = [
+      { ok: false, dropCode: 'verified_phone_number', error: 'A verified phone number is required...' },
+      { ok: false, dropCode: 'verified_phone_number', error: 'A verified phone number is required...' },
+      { ok: true },
+    ];
+    let callIndex = 0;
+    mocks.sendChatMessage.mockImplementation(async () => {
+      const result = results[callIndex++];
+      return result;
+    });
+
+    const { ws, updates } = await setupManager();
+
+    // Clear updates from reconciliation
+    updates.length = 0;
+
+    // First two drops (should only write once due to caching)
+    ws.emit('notification', notificationFrame({ message: { text: '!hello' } }));
+    await flush();
+    ws.emit('notification', notificationFrame({ message: { text: '!hello' } }));
+    await flush();
+
+    const dropUpdates = updates.filter((u: any) => u.lastError?.includes("Twitch won't let"));
+    expect(dropUpdates.length).toBe(1); // Only one write due to caching
+
+    updates.length = 0;
+
+    // Third: success (should not write a new error)
+    ws.emit('notification', notificationFrame({ message: { text: '!hello' } }));
+    await flush();
+
+    // Should not add a new error update for success
+    const successErrorUpdates = updates.filter((u: any) => u.lastError?.includes("Twitch won't let"));
+    expect(successErrorUpdates.length).toBe(0);
+  });
+
+  it('successful send does not write lastError', async () => {
+    mocks.sendChatMessage.mockResolvedValue({ ok: true });
+
+    const { ws, updates } = await setupManager();
+
+    // Clear updates from reconciliation
+    updates.length = 0;
+
+    ws.emit('notification', notificationFrame({ message: { text: '!hello' } }));
+    await flush();
+
+    // No drop-related lastError writes for a successful send
+    const dropUpdates = updates.filter((u: any) => u.lastError?.includes("Twitch won't let"));
+    expect(dropUpdates.length).toBe(0);
+  });
+});

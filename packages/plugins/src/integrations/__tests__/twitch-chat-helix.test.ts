@@ -276,7 +276,7 @@ describe('sendChatMessage', () => {
 
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(false);
-    expect(second.error).toBe('throttled');
+    expect((second as any).error).toBe('throttled');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -307,6 +307,110 @@ describe('sendChatMessage', () => {
     const result = await sendChatMessage(ctx, `broadcaster-${Date.now()}-d`, 'hello');
     expect(result.ok).toBe(false);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns ok:false with dropCode when Twitch returns 200 but is_sent:false (verified_phone_number)', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              message_id: '',
+              is_sent: false,
+              drop_reason: {
+                code: 'verified_phone_number',
+                message: 'A verified phone number is required to chat in this channel. ...',
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+
+    const { ctx } = createTestContext({
+      prismaOverrides: { twitchBotIdentity: { findFirst: async () => makeIdentity() } },
+    });
+
+    const result = await sendChatMessage(ctx, `broadcaster-${Date.now()}-drop-1`, 'hello');
+
+    expect(result.ok).toBe(false);
+    expect((result as any).dropCode).toBe('verified_phone_number');
+    expect((result as any).error).toContain('verified phone number');
+  });
+
+  it('returns ok:false with dropCode for follower_only drop reason', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              message_id: '',
+              is_sent: false,
+              drop_reason: {
+                code: 'follower_only',
+                message: 'This channel is in follower-only mode.',
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+
+    const { ctx } = createTestContext({
+      prismaOverrides: { twitchBotIdentity: { findFirst: async () => makeIdentity() } },
+    });
+
+    const result = await sendChatMessage(ctx, `broadcaster-${Date.now()}-drop-2`, 'hello');
+
+    expect(result.ok).toBe(false);
+    expect((result as any).dropCode).toBe('follower_only');
+  });
+
+  it('returns ok:true when Twitch returns 200 and is_sent:true (success)', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              message_id: 'abc123',
+              is_sent: true,
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+
+    const { ctx } = createTestContext({
+      prismaOverrides: { twitchBotIdentity: { findFirst: async () => makeIdentity() } },
+    });
+
+    const result = await sendChatMessage(ctx, `broadcaster-${Date.now()}-success`, 'hello');
+
+    expect(result.ok).toBe(true);
+    expect((result as any).dropCode).toBeUndefined();
+  });
+
+  it('returns ok:true (treats as success) when response body is malformed JSON', async () => {
+    const logSpy = vi.fn();
+    globalThis.fetch = vi.fn(async () => {
+      return new Response('not json', { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const { ctx } = createTestContext({
+      prismaOverrides: { twitchBotIdentity: { findFirst: async () => makeIdentity() } },
+    });
+    ctx.logger.warn = logSpy as any;
+
+    const result = await sendChatMessage(ctx, `broadcaster-${Date.now()}-malformed`, 'hello');
+
+    expect(result.ok).toBe(true);
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(String) }),
+      expect.stringContaining('failed to parse send chat message response'),
+    );
   });
 });
 
@@ -344,7 +448,10 @@ describe('a 401 from Helix forces one refresh and retries the call once', () => 
       if (auth === 'Bearer old-access-token') {
         return new Response(null, { status: 401 }); // the cached (pre-401) token — reject it
       }
-      return new Response(null, { status: 200 }); // the freshly refreshed token — accept it
+      return new Response(
+        JSON.stringify({ data: [{ message_id: 'abc123', is_sent: true }] }),
+        { status: 200 },
+      ); // the freshly refreshed token — accept it
     }) as unknown as typeof fetch;
 
     const { ctx } = createTestContext({
@@ -385,5 +492,6 @@ describe('a 401 from Helix forces one refresh and retries the call once', () => 
     const result = await sendChatMessage(ctx, `broadcaster-${Date.now()}-reauth-fail`, 'hi');
 
     expect(result.ok).toBe(false);
+    expect((result as any).error).toBeDefined();
   });
 });

@@ -51,6 +51,17 @@ interface HelixUsersResponse {
   data: { id: string; login: string; display_name: string }[];
 }
 
+interface HelixChatMessageResponse {
+  data: {
+    message_id: string;
+    is_sent: boolean;
+    drop_reason?: {
+      code: string;
+      message: string;
+    };
+  }[];
+}
+
 export interface TwitchUserInfo {
   id: string;
   login: string;
@@ -64,6 +75,10 @@ export interface StreamInfo {
 export interface ChannelInfo {
   title: string | null;
 }
+
+export type SendChatMessageResult =
+  | { ok: true }
+  | { ok: false; error: string; dropCode?: string };
 
 export type CreateSubscriptionResult =
   | { ok: true; subscriptionId: string }
@@ -284,12 +299,16 @@ export function pruneSendThrottle(broadcasterId: string): void {
 
 /** Sends a chat message as the bot identity (Helix "Send Chat Message"). Throttled client-side to at most one
  * send per second per broadcaster — anything beyond that is dropped (never queued) and only debug-logged, since
- * Twitch chat rate limits are itself for a reason and a queued backlog would just get progressively staler. */
+ * Twitch chat rate limits are itself for a reason and a queued backlog would just get progressively staler.
+ *
+ * Twitch returns HTTP 200 even when it refuses the message (e.g., verified_phone_number, follower-only, etc.),
+ * so we parse the response body to check `data[0].is_sent` and return a typed failure if it's false with the
+ * drop code and message. */
 export async function sendChatMessage(
   ctx: PluginContext,
   broadcasterId: string,
   text: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<SendChatMessageResult> {
   const now = Date.now();
   const last = lastSentAtByBroadcaster.get(broadcasterId) ?? 0;
   if (now - last < SEND_THROTTLE_MS) {
@@ -316,6 +335,29 @@ export async function sendChatMessage(
       ctx.logger.warn({ status: res.status }, 'integrations/twitch-chat: send chat message failed');
       return { ok: false, error: `Helix returned status ${res.status}.` };
     }
+
+    // Twitch returns 200 even when the message is refused (verified_phone_number, follower-only, etc.)
+    // — check the response body for is_sent: false to catch those cases
+    try {
+      const json = (await res.json()) as HelixChatMessageResponse;
+      const data = json.data?.[0];
+      if (data && !data.is_sent && data.drop_reason) {
+        return {
+          ok: false,
+          error: data.drop_reason.message,
+          dropCode: data.drop_reason.code,
+        };
+      }
+    } catch (err) {
+      // Failed to parse response body as JSON — not a valid success message structure, but we already got a 200
+      // so this is an edge case; just log and treat as success (the message may or may not have actually been sent,
+      // but we can't determine that)
+      ctx.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'integrations/twitch-chat: failed to parse send chat message response',
+      );
+    }
+
     return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
