@@ -1,0 +1,9 @@
+{
+  "name": "careercrumbs-cloud",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test/logic.test.cjs",
+    "build": "node build.cjs"
+  }
+}
