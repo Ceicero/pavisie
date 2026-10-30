@@ -95,6 +95,11 @@
     bullet: "Résumé bullets",
     oneonone: "1:1 agenda",
     brag: "Brag doc",
+    huddle: "Huddle & handoff",
+    a3: "Problem sheet (A3)",
+    interview: "Interview answers",
+    quarter: "Quarterly review",
+    coach: "From Ruhv",
     other: "Other",
   };
 
@@ -126,6 +131,12 @@
     jobs: [],
     drafts: [],
     reviews: [],
+    shifts: [],
+    problems: [],
+    learning: [],
+    interview: { stories: {}, practice: [] },
+    toolInputs: {},
+    coach: [],
     winSeq: 0,
   });
 
@@ -134,7 +145,7 @@
     const base = emptyWorkspace();
     const out = Object.assign({}, base, ws || {});
     out.profile = Object.assign({}, base.profile, (ws && ws.profile) || {});
-    for (const k of ["wins", "kpis", "competencies", "plan", "projects", "team", "stations", "people", "jobs", "drafts", "reviews"]) {
+    for (const k of ["wins", "kpis", "competencies", "plan", "projects", "team", "stations", "people", "jobs", "drafts", "reviews", "shifts", "problems", "learning", "coach"]) {
       if (!Array.isArray(out[k])) out[k] = base[k];
     }
     out.kpis = out.kpis.map((k) => Object.assign({ entries: [], target: null, better: "higher", unit: "" }, k));
@@ -143,6 +154,11 @@
     out.jobs = out.jobs.map((j) => Object.assign({ history: [], status: "Saved" }, j));
     out.projects = out.projects.map((p) => Object.assign({ milestones: [], status: "Active" }, p));
     out.wins = out.wins.map((w) => Object.assign({ competencies: [], skills: [] }, w));
+    const iv = (ws && ws.interview) || {};
+    out.interview = { stories: Object.assign({}, iv.stories), practice: Array.isArray(iv.practice) ? iv.practice : [] };
+    out.toolInputs = Object.assign({}, ws && ws.toolInputs);
+    out.shifts = out.shifts.map((x) => Object.assign({ safety: [] }, x));
+    out.problems = out.problems.map((x) => Object.assign({ whys: [], causes: {}, countermeasures: [], status: "Open" }, x));
     out.winSeq = Math.max(Number(out.winSeq) || 0, out.wins.reduce((m, w) => Math.max(m, w.n || 0), 0));
     return out;
   }
@@ -565,11 +581,425 @@
     ws.jobs = [
       { id: "j1", title: "Operations Manager", company: "DashMart (internal)", internal: true, status: "Saved", followUpAt: d(0), nextStep: "Ask Alex about the opening", history: [{ status: "Saved", at: new Date(parse(d(-4))).toISOString() }], created: d(-4) },
     ];
+    ws.shifts = [
+      { id: "sh1", date: d(-1), shift: "AM", orders: 412, headcount: 9, laborHours: 68, wentWell: "Frozen audit caught 6 mis-slots before the lunch wave", issues: "Two late trucks pushed putaway into peak", handoff: "Finish putaway on aisle 7 before 5pm wave", safety: [{ kind: "Near miss", text: "Pallet jack left in the handoff walkway" }] },
+      { id: "sh2", date: d(-2), shift: "AM", orders: 388, headcount: 8, laborHours: 64, wentWell: "Sam ran receiving solo for the first time", issues: "", handoff: "", safety: [] },
+    ];
+    ws.problems = [
+      { id: "pb1", title: "Frozen INF spikes after deliveries", status: "Countermeasures", created: d(-35), problem: "Frozen item-not-found rises to 5%+ on delivery days", impact: "Refunds, unhappy customers, INF above target", whys: ["Pickers can't find the item", "It's in overflow, not the pick face", "Putaway puts it wherever there's room", "No assigned overflow slots for frozen", "Slotting was never set up for frozen velocity"], causes: { Process: "No overflow rule", Measurement: "INF not split by temp zone" }, rootCause: "Frozen has no velocity-based slotting or overflow rule", countermeasures: [{ text: "Slot frozen by velocity", owner: "Me", due: d(-10), done: true }, { text: "Mid-shift freezer audit", owner: "Jordan", due: d(-5), done: true }], check: "Frozen INF under 2.5% for 4 straight weeks" },
+    ];
+    ws.learning = [
+      { id: "l1", title: "OSHA 10-hour General Industry", type: "Certification", comp: "c5", status: "Done", hours: 10, doneAt: d(-60) },
+      { id: "l2", title: "Lean Six Sigma Yellow Belt", type: "Certification", comp: "c4", status: "In progress", hours: 6, due: d(30) },
+      { id: "l3", title: "Shadow the Ops Manager's weekly labor plan", type: "Shadowing", comp: "c6", status: "Planned", due: d(5) },
+    ];
+    ws.interview = { stories: { q1: "w1", q5: "w3", q13: "w4" }, practice: [] };
     ws.reviews = [{ id: "r1", week: wk(1), wentWell: "Frozen INF finally moved.", stuck: "HR approval on the buddy program.", nextFocus: "Get slotting data pulled.", energy: 4, created: d(-5) }];
     return ws;
   }
 
+  // =====================================================================
+  // v2: shift log, interview prep, calculators, problem solving, learning,
+  // insights, search, calendar export
+  // =====================================================================
+
+  const SHIFTS = ["AM", "PM", "Overnight", "Weekend"];
+  const SAFETY_KINDS = ["Near miss", "Incident", "Observation", "Hazard fixed"];
+
+  // Rotating huddle topics for a dark-store warehouse floor. General guidance only.
+  const SAFETY_TOPICS = [
+    ["Lifting", "Bend at the knees, keep the load close, and ask for a team lift on anything heavy or awkward."],
+    ["Box cutters", "Cut away from your body, retract the blade every time, and never leave a cutter open on a shelf."],
+    ["Step stools", "Use the stool, not a shelf or a crate. Three points of contact, and don't overreach."],
+    ["Freezer work", "Wear the freezer gear, take your warm-up breaks, and tell a lead if you're feeling numb."],
+    ["Spills", "Stop, block it, clean it or call it in. Nobody walks past a wet floor."],
+    ["Pallet jacks", "Push, don't pull. Watch corners and pedestrians, and park it out of walkways."],
+    ["Clear exits", "Fire exits, extinguishers and electrical panels stay clear. Check them during your first lap."],
+    ["Stacking", "Heavy on the bottom, light on top, and nothing past the shelf edge."],
+    ["Broken glass", "Use a broom and dustpan, never hands. Bag it, label it, and tell the next shift."],
+    ["Near misses", "A near miss is a free lesson. Report it, even if nobody got hurt."],
+    ["Cold chain", "Check temps at receiving. Frozen and refrigerated goods go away first, before ambient."],
+    ["Allergens", "Keep damaged allergen items separate and clean the area before it touches other product."],
+    ["Wrists & scanning", "Switch hands, keep wrists straight, and stretch between waves."],
+    ["Handoff area", "Keep the dasher pickup area clear of carts and boxes. It's a walkway first."],
+    ["Evacuation", "Know two ways out and where we meet. New hires walk the route this week."],
+    ["Cleaning chemicals", "Keep chemicals in labelled containers away from food. Know where the safety data sheets are."],
+    ["Blade disposal", "Old blades go in the sharps container, never the trash."],
+    ["Fatigue", "Take your breaks. Tired people make mistakes, so speak up if you need a reset."],
+    ["Hydration", "Water at every break, especially in the warm zones and on long shifts."],
+    ["Reporting injuries", "Every injury gets reported the same shift, even small ones. It protects you."],
+  ];
+  function safetyTopic(dateStr) {
+    const d = parse(dateStr);
+    const start = new Date(d.getFullYear(), 0, 1);
+    const doy = Math.round((d - start) / 864e5);
+    return SAFETY_TOPICS[doy % SAFETY_TOPICS.length];
+  }
+
+  function huddleText(ws, dateStr, shift) {
+    const prev = (ws.shifts || []).filter((s) => s.date < dateStr).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    const [topic, tip] = safetyTopic(dateStr);
+    const L = ["Huddle — " + fmtDateY(dateStr) + (shift ? " · " + shift + " shift" : ""), ""];
+    L.push("SAFETY: " + topic, "- " + tip, "");
+    L.push("LAST SHIFT");
+    if (prev) {
+      if (prev.orders) L.push("- " + prev.orders + " orders" + (prev.headcount ? " with " + prev.headcount + " people" : ""));
+      if (prev.wentWell) L.push("- Went well: " + clean(prev.wentWell));
+      if (prev.issues) L.push("- Watch out: " + clean(prev.issues));
+      if (prev.handoff) L.push("- Handoff: " + clean(prev.handoff));
+    } else L.push("- [Quick recap of yesterday]");
+    const kp = (ws.kpis || []).map((k) => ({ k, s: kpiStatus(k) })).filter((o) => o.s.latest && o.s.target !== null);
+    const off = kp.filter((o) => o.s.state === "off" || o.s.state === "near");
+    L.push("", "TODAY'S FOCUS");
+    if (off.length) L.push(bullets(off.slice(0, 2).map((o) => o.k.name + " is at " + fmtNum(o.s.value, o.k.unit) + "; target " + fmtNum(o.s.target, o.k.unit))));
+    else L.push("- [One number or habit to focus on]");
+    const recentRec = [];
+    for (const m of ws.team || []) for (const n of m.notes || []) if (n.type === "Recognition" && daysBetween(n.date, dateStr) <= 3 && daysBetween(n.date, dateStr) >= 0) recentRec.push(m.name.replace(/\s*\(example\)/, "") + ": " + clean(n.text));
+    L.push("", "SHOUT-OUTS");
+    L.push(recentRec.length ? bullets(recentRec.slice(0, 3)) : "- [Recognise someone by name for something specific]");
+    L.push("", "QUESTIONS / BLOCKERS", "- [Open the floor]");
+    return L.join("\n");
+  }
+
+  function handoffText(s) {
+    const L = ["Shift handoff — " + fmtDateY(s.date) + (s.shift ? " · " + s.shift : ""), ""];
+    const nums = [];
+    if (s.orders) nums.push(s.orders + " orders");
+    if (s.headcount) nums.push(s.headcount + " on shift");
+    if (s.laborHours) nums.push(s.laborHours + " labor hrs");
+    if (s.orders && s.laborHours) nums.push((Math.round((num(s.orders) / num(s.laborHours)) * 10) / 10) + " orders/labor hr");
+    if (nums.length) L.push("VOLUME: " + nums.join(" · "), "");
+    L.push("WENT WELL", s.wentWell ? "- " + clean(s.wentWell) : "- —", "");
+    L.push("ISSUES", s.issues ? "- " + clean(s.issues) : "- None", "");
+    const saf = s.safety || [];
+    L.push("SAFETY", saf.length ? bullets(saf.map((x) => x.kind + ": " + clean(x.text))) : "- Nothing reported", "");
+    L.push("FOR THE NEXT SHIFT", s.handoff ? "- " + clean(s.handoff) : "- [Anything they need to pick up]");
+    return L.join("\n");
+  }
+
+  // ---------- interview prep ----------
+  // Behavioural questions a hiring panel commonly uses for operations manager roles.
+  const INTERVIEW_QS = [
+    ["q1", "Tell me about a time you improved a key metric in your building.", ["c1", "c3"]],
+    ["q2", "Describe a time you used data to find the real cause of a problem.", ["c3", "c4"]],
+    ["q3", "Tell me about a time you had to coach an underperforming team member.", ["c2"]],
+    ["q4", "Give an example of developing someone on your team into a bigger role.", ["c2", "c10"]],
+    ["q5", "Tell me about a safety issue you caught and how you handled it.", ["c5"]],
+    ["q6", "How have you handled a shift where volume far exceeded your labor plan?", ["c6", "c1"]],
+    ["q7", "Describe a time you reduced shrink, waste or inventory errors.", ["c7", "c4"]],
+    ["q8", "Tell me about a time you influenced someone you didn't manage.", ["c8"]],
+    ["q9", "Describe a change you introduced that people resisted. How did you land it?", ["c10", "c8"]],
+    ["q10", "Tell me about a time you made a decision with incomplete information.", ["c4", "c1"]],
+    ["q11", "Give an example of a difficult conversation you had with an employee.", ["c2", "c9"]],
+    ["q12", "Tell me about a time you missed a target. What did you do next?", ["c1", "c4"]],
+    ["q13", "How have you built a schedule or labor plan around forecast volume?", ["c6", "c3"]],
+    ["q14", "Describe how you keep your manager informed on what matters.", ["c9"]],
+    ["q15", "Tell me about a process you made simpler or faster.", ["c4", "c1"]],
+    ["q16", "Describe a time you handled conflict between two team members.", ["c2", "c9"]],
+    ["q17", "Tell me about a time you had to enforce a policy that was unpopular.", ["c5", "c2"]],
+    ["q18", "Give an example of how you recognise and motivate your team.", ["c2"]],
+    ["q19", "Tell me about a time you worked with another team to fix a customer issue.", ["c8", "c4"]],
+    ["q20", "How have you prepared for or passed an audit or inspection?", ["c5", "c7"]],
+    ["q21", "Describe a time you had to prioritise competing urgent problems on shift.", ["c1", "c6"]],
+    ["q22", "Tell me about a mistake you made as a leader and what you learned.", ["c2", "c9"]],
+    ["q23", "Why do you want to be an operations manager, and why now?", ["c9", "c10"]],
+    ["q24", "What would you change in your first 90 days running a building?", ["c10", "c1"]],
+  ].map(([id, q, comps]) => ({ id, q, comps }));
+
+  function suggestStories(ws, q) {
+    return (ws.wins || [])
+      .map((w) => ({ w, score: (w.competencies || []).filter((c) => q.comps.includes(c)).length + (metricPhrase(w.metric) ? 0.5 : 0) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || (a.w.date < b.w.date ? 1 : -1))
+      .slice(0, 4)
+      .map((x) => x.w);
+  }
+  function interviewReadiness(ws) {
+    const st = (ws.interview && ws.interview.stories) || {};
+    const ready = INTERVIEW_QS.filter((q) => st[q.id] && (ws.wins || []).some((w) => w.id === st[q.id])).length;
+    return { ready, total: INTERVIEW_QS.length, pct: Math.round((ready / INTERVIEW_QS.length) * 100) };
+  }
+  function starAnswer(w) {
+    const L = [];
+    L.push("SITUATION: " + (clean(w.situation) || "[Set the scene: where, when, what was at stake]") + ".");
+    L.push("TASK: [What you were responsible for]");
+    L.push("ACTION: " + (clean(w.action) || "[What you did, step by step, using I not we]") + ".");
+    const m = metricPhrase(w.metric);
+    L.push("RESULT: " + [clean(w.result), m].filter(Boolean).join("; ") + (clean(w.result) || m ? "." : "[The measurable outcome]"));
+    L.push("LEARNED: [What you'd repeat or do differently]");
+    return L.join("\n");
+  }
+
+  // ---------- calculators (inputs are always the person's own) ----------
+  function laborPlan(i) {
+    const orders = num(i.orders), upo = num(i.unitsPerOrder), uph = num(i.uph), shiftHours = num(i.shiftHours) || 8;
+    const overhead = num(i.overhead) || 0, wage = num(i.wage);
+    if (!orders || !upo || !uph) return null;
+    const units = orders * upo;
+    const pickHours = units / uph;
+    const totalHours = pickHours * (1 + overhead / 100);
+    const out = { units, pickHours, totalHours, headcount: Math.ceil(totalHours / shiftHours), cost: wage ? totalHours * wage : null, ordersPerLaborHour: orders / totalHours };
+    const newUph = num(i.newUph);
+    if (newUph && newUph > 0) {
+      const newTotal = (units / newUph) * (1 + overhead / 100);
+      const days = num(i.daysPerWeek) || 7;
+      out.whatIf = {
+        newUph,
+        hoursSavedPerDay: totalHours - newTotal,
+        hoursSavedPerWeek: (totalHours - newTotal) * days,
+        hoursSavedPerYear: (totalHours - newTotal) * days * 52,
+        dollarsPerYear: wage ? (totalHours - newTotal) * days * 52 * wage : null,
+        newHeadcount: Math.ceil(newTotal / shiftHours),
+      };
+    }
+    return out;
+  }
+  function impactCalc(i) {
+    const mins = num(i.minutesPerOrder), orders = num(i.ordersPerDay), days = num(i.daysPerWeek) || 7, wage = num(i.wage);
+    if (!mins || !orders) return null;
+    const hoursWeek = (mins * orders * days) / 60;
+    return { hoursWeek, hoursYear: hoursWeek * 52, dollarsYear: wage ? hoursWeek * 52 * wage : null };
+  }
+
+  // ---------- problem solving (A3) ----------
+  const FISHBONE = ["People", "Process", "Equipment", "Materials", "Measurement", "Environment"];
+  function a3Text(p) {
+    const L = ["A3: " + (clean(p.title) || "[Problem]"), "Owner: " + (p.owner || "me") + " · Opened " + fmtDateY(p.created || ""), ""];
+    L.push("1. PROBLEM", clean(p.problem) || "[What is happening, where, since when, how often]", "");
+    L.push("2. IMPACT", clean(p.impact) || "[Which number it hurts and by how much]", "");
+    L.push("3. FIVE WHYS");
+    const whys = (p.whys || []).filter((x) => clean(x));
+    L.push(whys.length ? whys.map((w, i) => "   Why " + (i + 1) + ": " + clean(w)).join("\n") : "   [Ask why until you reach something you can fix]");
+    const causes = Object.entries(p.causes || {}).filter(([, v]) => clean(v));
+    if (causes.length) {
+      L.push("", "4. CONTRIBUTING CAUSES");
+      L.push(causes.map(([k, v]) => "   " + k + ": " + clean(v)).join("\n"));
+    }
+    L.push("", (causes.length ? "5" : "4") + ". ROOT CAUSE", clean(p.rootCause) || "[One sentence]", "");
+    L.push((causes.length ? "6" : "5") + ". COUNTERMEASURES");
+    const cms = p.countermeasures || [];
+    L.push(cms.length ? cms.map((c) => "   [" + (c.done ? "x" : " ") + "] " + clean(c.text) + (c.owner ? " — " + c.owner : "") + (c.due ? " by " + fmtDate(c.due) : "")).join("\n") : "   [What you'll change, who owns it, by when]");
+    L.push("", (causes.length ? "7" : "6") + ". CHECK", clean(p.check) || "[How you'll know it worked, and when you'll look]");
+    return L.join("\n");
+  }
+
+  // ---------- learning ----------
+  const LEARNING_TYPES = ["Course", "Certification", "Book", "Shadowing", "Mentoring", "Project stretch"];
+  const LEARNING_SUGGESTIONS = [
+    ["OSHA 10-hour General Industry", "Certification", "c5"],
+    ["Food safety manager certification", "Certification", "c5"],
+    ["Lean Six Sigma Yellow Belt", "Certification", "c4"],
+    ["Lean Six Sigma Green Belt", "Certification", "c4"],
+    ["First Aid / CPR / AED", "Certification", "c5"],
+    ["Powered industrial truck train-the-trainer", "Certification", "c2"],
+    ["Excel: pivot tables and lookups", "Course", "c3"],
+    ["Shadow the Ops Manager's weekly labor plan", "Shadowing", "c6"],
+    ["Shadow a P&L / shrink review", "Shadowing", "c7"],
+    ["Run a site meeting with your manager watching", "Project stretch", "c9"],
+    ["Book: The Goal (Goldratt)", "Book", "c4"],
+    ["Book: Crucial Conversations", "Book", "c2"],
+  ];
+
+  // ---------- insights ----------
+  function activityByDay(ws, days, now) {
+    const end = today(now);
+    const start = addDays(end, -(days - 1));
+    const c = {};
+    const bump = (d) => {
+      if (d && d >= start && d <= end) c[d] = (c[d] || 0) + 1;
+    };
+    for (const w of ws.wins || []) bump(w.date);
+    for (const m of ws.team || []) for (const n of m.notes || []) bump(n.date);
+    for (const p of ws.people || []) for (const t of p.touches || []) bump(t.date);
+    for (const s of ws.shifts || []) bump(s.date);
+    for (const r of ws.reviews || []) bump(r.created);
+    for (const k of ws.kpis || []) for (const e of k.entries || []) bump(e.loggedAt);
+    return { start, end, counts: c };
+  }
+  function kpiHitRate(k) {
+    const t = num(k.target);
+    const es = (k.entries || []).filter((e) => num(e.value) !== null);
+    if (t === null || !es.length) return null;
+    const hit = es.filter((e) => (k.better === "lower" ? num(e.value) <= t : num(e.value) >= t)).length;
+    return { hit, total: es.length, pct: Math.round((hit / es.length) * 100) };
+  }
+  function recognitionGaps(ws, days, now) {
+    const t = today(now);
+    return (ws.team || []).filter((m) => {
+      const last = (m.notes || []).filter((n) => n.type === "Recognition").map((n) => n.date).sort().pop();
+      return !last || daysBetween(last, t) > days;
+    });
+  }
+  function evidenceByMonth(ws, months, now) {
+    const d = parse(today(now));
+    const keys = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const x = new Date(d.getFullYear(), d.getMonth() - i, 1);
+      keys.push(x.getFullYear() + "-" + pad(x.getMonth() + 1));
+    }
+    const rows = (ws.competencies || []).map((c) => ({ c, counts: keys.map((k) => (ws.wins || []).filter((w) => (w.date || "").slice(0, 7) === k && (w.competencies || []).includes(c.id)).length) }));
+    return { keys, rows };
+  }
+  function quarterlyReview(ws, now) {
+    const end = today(now);
+    const start = addDays(end, -89);
+    const wins = (ws.wins || []).filter((w) => inRange(w.date, start, end)).sort((a, b) => (a.date < b.date ? 1 : -1));
+    const L = ["Quarterly review — " + fmtDateY(start) + " to " + fmtDateY(end), ""];
+    L.push("HEADLINE", "- [One sentence: the most important thing you delivered]", "");
+    L.push("TOP WINS");
+    L.push(wins.length ? bullets(wins.slice(0, 6).map(winLine)) : "- [No wins logged this quarter]");
+    const kp = (ws.kpis || []).map((k) => ({ k, h: kpiHitRate(k), s: kpiStatus(k) })).filter((o) => o.h);
+    if (kp.length) {
+      L.push("", "NUMBERS");
+      L.push(bullets(kp.map((o) => o.k.name + ": on target " + o.h.hit + " of " + o.h.total + " weeks logged; latest " + fmtNum(o.s.value, o.k.unit))));
+    }
+    const done = (ws.projects || []).filter((p) => p.status === "Done" && (!p.updated || p.updated.slice(0, 10) >= start));
+    if (done.length) L.push("", "PROJECTS DELIVERED", bullets(done.map((p) => p.title + (p.result ? " — " + clean(p.result) : ""))));
+    const notes = [];
+    for (const m of ws.team || []) for (const n of m.notes || []) if (inRange(n.date, start, end)) notes.push(n);
+    L.push("", "TEAM", "- " + notes.filter((n) => n.type === "1:1").length + " 1:1s, " + notes.filter((n) => n.type === "Recognition").length + " recognitions, " + notes.filter((n) => n.type === "Coaching").length + " coaching conversations logged");
+    const certs = (ws.learning || []).filter((l) => l.status === "Done" && inRange(l.doneAt, start, end));
+    if (certs.length) L.push("", "LEARNING", bullets(certs.map((l) => l.title)));
+    const r = readiness(ws);
+    L.push("", "GROWTH", "- Readiness for " + ws.profile.targetRole + ": " + r.pct + "% (self-assessed)");
+    if (r.gaps[0]) L.push("- Biggest gap: " + r.gaps[0].c.name);
+    L.push("", "NEXT QUARTER", "- [Your top 3 goals]");
+    return L.join("\n");
+  }
+
+  // ---------- search ----------
+  function searchAll(ws, q) {
+    q = String(q || "").trim().toLowerCase();
+    if (q.length < 2) return [];
+    const out = [];
+    const hit = (type, route, id, title, text, date) => {
+      const hay = (title + " " + (text || "")).toLowerCase();
+      if (hay.includes(q)) out.push({ type, route, id, title, snippet: snippet(text || title, q), date: date || "" });
+    };
+    for (const w of ws.wins || []) hit("Win", "wins", w.id, w.title, [w.situation, w.action, w.result].join(" "), w.date);
+    for (const p of ws.projects || []) hit("Project", "projects", p.id, p.title, [p.impact, p.nextAction, p.result, p.blocker].join(" "), p.due);
+    for (const d of ws.drafts || []) hit("Draft", "drafts", d.id, d.title, d.body, (d.updated || "").slice(0, 10));
+    for (const m of ws.team || []) {
+      hit("Team", "team", m.id, m.name, [m.role, m.growth].join(" "));
+      for (const n of m.notes || []) hit(n.type + " · " + m.name, "team", m.id, n.text.slice(0, 80), n.text, n.date);
+    }
+    for (const p of ws.people || []) hit("Person", "people", p.id, p.name, [p.role, p.notes, (p.touches || []).map((t) => t.note).join(" ")].join(" "));
+    for (const j of ws.jobs || []) hit("Job", "jobs", j.id, j.title + " · " + j.company, [j.notes, j.nextStep].join(" "));
+    for (const s of ws.shifts || []) hit("Shift log", "shift", s.id, fmtDateY(s.date) + (s.shift ? " " + s.shift : ""), [s.wentWell, s.issues, s.handoff, (s.safety || []).map((x) => x.text).join(" ")].join(" "), s.date);
+    for (const p of ws.problems || []) hit("Problem", "solve", p.id, p.title, [p.problem, p.rootCause, (p.whys || []).join(" ")].join(" "), p.created);
+    for (const l of ws.learning || []) hit("Learning", "learn", l.id, l.title, l.notes);
+    return out.sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 40);
+  }
+  function snippet(text, q) {
+    const t = String(text || "").replace(/\s+/g, " ");
+    const i = t.toLowerCase().indexOf(q);
+    if (i < 0) return t.slice(0, 100);
+    const s = Math.max(0, i - 40);
+    return (s ? "…" : "") + t.slice(s, i + q.length + 60) + (i + q.length + 60 < t.length ? "…" : "");
+  }
+
+  // ---------- calendar (.ics) ----------
+  function icsEscape(s) {
+    return String(s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+  }
+  function buildIcs(events, now) {
+    const stamp = (now || new Date()).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+    const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//CareerCrumbs//EN", "CALSCALE:GREGORIAN"];
+    events.forEach((e, i) => {
+      const d = e.date.replace(/-/g, "");
+      const next = addDays(e.date, 1).replace(/-/g, "");
+      L.push("BEGIN:VEVENT", "UID:cc-" + d + "-" + i + "-" + (e.key || "x") + "@careercrumbs", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + d, "DTEND;VALUE=DATE:" + next, "SUMMARY:" + icsEscape(e.title));
+      if (e.desc) L.push("DESCRIPTION:" + icsEscape(e.desc));
+      L.push("END:VEVENT");
+    });
+    L.push("END:VCALENDAR");
+    return L.join("\r\n") + "\r\n";
+  }
+  function upcomingReminders(ws, days, now) {
+    const t = today(now);
+    const end = addDays(t, days);
+    const ev = [];
+    const clamp = (d) => (d < t ? t : d);
+    for (const p of ws.people || []) {
+      const last = lastTouch(p);
+      const due = last ? addDays(last, Number(p.cadenceDays) || 14) : t;
+      if (due <= end) ev.push({ date: clamp(due), title: "Touch base: " + p.name, desc: (p.relation || "") + (p.notes ? " — " + p.notes : ""), key: p.id });
+    }
+    for (const m of ws.team || []) {
+      const last = lastOneOnOne(m);
+      const due = last ? addDays(last, 14) : t;
+      if (due <= end) ev.push({ date: clamp(due), title: "1:1 with " + m.name, desc: m.growth ? "Growth goal: " + m.growth : "", key: m.id });
+    }
+    for (const j of ws.jobs || []) if (j.followUpAt && j.status !== "Closed" && j.followUpAt <= end) ev.push({ date: clamp(j.followUpAt), title: "Follow up: " + j.company + " — " + j.title, desc: j.nextStep || "", key: j.id });
+    for (const s of ws.plan || []) if (!s.done && s.due && s.due <= end) ev.push({ date: clamp(s.due), title: "Plan: " + s.text, key: s.id });
+    for (const p of ws.projects || []) if (p.status !== "Done" && p.due && p.due <= end) ev.push({ date: clamp(p.due), title: "Due: " + p.title, desc: p.nextAction || "", key: p.id });
+    for (const l of ws.learning || []) if (l.status !== "Done" && l.due && l.due <= end) ev.push({ date: clamp(l.due), title: "Learning: " + l.title, key: l.id });
+    return ev.sort((a, b) => (a.date < b.date ? -1 : 1));
+  }
+
+  // ---------- pasted KPI history ----------
+  // Accepts lines like "2026-10-26, 94", "10/26/2026\t94.5" or "Oct 26 2026 94".
+  function parseKpiPaste(text) {
+    const entries = {};
+    let bad = 0;
+    for (const raw of String(text || "").split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line) continue;
+      const parts = line.split(/[\t,;]+|\s{2,}/).map((s) => s.trim()).filter(Boolean);
+      let date = null, value = null;
+      const tryDate = (s) => {
+        let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if (m) return m[1] + "-" + pad(+m[2]) + "-" + pad(+m[3]);
+        m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+        if (m) return (m[3].length === 2 ? "20" + m[3] : m[3]) + "-" + pad(+m[1]) + "-" + pad(+m[2]);
+        const d = new Date(s);
+        return isNaN(d) || !/[a-z]/i.test(s) ? null : iso(d);
+      };
+      if (parts.length >= 2) {
+        date = tryDate(parts[0]);
+        value = num(parts[parts.length - 1]);
+      } else {
+        const m = line.match(/^(.*\d)\s+(-?[\d.,]+%?)$/);
+        if (m) {
+          date = tryDate(m[1]);
+          value = num(m[2]);
+        }
+      }
+      if (date && value !== null) entries[weekOf(date)] = value;
+      else bad++;
+    }
+    return { entries: Object.keys(entries).sort().map((w) => ({ week: w, value: entries[w] })), bad };
+  }
+
+  // ---------- coach context ----------
+  function coachSummary(ws, now) {
+    const r = readiness(ws);
+    const st = weekStats(ws, now);
+    const p = ws.profile;
+    return {
+      today: today(now),
+      profile: { role: p.role, company: p.company, site: p.site, targetRole: p.targetRole, targetDate: p.targetDate, why: p.why },
+      readinessPct: r.pct,
+      competencies: ws.competencies.map((c) => ({ id: c.id, name: c.name, rating: c.rating, target: c.target, winsLogged: evidenceCounts(ws)[c.id] || 0 })),
+      weekStats: st,
+      kpis: ws.kpis.map((k) => {
+        const s = kpiStatus(k);
+        return { name: k.name, unit: k.unit, better: k.better, target: s.target, latest: s.value, state: s.state };
+      }),
+      agenda: agenda(ws, now).slice(0, 8).map((a) => a.title + " — " + a.sub),
+      openPlanSteps: (ws.plan || []).filter((s) => !s.done).map((s) => s.phase + "d: " + s.text),
+      activeProjects: (ws.projects || []).filter((x) => x.status !== "Done").map((x) => x.title + " (" + x.status + ")"),
+      teamSize: (ws.team || []).length,
+      interview: interviewReadiness(ws),
+    };
+  }
+
   const api = {
+    SHIFTS, SAFETY_KINDS, SAFETY_TOPICS, safetyTopic, huddleText, handoffText,
+    INTERVIEW_QS, suggestStories, interviewReadiness, starAnswer,
+    laborPlan, impactCalc, FISHBONE, a3Text, LEARNING_TYPES, LEARNING_SUGGESTIONS,
+    activityByDay, kpiHitRate, recognitionGaps, evidenceByMonth, quarterlyReview,
+    searchAll, buildIcs, upcomingReminders, parseKpiPaste, coachSummary,
     uid, iso, today, parse, addDays, daysBetween, weekOf, fmtDate, fmtDateY, relDays, num, fmtNum,
     COMPETENCY_PRESET, RATING_LABELS, KPI_PRESETS, STATIONS_PRESET, TRAIN_LEVELS, JOB_STATUSES, PROJECT_STATUSES, RELATIONS, DRAFT_KINDS,
     emptyWorkspace, normalize, metricPhrase, bulletFromWin, readiness, evidenceCounts,

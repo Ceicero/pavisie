@@ -34,24 +34,42 @@
     copy: "M9 9h11v11H9zM5 15H4V4h11v1",
     spark: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6",
     edit: "M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
+    shift: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
+    solve: "M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z",
+    learn: "M2 7l10-4 10 4-10 4zM6 9v5c0 2 3 3.5 6 3.5s6-1.5 6-3.5V9M22 7v6",
+    interview: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5",
+    tools: "M4 3h16v18H4zM8 7h8M8 11h2M14 11h2M8 15h2M14 15h2M8 19h2M14 19h2",
+    insights: "M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4",
+    coach: "M12 3c4.97 0 9 3.58 9 8s-4.03 8-9 8c-1.2 0-2.35-.2-3.4-.58L3 20l1.6-4.2A7.6 7.6 0 0 1 3 11c0-4.42 4.03-8 9-8zM8.5 11h.01M12 11h.01M15.5 11h.01",
+    search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35",
+    calendar: "M8 2v4M16 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+    undo: "M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 8",
   };
   const icon = (n) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + P[n] + '"/></svg>';
   const MARK =
     '<svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="7" fill="var(--brown)"/><circle cx="11" cy="20" r="3.2" fill="var(--brown-ink)"/><circle cx="17.5" cy="14" r="2.4" fill="var(--brown-ink)"/><circle cx="23" cy="9" r="1.6" fill="var(--brown-ink)"/></svg>';
 
   const NAV = [
-    ["home", "Home"],
-    ["wins", "Wins"],
-    ["metrics", "Numbers"],
-    ["path", "Promotion"],
-    ["projects", "Projects"],
-    ["team", "Team"],
-    ["people", "Visibility"],
-    ["jobs", "Jobs"],
-    ["drafts", "Drafts"],
-    ["review", "Weekly review"],
-    ["backup", "Profile & data"],
+    ["home", "Home", "Track"],
+    ["wins", "Wins", "Track"],
+    ["metrics", "Numbers", "Track"],
+    ["path", "Promotion", "Track"],
+    ["shift", "Shift log", "Track"],
+    ["team", "Team", "Lead"],
+    ["projects", "Projects", "Lead"],
+    ["solve", "Problem solving", "Lead"],
+    ["tools", "Labor & impact", "Lead"],
+    ["people", "Visibility", "Grow"],
+    ["learn", "Learning", "Grow"],
+    ["interview", "Interview prep", "Grow"],
+    ["coach", "Ask Ruhv", "Grow"],
+    ["jobs", "Jobs", "Grow"],
+    ["drafts", "Drafts", "Grow"],
+    ["insights", "Insights", "Look back"],
+    ["review", "Weekly review", "Look back"],
+    ["backup", "Profile & data", "Look back"],
   ];
+  const GROUP_LABEL = { Track: "Track", Lead: "Lead the floor", Grow: "Grow & get the job", "Look back": "Look back" };
   const TABS = ["home", "wins", "metrics", "path"];
 
   // ---------- utils ----------
@@ -91,6 +109,12 @@
     jobs: ["jobs"],
     drafts: ["drafts"],
     reviews: ["reviews"],
+    shifts: ["shifts"],
+    problems: ["problems"],
+    learning: ["learning"],
+    interview: ["interview"],
+    tools: ["toolInputs"],
+    coach: ["coach"],
   };
   const KEY_TO_MOD = {};
   for (const [m, keys] of Object.entries(MODULES)) for (const k of keys) KEY_TO_MOD[k] = m;
@@ -114,6 +138,14 @@
     clearTimeout(flushTimer);
     flushTimer = setTimeout(flush, 500);
     render();
+  }
+  // Same as save() but leaves the screen alone (live calculators, streaming chat).
+  function persist(...keys) {
+    if (mode === "example") return;
+    for (const k of keys) dirty.add(KEY_TO_MOD[k] || k);
+    setSync("saving");
+    clearTimeout(flushTimer);
+    flushTimer = setTimeout(flush, 500);
   }
   async function flush() {
     if (flushing) {
@@ -158,7 +190,8 @@
     syncState = s;
     document.querySelectorAll(".sync").forEach((el) => {
       el.dataset.s = mode === "example" ? "example" : s;
-      el.innerHTML = "<i></i>" + esc(syncLabel());
+      el.innerHTML = '<i></i><span class="sync-t">' + esc(syncLabel()) + "</span>";
+      el.title = syncLabel();
     });
   }
   function syncLabel() {
@@ -254,7 +287,10 @@
     render();
     await saveAllNow();
     toast(keepExamples ? "Workspace started from the examples. Rename or delete them anytime." : "Your workspace is ready. Start by filling in your profile.");
-    if (!keepExamples) go("backup");
+    if (!keepExamples) {
+      if (A.onboard) A.onboard();
+      else go("backup");
+    }
   }
 
   // ---------- routing ----------
@@ -278,7 +314,8 @@
   function render() {
     const app = $("#app");
     if (!app) return;
-    const navLinks = NAV.map(([r, l], i) => (i === 4 ? '<div class="eyebrow rail-sep">Lead &amp; grow</div>' : "") + '<a href="#' + r + '"' + (route === r ? ' aria-current="page"' : "") + ">" + icon(r) + esc(l) + "</a>").join("");
+    const navLinks = NAV.filter(([r]) => VIEWS[r]).map(([r, l, g], i, arr) => (i > 0 && arr[i - 1][2] !== g ? '<div class="eyebrow rail-sep">' + esc(GROUP_LABEL[g]) + "</div>" : "") + '<a href="#' + r + '"' + (route === r ? ' aria-current="page"' : "") + ">" + icon(r) + esc(l) + "</a>").join("");
+    const quick = '<button class="iconbtn" data-act="search" aria-label="Search everything">' + icon("search") + '</button><button class="iconbtn" data-act="capture" aria-label="Quick capture">' + icon("plus") + "</button>";
     const tabs =
       TABS.map((r) => {
         const l = NAV.find((n) => n[0] === r)[1];
@@ -289,8 +326,8 @@
     const body = mode === "loading" ? '<div class="loading">' + MARK + "<span>Opening your workspace…</span></div>" : VIEWS[route]();
     const scrollY = window.scrollY;
     app.innerHTML =
-      '<nav class="rail" aria-label="Sections"><a class="brand" href="#home">' + MARK + "CareerCrumbs</a>" + navLinks + '<span class="sync"></span></nav>' +
-      '<main class="main"><header class="topbar"><a class="brand" href="#home">' + MARK + '<span class="sr">CareerCrumbs</span></a><span class="eyebrow">' + esc(title) + '</span><span class="sync"></span></header>' +
+      '<nav class="rail" aria-label="Sections"><a class="brand" href="#home">' + MARK + "CareerCrumbs</a>" + '<div class="row rail-quick">' + quick + "</div>" + navLinks + '<span class="sync"></span></nav>' +
+      '<main class="main"><header class="topbar"><a class="brand" href="#home">' + MARK + '<span class="sr">CareerCrumbs</span></a><span class="eyebrow">' + esc(title) + '</span><span class="sync"></span><span class="row top-quick">' + quick + "</span></header>" +
       (mode === "example" ? exampleBanner() : "") + body + "</main>" +
       '<nav class="tabbar" aria-label="Main">' + tabs + "</nav>";
     window.scrollTo(0, scrollY);
@@ -347,6 +384,7 @@
       head(C.fmtDateY(t0()) + (p.site ? " · " + p.site : ""), greeting() + (p.name ? ", " + p.name.split(" ")[0] : "")) +
       '<div class="row"><button class="btn brown" data-act="new-win">' + icon("plus") + 'Log a win</button><button class="btn ghost" data-act="log-week">Log numbers</button><button class="btn ghost" data-act="gen-update">Weekly update</button></div>' +
       readinessCard(true) +
+      (FX.homeTop ? FX.homeTop() : "") +
       '<section class="stack"><div class="row between"><h2>Today</h2><span class="muted small">' + plural(items.length, "item") + "</span></div>" +
       (items.length
         ? '<div class="agenda">' + items.map((it) => '<button class="' + it.tone + '" data-act="goto" data-r="' + it.route + '"><span class="bar"></span><span><b>' + esc(it.title) + "</b><small>" + esc(it.sub) + "</small></span>" + icon("chev") + "</button>").join("") + "</div>"
@@ -356,6 +394,7 @@
       '<div class="tile"><span class="eyebrow">Wins · 7d</span><b>' + st.wins7 + '</b></div><div class="tile"><span class="eyebrow">Wins · 30d</span><b>' + st.wins30 + "</b></div>" +
       '<div class="tile"><span class="eyebrow">On target</span><b>' + st.onTarget + '<span class="muted small"> / ' + st.withTarget + '</span></b></div><div class="tile"><span class="eyebrow">Active projects</span><b>' + st.activeProjects + "</b></div></div>" +
       '<div class="card stack-s"><div class="row between"><span class="eyebrow">Wins per week</span><span class="muted small">' + esc(line) + "</span></div>" + winsRhythm() + "</div></section>" +
+      (FX.homeBottom ? FX.homeBottom() : "") +
       (recent.length ? '<section class="stack"><div class="row between"><h2>Latest wins</h2><a class="linkbtn" href="#wins">All wins</a></div><div class="grid2">' + recent.map(winTicket).join("") + "</div></section>" : "") +
       "</div>"
     );
@@ -876,7 +915,11 @@
 
   const A = {
     more() {
-      openSheet("More", '<div class="list">' + NAV.slice(4).map(([r, l]) => '<a class="li" href="#' + r + '" data-act="close-nav" style="text-decoration:none;color:inherit;grid-template-columns:auto 1fr;display:grid;align-items:center;gap:12px"><span style="width:22px;color:var(--brown)">' + icon(r) + "</span><b>" + esc(l) + "</b></a>").join("") + "</div>");
+      const groups = ["Track", "Lead", "Grow", "Look back"];
+      openSheet("More", '<div class="stack">' + groups.map((g) => {
+        const items = NAV.filter(([r, , gg]) => gg === g && !TABS.includes(r) && VIEWS[r]);
+        return items.length ? '<div class="stack-s"><span class="eyebrow">' + esc(GROUP_LABEL[g]) + '</span><div class="more-grid">' + items.map(([r, l]) => '<a class="more-tile" href="#' + r + '" data-act="close-nav"' + (route === r ? ' aria-current="page"' : "") + ">" + icon(r) + "<span>" + esc(l) + "</span></a>").join("") + "</div></div>" : "";
+      }).join("") + "</div>");
     },
     "close-nav"() { closeSheet(); },
     close() { closeSheet(); },
@@ -934,6 +977,7 @@
       const rows = (k.entries || []).slice().sort((a, b) => (a.week < b.week ? 1 : -1));
       openSheet(esc(k.name), '<div class="sheet-body">' + sparkSvg(k, 26, true) +
         (rows.length ? '<div class="scroll-x"><table class="matrix" style="width:100%"><thead><tr><th>Week of</th><th>Value</th><th>Note</th><th></th></tr></thead><tbody>' + rows.map((e) => '<tr><td class="mono">' + esc(C.fmtDateY(e.week)) + '</td><td class="mono">' + esc(C.fmtNum(C.num(e.value), k.unit)) + '</td><td style="white-space:normal;text-align:left">' + esc(e.note || "") + '</td><td><button class="iconbtn" aria-label="Delete entry" data-act="kpi-del-entry" data-id="' + k.id + '" data-w="' + e.week + '">' + icon("close") + "</button></td></tr>").join("") + "</tbody></table></div>" : '<p class="muted">No entries yet.</p>') +
+        '<div class="row"><button class="btn sm ghost" data-act="kpi-paste" data-id="' + k.id + '">Paste history from a spreadsheet</button></div>' +
         "<h3>Settings</h3>" + kpiForm(k) + "</div>");
     },
     "kpi-del-entry"(el) {
@@ -1076,15 +1120,21 @@
     },
     "ask-del"(el) {
       const kind = el.dataset.kind, id = el.dataset.id;
-      const map = { win: ["wins", "this win"], kpi: ["kpis", "this metric and all its entries"], project: ["projects", "this project"], member: ["team", "this person and their notes"], person: ["people", "this person"], job: ["jobs", "this opening"], draft: ["drafts", "this draft"] };
+      const map = Object.assign({ win: ["wins", "this win"], kpi: ["kpis", "this metric and all its entries"], project: ["projects", "this project"], member: ["team", "this person and their notes"], person: ["people", "this person"], job: ["jobs", "this opening"], draft: ["drafts", "this draft"] }, FX.deletable || {});
       const [key, what] = map[kind];
       const host = el.closest(".sheet").querySelector("[data-confirm]");
       host.setAttribute("data-confirm-host", "1");
-      confirmIn("[data-confirm-host]", "Delete " + what + "? This can't be undone.", "Delete", () => {
+      confirmIn("[data-confirm-host]", "Delete " + what + "?", "Delete", () => {
+        const idx = ws[key].findIndex((x) => x.id === id);
+        const removed = ws[key][idx];
         ws[key] = ws[key].filter((x) => x.id !== id);
         closeSheet();
         save(key);
-        toast("Deleted");
+        toast("Deleted", "Undo", () => {
+          ws[key].splice(Math.min(idx, ws[key].length), 0, removed);
+          save(key);
+          toast("Restored");
+        });
       });
     },
   };
@@ -1148,7 +1198,7 @@
         const v = val(f, "k_" + k.id);
         const others = (k.entries || []).filter((e) => e.week !== wk);
         if (v !== "" && C.num(v) !== null) {
-          others.push({ week: wk, value: C.num(v) });
+          others.push({ week: wk, value: C.num(v), loggedAt: t0() });
           n++;
         }
         k.entries = others.sort((a, b) => (a.week < b.week ? -1 : 1)).slice(-156);
@@ -1256,6 +1306,21 @@
       toast("Review saved. Have a good weekend.");
     },
   };
+
+  // ---------- feature modules (src/features.js) ----------
+  const FX = {};
+  const api = {
+    get ws() { return ws; },
+    get sample() { return sample; },
+    get downloads() { return downloads; },
+    get route() { return route; },
+    get mode() { return mode; },
+    ui, esc, icon, fieldText, fieldSelect, head, plural, byId, sortDesc, t0,
+    save, persist, render, go, openSheet, closeSheet, toast, confirmIn, copyText, saveFile,
+    addDraft, openDraft, winForm, winTicket, readinessCard, sparkSvg,
+    actions: A, changes: CH, forms: F, views: VIEWS,
+  };
+  if (window.CCFeatures) Object.assign(FX, window.CCFeatures(api) || {});
 
   // ---------- wiring ----------
   document.addEventListener("click", (ev) => {
