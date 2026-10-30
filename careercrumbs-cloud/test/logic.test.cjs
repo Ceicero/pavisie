@@ -95,3 +95,58 @@ test("normalize tolerates junk and old saves", () => {
   assert.deepEqual(ws.kpis[0].entries, []);
   assert.equal(ws.competencies.length, 10);
 });
+
+test("labor plan and what-if use only the inputs given", () => {
+  const p = CC.laborPlan({ orders: 400, unitsPerOrder: 10, uph: 100, shiftHours: 8, overhead: 25, wage: 20, newUph: 125, daysPerWeek: 7 });
+  assert.equal(p.units, 4000);
+  assert.equal(p.pickHours, 40);
+  assert.equal(p.totalHours, 50);
+  assert.equal(p.headcount, 7);
+  assert.equal(p.cost, 1000);
+  assert.equal(p.whatIf.hoursSavedPerDay, 10);
+  assert.equal(p.whatIf.dollarsPerYear, 10 * 7 * 52 * 20);
+  assert.equal(CC.laborPlan({ orders: 1 }), null);
+  const i = CC.impactCalc({ minutesPerOrder: 0.5, ordersPerDay: 400, daysPerWeek: 7, wage: 20 });
+  assert.ok(Math.abs(i.hoursWeek - 23.333) < 0.01);
+});
+
+test("kpi paste accepts common spreadsheet formats", () => {
+  const r = CC.parseKpiPaste("2026-10-26, 94\n10/19/2026\t91.5\nOct 12 2026  90%\nnonsense");
+  assert.deepEqual(r.entries.map((e) => e.week), ["2026-10-12", "2026-10-19", "2026-10-26"]);
+  assert.deepEqual(r.entries.map((e) => e.value), [90, 91.5, 94]);
+  assert.equal(r.bad, 1);
+});
+
+test("ics export is valid all-day events with escaping", () => {
+  const ics = CC.buildIcs([{ date: "2026-10-30", title: "1:1 with Sam, PM", desc: "line1\nline2", key: "t2" }], NOW);
+  assert.match(ics, /BEGIN:VCALENDAR\r\n/);
+  assert.match(ics, /DTSTART;VALUE=DATE:20261030\r\nDTEND;VALUE=DATE:20261031/);
+  assert.match(ics, /SUMMARY:1:1 with Sam\\, PM/);
+  assert.match(ics, /DESCRIPTION:line1\\nline2/);
+});
+
+test("interview stories, search, insights and v2 templates", () => {
+  const ws = CC.normalize(CC.exampleWorkspace(NOW));
+  const q1 = CC.INTERVIEW_QS[0];
+  assert.equal(CC.suggestStories(ws, q1)[0].id, "w1");
+  assert.equal(CC.interviewReadiness(ws).ready, 3);
+  assert.match(CC.starAnswer(ws.wins[0]), /RESULT: Fewer refunds/);
+  assert.ok(CC.searchAll(ws, "frozen").length >= 3);
+  assert.deepEqual(CC.searchAll(ws, "f"), []);
+  assert.match(CC.huddleText(ws, "2026-10-29", "AM"), /SAFETY: .+\n- /);
+  assert.match(CC.handoffText(ws.shifts[0]), /orders\/labor hr/);
+  assert.match(CC.a3Text(ws.problems[0]), /Why 5: Slotting/);
+  assert.match(CC.quarterlyReview(ws, NOW), /TOP WINS/);
+  assert.equal(CC.kpiHitRate(ws.kpis[0]).total, 8);
+  assert.equal(CC.evidenceByMonth(ws, 6, NOW).keys.length, 6);
+  assert.ok(CC.upcomingReminders(ws, 30, NOW).length > 0);
+  assert.equal(CC.recognitionGaps(ws, 30, NOW).length, 2);
+  assert.ok(CC.coachSummary(ws, NOW).competencies.length === 10);
+});
+
+test("normalize fills v2 areas on an old save", () => {
+  const ws = CC.normalize({ wins: [] });
+  assert.deepEqual(ws.interview, { stories: {}, practice: [] });
+  assert.deepEqual(ws.shifts, []);
+  assert.deepEqual(ws.toolInputs, {});
+});

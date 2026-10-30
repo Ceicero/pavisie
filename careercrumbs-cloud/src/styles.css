@@ -570,3 +570,66 @@ table.matrix { border-collapse: separate; border-spacing: 0; min-width: 100%; fo
 }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .loading { padding: 48px 0; display: grid; gap: 8px; justify-items: center; color: var(--muted); }
+
+/* ---------- v2 ---------- */
+.top-quick { gap: 6px; flex: none; }
+.topbar .sync { margin-left: auto; }
+.rail-quick { padding: 0 10px 12px; gap: 6px; }
+@media (max-width: 479px) { .topbar .sync-t { display: none; } }
+@media (min-width: 900px) { .top-quick { display: none; } }
+.more-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.more-tile {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 14px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+  background: var(--surface);
+}
+.more-tile svg { width: 22px; height: 22px; color: var(--brown); }
+.more-tile[aria-current="page"] { border-color: var(--brown); background: var(--brown-soft); }
+.floor-card { display: grid; gap: 10px; background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.floor-card .eyebrow { color: var(--brown-soft); opacity: 0.85; }
+.floor-card .btn.ghost { color: var(--paper); border-color: rgba(255, 255, 255, 0.3); }
+:root[data-theme="dark"] .floor-card .btn.ghost { border-color: rgba(0, 0, 0, 0.3); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .floor-card .btn.ghost { border-color: rgba(0, 0, 0, 0.3); } }
+.floor-card .eyebrow { color: inherit; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.kv div { display: grid; gap: 2px; padding: 10px; border-radius: 8px; background: var(--sunk); min-width: 0; }
+.kv b { font: 600 1.15rem/1.15 var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kv.big b { font-size: 1.5rem; }
+.whys { display: grid; gap: 6px; counter-reset: why; }
+.whys label { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: center; }
+.whys label span { font: 600 0.75rem/1 var(--mono); text-transform: uppercase; color: var(--brown); }
+.fish { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.chat { display: grid; gap: 12px; }
+.msg { max-width: 92%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.msg.me { justify-self: end; background: var(--ink); color: var(--paper); border-bottom-right-radius: 4px; }
+.msg.ruhv { justify-self: start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.msg.ruhv .who { display: block; font: 600 0.7rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--brown); margin-bottom: 6px; }
+.msg .msg-acts { display: flex; gap: 10px; margin-top: 8px; }
+.composer { position: sticky; bottom: calc(var(--tabbar) + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding-block: 10px; background: var(--paper); }
+@media (min-width: 900px) { .composer { bottom: 0; } }
+.composer .textarea { min-height: 48px; max-height: 160px; }
+.heat { width: 100%; height: auto; display: block; }
+.hbar { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) 2.5rem; gap: 10px; align-items: center; font-size: 0.85rem; }
+.hbar .track { height: 10px; border-radius: 5px; background: var(--sunk); overflow: hidden; }
+.hbar .track i { display: block; height: 100%; background: var(--brown); border-radius: 5px; }
+.hbar span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar .mono { text-align: right; }
+.heatcell { display: inline-grid; place-items: center; width: 28px; height: 24px; border-radius: 4px; font: 600 0.72rem/1 var(--mono); }
+.timer { font: 700 3rem/1 var(--mono); font-variant-numeric: tabular-nums; text-align: center; padding: 8px 0; }
+.question { font: 600 1.3rem/1.3 var(--display); }
+.wiz-step { display: grid; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+.wiz-step:first-of-type { border-top: 0; padding-top: 0; }
+.wiz-step h3 { display: flex; gap: 8px; align-items: baseline; }
+.wiz-step h3 .mono { color: var(--brown); font-size: 0.85rem; }
+details.peek summary { cursor: pointer; font-weight: 600; color: var(--brown); }
+details.peek[open] summary { margin-bottom: 8px; }
+.togglechips .chip { white-space: normal; text-align: left; height: auto; min-height: 36px; padding: 7px 14px; line-height: 1.3; max-width: 100%; }

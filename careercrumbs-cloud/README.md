@@ -19,10 +19,19 @@ This is a separate build from the Android app in `C:\Users\Brandon\CareerCrumbs`
 | **Drafts** | Everything generated, editable, copyable and saveable as a file. "Polish with Ruhv" (Claude) rewrites wording without adding facts |
 | **Weekly review** | Went well / stuck / next focus / energy, with history |
 | **Profile & data** | Profile, theme, JSON backup export/import, erase |
+| **Shift log** | Orders, headcount, labor hours, went well, issues and safety notes per shift. Builds huddle notes (with a rotating safety topic) and the end-of-shift handoff. Turns good shifts into wins |
+| **Problem solving** | One-page A3: problem, impact, five whys, six cause areas, root cause, countermeasures with owner and date, and how you'll check it. Can become a project or a win |
+| **Labor & impact** | Labor planner (forecast → hours, headcount, cost, what-if UPH) and an impact calculator (minutes saved per order → hours and dollars a year). Results feed straight into a win |
+| **Learning** | Courses, certifications, shadowing, with hours and the competency each one builds, plus common ideas for an ops manager track |
+| **Interview prep** | 24 behavioural questions for ops manager panels, each matched to a logged win. STAR answer sheet, timed practice with a self-score, and a mock interview run by Ruhv |
+| **Ask Ruhv** | Coach chat. Ruhv reads your wins, numbers, team and plan through read-only lookups, and can save a draft when asked |
+| **Insights** | 26-week activity heatmap, evidence by competency and by month, weeks on target per KPI, team recognition gaps, touchpoints, and a quarterly review |
+
+Across the app: search everything, quick capture, a two-minute setup on "Start fresh", undo after delete, a calendar file of upcoming reminders, and pasting KPI history from a spreadsheet.
 
 ## Where data lives
 
-- **Published on claude.ai:** the artifact's database, under `ws/<area>` (profile, wins, kpis, path, projects, team, people, jobs, drafts, reviews). Access rules make it readable and writable by the owner only.
+- **Published on claude.ai:** the artifact's database, under `ws/<area>` (profile, wins, kpis, path, projects, team, people, jobs, drafts, reviews, shifts, problems, learning, interview, tools, coach). Access rules make it readable and writable by the owner only.
 - **Opened as a plain file:** `localStorage` in that browser.
 
 On first open, it shows clearly marked example data until you choose **Start fresh** or **Keep examples**.
@@ -35,6 +44,7 @@ npm run build   # inlines src/ into careercrumbs.html
 ```
 
 - `src/logic.js` — pure helpers: dates, readiness, KPI status, bullet and document templates, example data
-- `src/app.js` — UI, persistence, Ask Ruhv
+- `src/app.js` — shell, core sections, persistence
+- `src/features.js` — shift log, problem solving, calculators, learning, interview prep, Ruhv coach, insights, search, capture, setup
 - `src/styles.css` — design tokens (light and dark)
 - `src/shell.html` — page skeleton the build fills in
