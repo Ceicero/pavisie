@@ -2,13 +2,15 @@
    Look: warehouse signage — condensed caps headings, mono IDs like pick tickets,
    black / white / brown only (CareerCrumbs brand: no green). */
 :root {
-  --paper: #faf9f7;
+  --paper: #faf8f5;
   --surface: #ffffff;
   --sunk: #f2efeb;
   --ink: #17130f;
   --muted: #6b6158;
   --line: #e4ded7;
   --brown: #7a4a26;
+  --espresso: #3b2a20;
+  --cream: #f5eee4;
   --brown-ink: #ffffff;
   --brown-soft: #f3e9e0;
   --bad: #a3341f;
@@ -24,7 +26,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #121010;
+    --paper: #141110;
     --surface: #1b1816;
     --sunk: #24201d;
     --ink: #f2eeea;
@@ -42,7 +44,7 @@
   }
 }
 :root[data-theme="dark"] {
-  --paper: #121010;
+  --paper: #141110;
   --surface: #1b1816;
   --sunk: #24201d;
   --ink: #f2eeea;
@@ -633,3 +635,26 @@ table.matrix { border-collapse: separate; border-spacing: 0; min-width: 100%; fo
 details.peek summary { cursor: pointer; font-weight: 600; color: var(--brown); }
 details.peek[open] summary { margin-bottom: 8px; }
 .togglechips .chip { white-space: normal; text-align: left; height: auto; min-height: 36px; padding: 7px 14px; line-height: 1.3; max-width: 100%; }
+
+/* ---------- Ruhv ---------- */
+.brand-mark { width: 28px; height: 32px; color: var(--ink); }
+.rail .brand-mark { width: 30px; height: 34px; }
+.ruhv-icon { width: 22px; height: 24px; }
+.rail a .ruhv-icon { width: 19px; height: 21px; }
+.ruhv-hero { width: 72px; height: 86px; color: var(--ink); }
+.ruhv-empty { width: 40px; height: 48px; color: var(--muted); }
+.ruhv-btn { width: 16px; height: 18px; }
+.ruhv-who { width: 12px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+.ruhv-card { width: 22px; height: 26px; }
+
+/* ---------- v3 ---------- */
+.sched td, .sched th { padding: 4px 3px; }
+.lvl.sc { width: 44px; }
+.lvl.sc[data-c="AM"], .lvl.sc[data-c="PM"], .lvl.sc[data-c="ON"] { background: var(--brown); color: var(--brown-ink); border-color: var(--brown); }
+.lvl.sc[data-c="ON"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.lvl.sc[data-c="PTO"] { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-soft); }
+.lvl.sc[data-c="OFF"] { background: var(--sunk); }
+.input.need { width: 44px; min-height: 32px; padding: 4px; text-align: center; font-family: var(--mono); }
+.prio { align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.prio:last-child { border-bottom: 0; }
+.prio.done span { text-decoration: line-through; color: var(--muted); }

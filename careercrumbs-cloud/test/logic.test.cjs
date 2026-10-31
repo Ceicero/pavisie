@@ -150,3 +150,23 @@ test("normalize fills v2 areas on an old save", () => {
   assert.deepEqual(ws.shifts, []);
   assert.deepEqual(ws.toolInputs, {});
 });
+
+test("v3: schedule coverage, manager agenda, kudos, priorities", () => {
+  const ws = CC.normalize(CC.exampleWorkspace(NOW));
+  const wk = CC.weekOf(CC.today(NOW));
+  const cov = CC.scheduleCoverage(ws, wk);
+  assert.equal(cov.length, 7);
+  assert.equal(cov[0].total, 3);
+  assert.equal(cov[1].total, 2);
+  assert.equal(cov[1].short, 1);
+  assert.equal(CC.scheduleHours(ws, wk, 8).t1, 40);
+  assert.match(CC.scheduleText(ws, wk), /Short: Tue \(1\)/);
+  const ag = CC.managerAgenda(ws, NOW);
+  assert.match(ag, /^1:1 with Alex/);
+  assert.match(ag, /FOLLOWING UP ON YOUR FEEDBACK\n- Speak up more/);
+  assert.equal(CC.kudosText("Jordan (example)", "Caught a mislabeled pallet", "kept cold chain intact"), "Shout-out to Jordan for caught a mislabeled pallet. Kept cold chain intact. Thank you!");
+  assert.equal(CC.weekPriorities(ws, wk).length, 3);
+  const old = CC.normalize({});
+  assert.deepEqual(old.schedule, { weeks: {}, needs: [], hoursPerShift: 8 });
+  assert.deepEqual(old.feedback, []);
+});
