@@ -27,11 +27,18 @@ This is a separate build from the Android app in `C:\Users\Brandon\CareerCrumbs`
 | **Ask Ruhv** | Coach chat. Ruhv reads your wins, numbers, team and plan through read-only lookups, and can save a draft when asked |
 | **Insights** | 26-week activity heatmap, evidence by competency and by month, weeks on target per KPI, team recognition gaps, touchpoints, and a quarterly review |
 
+| **Schedule** | Weekly shift grid (AM / PM / overnight / off / PTO) for your team, people needed per day, shortage flags, hours per person, copy last week, share as text, and daily need straight from the labor planner |
+| **Feedback & 1:1** | Log feedback from your manager and others, mark coaching as acted on, turn it into a plan step, and build your 1:1 agenda with your manager from wins, numbers, asks and open feedback |
+
+Home also has **this week's top 3** priorities, shown again in the weekly review. Team cards have **shout-outs** (a specific thank-you message, logged as recognition) and a **30-day new-hire checklist**.
+
+Ruhv, the CareerCrumbs mouse, is the logo: in the header, on Ask Ruhv, on Ruhv's replies and in empty states. Solid black on light, cream on dark.
+
 Across the app: search everything, quick capture, a two-minute setup on "Start fresh", undo after delete, a calendar file of upcoming reminders, and pasting KPI history from a spreadsheet.
 
 ## Where data lives
 
-- **Published on claude.ai:** the artifact's database, under `ws/<area>` (profile, wins, kpis, path, projects, team, people, jobs, drafts, reviews, shifts, problems, learning, interview, tools, coach). Access rules make it readable and writable by the owner only.
+- **Published on claude.ai:** the artifact's database, under `ws/<area>` (profile, wins, kpis, path, projects, team, people, jobs, drafts, reviews, shifts, problems, learning, interview, tools, coach, feedback, schedule, priorities). Access rules make it readable and writable by the owner only.
 - **Opened as a plain file:** `localStorage` in that browser.
 
 On first open, it shows clearly marked example data until you choose **Start fresh** or **Keep examples**.
@@ -46,5 +53,6 @@ npm run build   # inlines src/ into careercrumbs.html
 - `src/logic.js` — pure helpers: dates, readiness, KPI status, bullet and document templates, example data
 - `src/app.js` — shell, core sections, persistence
 - `src/features.js` — shift log, problem solving, calculators, learning, interview prep, Ruhv coach, insights, search, capture, setup
+- `src/features2.js` — schedule, feedback & manager 1:1, weekly top 3, shout-outs, new-hire checklists
 - `src/styles.css` — design tokens (light and dark)
 - `src/shell.html` — page skeleton the build fills in

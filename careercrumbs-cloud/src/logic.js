@@ -137,6 +137,9 @@
     interview: { stories: {}, practice: [] },
     toolInputs: {},
     coach: [],
+    feedback: [],
+    schedule: { weeks: {}, needs: [], hoursPerShift: 8 },
+    priorities: {},
     winSeq: 0,
   });
 
@@ -145,7 +148,7 @@
     const base = emptyWorkspace();
     const out = Object.assign({}, base, ws || {});
     out.profile = Object.assign({}, base.profile, (ws && ws.profile) || {});
-    for (const k of ["wins", "kpis", "competencies", "plan", "projects", "team", "stations", "people", "jobs", "drafts", "reviews", "shifts", "problems", "learning", "coach"]) {
+    for (const k of ["wins", "kpis", "competencies", "plan", "projects", "team", "stations", "people", "jobs", "drafts", "reviews", "shifts", "problems", "learning", "coach", "feedback"]) {
       if (!Array.isArray(out[k])) out[k] = base[k];
     }
     out.kpis = out.kpis.map((k) => Object.assign({ entries: [], target: null, better: "higher", unit: "" }, k));
@@ -157,6 +160,9 @@
     const iv = (ws && ws.interview) || {};
     out.interview = { stories: Object.assign({}, iv.stories), practice: Array.isArray(iv.practice) ? iv.practice : [] };
     out.toolInputs = Object.assign({}, ws && ws.toolInputs);
+    const sc = (ws && ws.schedule) || {};
+    out.schedule = { weeks: Object.assign({}, sc.weeks), needs: Array.isArray(sc.needs) ? sc.needs : [], hoursPerShift: Number(sc.hoursPerShift) || 8 };
+    out.priorities = Object.assign({}, ws && ws.priorities);
     out.shifts = out.shifts.map((x) => Object.assign({ safety: [] }, x));
     out.problems = out.problems.map((x) => Object.assign({ whys: [], causes: {}, countermeasures: [], status: "Open" }, x));
     out.winSeq = Math.max(Number(out.winSeq) || 0, out.wins.reduce((m, w) => Math.max(m, w.n || 0), 0));
@@ -594,6 +600,15 @@
       { id: "l3", title: "Shadow the Ops Manager's weekly labor plan", type: "Shadowing", comp: "c6", status: "Planned", due: d(5) },
     ];
     ws.interview = { stories: { q1: "w1", q5: "w3", q13: "w4" }, practice: [] };
+    const thisWk = weekOf(t);
+    ws.schedule = { hoursPerShift: 8, needs: [3, 3, 3, 3, 4, 4, 3], weeks: { [thisWk]: { t1: ["AM", "AM", "AM", "OFF", "AM", "AM", "OFF"], t2: ["PM", "PM", "OFF", "PM", "PM", "PM", "OFF"], t3: ["AM", "OFF", "AM", "AM", "AM", "OFF", "AM"] } } };
+    ws.feedback = [
+      { id: "f1", date: d(-12), from: "Alex (example)", kind: "Praise", text: "Your INF write-up was exactly what I needed for the regional call", comp: "c3", actedOn: true },
+      { id: "f2", date: d(-5), from: "Alex (example)", kind: "Coaching", text: "Speak up more in the site leads meeting; bring one number and one ask", comp: "c8", actedOn: false },
+    ];
+    ws.priorities = { [thisWk]: [{ text: "Get slotting data pulled", done: true }, { text: "Sign off Sam on receiving", done: false }, { text: "Bring INF trend to the leads meeting", done: false }] };
+    ws.team[2].onboarding = NEW_HIRE_CHECKLIST.map((text, i) => ({ text, done: i < 4 }));
+    ws.team[2].hiredAt = d(-12);
     ws.reviews = [{ id: "r1", week: wk(1), wentWell: "Frozen INF finally moved.", stuck: "HR approval on the buddy program.", nextFocus: "Get slotting data pulled.", energy: 4, created: d(-5) }];
     return ws;
   }
@@ -888,6 +903,7 @@
     for (const s of ws.shifts || []) hit("Shift log", "shift", s.id, fmtDateY(s.date) + (s.shift ? " " + s.shift : ""), [s.wentWell, s.issues, s.handoff, (s.safety || []).map((x) => x.text).join(" ")].join(" "), s.date);
     for (const p of ws.problems || []) hit("Problem", "solve", p.id, p.title, [p.problem, p.rootCause, (p.whys || []).join(" ")].join(" "), p.created);
     for (const l of ws.learning || []) hit("Learning", "learn", l.id, l.title, l.notes);
+    for (const f of ws.feedback || []) hit("Feedback", "feedback", f.id, f.text.slice(0, 80), [f.text, f.action, f.from].join(" "), f.date);
     return out.sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 40);
   }
   function snippet(text, q) {
@@ -994,7 +1010,108 @@
     };
   }
 
+
+  // =====================================================================
+  // v3: schedule, feedback, manager 1:1, weekly priorities, kudos, new hires
+  // =====================================================================
+  const SCHED_CODES = ["", "AM", "PM", "ON", "OFF", "PTO"];
+  const SCHED_WORKING = ["AM", "PM", "ON"];
+  const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  function scheduleWeek(ws, week) {
+    const sc = ws.schedule || {};
+    return (sc.weeks || {})[week] || {};
+  }
+  // Per day: how many people are on each working shift, against the heads needed.
+  function scheduleCoverage(ws, week) {
+    const grid = scheduleWeek(ws, week);
+    const needs = ((ws.schedule || {}).needs || []).map((n) => num(n));
+    return DAY_NAMES.map((d, i) => {
+      const by = { AM: 0, PM: 0, ON: 0 };
+      for (const m of ws.team || []) {
+        const c = (grid[m.id] || [])[i];
+        if (by[c] !== undefined) by[c]++;
+      }
+      const total = by.AM + by.PM + by.ON;
+      const need = needs[i];
+      return { day: d, date: addDays(week, i), by, total, need: need === undefined ? null : need, short: need ? Math.max(0, need - total) : 0 };
+    });
+  }
+  function scheduleHours(ws, week, hoursPerShift) {
+    const grid = scheduleWeek(ws, week);
+    const out = {};
+    for (const m of ws.team || []) out[m.id] = (grid[m.id] || []).filter((c) => SCHED_WORKING.includes(c)).length * (hoursPerShift || 8);
+    return out;
+  }
+  function scheduleText(ws, week) {
+    const grid = scheduleWeek(ws, week);
+    const cov = scheduleCoverage(ws, week);
+    const L = ["Schedule — week of " + fmtDateY(week), ""];
+    const w = Math.max(6, ...(ws.team || []).map((m) => m.name.length));
+    L.push("".padEnd(w) + "  " + DAY_NAMES.map((d, i) => (d + " " + parse(addDays(week, i)).getDate()).padEnd(7)).join(""));
+    for (const m of ws.team || []) L.push(m.name.padEnd(w) + "  " + DAY_NAMES.map((_, i) => ((grid[m.id] || [])[i] || "—").padEnd(7)).join(""));
+    L.push("", "On shift".padEnd(w) + "  " + cov.map((c) => String(c.total + (c.need ? "/" + c.need : "")).padEnd(7)).join(""));
+    const short = cov.filter((c) => c.short);
+    if (short.length) L.push("", "Short: " + short.map((c) => c.day + " (" + c.short + ")").join(", "));
+    return L.join("\n");
+  }
+
+  const FEEDBACK_KINDS = ["Praise", "Coaching", "Ask", "Concern"];
+  function managerAgenda(ws, now) {
+    const t = today(now);
+    const mgr = (ws.people || []).find((p) => p.relation === "Manager");
+    const since = mgr ? lastTouch(mgr) || addDays(t, -14) : addDays(t, -14);
+    const wins = (ws.wins || []).filter((w) => inRange(w.date, since, t)).sort((a, b) => (a.date < b.date ? 1 : -1));
+    const L = ["1:1 with " + (mgr ? mgr.name.replace(/\s*\(example\)/, "") : "my manager") + " — " + fmtDateY(t), ""];
+    L.push("WINS SINCE WE LAST TALKED (" + fmtDate(since) + ")");
+    L.push(wins.length ? bullets(wins.slice(0, 5).map(winLine)) : "- [Log a win or two before the meeting]");
+    const kp = (ws.kpis || []).map((k) => ({ k, s: kpiStatus(k) })).filter((o) => o.s.latest);
+    if (kp.length) L.push("", "NUMBERS", bullets(kp.map((o) => o.k.name + ": " + fmtNum(o.s.value, o.k.unit) + (o.s.target !== null ? " (target " + fmtNum(o.s.target, o.k.unit) + ")" : ""))));
+    const blocked = (ws.projects || []).filter((p) => p.status === "Blocked");
+    L.push("", "WHERE I NEED YOUR HELP");
+    L.push(blocked.length ? bullets(blocked.map((p) => p.title + (p.blocker ? ": " + clean(p.blocker) : ""))) : "- [One specific ask]");
+    const open = (ws.feedback || []).filter((f) => !f.actedOn).slice(-3);
+    if (open.length) L.push("", "FOLLOWING UP ON YOUR FEEDBACK", bullets(open.map((f) => clean(f.text) + " — what I've done: [update]")));
+    const r = readiness(ws);
+    L.push("", "MY GROWTH");
+    L.push("- Working toward " + ws.profile.targetRole + (ws.profile.targetDate ? " by " + fmtDateY(ws.profile.targetDate) : ""));
+    if (r.gaps[0]) L.push("- Where do you see my biggest gap? I'd guess " + r.gaps[0].c.name.toLowerCase() + ".");
+    const next = (ws.plan || []).filter((s) => !s.done).slice(0, 2);
+    if (next.length) L.push(bullets(next.map((s) => "Next on my plan: " + s.text)));
+    L.push("", "ONE QUESTION FOR YOU", "- " + CAREER_QS[parse(t).getDate() % CAREER_QS.length]);
+    return L.join("\n");
+  }
+  const CAREER_QS = [
+    "What would you need to see from me to put me up for " + "the next role" + "?",
+    "What's one thing I should start doing that you've noticed top supervisors do?",
+    "Is there a project or meeting I could take off your plate to stretch me?",
+    "How do you think the site leadership sees my shift right now?",
+    "What did you work on to get from supervisor to manager?",
+    "Who else should I be learning from in the region?",
+  ];
+
+  function kudosText(name, what, impact) {
+    const first = String(name || "").replace(/\s*\(example\)/, "").split(" ")[0] || "[name]";
+    return "Shout-out to " + first + " for " + (clean(what) ? lower1(clean(what)) : "[what they did]") + "." + (clean(impact) ? " " + cap(clean(impact)) + "." : " [Why it mattered to the team or customers.]") + " Thank you!";
+  }
+
+  const NEW_HIRE_CHECKLIST = [
+    "Safety walk: exits, extinguishers, eyewash, first aid",
+    "PPE and freezer gear issued",
+    "Buddy assigned for the first two weeks",
+    "Scanner and app login working",
+    "Picking: shadowed, then signed off",
+    "Packing: shadowed, then signed off",
+    "Food safety and allergen basics",
+    "Day 7 check-in",
+    "Day 30 check-in: what's working, what isn't",
+  ];
+
+  function weekPriorities(ws, week) {
+    return ((ws.priorities || {})[week] || []).slice(0, 3);
+  }
+
   const api = {
+    SCHED_CODES, SCHED_WORKING, DAY_NAMES, scheduleWeek, scheduleCoverage, scheduleHours, scheduleText, FEEDBACK_KINDS, managerAgenda, kudosText, NEW_HIRE_CHECKLIST, weekPriorities,
     SHIFTS, SAFETY_KINDS, SAFETY_TOPICS, safetyTopic, huddleText, handoffText,
     INTERVIEW_QS, suggestStories, interviewReadiness, starAnswer,
     laborPlan, impactCalc, FISHBONE, a3Text, LEARNING_TYPES, LEARNING_SUGGESTIONS,

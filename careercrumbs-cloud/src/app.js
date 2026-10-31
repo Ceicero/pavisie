@@ -44,10 +44,16 @@
     search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35",
     calendar: "M8 2v4M16 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
     undo: "M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 8",
+    schedule: "M3 4h18v17H3zM3 9h18M8 2v4M16 2v4M8 13h2M14 13h2M8 17h2",
+    feedback: "M7 8h10M7 12h6M21 12a9 9 0 0 1-13.4 7.9L3 21l1.1-4.6A9 9 0 1 1 21 12z",
   };
-  const icon = (n) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + P[n] + '"/></svg>';
-  const MARK =
-    '<svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="7" fill="var(--brown)"/><circle cx="11" cy="20" r="3.2" fill="var(--brown-ink)"/><circle cx="17.5" cy="14" r="2.4" fill="var(--brown-ink)"/><circle cx="23" cy="9" r="1.6" fill="var(--brown-ink)"/></svg>';
+  const icon = (n) => n === "coach" ? ruhv("ruhv-icon") : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + P[n] + '"/></svg>';
+  // Ruhv, the CareerCrumbs mouse. Solid shape in currentColor; eye and smile are cut-outs.
+  const RUHV_PATHS =
+    '<ellipse cx="176" cy="152" rx="17" ry="22" transform="rotate(-14 176 152)"/><circle cx="219" cy="159" r="15"/><circle cx="272" cy="197" r="6"/>' +
+    '<path fill-rule="evenodd" d="M150 287 C148 246 152 206 166 182 C172 170 186 164 204 166 C222 168 240 174 254 184 L268 193 L271 202 C259 206 248 213 240 221 C230 232 231 250 252 285 C222 293 182 293 150 287 Z M226 187 m-3 0 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0 Z M233 206 Q242 217 252 207 Q242 213 233 206 Z"/>';
+  const ruhv = (cls, label) => '<svg class="' + (cls || "ruhv") + '" viewBox="140 124 144 172" fill="currentColor"' + (label ? ' role="img" aria-label="' + label + '"' : ' aria-hidden="true"') + ">" + RUHV_PATHS + "</svg>";
+  const MARK = ruhv("brand-mark");
 
   const NAV = [
     ["home", "Home", "Track"],
@@ -56,10 +62,12 @@
     ["path", "Promotion", "Track"],
     ["shift", "Shift log", "Track"],
     ["team", "Team", "Lead"],
+    ["schedule", "Schedule", "Lead"],
     ["projects", "Projects", "Lead"],
     ["solve", "Problem solving", "Lead"],
     ["tools", "Labor & impact", "Lead"],
     ["people", "Visibility", "Grow"],
+    ["feedback", "Feedback & 1:1", "Grow"],
     ["learn", "Learning", "Grow"],
     ["interview", "Interview prep", "Grow"],
     ["coach", "Ask Ruhv", "Grow"],
@@ -115,6 +123,9 @@
     interview: ["interview"],
     tools: ["toolInputs"],
     coach: ["coach"],
+    feedback: ["feedback"],
+    schedule: ["schedule"],
+    priorities: ["priorities"],
   };
   const KEY_TO_MOD = {};
   for (const [m, keys] of Object.entries(MODULES)) for (const k of keys) KEY_TO_MOD[k] = m;
@@ -323,12 +334,12 @@
       }).join("") +
       '<button class="tab" type="button" data-act="more"' + (TABS.includes(route) ? "" : ' aria-current="page"') + ">" + icon("more") + "<span>More</span></button>";
     const title = (NAV.find((n) => n[0] === route) || ["", ""])[1];
-    const body = mode === "loading" ? '<div class="loading">' + MARK + "<span>Opening your workspace…</span></div>" : VIEWS[route]();
+    const body = mode === "loading" ? '<div class="loading">' + ruhv("ruhv-hero") + "<span>Opening your workspace…</span></div>" : VIEWS[route]();
     const scrollY = window.scrollY;
     app.innerHTML =
       '<nav class="rail" aria-label="Sections"><a class="brand" href="#home">' + MARK + "CareerCrumbs</a>" + '<div class="row rail-quick">' + quick + "</div>" + navLinks + '<span class="sync"></span></nav>' +
       '<main class="main"><header class="topbar"><a class="brand" href="#home">' + MARK + '<span class="sr">CareerCrumbs</span></a><span class="eyebrow">' + esc(title) + '</span><span class="sync"></span><span class="row top-quick">' + quick + "</span></header>" +
-      (mode === "example" ? exampleBanner() : "") + body + "</main>" +
+      (mode === "example" ? exampleBanner() : "") + withRuhv(body) + "</main>" +
       '<nav class="tabbar" aria-label="Main">' + tabs + "</nav>";
     window.scrollTo(0, scrollY);
     setSync(syncState);
@@ -337,6 +348,10 @@
     return '<div class="view" style="padding-top:0;margin-bottom:12px"><div class="banner"><p><b>You\'re looking at example data.</b> It shows how a supervisor might use CareerCrumbs. Nothing is saved until you start your own workspace.</p><div class="row"><button class="btn sm" data-act="start-blank">Start fresh</button><button class="btn sm ghost" data-act="start-keep">Keep examples</button></div></div></div>';
   }
   const head = (eyebrow, title, right) => '<div class="view-head"><div><span class="eyebrow">' + esc(eyebrow) + "</span><h1>" + esc(title) + "</h1></div>" + (right ? '<div class="row">' + right + "</div>" : "") + "</div>";
+
+  // Empty states carry a small Ruhv, like the original app.
+  const EMPTY_RE = /<div class="empty"><b>/g;
+  const withRuhv = (html) => html.replace(EMPTY_RE, '<div class="empty">' + ruhv("ruhv-empty") + "<b>");
 
   // ---------- HOME ----------
   function readinessCard(compact) {
@@ -384,7 +399,7 @@
       head(C.fmtDateY(t0()) + (p.site ? " · " + p.site : ""), greeting() + (p.name ? ", " + p.name.split(" ")[0] : "")) +
       '<div class="row"><button class="btn brown" data-act="new-win">' + icon("plus") + 'Log a win</button><button class="btn ghost" data-act="log-week">Log numbers</button><button class="btn ghost" data-act="gen-update">Weekly update</button></div>' +
       readinessCard(true) +
-      (FX.homeTop ? FX.homeTop() : "") +
+      FX.homeTop.map((f) => f()).join("") +
       '<section class="stack"><div class="row between"><h2>Today</h2><span class="muted small">' + plural(items.length, "item") + "</span></div>" +
       (items.length
         ? '<div class="agenda">' + items.map((it) => '<button class="' + it.tone + '" data-act="goto" data-r="' + it.route + '"><span class="bar"></span><span><b>' + esc(it.title) + "</b><small>" + esc(it.sub) + "</small></span>" + icon("chev") + "</button>").join("") + "</div>"
@@ -394,7 +409,7 @@
       '<div class="tile"><span class="eyebrow">Wins · 7d</span><b>' + st.wins7 + '</b></div><div class="tile"><span class="eyebrow">Wins · 30d</span><b>' + st.wins30 + "</b></div>" +
       '<div class="tile"><span class="eyebrow">On target</span><b>' + st.onTarget + '<span class="muted small"> / ' + st.withTarget + '</span></b></div><div class="tile"><span class="eyebrow">Active projects</span><b>' + st.activeProjects + "</b></div></div>" +
       '<div class="card stack-s"><div class="row between"><span class="eyebrow">Wins per week</span><span class="muted small">' + esc(line) + "</span></div>" + winsRhythm() + "</div></section>" +
-      (FX.homeBottom ? FX.homeBottom() : "") +
+      FX.homeBottom.map((f) => f()).join("") +
       (recent.length ? '<section class="stack"><div class="row between"><h2>Latest wins</h2><a class="linkbtn" href="#wins">All wins</a></div><div class="grid2">' + recent.map(winTicket).join("") + "</div></section>" : "") +
       "</div>"
     );
@@ -535,7 +550,7 @@
           '<div class="row between small muted"><span>' + esc(C.RATING_LABELS[c.rating || 0]) + '</span><label class="row" for="tg-' + c.id + '">Target <select class="select" style="min-height:32px;width:auto;padding:2px 8px" id="tg-' + c.id + '" data-act-change="target" data-id="' + c.id + '">' + [1, 2, 3, 4].map((v) => '<option value="' + v + '"' + (Number(c.target) === v ? " selected" : "") + ">" + v + " · " + C.RATING_LABELS[v] + "</option>").join("") + "</select></label></div></div>";
       }).join("") +
       '<div class="row" style="padding-top:12px"><button class="btn sm ghost" data-act="edit-comps">Edit competency list</button></div></section>' +
-      '<section class="card stack"><div class="row between"><h2>30 / 60 / 90 plan</h2>' + (sample ? '<button class="btn sm ghost" data-act="ai-plan">' + icon("spark") + "Ask Ruhv for next steps</button>" : "") + "</div>" +
+      '<section class="card stack"><div class="row between"><h2>30 / 60 / 90 plan</h2>' + (sample ? '<button class="btn sm ghost" data-act="ai-plan">' + ruhv("ruhv-btn") + "Ask Ruhv for next steps</button>" : "") + "</div>" +
       '<p class="muted small">Small, specific moves your manager can see. Ask them what "ready" looks like, then put it here.</p>' +
       phases.map(([ph, label]) => {
         const items = ws.plan.filter((s) => s.phase === ph);
@@ -609,10 +624,10 @@
         ? '<div class="grid2">' + ws.team.map((m) => {
             const d = C.oneOnOneDue(m, null, 14);
             const rec = sortDesc((m.notes || []).filter((n) => n.type === "Recognition"), "date")[0];
-            return '<article class="card stack"><div class="row between"><div class="stack-s"><h3>' + esc(m.name) + '</h3><span class="muted small">' + esc([m.role, m.shift ? m.shift + " shift" : ""].filter(Boolean).join(" · ")) + '</span></div><span class="pill ' + (d.due ? "warn" : "") + '">' + esc(d.label) + "</span></div>" +
+            return '<article class="card stack"><div class="row between"><div class="stack-s"><h3>' + esc(m.name) + '</h3><span class="muted small">' + esc([m.role, m.shift ? m.shift + " shift" : ""].filter(Boolean).join(" · ")) + '</span></div><span class="row">' + ((m.onboarding || []).length && !(m.onboarding || []).every((x) => x.done) ? '<span class="pill brown">New hire</span>' : "") + '<span class="pill ' + (d.due ? "warn" : "") + '">' + esc(d.label) + "</span></span></div>" +
               (m.growth ? '<p class="small"><b>Growing toward:</b> ' + esc(m.growth) + "</p>" : "") +
               (rec ? '<p class="small muted">Last recognised ' + esc(C.fmtDate(rec.date)) + ": " + esc(rec.text) + "</p>" : "") +
-              '<div class="row"><button class="btn sm brown" data-act="note" data-id="' + m.id + '">Log note</button><button class="btn sm ghost" data-act="agenda" data-id="' + m.id + '">1:1 agenda</button><button class="btn sm ghost" data-act="member" data-id="' + m.id + '">History</button></div></article>';
+              '<div class="row"><button class="btn sm brown" data-act="note" data-id="' + m.id + '">Log note</button><button class="btn sm ghost" data-act="agenda" data-id="' + m.id + '">1:1 agenda</button><button class="btn sm ghost" data-act="kudos" data-id="' + m.id + '">Shout-out</button><button class="btn sm ghost" data-act="member" data-id="' + m.id + '">History</button></div></article>';
           }).join("") + "</div>"
         : '<div class="empty"><b>Add your team</b><span>Start with the people you schedule and coach. Only you can see this.</span><button class="btn brown" data-act="new-member">Add a person</button></div>') +
       '<section class="card stack"><div class="row between"><h2>Cross-training</h2><button class="btn sm ghost" data-act="edit-stations">Edit stations</button></div><p class="muted small">Tap a cell to step through: — → Training → Certified → Trainer. Stations with fewer than 2 certified people are a risk when someone calls out.</p>' +
@@ -751,7 +766,7 @@
       '<label class="field" for="f-dbody"><span class="row between"><span>Text</span><span class="muted small mono" data-count>' + (d.body || "").length + ' chars</span></span><textarea class="textarea" id="f-dbody" rows="14" style="font-family:var(--mono);font-size:0.88rem">' + esc(d.body) + "</textarea><small>Saves as you type.</small></label>" +
       '<div data-ai></div>' +
       '<div class="sheet-foot"><button class="btn danger sm" data-act="ask-del" data-kind="draft" data-id="' + d.id + '">Delete</button><span class="grow"></span>' +
-      (sample ? '<button class="btn sm ghost" data-act="ai-polish" data-id="' + d.id + '">' + icon("spark") + "Polish with Ruhv</button>" : "") +
+      (sample ? '<button class="btn sm ghost" data-act="ai-polish" data-id="' + d.id + '">' + ruhv("ruhv-btn") + "Polish with Ruhv</button>" : "") +
       '<button class="btn sm ghost" data-act="download-draft" data-id="' + d.id + '">Save file</button><button class="btn sm brown" data-act="copy-draft">' + icon("copy") + "Copy</button></div><div data-confirm></div></div>"
     );
   }
@@ -1315,12 +1330,20 @@
     get downloads() { return downloads; },
     get route() { return route; },
     get mode() { return mode; },
-    ui, esc, icon, fieldText, fieldSelect, head, plural, byId, sortDesc, t0,
+    ui, esc, icon, ruhv, fieldText, fieldSelect, head, plural, byId, sortDesc, t0,
     save, persist, render, go, openSheet, closeSheet, toast, confirmIn, copyText, saveFile,
     addDraft, openDraft, winForm, winTicket, readinessCard, sparkSvg,
     actions: A, changes: CH, forms: F, views: VIEWS,
   };
-  if (window.CCFeatures) Object.assign(FX, window.CCFeatures(api) || {});
+  FX.homeTop = [];
+  FX.homeBottom = [];
+  FX.deletable = {};
+  for (const install of window.CCFeatureList || []) {
+    const r = install(api) || {};
+    if (r.homeTop) FX.homeTop.push(r.homeTop);
+    if (r.homeBottom) FX.homeBottom.push(r.homeBottom);
+    Object.assign(FX.deletable, r.deletable || {});
+  }
 
   // ---------- wiring ----------
   document.addEventListener("click", (ev) => {

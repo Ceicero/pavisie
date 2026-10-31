@@ -1,7 +1,7 @@
 // CareerCrumbs v2 sections. Registered by app.js through window.CCFeatures(api).
 (function () {
   "use strict";
-  window.CCFeatures = function (api) {
+  (window.CCFeatureList = window.CCFeatureList || []).push(function (api) {
     const C = window.CC;
     const { esc, icon, fieldText, fieldSelect, head, plural, byId, sortDesc, t0, save, render, go, openSheet, closeSheet, toast, copyText, saveFile, addDraft, openDraft, winForm, ui } = api;
     const V = api.views, A = api.actions, CH = api.changes, F = api.forms;
@@ -328,7 +328,7 @@
       return (
         '<div class="view">' + head("Behavioural interview", "Interview prep", '<button class="btn ghost" data-act="interview-sheet">Answer sheet</button><button class="btn brown" data-act="practice">Practice</button>') +
         '<div class="tiles"><div class="tile"><span class="eyebrow">Questions with a story</span><b>' + r.ready + '<span class="muted small"> / ' + r.total + '</span></b></div><div class="tile"><span class="eyebrow">Practice runs</span><b>' + prac.length + '</b></div><div class="tile"><span class="eyebrow">Avg self-score</span><b>' + (avg === null ? "—" : avg + '<span class="muted small"> / 5</span>') + '</b></div><div class="tile"><span class="eyebrow">Wins to draw on</span><b>' + ws.wins.length + "</b></div></div>" +
-        (api.sample ? '<section class="card floor-card"><span class="eyebrow">Ask Ruhv</span><h2>Mock interview</h2><p>Ruhv plays the hiring manager for ' + esc(ws.profile.targetRole) + ", asks one question at a time and gives you feedback on each answer.</p><div class=\"row\"><button class=\"btn brown\" data-act=\"mock\">Start a mock interview</button></div></section>" : "") +
+        (api.sample ? '<section class="card floor-card"><span class="row">' + api.ruhv("ruhv-card") + '<span class="eyebrow">Ask Ruhv</span></span><h2>Mock interview</h2><p>Ruhv plays the hiring manager for ' + esc(ws.profile.targetRole) + ", asks one question at a time and gives you feedback on each answer.</p><div class=\"row\"><button class=\"btn brown\" data-act=\"mock\">Start a mock interview</button></div></section>" : "") +
         '<p class="muted">Panels ask for specific stories. Match each question to a win you\'ve logged, and you\'ll walk in with an answer ready for every one. Suggested wins are listed first.</p>' +
         '<div class="list">' + C.INTERVIEW_QS.map((q) => {
           const sugg = C.suggestStories(ws, q);
@@ -413,7 +413,7 @@
       mock.busy = true;
       const turn = document.createElement("div");
       turn.className = "msg ruhv";
-      turn.innerHTML = '<span class="who">Ruhv</span><span data-t>Thinking…</span>';
+      turn.innerHTML = '<span class="who">' + api.ruhv("ruhv-who") + 'Ruhv</span><span data-t>Thinking…</span>';
       box.appendChild(turn);
       const input = mock.msgs.length ? [{ role: "user", content: mock.brief + "\n\n(The interview has started.)" }].concat(mock.msgs) : [{ role: "user", content: firstUser }];
       // The platform needs alternating turns ending on the user.
@@ -469,7 +469,7 @@
       return (
         '<div class="view">' + head("Coach · reads your workspace, never changes it", "Ask Ruhv", msgs.length ? '<button class="btn sm ghost" data-act="coach-clear">New chat</button>' : "") +
         (msgs.length ? "" : '<p class="muted">Ruhv can look up your wins, numbers, team notes and plan when it answers. It only sees your data when you send a message, and it can\'t edit anything. It can save a draft if you ask.</p><div class="togglechips">' + STARTERS.map((s, i) => '<button class="chip" data-act="coach-starter" data-i="' + i + '">' + esc(s) + "</button>").join("") + "</div>") +
-        '<div class="chat" data-chat>' + msgs.map((m, i) => (m.role === "user" ? '<div class="msg me">' + esc(m.content) + "</div>" : '<div class="msg ruhv"><span class="who">Ruhv</span>' + fmtMsg(m.content) + '<span class="msg-acts"><button class="linkbtn small" data-act="coach-copy" data-i="' + i + '">Copy</button><button class="linkbtn small" data-act="coach-draft" data-i="' + i + '">Save as draft</button></span></div>')).join("") + "</div>" +
+        '<div class="chat" data-chat>' + msgs.map((m, i) => (m.role === "user" ? '<div class="msg me">' + esc(m.content) + "</div>" : '<div class="msg ruhv"><span class="who">' + api.ruhv("ruhv-who") + 'Ruhv</span>' + fmtMsg(m.content) + '<span class="msg-acts"><button class="linkbtn small" data-act="coach-copy" data-i="' + i + '">Copy</button><button class="linkbtn small" data-act="coach-draft" data-i="' + i + '">Save as draft</button></span></div>')).join("") + "</div>" +
         '<form class="composer" data-form="coach"><textarea class="textarea" id="coach-in" name="text" rows="2" placeholder="Ask Ruhv anything about your path…" aria-label="Message Ruhv"></textarea><button class="btn brown">Send</button></form>' +
         '<p class="muted small">Ruhv is Claude. It can be wrong, so check facts and numbers before you use them.</p></div>'
       );
@@ -506,7 +506,7 @@
       const box = $("[data-chat]");
       const turn = document.createElement("div");
       turn.className = "msg ruhv";
-      turn.innerHTML = '<span class="who">Ruhv</span><span data-t>Looking at your workspace…</span>';
+      turn.innerHTML = '<span class="who">' + api.ruhv("ruhv-who") + 'Ruhv</span><span data-t>Looking at your workspace…</span>';
       box.appendChild(turn);
       turn.scrollIntoView({ block: "nearest" });
       const brief = "You are Ruhv, the coach inside CareerCrumbs. The person is a " + ws.profile.role + " at " + (ws.profile.company || "DashMart") + " (DoorDash's own dark-store grocery and convenience warehouses) working toward " + ws.profile.targetRole + ". Today is " + t0() + ".\n" +
@@ -648,6 +648,7 @@
         else if (type === "Shift log") A["edit-shift"](fake);
         else if (type === "Problem") A["edit-problem"](fake);
         else if (type === "Learning") A["edit-learn"](fake);
+        else if (type === "Feedback") A["edit-feedback"](fake);
         else if (r === "team") A.member(fake);
       }, 30);
     };
@@ -778,5 +779,5 @@
       homeBottom,
       deletable: { shift: ["shifts", "this shift log"], problem: ["problems", "this problem"], learn: ["learning", "this item"] },
     };
-  };
+  });
 })();
