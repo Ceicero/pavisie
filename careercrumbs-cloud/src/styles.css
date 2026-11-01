@@ -241,3 +241,5 @@ details.more summary { cursor: pointer; font-weight: 600; color: var(--brown); }
 details.more[open] summary { margin-bottom: 12px; }
 .kind { background: var(--sunk); border-style: dashed; }
 .input, .select { min-width: 0; max-width: 100%; }
+.checkin { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--ink); }
+.checkin b { color: var(--warn); }

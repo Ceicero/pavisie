@@ -30,6 +30,7 @@
     copy: "M9 9h11v11H9zM5 15H4V4h11v1",
     edit: "M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
     play: "M7 4l13 8-13 8z",
+    bell: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0",
   };
   const icon = (n) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + P[n] + '"/></svg>';
   const NAV = [["home", "Home"], ["jobs", "Jobs"], ["interview", "Interview"], ["stories", "Stories"], ["me", "Me"]];
@@ -241,7 +242,7 @@
             return '<article class="card stack"><div class="row between"><span class="eyebrow">' + esc(j.company) + '</span><label class="sr" for="js-' + j.id + '">Stage</label><select class="select compact" id="js-' + j.id + '" data-change="job-status" data-id="' + j.id + '">' + C.STATUSES.map((s) => "<option" + (s === j.status ? " selected" : "") + ">" + s + "</option>").join("") + "</select></div><h3>" + esc(j.title) + "</h3>" +
               (b ? '<span class="pill ' + b.tone + '" style="justify-self:start">' + esc(b.text) + "</span>" : "") +
               (j.notes ? '<p class="small muted">' + esc(j.notes) + "</p>" : "") +
-              '<div class="row"><button class="btn sm ' + (j.status === "Interview" ? "brown" : "ghost") + '" data-act="prep" data-id="' + j.id + '">Prep' + (posted ? " · " + posted : "") + '</button><button class="btn sm ghost" data-act="messages" data-id="' + j.id + '">Messages</button><button class="btn sm ghost" data-act="edit-job" data-id="' + j.id + '">' + icon("edit") + "Details</button></div></article>";
+              '<div class="row"><button class="btn sm ' + (j.status === "Interview" ? "brown" : "ghost") + '" data-act="prep" data-id="' + j.id + '">Prep' + (posted ? " · " + posted : "") + '</button><button class="btn sm ghost" data-act="messages" data-id="' + j.id + '">Messages</button>' + (C.reminderEvents([j]).length ? '<button class="btn sm ghost" data-act="reminders" data-id="' + j.id + '" aria-label="Add check-in reminders to my calendar">' + icon("bell") + "Remind me</button>" : "") + '<button class="btn sm ghost" data-act="edit-job" data-id="' + j.id + '">' + icon("edit") + "Details</button></div></article>";
           }).join("") + "</div>"
         : '<div class="empty"><b>' + (ws.jobs.length ? "Nothing here" : "No jobs yet") + '</b><span>Add every job you apply for. Follow-up reminders and interview prep come with it.</span><button class="btn brown" data-act="new-job">Add a job</button></div>') +
       "</div>"
@@ -251,9 +252,11 @@
     j = j || { status: "Applied", appliedAt: t0() };
     return (
       '<form data-form="job" data-id="' + esc(j.id || "") + '">' + field("title", "Job title", j.title, { req: true, ph: "Warehouse associate" }) + field("company", "Company", j.company, { req: true }) +
-      select("status", "Stage", j.status, C.STATUSES) + field("interviewAt", "Interview date and time (if you have one)", j.interviewAt, { type: "datetime-local" }) +
+      '<div class="fields2">' + select("status", "Stage", j.status, C.STATUSES) + select("pay", "Pay", j.pay || "hourly", [["hourly", "Hourly"], ["salaried", "Salaried"]]) + "</div>" +
+      '<small class="muted">We remind you to check in 3 days, 1 week and 1 month after you apply or interview. Salaried jobs start at 1 week.</small>' +
+      field("interviewAt", "Interview date and time (if you have one)", j.interviewAt, { type: "datetime-local" }) +
       '<details class="more"' + (j.id && (j.contact || j.link || j.notes) ? " open" : "") + '><summary>More details (optional)</summary><div class="stack">' +
-      '<div class="fields2">' + field("appliedAt", "Applied on", j.appliedAt, { type: "date" }) + field("followUpAt", "Follow up on", j.followUpAt, { type: "date", hint: "We set this a week after you apply." }) + "</div>" +
+      '<div class="fields2">' + field("appliedAt", "Applied on", j.appliedAt, { type: "date" }) + field("followUpAt", "Follow up on", j.followUpAt, { type: "date", hint: "Optional. Check-ins are already scheduled for you." }) + "</div>" +
       field("contact", "Contact name", j.contact, { ph: "Recruiter or hiring manager" }) + field("link", "Job posting link", j.link, { type: "url", ph: "https://" }) +
       field("notes", "Notes", j.notes, { area: true, rows: 3, ph: "Pay, shift, what they're looking for" }) + "</div></details>" +
       (j.history && j.history.length ? '<div class="stack-s"><span class="eyebrow">Timeline</span><div class="timeline">' + j.history.slice().reverse().map((x) => "<div><b>" + esc(x.status) + '</b> <span class="muted small mono">' + esc(C.fmtDateY(x.at.slice(0, 10))) + "</span></div>").join("") + "</div></div>" : "") +
@@ -378,6 +381,8 @@
       '<section class="card stack"><h2>About you</h2><form class="stack" data-form="profile">' + field("name", "Your name", p.name, { hint: "Signs your follow-up and thank-you messages." }) + field("targetRole", "Job you're going for", p.targetRole, { ph: "Warehouse associate, cashier, shift lead…" }) +
       '<div class="field"><span>Question sets for your kind of job</span><div class="togglechips">' + ["warehouse", "service", "lead"].map((k) => '<label><input type="checkbox" name="packs" value="' + k + '"' + ((p.packs || []).includes(k) ? " checked" : "") + "><span>" + esc(C.PACKS[k]) + "</span></label>").join("") + "</div><small>Common and behavioral questions are always included.</small></div>" +
       '<div class="row"><button class="btn brown">Save</button></div></form></section>' +
+      '<section class="card stack"><h2>Check-in reminders</h2><p class="muted">CareerCrumbs reminds you to reconnect <b>3 days, 1 week and 1 month</b> after you apply or interview. Salaried jobs start at 1 week. Due check-ins show on Home with a message ready to send.</p><p class="muted">For an alert on your phone, add them to your calendar. Your calendar app does the notifying, and you can delete them anytime.</p>' +
+      '<div class="row"><button class="btn brown" data-act="reminders-all">' + icon("bell") + "Add all upcoming check-ins (" + C.reminderEvents(ws.jobs).length + ')</button></div><div class="field"><span>When I add or update a job</span><div class="chips" role="group" aria-label="Calendar offer">' + [["ask", "Offer to add reminders"], ["off", "Don\'t ask"]].map(([v, l]) => '<button class="chip" data-act="remind-pref" data-v="' + v + '" aria-pressed="' + ((p.reminders || "ask") === v) + '">' + l + "</button>").join("") + "</div></div></section>" +
       '<section class="card stack"><h2>Look</h2><div class="chips" role="group" aria-label="Theme">' + [["system", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([v, l]) => '<button class="chip" data-act="theme" data-v="' + v + '" aria-pressed="' + (theme === v) + '">' + l + "</button>").join("") + "</div></section>" +
       '<section class="card stack"><h2>Your data</h2><p class="muted">' + esc(where) + '</p><div class="row"><button class="btn ghost" data-act="export">Export backup</button><label class="btn ghost" for="import-file">Import backup</label><input class="sr" id="import-file" type="file" accept=".json,application/json"></div><div data-import></div><div class="row divider"><button class="btn danger sm" data-act="ask-erase">Erase everything</button></div><div data-erase></div></section>' +
       '<p class="muted small">CareerCrumbs has no AI and sends your answers nowhere. What you write is yours.</p></div>'
@@ -448,8 +453,34 @@
     messages(el) {
       const j = byId(ws.jobs, el.dataset.id);
       const ms = C.messages(j, ws.profile);
-      const first = ms.findIndex((m) => m.id === (j.status === "Interview" && j.interviewAt && j.interviewAt.slice(0, 10) <= t0() ? "thanks" : j.status === "Interview" ? "confirm" : "followup"));
-      openSheet("Messages · " + j.company, '<div class="sheet-body"><p class="muted small">Ready to copy into an email or text. Fill in anything in [brackets].</p>' + (ws.profile.name ? "" : '<label class="field" for="sign-name"><span>Your name, to sign the message</span><input class="input" id="sign-name" data-change="sign-name" data-id="' + j.id + '" placeholder="First and last name" autocomplete="name"></label>') + '<div class="chips">' + ms.map((m, i) => '<button class="chip" data-act="msg" data-i="' + i + '" data-id="' + j.id + '" aria-pressed="' + (i === first) + '">' + esc(m.label) + "</button>").join("") + '</div><label class="field" for="msg-subject"><span>Subject</span><input class="input" id="msg-subject" value="' + esc(ms[first].subject) + '"></label><label class="field" for="msg-body"><span>Message</span><textarea class="textarea" id="msg-body" rows="11">' + esc(ms[first].body) + '</textarea></label><div class="sheet-foot">' + (j.status === "Interview" ? '<label class="check"><input type="checkbox" data-change="thanked" data-id="' + j.id + '"' + (j.thankYouSent ? " checked" : "") + "> Thank-you sent</label>" : "") + '<span class="grow"></span><button class="btn brown" data-act="msg-copy">' + icon("copy") + "Copy message</button></div></div>");
+      const due = C.dueCheckIn(j);
+      const next = C.nextCheckIn(j);
+      const thanksDue = j.status === "Interview" && j.interviewAt && j.interviewAt.slice(0, 10) <= t0() && !j.thankYouSent;
+      const first = ms.findIndex((m) => m.id === (thanksDue ? "thanks" : due ? due.message : j.status === "Interview" ? "confirm" : "followup"));
+      const checkin = due
+        ? '<div class="checkin" data-checkin><span><b>Check-in due</b> · ' + esc(due.label) + '</span><button class="btn sm brown" data-act="checked-in" data-id="' + j.id + '" data-key="' + due.key + '">I checked in</button></div>'
+        : next ? '<p class="small muted" data-checkin>Next check-in: ' + esc(C.fmtDate(next.date)) + " (" + esc(next.label) + ")</p>" : "";
+      openSheet("Messages · " + j.company, '<div class="sheet-body"><p class="muted small">Ready to copy into an email or text. Fill in anything in [brackets].</p>' + checkin + (ws.profile.name ? "" : '<label class="field" for="sign-name"><span>Your name, to sign the message</span><input class="input" id="sign-name" data-change="sign-name" data-id="' + j.id + '" placeholder="First and last name" autocomplete="name"></label>') + '<div class="chips">' + ms.map((m, i) => '<button class="chip" data-act="msg" data-i="' + i + '" data-id="' + j.id + '" aria-pressed="' + (i === first) + '">' + esc(m.label) + "</button>").join("") + '</div><label class="field" for="msg-subject"><span>Subject</span><input class="input" id="msg-subject" value="' + esc(ms[first].subject) + '"></label><label class="field" for="msg-body"><span>Message</span><textarea class="textarea" id="msg-body" rows="11">' + esc(ms[first].body) + '</textarea></label><div class="sheet-foot">' + (j.status === "Interview" ? '<label class="check"><input type="checkbox" data-change="thanked" data-id="' + j.id + '"' + (j.thankYouSent ? " checked" : "") + "> Thank-you sent</label>" : "") + '<span class="grow"></span><button class="btn brown" data-act="msg-copy">' + icon("copy") + "Copy message</button></div></div>");
+    },
+    "checked-in"(el) {
+      const i = ws.jobs.findIndex((j) => j.id === el.dataset.id);
+      ws.jobs[i] = C.markCheckedIn(ws.jobs[i], el.dataset.key);
+      persist("jobs");
+      const next = C.nextCheckIn(ws.jobs[i]);
+      el.closest("[data-checkin]").outerHTML = '<p class="small muted" data-checkin>Nice. ' + (next ? "Next check-in: " + esc(C.fmtDate(next.date)) + " (" + esc(next.label) + ")." : "That was the last scheduled check-in.") + "</p>";
+    },
+    reminders(el) {
+      const j = byId(ws.jobs, el.dataset.id);
+      saveFile("check-ins-" + slug(j.company) + ".ics", C.remindersIcs([j]));
+    },
+    "reminders-all"() {
+      const n = C.reminderEvents(ws.jobs).length;
+      if (!n) return toast("Nothing coming up yet. Add a job you've applied for.");
+      saveFile("careercrumbs-reminders.ics", C.remindersIcs(ws.jobs));
+    },
+    "remind-pref"(el) {
+      ws.profile.reminders = el.dataset.v;
+      save("profile");
     },
     msg(el) {
       const m = C.messages(byId(ws.jobs, el.dataset.id), ws.profile)[el.dataset.i];
@@ -595,9 +626,8 @@
     "job-status"(el) {
       const i = ws.jobs.findIndex((j) => j.id === el.dataset.id);
       ws.jobs[i] = C.setStatus(ws.jobs[i], el.value);
-      if (el.value === "Applied" && !ws.jobs[i].followUpAt) ws.jobs[i].followUpAt = C.addDays(t0(), 7);
       save("jobs");
-      if (el.value === "Applied") toast("Follow-up reminder set for a week from today.");
+      if (el.value === "Applied") offerReminders(ws.jobs[i]);
       if (el.value === "Interview") toast("You got the interview. Add the date and time, then prep.", "Add date", () => A["edit-job"]({ dataset: { id: el.dataset.id } }));
       if (el.value === "Offer") toast("Congratulations! You earned this.");
     },
@@ -627,25 +657,39 @@
     },
   };
 
+  // Opt-in: we only offer the calendar file; nothing is added unless the person taps it.
+  function offerReminders(job) {
+    const upcoming = C.checkIns(job).filter((c) => !c.done && c.date >= t0());
+    if (!upcoming.length) return;
+    const dates = upcoming.map((c) => C.fmtDate(c.date));
+    const list = dates.length > 1 ? dates.slice(0, -1).join(", ") + " and " + dates[dates.length - 1] : dates[0];
+    if (ws.profile.reminders === "off") toast("Check-ins set for " + list + ".");
+    else toast("Check-ins set for " + list + ". Get a phone alert?", "Add to calendar", () => A.reminders({ dataset: { id: job.id } }));
+  }
+
   // form handlers
   const val = (f, n) => (f.elements[n] ? String(f.elements[n].value || "").trim() : "");
   const F = {
     job(f) {
       const id = f.dataset.id;
-      const data = { title: val(f, "title"), company: val(f, "company"), appliedAt: val(f, "appliedAt"), interviewAt: val(f, "interviewAt"), followUpAt: val(f, "followUpAt"), contact: val(f, "contact"), link: val(f, "link"), notes: val(f, "notes") };
+      const data = { title: val(f, "title"), company: val(f, "company"), appliedAt: val(f, "appliedAt"), interviewAt: val(f, "interviewAt"), followUpAt: val(f, "followUpAt"), pay: val(f, "pay") || "hourly", contact: val(f, "contact"), link: val(f, "link"), notes: val(f, "notes") };
       const status = val(f, "status");
+      let j;
+      let before = "";
       if (id) {
-        const i = ws.jobs.findIndex((j) => j.id === id);
-        let j = Object.assign({}, ws.jobs[i], data);
+        const i = ws.jobs.findIndex((x) => x.id === id);
+        before = C.checkIns(ws.jobs[i]).map((c) => c.date).join();
+        j = Object.assign({}, ws.jobs[i], data);
         if (j.status !== status) j = C.setStatus(j, status);
         ws.jobs[i] = j;
       } else {
-        const j = C.setStatus(Object.assign({ id: C.uid("j"), created: t0(), history: [] }, data), status);
-        if (status === "Applied" && !j.followUpAt) j.followUpAt = C.addDays(j.appliedAt || t0(), 7);
+        j = C.setStatus(Object.assign({ id: C.uid("j"), created: t0(), history: [] }, data), status);
+        if (!j.appliedAt && status !== "Saved") j.appliedAt = t0();
         ws.jobs.push(j);
       }
       closeSheet();
       save("jobs");
+      if (C.checkIns(j).map((c) => c.date).join() !== before) offerReminders(j);
     },
     story(f) {
       const id = f.dataset.id;

@@ -132,6 +132,47 @@
     if (status === "Applied" && !job.appliedAt) next.appliedAt = at.slice(0, 10);
     return next;
   }
+  // Check-ins: when to reconnect after applying and after an interview.
+  // Salaried hiring moves slower, so it starts at a week instead of three days.
+  const CHECKIN_DAYS = { hourly: [3, 7, 30], salaried: [7, 30] };
+  const AFTER = { 3: "3 days", 7: "1 week", 30: "1 month" };
+  function checkIns(job) {
+    if (!job || ["Saved", "Offer", "Closed"].includes(job.status)) return [];
+    const days = CHECKIN_DAYS[job.pay === "salaried" ? "salaried" : "hourly"];
+    const iv = job.interviewAt ? job.interviewAt.slice(0, 10) : null;
+    const done = job.checkins || {};
+    const out = [];
+    if (job.appliedAt) {
+      for (const d of days) {
+        const date = addDays(job.appliedAt, d);
+        // Once there's an interview, its own check-ins take over.
+        if (iv && date >= iv) continue;
+        out.push({ key: "a" + d, kind: "applied", days: d, date, label: AFTER[d] + " since you applied" });
+      }
+    }
+    if (iv) for (const d of days) out.push({ key: "i" + d, kind: "interview", days: d, date: addDays(iv, d), label: AFTER[d] + " since your interview" });
+    return out.map((c) => Object.assign(c, { done: !!done[c.key], message: c.kind === "applied" && c.days < 30 ? "followup" : "status" }));
+  }
+  // The most recent check-in that has come due and isn't done yet.
+  function dueCheckIn(job, now) {
+    const t = today(now);
+    const due = checkIns(job).filter((c) => c.date <= t);
+    const last = due[due.length - 1];
+    return last && !last.done ? last : null;
+  }
+  function nextCheckIn(job, now) {
+    const t = today(now);
+    return checkIns(job).find((c) => c.date > t && !c.done) || null;
+  }
+  // Checking in covers every check-in up to and including this one.
+  function markCheckedIn(job, key) {
+    const list = checkIns(job);
+    const upto = list.find((c) => c.key === key);
+    const done = Object.assign({}, job.checkins);
+    for (const c of list) if (upto && c.date <= upto.date) done[c.key] = true;
+    return Object.assign({}, job, { checkins: done });
+  }
+
   function jobBadge(job, now) {
     const t = today(now);
     if (job.status === "Closed" || job.status === "Offer") return null;
@@ -139,12 +180,16 @@
       const n = daysBetween(t, job.interviewAt);
       return { tone: n <= 1 ? "warn" : "brown", text: "Interview " + (n <= 1 ? relDays(job.interviewAt, now) : fmtWhen(job.interviewAt)) + (n <= 1 && fmtTime(job.interviewAt) ? " " + fmtTime(job.interviewAt) : "") };
     }
-    if (job.followUpAt) {
+    const due = dueCheckIn(job, now);
+    if (due) return { tone: "warn", text: "Check in now · " + due.label };
+    if (job.followUpAt && job.followUpAt >= t) {
       const n = daysBetween(t, job.followUpAt);
       if (n < 0) return { tone: "bad", text: "Follow-up overdue by " + -n + (n === -1 ? " day" : " days") };
       if (n === 0) return { tone: "warn", text: "Follow up today" };
       return { tone: "", text: "Follow up " + relDays(job.followUpAt, now) };
     }
+    const next = nextCheckIn(job, now);
+    if (next) return { tone: "", text: "Next check-in " + (daysBetween(t, next.date) <= 6 ? relDays(next.date, now) : fmtDate(next.date)) };
     return null;
   }
   // What needs doing today, most urgent first.
@@ -158,7 +203,9 @@
         if (n >= 0 && n <= 3) out.push({ tone: n <= 1 ? "warn" : "", job: j.id, act: "prep", title: "Prepare: " + j.title + " at " + j.company, sub: "Interview " + relDays(j.interviewAt, now) + (fmtTime(j.interviewAt) ? " at " + fmtTime(j.interviewAt) : "") });
         if (n < 0 && n >= -3 && !j.thankYouSent && j.status === "Interview") out.push({ tone: "warn", job: j.id, act: "messages", title: "Send a thank-you to " + j.company, sub: "Interviewed " + relDays(j.interviewAt, now) + ". Within 24 hours is best." });
       }
-      if (j.followUpAt && daysBetween(t, j.followUpAt) <= 0) out.push({ tone: daysBetween(t, j.followUpAt) < 0 ? "bad" : "warn", job: j.id, act: "messages", title: "Follow up with " + j.company, sub: j.title + " · " + (daysBetween(t, j.followUpAt) < 0 ? "overdue" : "due today") });
+      const due = dueCheckIn(j, now);
+      if (due) out.push({ tone: "warn", job: j.id, act: "messages", title: "Check in with " + j.company, sub: due.label + " · " + j.title });
+      else if (j.followUpAt && daysBetween(t, j.followUpAt) <= 0) out.push({ tone: daysBetween(t, j.followUpAt) < 0 ? "bad" : "warn", job: j.id, act: "messages", title: "Follow up with " + j.company, sub: j.title + " · " + (daysBetween(t, j.followUpAt) < 0 ? "overdue" : "due today") });
     }
     const rank = { bad: 0, warn: 1, "": 2 };
     return out.sort((a, b) => rank[a.tone] - rank[b.tone]);
@@ -268,20 +315,54 @@
   function icsEscape(s) {
     return String(s || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
   }
-  function interviewIcs(job, now) {
+  // events: { uid, date, time ("HH:MM", optional), minutes, summary, desc, alarm (e.g. "-PT2H" or "PT0M") }
+  function buildIcs(events, now) {
     const stamp = (now || new Date()).toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
-    const dt = job.interviewAt;
-    const timed = /T\d{2}:\d{2}/.test(dt);
-    const start = timed ? dt.replace(/[-:]/g, "").slice(0, 13) + "00" : dt.slice(0, 10).replace(/-/g, "");
-    let end;
-    if (timed) {
-      const d = new Date(dt);
-      d.setHours(d.getHours() + 1);
-      end = iso(d).replace(/-/g, "") + "T" + pad(d.getHours()) + pad(d.getMinutes()) + "00";
-    } else end = addDays(dt.slice(0, 10), 1).replace(/-/g, "");
-    const v = timed ? "" : ";VALUE=DATE";
-    return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//CareerCrumbs//EN", "BEGIN:VEVENT", "UID:cc-" + job.id + "@careercrumbs", "DTSTAMP:" + stamp, "DTSTART" + v + ":" + start, "DTEND" + v + ":" + end, "SUMMARY:" + icsEscape("Interview: " + job.title + " at " + job.company), "DESCRIPTION:" + icsEscape((job.contact ? "With " + job.contact + ". " : "") + "Bring résumé copies and ID. Send a thank-you within 24 hours."), "BEGIN:VALARM", "TRIGGER:-PT2H", "ACTION:DISPLAY", "DESCRIPTION:Interview in 2 hours", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].join("\r\n") + "\r\n";
+    const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//CareerCrumbs//EN", "CALSCALE:GREGORIAN"];
+    for (const e of events) {
+      const d = e.date.replace(/-/g, "");
+      L.push("BEGIN:VEVENT", "UID:" + e.uid + "@careercrumbs", "DTSTAMP:" + stamp);
+      if (e.time) {
+        const [h, m] = e.time.split(":").map(Number);
+        const endMin = h * 60 + m + (e.minutes || 15);
+        const endDate = endMin >= 1440 ? addDays(e.date, 1).replace(/-/g, "") : d;
+        const em = endMin % 1440;
+        L.push("DTSTART:" + d + "T" + pad(h) + pad(m) + "00", "DTEND:" + endDate + "T" + pad(Math.floor(em / 60)) + pad(em % 60) + "00");
+      } else L.push("DTSTART;VALUE=DATE:" + d, "DTEND;VALUE=DATE:" + addDays(e.date, 1).replace(/-/g, ""));
+      L.push("SUMMARY:" + icsEscape(e.summary));
+      if (e.desc) L.push("DESCRIPTION:" + icsEscape(e.desc));
+      if (e.alarm) L.push("BEGIN:VALARM", "TRIGGER:" + e.alarm, "ACTION:DISPLAY", "DESCRIPTION:" + icsEscape(e.summary), "END:VALARM");
+      L.push("END:VEVENT");
+    }
+    L.push("END:VCALENDAR");
+    return L.join("\r\n") + "\r\n";
   }
+  function interviewEvent(job) {
+    const dt = job.interviewAt;
+    const m = String(dt).match(/T(\d{2}:\d{2})/);
+    return { uid: "cc-" + job.id + "-interview", date: dt.slice(0, 10), time: m ? m[1] : null, minutes: 60, summary: "Interview: " + job.title + " at " + job.company, desc: (job.contact ? "With " + job.contact + ". " : "") + "Bring résumé copies and ID. Send a thank-you within 24 hours.", alarm: "-PT2H" };
+  }
+  function interviewIcs(job, now) {
+    return buildIcs([interviewEvent(job)], now);
+  }
+  // Check-in reminders at 9:00 on the day, from today on. A stable UID per check-in means
+  // importing the file again updates the reminder instead of duplicating it.
+  function reminderEvents(jobs, now) {
+    const t = today(now);
+    const out = [];
+    for (const j of jobs) {
+      for (const c of checkIns(j)) {
+        if (c.done || c.date < t) continue;
+        out.push({ uid: "cc-" + j.id + "-" + c.key, date: c.date, time: "09:00", minutes: 15, summary: "Check in with " + j.company + " (" + j.title + ")", desc: c.label + ". Open CareerCrumbs > Jobs > Messages for a message ready to send.", alarm: "PT0M" });
+      }
+      if (j.interviewAt && j.interviewAt.slice(0, 10) >= t && !["Offer", "Closed"].includes(j.status)) out.push(interviewEvent(j));
+    }
+    return out.sort((a, b) => (a.date < b.date ? -1 : 1));
+  }
+  function remindersIcs(jobs, now) {
+    return buildIcs(reminderEvents(jobs, now), now);
+  }
+
 
   // ---------- workspace ----------
   const emptyWorkspace = () => ({
@@ -326,6 +407,7 @@
   const api = {
     uid, iso, today, parse, addDays, daysBetween, fmtDate, fmtDateY, fmtTime, fmtWhen, relDays, clean, firstName,
     PACKS, BANK, WPM, answerText, wordCount, speakTime, lengthHint,
+    CHECKIN_DAYS, checkIns, dueCheckIn, nextCheckIn, markCheckedIn, reminderEvents, remindersIcs,
     STATUSES, setStatus, jobBadge, todo, nextInterview, messages,
     bulletFromStory, storyToStar, bankFor, status, readiness, jobQuestions, cheatSheet, interviewIcs,
     emptyWorkspace, normalize, EXAMPLES,
