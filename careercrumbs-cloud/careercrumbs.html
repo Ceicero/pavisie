@@ -1053,7 +1053,7 @@ details.more[open] summary { margin-bottom: 12px; }
     const p = ws.profile;
     let theme = "system";
     try { theme = localStorage.getItem("careercrumbs:theme") || "system"; } catch (e) {}
-    const where = mode === "cloud" ? "Saved to your claude.ai account and private to you." : "Saved in this browser only. Export a backup now and then.";
+    const where = mode === "cloud" ? "Saved to your claude.ai account and private to you." : (native ? "Saved on this phone. Export a backup now and then." : "Saved in this browser only. Export a backup now and then.");
     return (
       '<div class="view">' + head("Your details and your data", "Me") +
       '<section class="card stack"><h2>About you</h2><form class="stack" data-form="profile">' + field("name", "Your name", p.name, { hint: "Signs your follow-up and thank-you messages." }) + field("targetRole", "Job you're going for", p.targetRole, { ph: "Warehouse associate, cashier, shift lead…" }) +
@@ -1097,7 +1097,13 @@ details.more[open] summary { margin-bottom: 12px; }
     host.innerHTML = '<div class="confirm"><p>' + esc(msg) + '</p><button type="button" class="btn sm ghost" data-act="cancel-confirm">Keep</button><button type="button" class="btn sm danger" data-go>' + esc(label) + "</button></div>";
     host.querySelector("[data-go]").onclick = fn;
   }
+  // Inside the Android test app, window.CCAndroid handles copying and saving files.
+  const native = window.CCAndroid || null;
   async function copyText(text, el) {
+    if (native) {
+      native.copy(text);
+      return toast("Copied");
+    }
     try {
       await navigator.clipboard.writeText(text);
       toast("Copied");
@@ -1107,6 +1113,7 @@ details.more[open] summary { margin-bottom: 12px; }
     }
   }
   async function saveFile(name, data) {
+    if (native) return void native.saveFile(name, data);
     if (!downloads) return toast("Saving files isn't available here. Use Copy instead.");
     try {
       await downloads.save({ filename: name, data });
