@@ -6,10 +6,10 @@
 
   // ---------- state ----------
   let ws = C.emptyWorkspace();
-  let mode = "loading"; // loading | example | cloud | local
+  let mode = "loading"; // loading | cloud | local
   let syncState = "idle";
   let route = "home";
-  const ui = { jobFilter: "Active", pack: "all", prepJob: null, sheetOpen: false, after: "local" };
+  const ui = { jobFilter: "Active", pack: "all", prepJob: null, sheetOpen: false };
   let db = null, uidv = null, downloads = null;
 
   // ---------- Ruhv & icons ----------
@@ -62,16 +62,10 @@
   for (const [m, keys] of Object.entries(MODULES)) for (const k of keys) KEY_TO_MOD[k] = m;
   const LS_KEY = "careercrumbs:v2";
   const dirty = new Set();
-  let flushTimer = null, flushing = false, warned = false;
+  let flushTimer = null, flushing = false;
 
+  // Everything saves on its own; there is no account or setup step.
   function persist(...keys) {
-    if (mode === "example") {
-      if (!warned) {
-        warned = true;
-        toast("Examples aren't saved. Start your own to keep changes.", "Start", () => start(false));
-      }
-      return;
-    }
     for (const k of keys) dirty.add(KEY_TO_MOD[k] || k);
     setSync("saving");
     clearTimeout(flushTimer);
@@ -114,9 +108,9 @@
   }
   function setSync(s) {
     syncState = s;
-    const label = mode === "example" ? "Examples · not saved" : mode === "loading" ? "Loading" : s === "saving" ? "Saving…" : s === "error" ? "Not saved" : mode === "cloud" ? "Saved to your account" : "Saved on this device";
+    const label = mode === "loading" ? "Loading" : s === "saving" ? "Saving…" : s === "error" ? "Not saved" : mode === "cloud" ? "Saved to your account" : "Saved on this device";
     document.querySelectorAll(".sync").forEach((el) => {
-      el.dataset.s = mode === "example" ? "example" : s;
+      el.dataset.s = s;
       el.title = label;
       el.innerHTML = '<i></i><span class="sync-t">' + esc(label) + "</span>";
     });
@@ -153,31 +147,10 @@
     if (where === "local") {
       try { loaded = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) {}
     }
-    ui.after = where;
-    if (loaded) {
-      ws = C.normalize(loaded);
-      mode = where;
-    } else {
-      ws = C.normalize(C.exampleWorkspace());
-      mode = "example";
-    }
+    ws = C.normalize(loaded || {});
+    mode = where;
     setSync("saved");
     render();
-  }
-  function start(keep) {
-    ws = keep ? C.normalize(ws) : C.emptyWorkspace();
-    mode = ui.after;
-    warned = false;
-    ui.prepJob = null;
-    ui.pack = "all";
-    closeSheet();
-    for (const m of Object.keys(MODULES)) dirty.add(m);
-    persist();
-    if (keep) toast("Started from the examples. Edit or delete them anytime.");
-    else {
-      go("home");
-      A.setup();
-    }
   }
 
   // ---------- routing ----------
@@ -208,7 +181,6 @@
       '<nav class="rail" aria-label="Sections"><a class="brand" href="#home">' + ruhv("brand-mark") + "CareerCrumbs</a>" +
       NAV.map(([r, l]) => '<a href="#' + r + '"' + (route === r ? ' aria-current="page"' : "") + ">" + icon(r) + esc(l) + "</a>").join("") + '<span class="sync"></span></nav>' +
       '<main class="main"><header class="topbar"><a class="brand" href="#home" aria-label="CareerCrumbs home">' + ruhv("brand-mark") + '</a><span class="eyebrow">' + esc(title) + '</span><span class="sync"></span><a class="iconbtn top-me" href="#me" aria-label="Me and my data"' + (route === "me" ? ' aria-current="page"' : "") + ">" + icon("me") + "</a></header>" +
-      (mode === "example" ? '<div class="view banner-wrap"><div class="banner"><p><b>These are example jobs and answers.</b> They show how CareerCrumbs works. Nothing is saved until you start your own.</p><div class="row"><button class="btn sm" data-act="start-blank">Start my own</button><button class="btn sm ghost" data-act="start-keep">Keep examples</button></div></div></div>' : "") +
       body.replace(/<div class="empty"><b>/g, '<div class="empty">' + ruhv("ruhv-empty") + "<b>") + "</main>" +
       '<nav class="tabbar" aria-label="Main">' + TABS.map((r) => '<a class="tab" href="#' + r + '"' + (route === r ? ' aria-current="page"' : "") + ">" + icon(r) + "<span>" + esc(NAV.find((n) => n[0] === r)[1]) + "</span></a>").join("") + "</nav>";
     window.scrollTo(0, y);
@@ -226,6 +198,18 @@
     const nextQ = qs.find((q) => q.pack !== "ask" && C.status(ws, q.id) === "none");
     const count = (s) => ws.jobs.filter((j) => j.status === s).length;
     const h = new Date().getHours();
+    const fresh = !ws.jobs.length && !ws.stories.length && !Object.keys(ws.interview.answers).length;
+    if (fresh) {
+      return (
+        '<div class="view">' + head("No sign-up, nothing to set up", "Let's get you hired") +
+        '<section class="card dark welcome">' + ruhv("ruhv-welcome") + "<p>Pick any place to start. Everything saves as you go, and you can come back anytime.</p></section>" +
+        '<div class="starts">' +
+        '<button class="start" data-act="answer" data-id="c1"><span><span class="eyebrow">About 2 minutes</span><b>Answer “Tell me about yourself”</b><small>Almost every interview starts with it. We show you an example first.</small></span>' + icon("chev") + "</button>" +
+        '<button class="start" data-act="new-job"><span><span class="eyebrow">30 seconds</span><b>Add a job you applied for</b><small>Just the title and company. We\'ll remind you to follow up.</small></span>' + icon("chev") + "</button>" +
+        '<button class="start" data-act="practice"><span><span class="eyebrow">5 minutes</span><b>Practise 5 interview questions</b><small>Say your answers out loud with a timer.</small></span>' + icon("chev") + "</button>" +
+        "</div></div>"
+      );
+    }
     return (
       '<div class="view">' + head(C.fmtDateY(t0()) + (p.targetRole ? " · going for " + p.targetRole : ""), (h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening") + (p.name ? ", " + C.firstName(p.name) : "")) +
       (nx
@@ -267,10 +251,11 @@
     j = j || { status: "Applied", appliedAt: t0() };
     return (
       '<form data-form="job" data-id="' + esc(j.id || "") + '">' + field("title", "Job title", j.title, { req: true, ph: "Warehouse associate" }) + field("company", "Company", j.company, { req: true }) +
-      '<div class="fields2">' + select("status", "Stage", j.status, C.STATUSES) + field("appliedAt", "Applied on", j.appliedAt, { type: "date" }) + "</div>" +
-      '<div class="fields2">' + field("interviewAt", "Interview", j.interviewAt, { type: "datetime-local" }) + field("followUpAt", "Follow up on", j.followUpAt, { type: "date", hint: "Leave blank and it's set a week after you apply." }) + "</div>" +
+      select("status", "Stage", j.status, C.STATUSES) + field("interviewAt", "Interview date and time (if you have one)", j.interviewAt, { type: "datetime-local" }) +
+      '<details class="more"' + (j.id && (j.contact || j.link || j.notes) ? " open" : "") + '><summary>More details (optional)</summary><div class="stack">' +
+      '<div class="fields2">' + field("appliedAt", "Applied on", j.appliedAt, { type: "date" }) + field("followUpAt", "Follow up on", j.followUpAt, { type: "date", hint: "We set this a week after you apply." }) + "</div>" +
       field("contact", "Contact name", j.contact, { ph: "Recruiter or hiring manager" }) + field("link", "Job posting link", j.link, { type: "url", ph: "https://" }) +
-      field("notes", "Notes", j.notes, { area: true, rows: 3, ph: "Pay, shift, what they're looking for" }) +
+      field("notes", "Notes", j.notes, { area: true, rows: 3, ph: "Pay, shift, what they're looking for" }) + "</div></details>" +
       (j.history && j.history.length ? '<div class="stack-s"><span class="eyebrow">Timeline</span><div class="timeline">' + j.history.slice().reverse().map((x) => "<div><b>" + esc(x.status) + '</b> <span class="muted small mono">' + esc(C.fmtDateY(x.at.slice(0, 10))) + "</span></div>").join("") + "</div></div>" : "") +
       (j.link ? '<a class="linkbtn" href="' + esc(j.link) + '" target="_blank" rel="noopener">Open the posting</a>' : "") +
       foot("job", j.id) + "</form>"
@@ -308,7 +293,8 @@
       '<div class="view">' + head(job ? "Preparing for " + job.company : "Write it once, say it with confidence", job ? job.title : "Interview prep", '<button class="btn ghost" data-act="add-q">' + icon("plus") + 'Questions</button><button class="btn brown" data-act="practice">' + icon("play") + "Practise</button>") +
       (job
         ? '<div class="card stack-s"><div class="row between"><span>' + (job.interviewAt ? "Interview <b>" + esc(C.fmtWhen(job.interviewAt)) + "</b>" : "No interview date yet") + '</span><button class="linkbtn small" data-act="unprep">Show all questions</button></div><div class="row"><button class="btn sm ghost" data-act="cheat" data-id="' + job.id + '">Cheat sheet</button>' + (job.interviewAt ? '<button class="btn sm ghost" data-act="ics" data-id="' + job.id + '">Add to calendar</button>' : "") + '<button class="btn sm ghost" data-act="paste-q" data-job="' + job.id + '">Paste questions from the posting</button></div></div>'
-        : '<p class="muted">Pick a question, write your answer in your own words, and mark it ready when you can say it without reading. CareerCrumbs times your answer so you know if it\'s too short or too long.</p><div class="chips" role="group" aria-label="Question sets">' + packs.map((p) => '<button class="chip" data-act="pack" data-v="' + p + '" aria-pressed="' + (ui.pack === p) + '">' + esc(label(p)) + "</button>").join("") + "</div>") +
+        : '<p class="muted">Pick a question, write your answer in your own words, and mark it ready when you can say it without reading. CareerCrumbs times your answer so you know if it\'s too short or too long.</p><div class="chips" role="group" aria-label="Question sets">' + packs.map((p) => '<button class="chip" data-act="pack" data-v="' + p + '" aria-pressed="' + (ui.pack === p) + '">' + esc(label(p)) + "</button>").join("") + "</div>" +
+          (!ws.profile.packsAsked ? '<div class="card kind stack-s"><div class="row between"><b>What kind of job are you going for?</b><button class="linkbtn small" data-act="kind-done">Done</button></div><span class="small muted">Tap any that fit to add those questions. Optional.</span><div class="togglechips">' + ["warehouse", "service", "lead"].map((k) => '<label><input type="checkbox" data-change="kind" value="' + k + '"' + ((ws.profile.packs || []).includes(k) ? " checked" : "") + "><span>" + esc(C.PACKS[k]) + "</span></label>").join("") + "</div></div>" : "")) +
       (answerable.length ? '<div class="stack-s"><div class="small"><b>' + r.ready + "</b> ready · <b>" + r.draft + "</b> drafts · " + r.total + ' questions</div><div class="progress big"><i style="width:' + r.pct + '%"></i></div></div><div class="qlist">' + answerable.map((q) => questionRow(q, !!job || ui.pack === "all" || ui.pack === "work")).join("") + "</div>" : "") +
       (asks.length ? '<section class="stack"><h2>Questions to ask them</h2><p class="muted small">Tick two or three to bring. They go on your cheat sheet.</p><div class="qlist">' + asks.map((q) => questionRow(q)).join("") + "</div></section>" : "") +
       (!qs.length ? '<div class="empty"><b>' + (ui.pack === "mine" ? "No questions of your own yet" : "Nothing marked as needs work") + "</b><span>" + (ui.pack === "mine" ? "Paste the requirements or questions from a job posting and practise each one." : "Practise a few. Anything you stumble on shows up here.") + '</span><button class="btn brown" data-act="' + (ui.pack === "mine" ? "paste-q" : "practice") + '">' + (ui.pack === "mine" ? "Add questions" : "Practise") + "</button></div>" : "") +
@@ -321,6 +307,7 @@
     const storyOpts = ws.stories.map((s) => '<option value="' + s.id + '"' + (a.storyId === s.id ? " selected" : "") + ">" + esc(s.title) + "</option>").join("");
     return (
       '<div class="sheet-body" data-answer="' + q.id + '"><p class="question">' + esc(q.q) + "</p>" + (q.tip ? '<p class="tip">' + esc(q.tip) + "</p>" : "") +
+      (C.EXAMPLES[q.id] ? '<details class="peek"><summary>See an example answer</summary><div class="out">' + esc(C.EXAMPLES[q.id]) + '</div><small class="muted">It shows the shape. Use your own words and your own experience.</small></details>' : "") +
       '<div class="seg" role="group" aria-label="Answer style"><button type="button" data-act="mode" data-v="free" aria-pressed="' + !star + '">Free text</button><button type="button" data-act="mode" data-v="star" aria-pressed="' + star + '">STAR</button></div>' +
       (star
         ? (ws.stories.length ? '<label class="field" for="a-story"><span>Fill from a story</span><select class="select" id="a-story" data-change="from-story"><option value="">Choose one of your stories…</option>' + storyOpts + "</select></label>" : '<p class="small muted">Tip: write your stories in Stories, then fill STAR answers from them in one tap.</p>') +
@@ -372,9 +359,10 @@
   function storyForm(s) {
     s = s || { date: t0() };
     return (
-      '<form data-form="story" data-id="' + esc(s.id || "") + '">' + field("title", "Name it", s.title, { req: true, ph: "Caught a mislabeled pallet" }) + field("date", "Roughly when", s.date, { type: "date" }) +
-      field("situation", "Situation", s.situation, { area: true, rows: 2, ph: "Where were you, what was going on?" }) + field("task", "Task", s.task, { area: true, rows: 2, ph: "What needed doing?" }) +
-      field("action", "What you did", s.action, { area: true, rows: 3, ph: "Start with a verb: helped, trained, fixed, organised…" }) + field("result", "Result", s.result, { area: true, rows: 2, ph: "How did it turn out? A number helps." }) +
+      '<form data-form="story" data-id="' + esc(s.id || "") + '">' + field("title", "Name it", s.title, { req: true, ph: "Caught a mislabeled pallet" }) +
+      field("action", "What you did", s.action, { area: true, rows: 3, ph: "Start with a verb: helped, trained, fixed, organised…" }) + field("result", "How it turned out", s.result, { area: true, rows: 2, ph: "A number helps, but it's optional." }) +
+      '<details class="more"' + (s.situation || s.task ? " open" : "") + '><summary>Add the backstory (optional, makes a stronger STAR answer)</summary><div class="stack">' +
+      field("situation", "Situation", s.situation, { area: true, rows: 2, ph: "Where were you, what was going on?" }) + field("task", "Task", s.task, { area: true, rows: 2, ph: "What needed doing?" }) + field("date", "Roughly when", s.date, { type: "date" }) + "</div></details>" +
       foot("story", s.id) + "</form>"
     );
   }
@@ -384,7 +372,7 @@
     const p = ws.profile;
     let theme = "system";
     try { theme = localStorage.getItem("careercrumbs:theme") || "system"; } catch (e) {}
-    const where = mode === "cloud" ? "Saved to your claude.ai account and private to you." : mode === "local" ? "Saved in this browser only. Export a backup now and then." : "You're looking at examples; nothing is saved yet.";
+    const where = mode === "cloud" ? "Saved to your claude.ai account and private to you." : "Saved in this browser only. Export a backup now and then.";
     return (
       '<div class="view">' + head("Your details and your data", "Me") +
       '<section class="card stack"><h2>About you</h2><form class="stack" data-form="profile">' + field("name", "Your name", p.name, { hint: "Signs your follow-up and thank-you messages." }) + field("targetRole", "Job you're going for", p.targetRole, { ph: "Warehouse associate, cashier, shift lead…" }) +
@@ -453,14 +441,7 @@
   const A = {
     close: () => closeSheet(),
     scrim: (el, ev) => ev.target === el && closeSheet(),
-    "start-blank": () => start(false),
-    "start-keep": () => start(true),
     "cancel-confirm": (el) => (el.closest(".confirm").parentElement.innerHTML = ""),
-    setup() {
-      openSheet("Welcome to CareerCrumbs", '<form data-form="setup"><p class="muted">Three quick things and you\'re ready. Change them anytime under Me.</p>' + field("name", "Your name", ws.profile.name, { hint: "Signs your follow-up messages." }) + field("targetRole", "What job are you going for?", ws.profile.targetRole, { ph: "Warehouse associate" }) +
-        '<div class="field"><span>Which extra questions should we add?</span><div class="togglechips">' + ["warehouse", "service", "lead"].map((k) => '<label><input type="checkbox" name="packs" value="' + k + '"><span>' + esc(C.PACKS[k]) + "</span></label>").join("") + "</div></div>" +
-        '<div class="sheet-foot"><span class="grow"></span><button class="btn brown">Let\'s go</button></div></form>');
-    },
     "new-job": () => openSheet("Add a job", jobForm()),
     "edit-job": (el) => openSheet("Job", jobForm(byId(ws.jobs, el.dataset.id))),
     "job-filter": (el) => { ui.jobFilter = el.dataset.v; route === "jobs" ? render() : go("jobs"); },
@@ -468,7 +449,7 @@
       const j = byId(ws.jobs, el.dataset.id);
       const ms = C.messages(j, ws.profile);
       const first = ms.findIndex((m) => m.id === (j.status === "Interview" && j.interviewAt && j.interviewAt.slice(0, 10) <= t0() ? "thanks" : j.status === "Interview" ? "confirm" : "followup"));
-      openSheet("Messages · " + j.company, '<div class="sheet-body"><p class="muted small">Ready to copy into an email or text. Fill in anything in [brackets].</p><div class="chips">' + ms.map((m, i) => '<button class="chip" data-act="msg" data-i="' + i + '" data-id="' + j.id + '" aria-pressed="' + (i === first) + '">' + esc(m.label) + "</button>").join("") + '</div><label class="field" for="msg-subject"><span>Subject</span><input class="input" id="msg-subject" value="' + esc(ms[first].subject) + '"></label><label class="field" for="msg-body"><span>Message</span><textarea class="textarea" id="msg-body" rows="11">' + esc(ms[first].body) + '</textarea></label><div class="sheet-foot">' + (j.status === "Interview" ? '<label class="check"><input type="checkbox" data-change="thanked" data-id="' + j.id + '"' + (j.thankYouSent ? " checked" : "") + "> Thank-you sent</label>" : "") + '<span class="grow"></span><button class="btn brown" data-act="msg-copy">' + icon("copy") + "Copy message</button></div></div>");
+      openSheet("Messages · " + j.company, '<div class="sheet-body"><p class="muted small">Ready to copy into an email or text. Fill in anything in [brackets].</p>' + (ws.profile.name ? "" : '<label class="field" for="sign-name"><span>Your name, to sign the message</span><input class="input" id="sign-name" data-change="sign-name" data-id="' + j.id + '" placeholder="First and last name" autocomplete="name"></label>') + '<div class="chips">' + ms.map((m, i) => '<button class="chip" data-act="msg" data-i="' + i + '" data-id="' + j.id + '" aria-pressed="' + (i === first) + '">' + esc(m.label) + "</button>").join("") + '</div><label class="field" for="msg-subject"><span>Subject</span><input class="input" id="msg-subject" value="' + esc(ms[first].subject) + '"></label><label class="field" for="msg-body"><span>Message</span><textarea class="textarea" id="msg-body" rows="11">' + esc(ms[first].body) + '</textarea></label><div class="sheet-foot">' + (j.status === "Interview" ? '<label class="check"><input type="checkbox" data-change="thanked" data-id="' + j.id + '"' + (j.thankYouSent ? " checked" : "") + "> Thank-you sent</label>" : "") + '<span class="grow"></span><button class="btn brown" data-act="msg-copy">' + icon("copy") + "Copy message</button></div></div>");
     },
     msg(el) {
       const m = C.messages(byId(ws.jobs, el.dataset.id), ws.profile)[el.dataset.i];
@@ -497,6 +478,7 @@
     "ts-file": (el) => saveFile(el.dataset.name, $("#ts").value),
 
     pack: (el) => { ui.pack = el.dataset.v; render(); },
+    "kind-done": () => { ws.profile.packsAsked = true; save("profile"); },
     answer: (el) => openAnswer(el.dataset.id),
     mode(el) {
       const host = el.closest("[data-answer]");
@@ -575,7 +557,6 @@
     "ask-erase"() {
       confirmIn($("[data-erase]"), "This deletes every job, answer and story. Export a backup first if you might want them.", "Erase everything", () => {
         ws = C.emptyWorkspace();
-        if (mode === "example") mode = ui.after;
         for (const m of Object.keys(MODULES)) dirty.add(m);
         save();
         toast("Erased");
@@ -599,6 +580,18 @@
 
   // change handlers
   const CH = {
+    kind(el) {
+      const set = new Set(ws.profile.packs || []);
+      el.checked ? set.add(el.value) : set.delete(el.value);
+      ws.profile.packs = [...set];
+      save("profile");
+    },
+    "sign-name"(el) {
+      ws.profile.name = el.value.trim();
+      persist("profile");
+      const on = $(".sheet .chip[aria-pressed=true]");
+      if (on) A.msg(on);
+    },
     "job-status"(el) {
       const i = ws.jobs.findIndex((j) => j.id === el.dataset.id);
       ws.jobs[i] = C.setStatus(ws.jobs[i], el.value);
@@ -689,11 +682,6 @@
       save("profile");
       toast("Saved");
     },
-    setup(f) {
-      F.profile(f);
-      closeSheet();
-      toast("You're set. Start with “Tell me about yourself.”", "Write it", () => openAnswer("c1"));
-    },
   };
 
   // ---------- wiring ----------
@@ -736,7 +724,6 @@
       const next = C.normalize(data);
       confirmIn($("[data-import]"), "Replace everything with this backup (" + plural(next.jobs.length, "job") + ", " + plural(Object.keys(next.interview.answers).length, "answer") + ", " + next.stories.length + (next.stories.length === 1 ? " story" : " stories") + ")?", "Replace", () => {
         ws = next;
-        if (mode === "example") mode = ui.after;
         for (const m of Object.keys(MODULES)) dirty.add(m);
         save();
         toast("Backup restored");

@@ -21,7 +21,14 @@ No AI anywhere, and nothing you write is sent anywhere else.
 - **Published on claude.ai:** the artifact's database, in each viewer's own private space (`data/users/<id>/profile|jobs|stories|interview`). Nobody else, the owner included, can read it.
 - **Where that isn't available** (opened as a plain file, or a viewer who can't write): `localStorage` in that browser.
 
-On first open it shows clearly marked example jobs and answers until you choose **Start my own** or **Keep examples**.
+## No setup
+
+There's no sign-up, setup form or example data to clear. The first screen offers three one-tap starts: answer "Tell me about yourself" (with an example answer to look at first), add a job, or practise 5 questions. Everything saves as you type.
+
+- Adding a job needs only a title and company; the rest sits under "More details".
+- A story needs only what you did and how it turned out; the backstory is optional.
+- Your name is asked for only inside Messages, the one place it's used.
+- Matching question sets (warehouse, customer service, lead) are one optional tap on the Interview page.
 
 ## Develop
 
@@ -30,7 +37,8 @@ npm test        # pure logic tests (node:test)
 npm run build   # inlines src/ into careercrumbs.html
 ```
 
-- `src/logic.js` — question bank and tips, answer timing, job stages and badges, message templates, résumé lines, cheat sheet, calendar file, example data
+- `src/logic.js` — question bank and tips, answer timing, job stages and badges, message templates, résumé lines, cheat sheet, calendar file, example answers
 - `src/app.js` — UI, saving, practice mode
+- `test/fixture.cjs` — example workspace used by the tests
 - `src/styles.css` — design tokens (light and dark)
 - `src/shell.html` — page skeleton the build fills in

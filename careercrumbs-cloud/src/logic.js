@@ -307,37 +307,28 @@
     out.storySeq = Math.max(Number(out.storySeq) || 0, out.stories.reduce((m, s) => Math.max(m, s.n || 0), 0));
     return out;
   }
-  function exampleWorkspace(now) {
-    const t = today(now);
-    const d = (n) => addDays(t, n);
-    const ws = emptyWorkspace();
-    ws.profile = { name: "", targetRole: "Warehouse associate", packs: ["warehouse", "service"] };
-    ws.stories = [
-      { id: "s1", n: 1, date: d(-40), title: "Caught a mislabeled pallet before it shipped", situation: "A pallet of frozen goods came in with the wrong label during a rush", task: "Get it put away correctly without slowing the line", action: "Stopped and checked it against the order, then flagged it to my lead and relabelled it", result: "The right product reached the customer and nothing was refunded" },
-      { id: "s2", n: 2, date: d(-90), title: "Trained two new hires in my first year", situation: "We had two new people start during the holiday rush", task: "Help them get up to speed fast", action: "Showed them the layout, shadowed their first shifts and made a cheat sheet of bin locations", result: "Both were picking on their own by the end of week one" },
-      { id: "s3", n: 3, date: d(-150), title: "Calmed down an upset customer", situation: "A customer's order was missing items and they were angry at the counter", task: "Fix it and keep them as a customer", action: "Listened, apologised, found the missing items and walked them out myself", result: "They thanked me and left a good review mentioning me" },
-    ];
-    ws.storySeq = 3;
-    ws.jobs = [
-      { id: "j1", title: "Warehouse associate", company: "Northwind Logistics (example)", status: "Interview", appliedAt: d(-9), interviewAt: d(2) + "T10:00", contact: "Jamie Lee", notes: "Night shift, forklift a plus", link: "", history: [{ status: "Saved", at: d(-10) + "T12:00:00.000Z" }, { status: "Applied", at: d(-9) + "T12:00:00.000Z" }, { status: "Interview", at: d(-3) + "T12:00:00.000Z" }] },
-      { id: "j2", title: "Stock associate", company: "Contoso Market (example)", status: "Applied", appliedAt: d(-6), followUpAt: d(0), contact: "", notes: "", link: "", history: [{ status: "Applied", at: d(-6) + "T12:00:00.000Z" }] },
-      { id: "j3", title: "Shift lead", company: "Fabrikam Foods (example)", status: "Saved", notes: "Posting closes soon", link: "", history: [{ status: "Saved", at: d(-1) + "T12:00:00.000Z" }] },
-    ];
-    ws.interview.answers = {
-      c1: { mode: "free", text: "I've worked in warehouses for two years, most recently picking and packing grocery orders where I kept a 99% accuracy rate. Before that I worked retail, so I'm used to fast-paced shifts and helping customers. I'm looking for a role with steady hours where I can learn equipment and grow into training others.", ready: true },
-      b1: { mode: "star", s: "Two of us kept clashing over who restocked the cooler", t: "Stop it slowing the shift", a: "I asked to talk on break, we split the cooler by aisle and wrote it on the board", r: "No more arguments and restocking got faster", ready: false },
-      w1: Object.assign(storyToStar(ws.stories[0]), { ready: true }),
-    };
-    ws.interview.custom = [{ id: "m1", q: "Are you comfortable working nights and weekends?", jobId: "j1" }];
-    return ws;
-  }
+
+  // Sample answers that show the shape of a good one. Shown behind "See an example"; never saved as the person's answer.
+  const EXAMPLES = {
+    c1: "I've worked in fast-paced jobs for about two years, most recently picking and packing orders at a grocery warehouse, where I kept my accuracy above 99%. Before that I worked a register, so I'm comfortable with customers and busy shifts. I'm looking for a role with steady hours where I can learn more equipment and grow into training new people, and this job fits that.",
+    c2: "I've heard good things about how you treat your people, and the posting mentions training and a path to lead, which is what I'm looking for. The schedule also works well for me, so I know I can be reliable from day one.",
+    c3: "Three reasons. I'm reliable: I didn't miss a shift last year. I'm accurate, which matters when every order goes to a customer. And I learn fast: I was picking on my own after my first week. I think I'd be useful quickly.",
+    c4: "I'm dependable and I pay attention to detail. At my last job I was the person my lead asked to double-check a big order before it shipped, because I'd catch the mistakes.",
+    c5: "I used to try to do everything myself instead of asking for help when it got busy. I've been working on it by speaking up earlier, like telling my lead when I'm falling behind instead of waiting. The shifts go smoother now.",
+    c6: "I've learned a lot there, but I'm looking for more hours and a chance to grow, and there isn't room for that right now. This role offers both.",
+    c7: "I took eight months off to care for a family member. During that time I kept my forklift certification current, and now I'm ready and available to work full time.",
+    b1: "SITUATION: Two of us kept clashing over who restocked the cooler.\nTASK: It was slowing the shift down and I wanted it fixed.\nACTION: I asked him to talk on our break. We split the cooler by aisle and wrote it on the board.\nRESULT: The arguments stopped and restocking got faster.",
+    b2: "SITUATION: I mislabeled a tote during a rush and it went to the wrong order.\nTASK: Fix it before it reached the customer.\nACTION: I told my lead right away, we pulled the tote, relabeled it and checked the rest of my batch.\nRESULT: The customer got the right order. Now I scan every label twice when it's busy.",
+    s1: "SITUATION: A customer's order was missing items and they were upset at the counter.\nTASK: Fix it and keep them happy.\nACTION: I listened, apologised, found the missing items and walked them out myself.\nRESULT: They thanked me and later left a good review that mentioned me by name.",
+    w1: "SITUATION: During a rush I saw a pallet jack left in the walkway by the pickup area.\nTASK: Keep people from tripping over it.\nACTION: I moved it to the parking spot, told my lead, and we added a quick reminder to the next huddle.\nRESULT: No one got hurt, and it stopped happening.",
+  };
 
   const api = {
     uid, iso, today, parse, addDays, daysBetween, fmtDate, fmtDateY, fmtTime, fmtWhen, relDays, clean, firstName,
     PACKS, BANK, WPM, answerText, wordCount, speakTime, lengthHint,
     STATUSES, setStatus, jobBadge, todo, nextInterview, messages,
     bulletFromStory, storyToStar, bankFor, status, readiness, jobQuestions, cheatSheet, interviewIcs,
-    emptyWorkspace, normalize, exampleWorkspace,
+    emptyWorkspace, normalize, EXAMPLES,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.CC = api;
