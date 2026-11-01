@@ -8,7 +8,11 @@ BT="$SDK/build-tools/$(ls "$SDK/build-tools" | sort -V | tail -1)"
 API="$(ls "$SDK/platforms" | sed 's/android-//' | grep -E '^[0-9]+$' | sort -n | tail -1)"
 JAR="$SDK/platforms/android-$API/android.jar"
 VERSION_CODE="${VERSION_CODE:-1}"
-echo "build-tools: $BT  platform: android-$API  version: 0.1.$VERSION_CODE"
+# Target Android 14 behaviour for test builds: targeting 15+ forces edge-to-edge drawing and
+# 16+ stops calling onBackPressed, which this simple wrapper doesn't handle yet. A Play Store
+# release will need to target the current level and handle both.
+TARGET_SDK="${TARGET_SDK:-34}"
+echo "build-tools: $BT  platform: android-$API  target: $TARGET_SDK  version: 0.1.$VERSION_CODE"
 
 rm -rf build && mkdir -p build/assets build/classes build/dex
 (cd .. && node build.cjs)
@@ -16,7 +20,7 @@ cp ../careercrumbs.html build/assets/index.html
 
 "$BT/aapt2" compile --dir res -o build/res.zip
 "$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml -A build/assets \
-  --min-sdk-version 24 --target-sdk-version "$API" --version-code "$VERSION_CODE" --version-name "0.1.$VERSION_CODE-test" build/res.zip
+  --min-sdk-version 24 --target-sdk-version "$TARGET_SDK" --version-code "$VERSION_CODE" --version-name "0.1.$VERSION_CODE-test" build/res.zip
 
 javac -source 1.8 -target 1.8 -Xlint:-options -cp "$JAR" -d build/classes $(find src -name '*.java')
 "$BT/d8" --release --min-api 24 --lib "$JAR" --output build/dex $(find build/classes -name '*.class')
