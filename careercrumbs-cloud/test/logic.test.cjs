@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const CC = require("../src/logic.js");
+const { exampleWorkspace } = require("./fixture.cjs");
 
 const NOW = new Date(2026, 10, 1, 10); // Sun Nov 1 2026
 
@@ -45,7 +46,7 @@ test("jobs: status history, badges and today's list", () => {
   assert.equal(j.history.length, 1);
   assert.equal(CC.jobBadge({ status: "Applied", followUpAt: "2026-10-30" }, NOW).text, "Follow-up overdue by 2 days");
   assert.equal(CC.jobBadge({ status: "Interview", interviewAt: "2026-11-02T10:00" }, NOW).text, "Interview tomorrow 10:00 am");
-  const ws = CC.normalize(CC.exampleWorkspace(NOW));
+  const ws = CC.normalize(exampleWorkspace(NOW));
   const list = CC.todo(ws, NOW);
   assert.ok(list.some((x) => x.act === "prep"));
   assert.ok(list.some((x) => /Follow up with Contoso/.test(x.title)));
@@ -62,7 +63,7 @@ test("message templates fill in what's known and bracket the rest", () => {
 });
 
 test("job prep: posting questions first, cheat sheet pulls answers and stories", () => {
-  const ws = CC.normalize(CC.exampleWorkspace(NOW));
+  const ws = CC.normalize(exampleWorkspace(NOW));
   const qs = CC.jobQuestions(ws, ws.jobs[0]);
   assert.equal(qs[0].id, "m1");
   assert.ok(qs.some((q) => q.pack === "warehouse"));
@@ -88,4 +89,9 @@ test("normalize tolerates junk and old saves", () => {
   assert.deepEqual(ws.interview.answers, {});
   assert.equal(ws.profile.name, "B");
   assert.deepEqual(ws.profile.packs, []);
+});
+
+test("example answers exist only for real bank questions", () => {
+  for (const id of Object.keys(CC.EXAMPLES)) assert.ok(CC.BANK.some((q) => q.id === id), id);
+  assert.ok(CC.wordCount(CC.EXAMPLES.c1) > 40);
 });
