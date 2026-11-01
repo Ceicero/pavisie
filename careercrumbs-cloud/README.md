@@ -1,47 +1,27 @@
 # CareerCrumbs — cloud edition
 
-A private, phone-first career tracker for a warehouse supervisor working toward a promotion. It runs as one self-contained page (`careercrumbs.html`) and is published as a claude.ai artifact, so it opens on any phone or computer with nothing to install.
+A no-AI job search companion with one goal: **make getting a job easier.** You write your own interview answers, practise them out loud, and keep every application moving. Ruhv, the CareerCrumbs mouse, is the logo.
 
-This is a separate build from the Android app in `C:\Users\Brandon\CareerCrumbs`. It keeps the same brand rules: black, white and brown only, templates always labelled as templates, and a calm tone with no streaks.
+It runs as one self-contained page (`careercrumbs.html`) published as a claude.ai artifact. Each person who opens it gets their own private workspace.
 
 ## What's in it
 
-| Area | What it does |
+| Section | What it does |
 | --- | --- |
-| **Home** | Promotion-readiness meter, a "Today" list (overdue 1:1s, stakeholder touchpoints, job follow-ups, blocked projects, unlogged numbers, plan steps due), week stats, wins-per-week chart |
-| **Wins** | STAR evidence log with before/after metrics and competency tags. Template résumé bullets built only from your own words and numbers. Brag doc for any date range |
-| **Numbers** | Weekly KPI tracker (UPH, pick accuracy, INF rate, dasher wait, shrink, labor hours per order…) with targets, higher/lower-is-better, sparklines and history |
-| **Promotion** | Competency self-ratings against a target level, evidence count per competency, gaps, a 30/60/90 plan, and a one-tap promotion case |
-| **Projects** | Status, impact, next action, blockers, milestones. A finished project becomes a win |
-| **Team** | 1:1, recognition and coaching log, auto-built 1:1 agendas, and a cross-training matrix that flags stations with fewer than 2 certified people |
-| **Visibility** | Manager, skip-level and mentor touchpoint cadence with overdue reminders, plus a weekly-update generator |
-| **Jobs** | Internal and outside openings with stages, follow-up dates and a timeline |
-| **Drafts** | Everything generated, editable, copyable and saveable as a file. "Polish with Ruhv" (Claude) rewrites wording without adding facts |
-| **Weekly review** | Went well / stuck / next focus / energy, with history |
-| **Profile & data** | Profile, theme, JSON backup export/import, erase |
-| **Shift log** | Orders, headcount, labor hours, went well, issues and safety notes per shift. Builds huddle notes (with a rotating safety topic) and the end-of-shift handoff. Turns good shifts into wins |
-| **Problem solving** | One-page A3: problem, impact, five whys, six cause areas, root cause, countermeasures with owner and date, and how you'll check it. Can become a project or a win |
-| **Labor & impact** | Labor planner (forecast → hours, headcount, cost, what-if UPH) and an impact calculator (minutes saved per order → hours and dollars a year). Results feed straight into a win |
-| **Learning** | Courses, certifications, shadowing, with hours and the competency each one builds, plus common ideas for an ops manager track |
-| **Interview prep** | 24 behavioural questions for ops manager panels, each matched to a logged win. STAR answer sheet, timed practice with a self-score, and a mock interview run by Ruhv |
-| **Ask Ruhv** | Coach chat. Ruhv reads your wins, numbers, team and plan through read-only lookups, and can save a draft when asked |
-| **Insights** | 26-week activity heatmap, evidence by competency and by month, weeks on target per KPI, team recognition gaps, touchpoints, and a quarterly review |
+| **Home** | Your next interview, what to do today (follow-ups due, prep before an interview, thank-you notes after), how many answers are ready, and the next question to write |
+| **Jobs** | Every application with its stage, interview date and time, follow-up date and contact. A follow-up is set a week after you apply. Ready-to-copy messages: follow up, thank you, confirm a time, check on a decision, withdraw politely |
+| **Interview** | 46 questions for everyday jobs (common, behavioral, warehouse & operations, customer service & retail, lead & supervisor) plus your own, pasted straight from a job posting. Write answers as free text or STAR, with word count, spoken time and a length hint. Mark them ready, practise 5 at a time with a timer, and keep a "needs work" list. Each job gets its own prep view, a one-page cheat sheet and a calendar file for the interview |
+| **Stories** | Your real moments at work, in STAR form. One tap fills a STAR answer, and each story becomes a template résumé line built only from your words |
+| **Me** | Name (signs your messages), the job you're going for, which question sets to include, theme, backup export/import, erase |
 
-| **Schedule** | Weekly shift grid (AM / PM / overnight / off / PTO) for your team, people needed per day, shortage flags, hours per person, copy last week, share as text, and daily need straight from the labor planner |
-| **Feedback & 1:1** | Log feedback from your manager and others, mark coaching as acted on, turn it into a plan step, and build your 1:1 agenda with your manager from wins, numbers, asks and open feedback |
-
-Home also has **this week's top 3** priorities, shown again in the weekly review. Team cards have **shout-outs** (a specific thank-you message, logged as recognition) and a **30-day new-hire checklist**.
-
-Ruhv, the CareerCrumbs mouse, is the logo: in the header, on Ask Ruhv, on Ruhv's replies and in empty states. Solid black on light, cream on dark.
-
-Across the app: search everything, quick capture, a two-minute setup on "Start fresh", undo after delete, a calendar file of upcoming reminders, and pasting KPI history from a spreadsheet.
+No AI anywhere, and nothing you write is sent anywhere else.
 
 ## Where data lives
 
-- **Published on claude.ai:** the artifact's database, under `ws/<area>` (profile, wins, kpis, path, projects, team, people, jobs, drafts, reviews, shifts, problems, learning, interview, tools, coach, feedback, schedule, priorities). Access rules make it readable and writable by the owner only.
-- **Opened as a plain file:** `localStorage` in that browser.
+- **Published on claude.ai:** the artifact's database, in each viewer's own private space (`data/users/<id>/profile|jobs|stories|interview`). Nobody else, the owner included, can read it.
+- **Where that isn't available** (opened as a plain file, or a viewer who can't write): `localStorage` in that browser.
 
-On first open, it shows clearly marked example data until you choose **Start fresh** or **Keep examples**.
+On first open it shows clearly marked example jobs and answers until you choose **Start my own** or **Keep examples**.
 
 ## Develop
 
@@ -50,9 +30,7 @@ npm test        # pure logic tests (node:test)
 npm run build   # inlines src/ into careercrumbs.html
 ```
 
-- `src/logic.js` — pure helpers: dates, readiness, KPI status, bullet and document templates, example data
-- `src/app.js` — shell, core sections, persistence
-- `src/features.js` — shift log, problem solving, calculators, learning, interview prep, Ruhv coach, insights, search, capture, setup
-- `src/features2.js` — schedule, feedback & manager 1:1, weekly top 3, shout-outs, new-hire checklists
+- `src/logic.js` — question bank and tips, answer timing, job stages and badges, message templates, résumé lines, cheat sheet, calendar file, example data
+- `src/app.js` — UI, saving, practice mode
 - `src/styles.css` — design tokens (light and dark)
 - `src/shell.html` — page skeleton the build fills in
