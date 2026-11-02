@@ -147,7 +147,10 @@ NEXT_PUBLIC_SUPPORT_SERVER_URL=<optional — shown in the dashboard sidebar/erro
 ```
 BOT_HEALTH_PORT=3002
 BOT_OWNER_IDS=<your Discord user id, comma-separated if more than one>
-ALERT_CHANNEL_ID=<optional — private channel id for crash alerts>
+PORT=3002   # Railway healthcheck target — see §2.7a; keep equal to BOT_HEALTH_PORT
+ALERT_CHANNEL_ID=<optional — private channel id for crash alerts (needs the gateway connected)>
+ALERT_WEBHOOK_URL=<optional, secret — Discord webhook URL for crash alerts; works without the gateway>
+BOT_WATCHDOG_MINUTES=5   # exit for a restart if the gateway stays down this long; 0 disables
 ENABLE_GUILD_MEMBERS_INTENT=true
 ENABLE_MESSAGE_CONTENT_INTENT=false
 ```
@@ -238,9 +241,10 @@ actually write). Run it from a machine with the repo checked out and `DISCORD_TO
 ### 2.7 Health checks
 
 - `api`: `GET https://api.pavisie.com/health` → `200 {"status":"ok", ...}`.
-- `bot`: has no public URL; Railway pings its private health port directly (`bot.railway.json`
-  configures `healthcheckPath` — see `infra/railway/README.md` for why the bot's healthcheck is
-  handled differently from the other three).
+- `bot`: has no public URL. `GET /health` on its health port returns `200` while the Discord gateway
+  is connected (and during the first 2 minutes of startup) and `503` once the gateway has been down
+  for over 2 minutes. `bot.railway.json` deliberately sets no `healthcheckPath`; to use it, set it in
+  the dashboard as described in §2.7a.
 - `web`: `GET /` returning `200` is the healthcheck.
 - `dashboard`: **`GET /` now returns a 308 redirect, not 200** (see §1's topology note) — a
   healthcheck configured to require exactly `200` on `/` will misreport this service as down. Both
@@ -250,6 +254,38 @@ actually write). Run it from a machine with the repo checked out and `DISCORD_TO
 
 Each service's **Deployments** tab shows the healthcheck result for the active deploy — a red X
 there is the first place to look when something doesn't come up.
+
+### 2.7a Railway healthcheck and restarts for `bot`
+
+In the `bot` service's **Settings**:
+
+- **Healthcheck Path**: `/health`.
+- **Restart Policy**: **On Failure** (`bot.railway.json` already sets this, with a retry limit of 5; raise
+  the limit in the dashboard if you want it to keep trying through a longer outage).
+
+What this does and does not do:
+
+- Railway's healthcheck only gates a deploy going live: after a new deploy starts, Railway polls the path
+  and only switches over once it answers `200`. It is not continuous monitoring, so a bot that goes
+  unhealthy *after* it is live is **not** restarted because of it.
+- Restarts of a running bot come from the process **exiting** with a non-zero code, which On Failure
+  then restarts. The bot exits (code 1) in two cases: an `unhandledRejection` / `uncaughtException`
+  (after posting the alert, waiting at most about 3 seconds), and the gateway watchdog, which fires when
+  the Discord gateway has been disconnected for `BOT_WATCHDOG_MINUTES` (default 5; discord.js normally
+  reconnects on its own, so this is a last resort; `0` disables it).
+- Crash alerts go to `ALERT_CHANNEL_ID` (needs the gateway connected) and/or `ALERT_WEBHOOK_URL` (a
+  Discord webhook; works for startup crashes too, and treat it like a secret). Both are optional.
+
+Which port Railway checks is the part to verify. The bot listens on `BOT_HEALTH_PORT`, else `PORT`,
+else `3002`. Railway's healthcheck is understood to be sent to the service's `PORT`, but this has **not
+been verified** against the current Railway docs or a live account, nor whether Railway injects `PORT`
+into a service that has no public domain. That is why the §2.3 block sets
+`PORT=3002` explicitly next to `BOT_HEALTH_PORT=3002`: both then agree whichever one Railway uses.
+If the first deploy with a Healthcheck Path set is marked failed with "service unavailable", the check
+is probably not reaching the port: confirm the values in the service's **Variables**, and if needed
+clear the Healthcheck Path to get back to the previous behavior (the exit-on-crash and watchdog
+restarts do not depend on it). The Dockerfile's own `HEALTHCHECK` hardcodes `localhost:3002`, so
+keep `BOT_HEALTH_PORT=3002`.
 
 ### 2.8 Logs
 
@@ -399,6 +435,10 @@ list with comments; every var there is also documented in `docs/ARCHITECTURE.md`
 | `BOT_OWNER_IDS`                                                                                                                                                                                                                                              | Recommended              | bot                                                | Your (and any co-owner's) Discord user id — right-click your name in Discord with Developer Mode on → Copy User ID                                                             |
 | `DEV_GUILD_ID`                                                                                                                                                                                                                                               | No                       | bot                                                | A test server's id, temporarily, for instant command registration while testing                                                                                                |
 | `BOT_HEALTH_PORT`                                                                                                                                                                                                                                            | No (defaults `3002`)     | bot                                                | Literal `3002`                                                                                                                                                                 |
+| `ALERT_CHANNEL_ID`                                                                                                                                                                                                                                           | No                       | bot                                                | A private channel id; the bot posts crash alerts there (needs the gateway connected)                                                                                           |
+| `ALERT_WEBHOOK_URL`                                                                                                                                                                                                                                          | No                       | bot                                                | A Discord webhook URL (secret) for the same crash alerts and fatal startup failures; works without the gateway. https discord.com / discordapp.com only                        |
+| `BOT_WATCHDOG_MINUTES`                                                                                                                                                                                                                                       | No (defaults `5`)        | bot                                                | Minutes the gateway may stay down before the bot exits so the platform restarts it; `0` disables                                                                               |
+| `PORT`                                                                                                                                                                                                                                                       | No                       | bot (Railway)                                      | Literal `3002`, same as `BOT_HEALTH_PORT`; the health server falls back to it when `BOT_HEALTH_PORT` is unset (§2.7a)                                                          |
 | `ENABLE_GUILD_MEMBERS_INTENT`                                                                                                                                                                                                                                | Recommended `true`       | bot                                                | Enabled in Discord Developer Portal → **Bot** → Privileged Gateway Intents → Server Members Intent, then set `true` here to match                                              |
 | `ENABLE_MESSAGE_CONTENT_INTENT`                                                                                                                                                                                                                              | No (default `false`)     | bot                                                | Only after Discord approves the privileged intent for your bot (or while under 100 servers, which doesn't require approval) — enable in the Portal first, then set `true` here |
 | `PUBLIC_WEBHOOK_BASE_URL`                                                                                                                                                                                                                                    | Yes if using webhooks    | api                                                | `https://api.pavisie.com`                                                                                                                                                  |
@@ -458,8 +498,8 @@ There's no dedicated monitoring dashboard shipped yet (see `docs/ROADMAP.md`) �
 means checking the health endpoints and logs:
 
 - `GET https://api.pavisie.com/health` — should always return `200`.
-- `bot`'s private health port (`BOT_HEALTH_PORT`) — Railway/Render check this automatically per
-  §2.7/§3; on a VPS, `docker compose ps` shows each service's healthcheck status, or curl it directly
+- `bot`'s health port (`BOT_HEALTH_PORT`) — returns `503` if the gateway has been down for over 2
+  minutes; see §2.7a for what Railway does with it (deploy gating only); on a VPS, `docker compose ps` shows each service's healthcheck status, or curl it directly
   from inside the container network.
 - `GET https://pavisie.com/` — should return `200`.
 - `GET https://app.pavisie.com/` — now expected to return a `308` redirect to

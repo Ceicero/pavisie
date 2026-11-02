@@ -289,9 +289,11 @@ injected into the service's environment.
 - **Free/hobby tier services can sleep.** A Discord bot needs to stay connected to the gateway
   continuously — make sure the `bot` service is on an always-on plan, not a tier that sleeps on
   inactivity, or it will silently go offline between messages.
-- **Healthchecks**: the `bot` service's healthcheck should hit its `BOT_HEALTH_PORT` (default
-  `3002`) `/health` path; `api` uses `/health`; `dashboard`/`web` use `/`. Railway restarts a service
-  that fails its healthcheck, so a wrong port here shows up as a crash-looping service.
+- **Healthchecks**: the `bot` service's healthcheck should hit its health port (`BOT_HEALTH_PORT`,
+  default `3002`) `/health` path; `api` uses `/health`; `dashboard`/`web` use `/`. Railway's healthcheck
+  only decides whether a *new deploy* goes live (a wrong port shows up as a deploy that never goes live);
+  it does not restart a running service. The bot restarts itself by exiting on a crash or a long gateway
+  outage — see `infra/DEPLOYMENT.md` §2.7a.
 
 See `infra/DEPLOYMENT.md` for the full production operations guide (backups, log shipping, rollback)
 and `infra/railway/README.md` for the exact Railway click-path end to end.

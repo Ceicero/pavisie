@@ -71,21 +71,27 @@ Set `DEV_GUILD_ID` in `.env` during development so plain `pnpm --filter @pavisie
 }
 ```
 
+The port is `BOT_HEALTH_PORT`, else the platform's `PORT`, else `3002`. The response is HTTP 200 while the Discord gateway is connected, and also during the first 2 minutes of startup (`"status": "starting"`). If the gateway has been down for longer than 2 minutes (never connected, or dropped and did not recover) it returns HTTP 503 with the same body.
+
+A healthcheck only reports; it does not restart a running bot. Restarts come from the process exiting: an `unhandledRejection` / `uncaughtException` alerts and exits with code 1, and a watchdog does the same when the gateway has been down for `BOT_WATCHDOG_MINUTES`. See "Railway healthcheck" in `infra/DEPLOYMENT.md`.
+
 Used by the Docker healthcheck (`infra/docker/Dockerfile.bot`) and safe to poll manually — it returns no sensitive data and needs no auth.
 
 ## Environment variables this process reads
 
 See `.env.example` for the full documented list. The ones that specifically affect bot behavior:
 
-| Variable                                                                                          | Effect                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`                                                              | required to boot                                                                                                                                                           |
-| `DATABASE_URL`, `REDIS_URL`                                                                       | required to boot                                                                                                                                                           |
-| `BOT_OWNER_IDS`                                                                                   | comma-separated user ids; floored at `admin` staff level everywhere, and required for `botOwnerOnly` commands                                                              |
-| `DEV_GUILD_ID`                                                                                    | default target for `register` (instant guild-scoped updates instead of global)                                                                                             |
-| `BOT_HEALTH_PORT`                                                                                 | health server port, default `3002`                                                                                                                                         |
-| `ALERT_CHANNEL_ID`                                                                                | optional private channel id; the bot posts a short alert there on `unhandledRejection` / `uncaughtException` (max one per kind per minute)                                 |
-| `ENABLE_MESSAGE_CONTENT_INTENT` / `ENABLE_GUILD_MEMBERS_INTENT` / `ENABLE_GUILD_PRESENCES_INTENT` | privileged intents — only enable after Discord approval/eligibility; plugins that need one degrade gracefully (not crash) when it's off, per `PluginRegistry.availability` |
+| Variable                                                                                          | Effect                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`                                                              | required to boot                                                                                                                                                                                |
+| `DATABASE_URL`, `REDIS_URL`                                                                       | required to boot                                                                                                                                                                                |
+| `BOT_OWNER_IDS`                                                                                   | comma-separated user ids; floored at `admin` staff level everywhere, and required for `botOwnerOnly` commands                                                                                   |
+| `DEV_GUILD_ID`                                                                                    | default target for `register` (instant guild-scoped updates instead of global)                                                                                                                  |
+| `BOT_HEALTH_PORT`                                                                                 | health server port; falls back to the platform's `PORT`, then `3002`                                                                                                                            |
+| `ALERT_CHANNEL_ID`                                                                                | optional private channel id; the bot posts a short alert there on `unhandledRejection` / `uncaughtException` (max one per kind per minute), then exits with code 1 so the platform restarts it  |
+| `ALERT_WEBHOOK_URL`                                                                               | optional Discord webhook URL (secret, never logged) for the same alerts and fatal startup failures; works without a gateway connection. Only `https://discord.com/api/webhooks/...` is accepted |
+| `BOT_WATCHDOG_MINUTES`                                                                            | minutes the gateway may stay disconnected before the bot logs, alerts and exits for a restart; default `5`, `0` disables                                                                        |
+| `ENABLE_MESSAGE_CONTENT_INTENT` / `ENABLE_GUILD_MEMBERS_INTENT` / `ENABLE_GUILD_PRESENCES_INTENT` | privileged intents — only enable after Discord approval/eligibility; plugins that need one degrade gracefully (not crash) when it's off, per `PluginRegistry.availability`                      |
 
 ## What to test by hand after a change
 

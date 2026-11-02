@@ -60,6 +60,12 @@ railway run --service bot wget -qO- http://localhost:3002/health
 or check the service's **Deployments** tab, which shows crash/restart history even without an HTTP
 healthcheck configured.
 
+The bot also now exits (code 1) on an uncaught crash or when the Discord gateway stays down for
+`BOT_WATCHDOG_MINUTES`, which is what makes `ON_FAILURE` restart a wedged process, and `/health` returns
+`503` after the gateway has been down for 2 minutes. If you do set a Healthcheck Path for `bot` in the
+dashboard, see `infra/DEPLOYMENT.md` §2.7a for what it does (it only gates deploys) and the open question
+about which port Railway checks.
+
 ## Editing these files
 
 Change the Dockerfile path, restart policy, or healthcheck path here and redeploy — Railway re-reads
