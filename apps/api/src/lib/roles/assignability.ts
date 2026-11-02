@@ -1,4 +1,4 @@
-import { PermissionError, ValidationError } from '@pavisie/core';
+import { AppError, PermissionError, ValidationError } from '@pavisie/core';
 import { canActorManageRole, checkRoleAssignable } from '@pavisie/plugins/roles/engine';
 import { fetchWithBotToken, hasBotToken } from '../discord';
 
@@ -24,8 +24,7 @@ function topPosition(roleIds: string[], byId: Map<string, ApiRole>): number {
  * `allowElevatedRoles`), be below the bot's top role, AND be below the acting user's own top role (guild owner
  * exempt). Reads live Discord data via the bot token (uncached — this is a write-path authorization check).
  *
- * When the API has no bot token configured the check is skipped (the bot still re-checks managed/elevated/bot
- * hierarchy at toggle time); this keeps token-less dev setups working.
+ * Fails closed: with no bot token configured the save is rejected (503 `role_checks_unavailable`).
  */
 export async function assertPanelRolesAssignable(input: {
   guildId: string;
@@ -34,7 +33,15 @@ export async function assertPanelRolesAssignable(input: {
   allowElevatedRoles: boolean;
 }): Promise<void> {
   const roleIds = [...new Set(input.roleIds)];
-  if (roleIds.length === 0 || !hasBotToken()) return;
+  if (roleIds.length === 0) return;
+  if (!hasBotToken()) {
+    // Fail closed: without a bot token we can't verify hierarchy/managed/elevated, so refuse the save.
+    throw new AppError(
+      'role_checks_unavailable',
+      "Role checks unavailable: the API has no Discord bot token configured, so role panels can't be saved.",
+      { status: 503, expose: true },
+    );
+  }
 
   const [roles, guild, botUser] = await Promise.all([
     fetchWithBotToken<ApiRole[]>(`/guilds/${input.guildId}/roles`),

@@ -79,8 +79,12 @@ describe('assertPanelRolesAssignable', () => {
     await expect(check(MOD, ['nope'])).rejects.toThrow(/not an assignable role/);
     await expect(check(MOD, [GUILD])).rejects.toThrow(/not an assignable role/);
   });
-  it('is skipped when the API has no bot token', async () => {
+  it('fails closed with 503 when the API has no bot token', async () => {
     env.DISCORD_TOKEN = undefined as unknown as string;
-    await expect(check(MOD, ['high'])).resolves.toBeUndefined();
+    await expect(check(MOD, ['low'])).rejects.toMatchObject({
+      status: 503,
+      code: 'role_checks_unavailable',
+      message: expect.stringContaining('Role checks unavailable'),
+    });
   });
 });
