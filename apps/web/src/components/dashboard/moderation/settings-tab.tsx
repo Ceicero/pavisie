@@ -231,7 +231,7 @@ export function SettingsTab({ guildId }: { guildId: string }) {
                   onValueChange={(v) => updateRule(index, { action: v as EscalationRuleDto['action'] })}
                   disabled={update.isPending}
                 >
-                  <SelectTrigger className="w-32">
+                  <SelectTrigger aria-label="Escalation action" className="w-32">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

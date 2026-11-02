@@ -85,19 +85,21 @@ export default function AuditLogPage() {
 
       <div className="flex flex-wrap gap-3">
         <Input
+          aria-label="Filter by action"
           placeholder="Filter by action (e.g. plugin.enable)"
-          className="max-w-xs"
+          className="w-full sm:max-w-xs"
           value={filters.action ?? ''}
           onChange={(e) => updateFilter({ action: e.target.value || undefined })}
         />
         <Input
+          aria-label="Filter by actor id"
           placeholder="Filter by actor id"
-          className="max-w-xs"
+          className="w-full sm:max-w-xs"
           value={filters.actorId ?? ''}
           onChange={(e) => updateFilter({ actorId: e.target.value || undefined })}
         />
         <Select value={String(filters.limit ?? 25)} onValueChange={(v) => updateFilter({ limit: Number(v) })}>
-          <SelectTrigger className="w-32">
+          <SelectTrigger aria-label="Entries per page" className="w-full sm:w-32">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

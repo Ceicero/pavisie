@@ -96,7 +96,7 @@ export const SidebarNavItem = React.forwardRef<HTMLAnchorElement, SidebarNavItem
         )}
         {...props}
       >
-        {icon}
+        {icon ? <span aria-hidden="true">{icon}</span> : null}
         {asChild ? <Slottable>{children}</Slottable> : <span className="flex-1 truncate">{children}</span>}
         {suffix}
       </Comp>
