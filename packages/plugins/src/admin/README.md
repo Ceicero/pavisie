@@ -9,6 +9,9 @@ disabled per guild, since it's what lets staff configure and manage every other 
   channel selects for the mod-log and staff channels, locale/timezone selects, and a multi-select for which
   plugins to enable) that writes `GuildConfig` and plugin enablement in one pass, with a summary embed at the end.
 - **`/setup status`** — shows what has been configured so far, plus a lightweight permissions warning summary.
+- **`/setup streamer [twitch_login] [alert_channel]`** — the streamer starter pack, a one-click preset (see
+  below). The dashboard's "Streamer starter pack" button on the server overview runs the very same code.
+- **`/setup footer enabled:<bool>`** — shows or hides the "Powered by Pavisie" footer on public embeds (see below).
 - **`/config view`** — paginated, ephemeral view of core `GuildConfig` plus every enabled plugin's config keys.
 - **`/config set <key> <value>`** — sets a single config key (`guild.<field>` for core config, `<pluginId>.<field>`
   for a plugin's own config), with autocomplete over every known key and type-aware value parsing (booleans,
@@ -60,12 +63,44 @@ Admin's own `PluginConfig` (`admin.*`) is intentionally small:
 | `fastActions`    | boolean        | `false` | Mirrors `GuildConfig.fastActions` (the authoritative copy other plugins read). |
 | `setupCompleted` | boolean        | `false` | Set by `/setup wizard` on completion.                                          |
 | `staffChannelId` | string \| null | `null`  | Mirrors `GuildConfig.staffChannelId`.                                          |
+| `poweredByFooter` | boolean | `true` | "Powered by Pavisie" footer on public embeds. `/setup footer`, Dashboard → Settings. |
 
 Everything else staff actually configure day-to-day — staff role ids, locale, timezone, mod-log channel — lives
 in the core `GuildConfig` table (`guild.*` keys via `/config set`), not in this plugin's own config. `admin`
 reaches it (and every other plugin's enablement/config) through the `host` cross-plugin service
 (`ctx.services.require('host')`) rather than the narrower per-plugin `ctx.getConfig`/`ctx.setConfig`, since those
 are scoped to "this plugin's own config" by design (see `packages/plugins/src/sdk/services.ts`).
+
+## Streamer starter pack
+
+`/setup streamer` (and the dashboard button) turns on four things, each independent of the others:
+
+| Step          | What it does                                                                                                                                                                                    | Counts as "already configured" when                                |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Twitch alerts | Enables `integrations` and adds a go-live alert for `twitch_login` in `alert_channel` (default: the channel the command ran in). No login: enables the plugin and says how to add one later. | An active Twitch alert already exists for that login (any channel) |
+| Stats channel | Creates a "Server Stats" category with a locked voice channel `Members: {members}` and saves it in `community.statsChannels`. Needs Manage Channels, otherwise this step alone is skipped.       | `community.statsChannels` is not empty                             |
+| Leveling      | Enables `engagement` and switches `engagement.leveling.enabled` on; every other leveling setting is kept.                                                                                     | Plugin on and `leveling.enabled` already true                      |
+| Basic automod | Enables `automod` and adds rules for invite links, mention spam (8+) and scam links. Delete only: no timeouts, quarantine or bans.                                                              | A non-deleted rule of that type exists (any name, on or off)       |
+
+It only fills gaps, so running it twice changes nothing the second time. The new automod rules are created in
+dry-run like every rule from `/automod rule create`; the reply says how to take them live. A missing permission, an
+unknown Twitch user or an unavailable plugin skips or fails only its own step. The reply is an embed listing, per
+step, what happened and where to change it; one audit entry (`setup.streamer_starter`) summarises the run, next to
+the usual entries for each individual change.
+
+The decision logic is `planStreamerStarter` (pure, over a snapshot of the guild) and the applier is
+`applyStreamerStarter` (`starter-pack.ts`, with ports for everything outside); `starter-pack-runtime.ts` supplies the
+real ones and takes a per-guild Redis lock so two concurrent runs cannot create duplicate channels. The dashboard's
+`POST /guilds/:id/setup/streamer-starter` queues an `admin.streamerStarter` bot action; the `admin` service
+(`service.ts`) runs the same runtime and leaves the report in Redis for `GET .../:requestId`.
+
+## "Powered by Pavisie" footer
+
+Public embeds (go-live and other integration alerts, giveaways, polls, starboard posts) go through
+`publicEmbed(ctx, guildId, embed)` from the SDK (`sdk/public-embed.ts`). It appends "Powered by Pavisie" unless
+`admin.poweredByFooter` is off. An existing footer is kept ("Twitch · Powered by Pavisie"); the plain brand footer is
+replaced; applying it twice is a no-op. Ephemeral replies, staff and mod-log embeds, and plain-text messages
+(level-ups, announcements) never carry it.
 
 ## Permissions
 
@@ -84,6 +119,7 @@ plain text; see `redactForAudit` in `@pavisie/database`).
 | Command                                 | Minimum staff level |
 | --------------------------------------- | ------------------- |
 | `/setup wizard`, `/setup status`        | admin               |
+| `/setup streamer`, `/setup footer`      | admin               |
 | `/config view\|set\|reset`              | admin               |
 | `/plugin enable\|disable\|status\|list` | admin               |
 | `/permissions audit`                    | admin               |
@@ -97,10 +133,14 @@ manifest.ts             PluginManifest (alwaysEnabled, defaultConfig, dashboard 
 config-keys.ts           /config set|reset key introspection + value parsing (pure, unit-tested)
 format.ts                 shared embed-formatting helpers (bot permission diffing, uptime/memory formatting)
 wizard.ts                 /setup wizard session store + per-step render logic + Finish persistence
+starter-pack.ts            streamer starter pack: planner + applier (pure, ports for the outside world)
+starter-pack-runtime.ts    real ports (discord.js, Prisma, host), per-guild lock, audit entry
+starter-pack-embed.ts      the reply embed for a finished run
+service.ts                 `admin` cross-plugin service: the dashboard's bot action (`admin.streamerStarter`)
 report-shared.ts           /pavisie report: kind validation, length validation, rate limiting, bot version (pure, unit-tested)
 index.ts                   wires manifest + commands + components, registers locales
 commands/
-  setup.ts                 /setup wizard|status
+  setup.ts                 /setup wizard|status|streamer|footer
   config.ts                 /config view|set|reset
   plugin.ts                 /plugin enable|disable|status|list
   permissions.ts             /permissions audit
@@ -112,6 +152,8 @@ components/
 locales/en.json            admin namespace strings
 __tests__/config-keys.test.ts   unit tests for config-keys.ts
 __tests__/report.test.ts        unit tests for /pavisie report (permission gate, rate limit, stored-field regression, audit)
+__tests__/starter-pack.test.ts  streamer starter pack: idempotency, no overwrite, missing permission, no-login path
+__tests__/setup-streamer-command.test.ts, setup-footer.test.ts   the two new /setup subcommands
 ```
 
 ## Notes for the bot-host implementation
