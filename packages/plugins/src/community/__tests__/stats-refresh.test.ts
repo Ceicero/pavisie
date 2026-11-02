@@ -4,20 +4,32 @@ import type { Client } from 'discord.js';
 import { createTestContext } from '../../sdk/testing';
 import type { CommunityConfig } from '../manifest';
 import { configSchema } from '../manifest';
-import { refreshGuildStats, statsChannelRenameKey, statsLastKey, statsRefreshJob } from '../jobs/stats-refresh';
+import {
+  rateLimitRetryAfterMs,
+  refreshGuildStats,
+  statsBlockedKey,
+  statsChannelRenameKey,
+  statsLastKey,
+  statsRefreshJob,
+} from '../jobs/stats-refresh';
 
 const GUILD_ID = 'guild-1';
 
 interface FakeChannel {
   id: string;
   name: string;
+  /** The bot's permission bitfield on this channel, as `permissionsFor(me)` reports it. */
+  perms: bigint;
   setName: ReturnType<typeof vi.fn>;
+  permissionsFor: () => { bitfield: bigint };
 }
 
 function fakeChannel(id: string, name: string, setNameImpl?: () => Promise<unknown>): FakeChannel {
   const ch: FakeChannel = {
     id,
     name,
+    perms: 1024n,
+    permissionsFor: () => ({ bitfield: ch.perms }),
     setName: vi.fn(async (next: string) => {
       if (setNameImpl) await setNameImpl();
       ch.name = next;
@@ -31,9 +43,10 @@ function fakeGuild(channels: FakeChannel[], opts: { available?: boolean } = {}) 
   const channelMap = new Map(channels.map((c) => [c.id, c]));
   return {
     id: GUILD_ID,
+    name: 'Test Guild',
     available: opts.available ?? true,
     memberCount: 42,
-    members: { cache: { filter: () => ({ size: 2 }), size: 42 } },
+    members: { cache: { filter: () => ({ size: 2 }), size: 42 }, me: { id: 'bot-1' } },
     premiumSubscriptionCount: 1,
     roles: { cache: { size: 4 } },
     channels: { cache: { size: channels.length, get: (id: string) => channelMap.get(id) } },
@@ -214,5 +227,230 @@ describe('statsRefreshJob', () => {
     expect(statsRefreshJob.name).toBe('stats-refresh');
     expect(statsRefreshJob.repeat).toEqual({ pattern: '*/5 * * * *' });
     expect(statsRefreshJob.concurrency).toBe(1);
+  });
+});
+
+describe('stats channel rename throttling', () => {
+  beforeEach(async () => {
+    await new RedisMock().flushall();
+  });
+
+  function discordError(code: number, message: string, extra: Record<string, unknown> = {}) {
+    return Object.assign(new Error(message), { code, ...extra });
+  }
+
+  /** Lets the next periodic tick run: clears the per-guild gate and the per-channel rename budgets. */
+  async function expireGates(redis: { del: (...keys: string[]) => Promise<number> }, channelIds: string[]) {
+    await redis.del(statsLastKey(GUILD_ID), ...channelIds.map((id) => statsChannelRenameKey(GUILD_ID, id)));
+  }
+
+  it('allows at most one rename per channel per 10 minutes and records when it happened', async () => {
+    const ch = fakeChannel('c1', 'Members: 0');
+    const guild = fakeGuild([ch]);
+    const { ctx, cfg, redis } = buildCtx(guild, {
+      statsChannels: [{ channelId: 'c1', template: 'Members: {members}' }],
+    });
+    const now = new Date('2026-11-02T10:00:00Z');
+
+    await refreshGuildStats(ctx, guild as never, cfg, now);
+    expect(ch.setName).toHaveBeenCalledTimes(1);
+    const key = statsChannelRenameKey(GUILD_ID, 'c1');
+    expect(await redis.get(key)).toBe(now.toISOString());
+    const ttl = await redis.ttl(key);
+    expect(ttl).toBeGreaterThan(9 * 60);
+    expect(ttl).toBeLessThanOrEqual(10 * 60);
+  });
+
+  it('makes no API call when the rendered name already matches', async () => {
+    const ch = fakeChannel('c1', 'Members: 42');
+    const guild = fakeGuild([ch]);
+    const { ctx, cfg, redis } = buildCtx(guild, {
+      statsChannels: [{ channelId: 'c1', template: 'Members: {members}' }],
+    });
+
+    const result = await refreshGuildStats(ctx, guild as never, cfg);
+    expect(result.unchanged).toBe(1);
+    expect(ch.setName).not.toHaveBeenCalled();
+    // An unchanged name doesn't spend the channel's rename budget either.
+    expect(await redis.get(statsChannelRenameKey(GUILD_ID, 'c1'))).toBeNull();
+  });
+
+  it.each([
+    [50001, 'Missing Access'],
+    [50013, 'Missing Permissions'],
+  ])('pauses the whole guild after a %i and warns once, naming the guild', async (code, message) => {
+    const denied = fakeChannel('c1', 'Members: 0', async () => {
+      throw discordError(code, message);
+    });
+    const other = fakeChannel('c2', 'Bots: 0');
+    const guild = fakeGuild([denied, other]);
+    const { ctx, redis } = buildCtx(guild, {
+      statsChannels: [
+        { channelId: 'c1', template: 'Members: {members}' },
+        { channelId: 'c2', template: 'Bots: {bots}' },
+      ],
+    });
+    const warn = vi.spyOn(ctx.logger, 'warn');
+    const info = vi.spyOn(ctx.logger, 'info');
+
+    await statsRefreshJob.processor(ctx, {} as never);
+    expect(denied.setName).toHaveBeenCalledTimes(1);
+    expect(other.setName).not.toHaveBeenCalled(); // no further calls in that guild once access is denied
+    expect(await redis.get(statsBlockedKey(GUILD_ID))).toBeTruthy();
+
+    // Several later ticks, with every throttle expired: still no API calls and no more log lines.
+    for (let i = 0; i < 3; i++) {
+      await expireGates(redis, ['c1', 'c2']);
+      await statsRefreshJob.processor(ctx, {} as never);
+    }
+    expect(denied.setName).toHaveBeenCalledTimes(1);
+    expect(other.setName).not.toHaveBeenCalled();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [fields, text] = warn.mock.calls[0] as unknown as [Record<string, unknown>, string];
+    expect(fields).toMatchObject({
+      guildId: GUILD_ID,
+      guildName: 'Test Guild',
+      channelId: 'c1',
+      code,
+      message,
+    });
+    expect(text).toContain('Test Guild');
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it("retries a paused guild once the bot's permissions change", async () => {
+    let denied = true;
+    const ch = fakeChannel('c1', 'Members: 0', async () => {
+      if (denied) throw discordError(50001, 'Missing Access');
+    });
+    const guild = fakeGuild([ch]);
+    const { ctx, redis } = buildCtx(guild, {
+      statsChannels: [{ channelId: 'c1', template: 'Members: {members}' }],
+    });
+
+    await statsRefreshJob.processor(ctx, {} as never);
+    await expireGates(redis, ['c1']);
+    await statsRefreshJob.processor(ctx, {} as never);
+    expect(ch.setName).toHaveBeenCalledTimes(1);
+
+    // An admin grants View Channel: the bot's computed permissions on the channel change.
+    denied = false;
+    ch.perms = 1024n | 16n;
+    await expireGates(redis, ['c1']);
+    await statsRefreshJob.processor(ctx, {} as never);
+    expect(ch.setName).toHaveBeenCalledTimes(2);
+    expect(ch.name).toBe('Members: 42');
+    expect(await redis.get(statsBlockedKey(GUILD_ID))).toBeNull();
+  });
+
+  it('retries a paused guild once its stats config changes', async () => {
+    const ch = fakeChannel('c1', 'Members: 0', async () => {
+      throw discordError(50013, 'Missing Permissions');
+    });
+    const guild = fakeGuild([ch]);
+    const { ctx, cfg, redis } = buildCtx(guild, {
+      statsChannels: [{ channelId: 'c1', template: 'Members: {members}' }],
+    });
+    const warn = vi.spyOn(ctx.logger, 'warn');
+
+    await statsRefreshJob.processor(ctx, {} as never);
+    expect(ch.setName).toHaveBeenCalledTimes(1);
+
+    cfg.statsChannels = [{ channelId: 'c1', template: 'People: {members}' }];
+    await expireGates(redis, ['c1']);
+    await statsRefreshJob.processor(ctx, {} as never);
+    expect(ch.setName).toHaveBeenCalledTimes(2);
+    // Still denied after the change → a second (new) warning, then quiet again.
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('a manual refresh still tries a paused guild, and a success lifts the pause', async () => {
+    let denied = true;
+    const ch = fakeChannel('c1', 'Members: 0', async () => {
+      if (denied) throw discordError(50013, 'Missing Permissions');
+    });
+    const guild = fakeGuild([ch]);
+    const { ctx, cfg, redis } = buildCtx(guild, {
+      statsChannels: [{ channelId: 'c1', template: 'Members: {members}' }],
+    });
+
+    const first = await refreshGuildStats(ctx, guild as never, cfg);
+    expect(first.missingPermission).toBe(true);
+    expect(await redis.get(statsBlockedKey(GUILD_ID))).toBeTruthy();
+
+    denied = false;
+    await redis.del(statsChannelRenameKey(GUILD_ID, 'c1'));
+    const second = await refreshGuildStats(ctx, guild as never, cfg);
+    expect(second.renamed).toBe(1);
+    expect(await redis.get(statsBlockedKey(GUILD_ID))).toBeNull();
+  });
+
+  it("respects Discord's retry_after on a 429 and doesn't retry early", async () => {
+    const ch = fakeChannel('c1', 'Members: 0', async () => {
+      throw Object.assign(new Error('You are being rate limited.'), {
+        status: 429,
+        code: 0,
+        rawError: { message: 'You are being rate limited.', retry_after: 1500, code: 0 },
+      });
+    });
+    const guild = fakeGuild([ch]);
+    const { ctx, cfg, redis } = buildCtx(guild, {
+      statsChannels: [{ channelId: 'c1', template: 'Members: {members}' }],
+    });
+    const warn = vi.spyOn(ctx.logger, 'warn');
+
+    await refreshGuildStats(ctx, guild as never, cfg);
+    const ttl = await redis.ttl(statsChannelRenameKey(GUILD_ID, 'c1'));
+    expect(ttl).toBeGreaterThan(1400);
+    expect(ttl).toBeLessThanOrEqual(1500);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ channelId: 'c1', retryAfterMs: 1_500_000 }),
+      expect.stringContaining('rate limited'),
+    );
+
+    // Next periodic tick (guild gate expired, channel budget NOT): no second API call.
+    await redis.del(statsLastKey(GUILD_ID));
+    await statsRefreshJob.processor(ctx, {} as never);
+    expect(ch.setName).toHaveBeenCalledTimes(1);
+    // Rate limits are transient — the guild is not paused.
+    expect(await redis.get(statsBlockedKey(GUILD_ID))).toBeNull();
+  });
+
+  it('logs other failures at warn with the Discord code and message, never at info', async () => {
+    const err = discordError(50035, 'Invalid Form Body');
+    const ch = fakeChannel('c1', 'Members: 0', async () => {
+      throw err;
+    });
+    const guild = fakeGuild([ch]);
+    const { ctx, cfg } = buildCtx(guild, {
+      statsChannels: [{ channelId: 'c1', template: 'Members: {members}' }],
+    });
+    const warn = vi.spyOn(ctx.logger, 'warn');
+    const info = vi.spyOn(ctx.logger, 'info');
+
+    await refreshGuildStats(ctx, guild as never, cfg);
+    expect(info).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ guildId: GUILD_ID, channelId: 'c1', code: 50035, err }),
+      expect.stringContaining('Invalid Form Body'),
+    );
+  });
+});
+
+describe('rateLimitRetryAfterMs', () => {
+  it('reads retry_after (seconds) from a raw 429 and retryAfter (ms) from a RateLimitError', () => {
+    expect(rateLimitRetryAfterMs({ status: 429, rawError: { retry_after: 2.5 } })).toBe(2500);
+    expect(rateLimitRetryAfterMs({ name: 'RateLimitError', retryAfter: 4000, sublimitTimeout: 0 })).toBe(
+      4000,
+    );
+    expect(rateLimitRetryAfterMs({ retryAfter: 1000, sublimitTimeout: 540_000 })).toBe(540_000);
+  });
+
+  it('falls back to the full channel interval for a 429 without retry_after, and null for non-429s', () => {
+    expect(rateLimitRetryAfterMs({ status: 429 })).toBe(10 * 60_000);
+    expect(rateLimitRetryAfterMs({ status: 403, code: 50013 })).toBeNull();
+    expect(rateLimitRetryAfterMs(new Error('boom'))).toBeNull();
+    expect(rateLimitRetryAfterMs(undefined)).toBeNull();
   });
 });

@@ -7,7 +7,12 @@ export interface LogBatcherOptions {
   /** Flush immediately once a channel's queue reaches this many embeds. Default 5. */
   maxBatchSize?: number;
   send: (channelId: string, embeds: EmbedBuilder[]) => Promise<void>;
-  onError?: (channelId: string, err: unknown) => void;
+  /** Total tries per group of embeds before it is dropped. Default 3. */
+  maxAttempts?: number;
+  /** Wait before the first retry; doubles on each later one (1s, 2s, ...). Default 1000. */
+  retryBaseDelayMs?: number;
+  /** Called once per dropped group, after its last failed attempt (`attempts` = how many were made). */
+  onError?: (channelId: string, err: unknown, attempts: number) => void;
 }
 
 interface ChannelBatch {
@@ -17,6 +22,24 @@ interface ChannelBatch {
 
 const DEFAULT_FLUSH_INTERVAL_MS = 2000;
 const DEFAULT_MAX_BATCH_SIZE = 5;
+const DEFAULT_MAX_ATTEMPTS = 3;
+const DEFAULT_RETRY_BASE_DELAY_MS = 1000;
+
+/**
+ * A 4xx other than 429 (missing access, unknown channel, invalid body) fails the same way every time, so only
+ * rate limits, 5xx and network errors (no HTTP status) are retried.
+ */
+function isRetryable(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status !== 'number' || status === 429 || status >= 500;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    // unref: a pending retry must never keep the process alive on shutdown.
+    setTimeout(resolve, ms).unref?.();
+  });
+}
 
 /**
  * Calculates the total character count of an embed as Discord counts it for the 6000-character per-message limit.
@@ -45,12 +68,16 @@ export class LogBatcher {
   private readonly flushIntervalMs: number;
   private readonly maxBatchSize: number;
   private readonly sendFn: LogBatcherOptions['send'];
+  private readonly maxAttempts: number;
+  private readonly retryBaseDelayMs: number;
   private readonly onError?: LogBatcherOptions['onError'];
 
   constructor(options: LogBatcherOptions) {
     this.flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
     this.maxBatchSize = options.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE;
     this.sendFn = options.send;
+    this.maxAttempts = Math.max(1, options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS);
+    this.retryBaseDelayMs = options.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS;
     this.onError = options.onError;
   }
 
@@ -75,7 +102,10 @@ export class LogBatcher {
     }
   }
 
-  /** Immediately sends whatever is queued for `channelId` (no-op if empty) and clears its timer. Send failures go to `onError` and never throw. */
+  /**
+   * Immediately sends whatever is queued for `channelId` (no-op if empty) and clears its timer. A failed send is
+   * retried with backoff up to `maxAttempts` times, then dropped and reported to `onError`; it never throws.
+   */
   flush(channelId: string): void {
     const batch = this.batches.get(channelId);
     if (!batch || batch.embeds.length === 0) return;
@@ -92,10 +122,25 @@ export class LogBatcher {
     // The common case is a single group, dispatched exactly as it always was. When the size cap forces a split,
     // chain the extra groups behind the first rather than firing them together: a log channel is read
     // chronologically, and concurrent sends would let Discord deliver a later group before an earlier one.
-    const report = (err: unknown) => this.onError?.(channelId, err);
-    let chain = this.sendFn(channelId, first).catch(report);
+    let chain = this.sendWithRetry(channelId, first);
     for (const group of rest) {
-      chain = chain.then(() => this.sendFn(channelId, group)).catch(report);
+      chain = chain.then(() => this.sendWithRetry(channelId, group));
+    }
+  }
+
+  /** Sends one group, retrying transient failures with exponential backoff; resolves (never rejects) either way. */
+  private async sendWithRetry(channelId: string, embeds: EmbedBuilder[]): Promise<void> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await this.sendFn(channelId, embeds);
+        return;
+      } catch (err) {
+        if (attempt >= this.maxAttempts || !isRetryable(err)) {
+          this.onError?.(channelId, err, attempt);
+          return;
+        }
+        await sleep(this.retryBaseDelayMs * 2 ** (attempt - 1));
+      }
     }
   }
 
