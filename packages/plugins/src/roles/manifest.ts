@@ -54,14 +54,14 @@ export const AUTO_ROLES_MAX_DELAY_SECONDS = 604_800;
 export const configSchema = z.object({
   /** When false (default), role panels / groups refuse to attach a role that grants an elevated permission. */
   allowElevatedRoles: z.boolean().default(false),
-  welcome: welcomeGoodbyeSchema.default({}),
-  goodbye: welcomeGoodbyeSchema.default({}),
+  welcome: welcomeGoodbyeSchema.prefault({}),
+  goodbye: welcomeGoodbyeSchema.prefault({}),
   rulesText: z.string().max(4000).nullable().default(null),
   rulesRoleId: z.string().nullable().default(null),
   steps: z.array(onboardingStepSchema).max(20).default([]),
-  verification: verificationSchema.default({}),
-  rolePersistence: rolePersistenceSchema.default({}),
-  autoRoles: autoRolesSchema.default({}),
+  verification: verificationSchema.prefault({}),
+  rolePersistence: rolePersistenceSchema.prefault({}),
+  autoRoles: autoRolesSchema.prefault({}),
 });
 
 export type RolesConfig = z.infer<typeof configSchema>;

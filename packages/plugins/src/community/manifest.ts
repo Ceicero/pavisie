@@ -3,19 +3,14 @@ import { z } from 'zod';
 import { defineManifest } from '../sdk';
 
 /**
- * Object default that is parsed, so nested `.default()` values are part of the default itself.
- * Zod 4 calls this `.prefault({})`. Zod 3.25's `.default({})` parses on the way out, but
- * `defaultValue()` still returns the bare `{}`, which is what the dashboard schema publishes.
+ * Object default that is parsed, so nested `.default()` values are part of the default itself (and of the
+ * default the dashboard schema publishes). Under zod 4 a plain `.default({})` would return the bare `{}`.
  */
 function prefaultObject<S extends z.ZodRawShape>(shape: S) {
   const objectSchema = z.object(shape);
-  const withPrefault = objectSchema as z.ZodObject<S> & {
-    prefault?: (value: Record<string, never>) => z.ZodTypeAny;
-  };
-  if (typeof withPrefault.prefault === 'function') {
-    return withPrefault.prefault({});
-  }
-  return objectSchema.default(() => objectSchema.parse({}));
+  return objectSchema.default(
+    () => objectSchema.parse({}) as z.core.util.NoUndefined<z.output<typeof objectSchema>>,
+  );
 }
 
 export const configSchema = z.object({
@@ -29,7 +24,7 @@ export const configSchema = z.object({
       /** Master switch for keyword triggers (needs the Message Content intent). */
       triggersEnabled: z.boolean().default(false),
     })
-    .default({}),
+    .prefault({}),
   suggestions: prefaultObject({
     channelId: z.string().nullable().default(null),
     threads: z.boolean().default(true),
@@ -51,7 +46,7 @@ export const configSchema = z.object({
       maxPerGuild: z.number().int().min(1).max(100).default(25),
       defaultCooldownSeconds: z.number().int().min(3).max(600).default(10),
     })
-    .default({}),
+    .prefault({}),
   autoPublish: z
     .object({
       /** Announcement (type 5) channel ids whose new messages the bot crossposts. */
@@ -59,7 +54,7 @@ export const configSchema = z.object({
       /** Also publish messages sent by other bots/webhooks (default: humans + this bot only). */
       includeBots: z.boolean().default(false),
     })
-    .default({}),
+    .prefault({}),
   autoThreads: z
     .array(
       z.object({
@@ -107,7 +102,7 @@ export const configSchema = z.object({
        * When false, only an admin can set or remove a birthday (for themselves or another member). */
       allowSelfService: z.boolean().default(true),
     })
-    .default({}),
+    .prefault({}),
 });
 
 export type CommunityConfig = z.infer<typeof configSchema>;
