@@ -19,7 +19,7 @@ function useStandaloneOutput(): boolean {
 const monorepoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@pavisie/ui', '@pavisie/types'],
+  transpilePackages: ['@pavisie/core', '@pavisie/ui', '@pavisie/types'],
   ...(useStandaloneOutput() ? { output: 'standalone' as const } : {}),
   // Trace files from the workspace root so the standalone bundle includes hoisted workspace deps and
   // lands at .next/standalone/apps/dashboard/server.js (what Dockerfile.dashboard's CMD expects).

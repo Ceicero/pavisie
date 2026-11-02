@@ -25,6 +25,7 @@
     "tailwind-merge": "^2.6.0",
     "class-variance-authority": "^0.7.1",
     "recharts": "^2.15.0",
+    "@pavisie/core": "workspace:*",
     "@pavisie/ui": "workspace:*",
     "@pavisie/types": "workspace:*"
   },
