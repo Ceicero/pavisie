@@ -17,7 +17,7 @@
     "@fastify/helmet": "^13.0.1",
     "@fastify/rate-limit": "^10.2.1",
     "@fastify/sensible": "^6.0.2",
-    "@fastify/swagger": "^9.4.0",
+    "@fastify/swagger": "^9.8.1",
     "@fastify/swagger-ui": "^5.2.0",
     "@pavisie/core": "workspace:*",
     "@pavisie/database": "workspace:*",
@@ -25,10 +25,10 @@
     "@pavisie/types": "workspace:*",
     "bullmq": "^5.34.0",
     "fastify": "^5.12.7",
-    "fastify-type-provider-zod": "^4.0.2",
+    "fastify-type-provider-zod": "^7.0.0",
     "ioredis": "^5.4.2",
     "pino": "^9.6.0",
-    "zod": "^3.24.1"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
