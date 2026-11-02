@@ -2,15 +2,21 @@
   "poll": {
     "needTwoOptions": "Provide at least two options.",
     "tooManyOptions": "This server allows at most {max} poll options.",
+    "emptyQuestion": "The question can't be empty.",
+    "duplicateOptions": "Those options repeat: {options}. Give each choice a different label.",
     "badDuration": "That doesn't look like a valid duration (try \"1h\", \"30m\", \"2h30m\").",
+    "durationRange": "Polls must stay open between 15 seconds and 28 days (try \"1h\", \"30m\", or \"2d\").",
     "notFound": "That poll could not be found.",
     "notOwner": "Only the poll's creator or a moderator can do that.",
     "alreadyClosed": "That poll is already closed.",
     "ended": "Poll ended."
   },
   "giveaway": {
+    "emptyPrize": "The prize can't be empty.",
     "badDuration": "That doesn't look like a valid duration (try \"1h\", \"1d\").",
+    "durationRange": "Giveaways must run between 15 seconds and 28 days (try \"1h\" or \"1d\").",
     "badChannel": "I can't post in that channel — check my permissions.",
+    "postFailed": "I couldn't post the giveaway. Check that I can send messages and use embeds in that channel, then try again.",
     "started": "Giveaway started in {channel}.",
     "notFound": "That giveaway could not be found.",
     "alreadyEnded": "That giveaway has already ended.",
@@ -19,11 +25,15 @@
     "noEntries": "There were no eligible entries to draw from.",
     "rerolled": "New winner(s): {winners}",
     "listTitle": "Giveaways",
+    "listEmpty": "No giveaways yet. Start one with /giveaway start.",
     "cancelled": "Giveaway cancelled."
   },
   "suggest": {
     "notConfigured": "The suggestion box hasn't been set up yet. Ask a staff member to run /suggestions setup.",
     "channelUnavailable": "The suggestions channel isn't available right now — ask a staff member to check it.",
+    "empty": "The suggestion can't be empty.",
+    "postFailed": "I couldn't post your suggestion. Ask a staff member to check that I can send messages in the suggestions channel, then try again.",
+    "saveFailed": "I couldn't save that suggestion. Please try again in a moment.",
     "submitted": "Suggestion #{number} submitted to {channel}. Thanks!"
   },
   "suggestions": {
@@ -32,14 +42,20 @@
     "alreadyThatStatus": "That suggestion already has that status.",
     "statusChanged": "Suggestion #{number} is now **{status}**.",
     "dmStatusChanged": "Your suggestion #{number} in {guild} is now **{status}**.",
-    "listTitle": "Suggestions"
+    "listTitle": "Suggestions",
+    "listEmpty": "No suggestions yet.",
+    "listEmptyFiltered": "No suggestions with status {status}."
   },
   "announce": {
     "badChannel": "I can't post in that channel — check my permissions.",
+    "emptyMessage": "The announcement message can't be empty.",
+    "past": "That time is already in the past. Use a future date, or a duration like \"2h\".",
+    "scheduleFailed": "I couldn't schedule that announcement. Please try again in a moment.",
     "scheduled": "Announcement scheduled for {channel}.",
     "scheduledCron": "It will repeat on schedule \"{cron}\".",
     "scheduledAt": "It will send at {time}.",
     "listTitle": "Scheduled announcements",
+    "listEmpty": "No scheduled announcements. Add one with /announce schedule.",
     "notFound": "That scheduled announcement could not be found.",
     "cancelled": "Announcement cancelled.",
     "previewTitle": "Announcement preview"
@@ -47,16 +63,26 @@
   "remind": {
     "badCron": "That recurring schedule isn't valid: {reason}",
     "badChannel": "I can't post in that channel — check my permissions.",
+    "emptyMessage": "The reminder message can't be empty.",
+    "past": "That time is already in the past. Use a future date, or a duration like \"10m\".",
+    "saveFailed": "I couldn't save that reminder. Please try again in a moment.",
     "set": "Reminder set for {time}.",
     "listTitle": "Your reminders",
+    "listEmpty": "You don't have any upcoming reminders. Set one with /remind set.",
     "notFound": "That reminder could not be found.",
     "notOwner": "Only the reminder's owner or a moderator can do that.",
     "cancelled": "Reminder cancelled."
   },
   "event": {
     "badChannel": "I can't post in that channel — check my permissions.",
+    "emptyTitle": "The event title can't be empty.",
+    "endsBeforeStart": "The end time has to be after the start time.",
+    "past": "That start time is already in the past. Use a future date, or a duration like \"2h\".",
+    "postFailed": "I couldn't post the event. Check that I can send messages and use embeds in that channel, then try again.",
+    "discordEventFailed": "The RSVP post was created, but Discord rejected the native scheduled event. Check that I have Manage Events, then create the Discord event separately if you still want one.",
     "created": "Event created and announced in {channel}.",
     "listTitle": "Upcoming events",
+    "listEmpty": "No upcoming events. Create one with /event create.",
     "notFound": "That event could not be found.",
     "cancelled": "Event cancelled."
   },

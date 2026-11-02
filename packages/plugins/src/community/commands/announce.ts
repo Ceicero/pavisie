@@ -10,6 +10,7 @@ import {
   type PluginCommand,
 } from '../../sdk';
 import { cancelAnnouncement, type AnnouncementContent } from '../actions';
+import { isInThePast, nonBlank } from '../command-input';
 import { parseSchedule } from '../schedule';
 
 const data = new SlashCommandBuilder()
@@ -60,7 +61,11 @@ async function handleSchedule(c: CommandContext): Promise<void> {
   const { interaction, ctx, guildId, t } = c;
   const channel = interaction.options.getChannel('channel', true);
   const when = interaction.options.getString('when', true);
-  const message = interaction.options.getString('message', true);
+  const message = nonBlank(interaction.options.getString('message', true));
+  if (!message) {
+    await interaction.reply({ embeds: [errorEmbed(t('announce.emptyMessage'))], ephemeral: true });
+    return;
+  }
 
   const host = ctx.services.get('host');
   const timezone = host ? (await host.getGuildConfig(guildId)).timezone : 'UTC';
@@ -68,6 +73,10 @@ async function handleSchedule(c: CommandContext): Promise<void> {
   const parsed = parseSchedule(when, timezone);
   if (parsed.kind === 'invalid') {
     await interaction.reply({ embeds: [errorEmbed(parsed.reason)], ephemeral: true });
+    return;
+  }
+  if (parsed.kind === 'at' && isInThePast(parsed.runAt)) {
+    await interaction.reply({ embeds: [errorEmbed(t('announce.past'))], ephemeral: true });
     return;
   }
 
@@ -78,30 +87,41 @@ async function handleSchedule(c: CommandContext): Promise<void> {
   }
 
   const content: AnnouncementContent = { content: message };
-  const announcement = await ctx.prisma.scheduledAnnouncement.create({
-    data: {
-      guildId,
-      channelId: channel.id,
-      content: content as unknown as Prisma.InputJsonValue,
-      cron: parsed.kind === 'cron' ? parsed.cron : null,
-      runAt: parsed.kind === 'at' ? parsed.runAt : null,
-      createdBy: interaction.user.id,
-    },
-  });
+  let announcementId: string | null = null;
+  try {
+    const announcement = await ctx.prisma.scheduledAnnouncement.create({
+      data: {
+        guildId,
+        channelId: channel.id,
+        content: content as unknown as Prisma.InputJsonValue,
+        cron: parsed.kind === 'cron' ? parsed.cron : null,
+        runAt: parsed.kind === 'at' ? parsed.runAt : null,
+        createdBy: interaction.user.id,
+      },
+    });
+    announcementId = announcement.id;
 
-  const queue = ctx.queue('announcement-run');
-  if (parsed.kind === 'cron') {
-    await queue.upsertJobScheduler(
-      `ann-${announcement.id}`,
-      { pattern: parsed.cron, tz: timezone },
-      { name: 'announcement-run', data: { announcementId: announcement.id } },
-    );
-  } else {
-    await queue.add(
-      'announcement-run',
-      { announcementId: announcement.id },
-      { jobId: `ann-${announcement.id}`, delay: Math.max(0, parsed.runAt.getTime() - Date.now()) },
-    );
+    const queue = ctx.queue('announcement-run');
+    if (parsed.kind === 'cron') {
+      await queue.upsertJobScheduler(
+        `ann-${announcement.id}`,
+        { pattern: parsed.cron, tz: timezone },
+        { name: 'announcement-run', data: { announcementId: announcement.id } },
+      );
+    } else {
+      await queue.add(
+        'announcement-run',
+        { announcementId: announcement.id },
+        { jobId: `ann-${announcement.id}`, delay: Math.max(0, parsed.runAt.getTime() - Date.now()) },
+      );
+    }
+  } catch (err) {
+    if (announcementId) {
+      await ctx.prisma.scheduledAnnouncement.delete({ where: { id: announcementId } }).catch(() => undefined);
+    }
+    ctx.logger.warn({ err, guildId }, 'community: failed to schedule an announcement');
+    await interaction.reply({ embeds: [errorEmbed(t('announce.scheduleFailed'))], ephemeral: true });
+    return;
   }
 
   const when_ =
@@ -121,6 +141,13 @@ async function handleList(c: CommandContext): Promise<void> {
     orderBy: { createdAt: 'desc' },
     take: 25,
   });
+  if (rows.length === 0) {
+    await interaction.reply({
+      embeds: [infoEmbed(t('announce.listTitle'), t('announce.listEmpty'))],
+      ephemeral: true,
+    });
+    return;
+  }
   const lines = rows.map((a) => {
     const body = a.content as unknown as AnnouncementContent | null;
     const preview = body?.content ? body.content.slice(0, 40) : '(empty)';

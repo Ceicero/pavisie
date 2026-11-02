@@ -2,6 +2,7 @@ import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.j
 import {
   errorEmbed,
   fetchMemberSafe,
+  infoEmbed,
   listEmbed,
   safeDm,
   successEmbed,
@@ -144,6 +145,18 @@ async function handleList(c: CommandContext): Promise<void> {
     orderBy: { number: 'desc' },
     take: 25,
   });
+  if (suggestions.length === 0) {
+    await interaction.reply({
+      embeds: [
+        infoEmbed(
+          t('suggestions.listTitle'),
+          status ? t('suggestions.listEmptyFiltered', { status }) : t('suggestions.listEmpty'),
+        ),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
   const lines = suggestions.map(
     (s) =>
       `**#${s.number}** ${s.content.slice(0, 60)}${s.content.length > 60 ? '…' : ''} — ${s.status} (👍${s.upvotes} 👎${s.downvotes})`,
