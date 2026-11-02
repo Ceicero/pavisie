@@ -1,6 +1,6 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { NotFoundError, ValidationError, buildPaginated, paginate, sanitizeFilename } from '@pavisie/core';
+import { NotFoundError, ValidationError, buildPaginated, paginate, sanitizeFilename, partialWithoutDefaults } from '@pavisie/core';
 import { Prisma } from '@pavisie/database';
 import type { Paginated } from '@pavisie/types';
 import type { TicketDetailDto, TicketPanelDto, TicketQueueItemDto } from '@pavisie/types/tickets';
@@ -37,7 +37,7 @@ const panelBodySchema = z.object({
   intakeForm: z.array(intakeFieldBodySchema).max(5).nullable().optional(),
   slaMinutes: z.number().int().positive().nullable().optional(),
 });
-const panelUpdateSchema = panelBodySchema.partial();
+const panelUpdateSchema = partialWithoutDefaults(panelBodySchema);
 const panelParamSchema = guildIdParamSchema.extend({ panelId: z.string().min(1) });
 
 const ticketParamSchema = guildIdParamSchema.extend({ ticketId: z.string().min(1) });

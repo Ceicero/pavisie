@@ -1,3 +1,4 @@
+import { partialWithoutDefaults } from '@pavisie/core';
 import { z } from 'zod';
 import { guildIdParamSchema, snowflakeSchema } from '../schemas';
 
@@ -7,7 +8,7 @@ export const groupBodySchema = z.object({
   exclusive: z.boolean().default(false),
   maxSelections: z.number().int().positive().max(25).nullable().default(null),
 });
-export const groupUpdateSchema = groupBodySchema.partial();
+export const groupUpdateSchema = partialWithoutDefaults(groupBodySchema);
 export const groupParamSchema = guildIdParamSchema.extend({ groupId: z.string().min(1) });
 
 const welcomeGoodbyeBodySchema = z.object({

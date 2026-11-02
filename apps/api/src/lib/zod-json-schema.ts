@@ -30,32 +30,36 @@ export interface JsonSchemaLike {
 export function zodToJsonSchema(schema: z.ZodTypeAny): JsonSchemaLike {
   const description = schema.description ? { description: schema.description } : {};
 
-  if (schema instanceof z.ZodDefault) {
-    const inner = zodToJsonSchema(schema._def.innerType as z.ZodTypeAny);
-    return { ...inner, default: schema._def.defaultValue(), ...description };
+  // zod 4: `.prefault()` is the v3-style "default applied before parsing" used by plugin manifests.
+  if (schema instanceof z.ZodDefault || schema instanceof z.ZodPrefault) {
+    const inner = zodToJsonSchema(schema.def.innerType as z.ZodTypeAny);
+    const raw = (schema.def as { defaultValue: unknown }).defaultValue;
+    return { ...inner, default: typeof raw === 'function' ? (raw as () => unknown)() : raw, ...description };
   }
 
   if (schema instanceof z.ZodOptional) {
-    const inner = zodToJsonSchema(schema._def.innerType as z.ZodTypeAny);
+    const inner = zodToJsonSchema(schema.def.innerType as z.ZodTypeAny);
     return { ...inner, optional: true, ...description };
   }
 
   if (schema instanceof z.ZodNullable) {
-    const inner = zodToJsonSchema(schema._def.innerType as z.ZodTypeAny);
+    const inner = zodToJsonSchema(schema.def.innerType as z.ZodTypeAny);
     return { ...inner, nullable: true, ...description };
   }
 
-  if (schema instanceof z.ZodEffects) {
-    return { ...zodToJsonSchema(schema._def.schema as z.ZodTypeAny), ...description };
+  // zod 4: `.transform()`/`.pipe()` produce a ZodPipe (refinements no longer wrap); describe the input side.
+  if (schema instanceof z.ZodPipe) {
+    return { ...zodToJsonSchema(schema.def.in as z.ZodTypeAny), ...description };
   }
 
   if (schema instanceof z.ZodObject) {
-    const shape = schema._def.shape() as Record<string, z.ZodTypeAny>;
+    const shape = schema.shape as Record<string, z.ZodTypeAny>;
     const properties: Record<string, JsonSchemaLike> = {};
     const required: string[] = [];
     for (const [key, value] of Object.entries(shape)) {
       properties[key] = zodToJsonSchema(value);
-      const isOptional = value instanceof z.ZodOptional || value instanceof z.ZodDefault;
+      const isOptional =
+        value instanceof z.ZodOptional || value instanceof z.ZodDefault || value instanceof z.ZodPrefault;
       if (!isOptional) required.push(key);
     }
     return {
@@ -67,9 +71,8 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): JsonSchemaLike {
   }
 
   if (schema instanceof z.ZodString) {
-    const checks = schema._def.checks as { kind: string; value?: number }[];
-    const min = checks.find((c) => c.kind === 'min')?.value;
-    const max = checks.find((c) => c.kind === 'max')?.value;
+    const min = schema.minLength ?? undefined;
+    const max = schema.maxLength ?? undefined;
     return {
       type: 'string',
       ...(min !== undefined ? { minLength: min } : {}),
@@ -79,9 +82,8 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): JsonSchemaLike {
   }
 
   if (schema instanceof z.ZodNumber) {
-    const checks = schema._def.checks as { kind: string; value?: number }[];
-    const min = checks.find((c) => c.kind === 'min')?.value;
-    const max = checks.find((c) => c.kind === 'max')?.value;
+    const min = Number.isFinite(schema.minValue) ? (schema.minValue as number) : undefined;
+    const max = Number.isFinite(schema.maxValue) ? (schema.maxValue as number) : undefined;
     return {
       type: 'number',
       ...(min !== undefined ? { minimum: min } : {}),
@@ -94,37 +96,30 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): JsonSchemaLike {
     return { type: 'boolean', ...description };
   }
 
+  // zod 4 merged ZodNativeEnum into ZodEnum.
   if (schema instanceof z.ZodEnum) {
-    return { type: 'string', enum: schema._def.values as unknown[], ...description };
-  }
-
-  if (schema instanceof z.ZodNativeEnum) {
-    return {
-      type: 'string',
-      enum: Object.values(schema._def.values as Record<string, unknown>),
-      ...description,
-    };
+    return { type: 'string', enum: schema.options as unknown[], ...description };
   }
 
   if (schema instanceof z.ZodLiteral) {
-    return { const: schema._def.value, ...description };
+    const values = [...schema.values];
+    return values.length === 1 ? { const: values[0], ...description } : { enum: values, ...description };
   }
 
   if (schema instanceof z.ZodArray) {
-    return { type: 'array', items: zodToJsonSchema(schema._def.type as z.ZodTypeAny), ...description };
+    return { type: 'array', items: zodToJsonSchema(schema.element as z.ZodTypeAny), ...description };
   }
 
   if (schema instanceof z.ZodRecord) {
     return {
       type: 'object',
-      additionalProperties: zodToJsonSchema(schema._def.valueType as z.ZodTypeAny),
+      additionalProperties: zodToJsonSchema(schema.valueType as z.ZodTypeAny),
       ...description,
     };
   }
 
   if (schema instanceof z.ZodUnion || schema instanceof z.ZodDiscriminatedUnion) {
-    const options = (schema._def.options as z.ZodTypeAny[] | Map<string, z.ZodTypeAny>) ?? [];
-    const list = options instanceof Map ? [...options.values()] : options;
+    const list = (schema.options ?? []) as readonly z.ZodTypeAny[];
     return { anyOf: list.map((option) => zodToJsonSchema(option)), ...description };
   }
 
