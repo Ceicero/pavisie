@@ -35,4 +35,5 @@ export const allPlugins: Plugin[] = [
 ];
 
 export { allManifests } from './manifests';
+export { statsRenameRateLimitFilter } from './community/stats-rename';
 export * from './sdk';

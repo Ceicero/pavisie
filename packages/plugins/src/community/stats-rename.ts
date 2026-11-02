@@ -1,3 +1,4 @@
+import type { RateLimitData } from 'discord.js';
 import { redisKey } from '@pavisie/core';
 import type { PluginContext } from '../sdk';
 import { CHANNEL_RENAME_INTERVAL_MS } from './stats-channels';
@@ -50,6 +51,32 @@ export function rateLimitRetryAfterMs(err: unknown): number | null {
   return null;
 }
 
+/**
+ * Ids of channels with a stats rename in flight right now. discord.js's REST layer QUEUES a request that hits the
+ * channel-name sublimit (2 renames / 10 min / channel) and sleeps until it clears — up to ~10 minutes — so
+ * `setName` would hang inside the job instead of throwing. `statsRenameRateLimitFilter` reads this set to make
+ * just those requests reject instead.
+ */
+const renamesInFlight = new Set<string>();
+
+/**
+ * `rejectOnRateLimit` filter for the Discord client's REST options (see `apps/bot/src/client.ts`). True only for
+ * a channel PATCH (`/channels/:id`, the route a rename uses) whose channel has a stats rename in flight, so that
+ * request throws a `RateLimitError` immediately instead of waiting for the limit to clear. Every other request —
+ * including other edits to the same channel when no stats rename is running — keeps discord.js's normal queueing.
+ * Global rate limits aren't the channel's sublimit and clear within about a second, so those are still waited out.
+ */
+export function statsRenameRateLimitFilter(
+  data: Pick<RateLimitData, 'global' | 'method' | 'route' | 'majorParameter'>,
+): boolean {
+  return (
+    !data.global &&
+    data.method.toUpperCase() === 'PATCH' &&
+    data.route === '/channels/:id' &&
+    renamesInFlight.has(data.majorParameter)
+  );
+}
+
 /** What `renameStatsChannel` did, so the caller can tally it and decide whether to pause the guild. */
 export type StatsRenameOutcome =
   /** The channel was renamed. */
@@ -96,6 +123,7 @@ export async function renameStatsChannel(
   // Renamed (or rate limited) too recently — try again on a later pass rather than risk Discord's per-channel limit.
   if (!claimed) return { status: 'throttled' };
 
+  renamesInFlight.add(channel.id);
   try {
     await channel.setName(name, 'Server stats');
     return { status: 'renamed' };
@@ -120,5 +148,7 @@ export async function renameStatsChannel(
       `community: stats channel rename failed: ${message}`,
     );
     return { status: 'failed' };
+  } finally {
+    renamesInFlight.delete(channel.id);
   }
 }
