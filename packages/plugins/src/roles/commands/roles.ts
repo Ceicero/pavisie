@@ -18,7 +18,7 @@ import {
   type CommandContext,
   type PluginCommand,
 } from '../../sdk';
-import { checkRoleAssignable } from '../engine';
+import { canActorManageRole, checkRoleAssignable } from '../engine';
 import {
   AUTO_ROLES_MAX_BOT,
   AUTO_ROLES_MAX_DELAY_SECONDS,
@@ -547,6 +547,23 @@ async function handlePanel(
       return;
     }
 
+    {
+      const actorMember = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+      if (
+        !canActorManageRole({
+          rolePosition: guildRole?.position ?? Number.MAX_SAFE_INTEGER,
+          actorTopRolePosition: actorMember?.roles.highest.position,
+          actorIsOwner: interaction.guild.ownerId === interaction.user.id,
+        })
+      ) {
+        await interaction.reply({
+          embeds: [errorEmbed("That role is at or above your own highest role, so you can't make it assignable.")],
+          ephemeral: true,
+        });
+        return;
+      }
+    }
+
     await c.ctx.prisma.rolePanelOption.create({
       data: { panelId, roleId: role.id, label, emoji, description, position: panel.options.length },
     });
@@ -822,6 +839,23 @@ async function handleAutorole(
             : c.t('autorole.refused.hierarchy');
       await interaction.reply({ embeds: [errorEmbed(refusal)], ephemeral: true });
       return;
+    }
+
+    {
+      const actorMember = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+      if (
+        !canActorManageRole({
+          rolePosition: guildRole?.position ?? Number.MAX_SAFE_INTEGER,
+          actorTopRolePosition: actorMember?.roles.highest.position,
+          actorIsOwner: interaction.guild.ownerId === interaction.user.id,
+        })
+      ) {
+        await interaction.reply({
+          embeds: [errorEmbed("That role is at or above your own highest role, so you can't make it assignable.")],
+          ephemeral: true,
+        });
+        return;
+      }
     }
 
     await c.ctx.setConfig<RolesConfig>(
