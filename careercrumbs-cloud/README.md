@@ -2,7 +2,11 @@
 
 A no-AI job search companion with one goal: **make getting a job easier.** You write your own interview answers, practise them out loud, and keep every application moving. Ruhv, the CareerCrumbs mouse, is the logo.
 
-It runs as one self-contained page (`careercrumbs.html`) published as a claude.ai artifact. Each person who opens it gets their own private workspace.
+One codebase, three ways to run it:
+
+- **Website** — `site/` is a standalone static site (no server code): app, offline cache, manifest, icons, self-hosted fonts, privacy page. Host the folder anywhere.
+- **Android** — `android/` wraps the site build in a WebView for test APKs (built by `.github/workflows/careercrumbs-apk.yml`).
+- **claude.ai** — `careercrumbs.html` runs as an artifact, where each person gets a private account-backed workspace.
 
 ## What's in it
 
@@ -28,8 +32,10 @@ Due check-ins show on Home and in the job's Messages, with the right message rea
 
 ## Where data lives
 
-- **Published on claude.ai:** the artifact's database, in each viewer's own private space (`data/users/<id>/profile|jobs|stories|interview`). Nobody else, the owner included, can read it.
-- **Where that isn't available** (opened as a plain file, or a viewer who can't write): `localStorage` in that browser.
+- **Website and Android app:** `localStorage` on the device (`careercrumbs:v2`). The app asks the browser to keep it (`navigator.storage.persist`), saves pending edits when it goes to the background, keeps any unreadable copy aside instead of overwriting it, and reminds people to export a backup.
+- **claude.ai:** the artifact's database, in each viewer's own private space (`data/users/<id>/…`). Nobody else, the owner included, can read it.
+
+Backups are checked before import (must be a CareerCrumbs backup with something in it), cleaned field by field, and can be undone. Ids from a file are replaced if they aren't plain ids, so an imported file can't inject HTML.
 
 ## No setup
 
@@ -44,11 +50,16 @@ There's no sign-up, setup form or example data to clear. The first screen offers
 
 ```
 npm test        # pure logic tests (node:test)
-npm run build   # inlines src/ into careercrumbs.html
+npm run build   # careercrumbs.html + site/
+SITE_URL=https://example.org/ CONTACT_EMAIL=you@example.org npm run build   # for launch: canonical/og:url and the privacy contact
 ```
+
+Before launch: set `SITE_URL` and `CONTACT_EMAIL`, host `site/`, then add `/.well-known/assetlinks.json` if the Play Store app is a TWA.
 
 - `src/logic.js` — question bank and tips, answer timing, job stages and badges, check-in schedule and reminder calendar, message templates, résumé lines, cheat sheet, calendar file, example answers
 - `src/app.js` — UI, saving, practice mode
 - `test/fixture.cjs` — example workspace used by the tests
 - `src/styles.css` — design tokens (light and dark)
-- `src/shell.html` — page skeleton the build fills in
+- `src/shell.html` — claude.ai page skeleton
+- `site-src/` — standalone site shell, manifest, service worker, privacy page, icons, self-hosted fonts (OFL)
+- `android/` — WebView wrapper and `build.sh`

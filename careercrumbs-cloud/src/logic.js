@@ -129,7 +129,8 @@
     const at = (now || new Date()).toISOString();
     const next = Object.assign({}, job, { status });
     next.history = (job.history || []).concat([{ status, at }]);
-    if (status === "Applied" && !job.appliedAt) next.appliedAt = at.slice(0, 10);
+    // Local calendar date: the UTC date is tomorrow for evening changes in the Americas.
+    if (status === "Applied" && !job.appliedAt) next.appliedAt = today(now);
     return next;
   }
   // Check-ins: when to reconnect after applying and after an interview.
@@ -182,7 +183,7 @@
     }
     const due = dueCheckIn(job, now);
     if (due) return { tone: "warn", text: "Check in now · " + due.label };
-    if (job.followUpAt && job.followUpAt >= t) {
+    if (job.followUpAt) {
       const n = daysBetween(t, job.followUpAt);
       if (n < 0) return { tone: "bad", text: "Follow-up overdue by " + -n + (n === -1 ? " day" : " days") };
       if (n === 0) return { tone: "warn", text: "Follow up today" };
@@ -242,6 +243,7 @@
     [/^(handle|handled|manage|managed|ran|run)\b/i, "Managed"],
   ];
   // Template only: the person's own words, and a [placeholder] where something is missing.
+  const PAST_VERB = /^(\w+ed|cut|got|made|kept|won|caught|hit|beat|led|went|became|brought|grew|sold|built|met|took|gave|ran|set|put|paid|held|spent|read|taught|drove|wrote|found|left|lost|brought)\b/i;
   function bulletFromStory(s) {
     let action = clean(s.action) || clean(s.title) || "[what you did]";
     let lead = "";
@@ -254,7 +256,10 @@
     }
     let text = lead ? lead + " " + lower1(action) : cap(action);
     const result = clean(s.result);
-    text += result ? ", resulting in " + lower1(result) : ", resulting in [the result — add a number if you have one]";
+    // "resulting in saved 2 hours" reads badly; a result that starts with a past-tense verb gets a semicolon.
+    if (!result) text += ", resulting in [the result — add a number if you have one]";
+    else if (PAST_VERB.test(result)) text += "; " + lower1(result);
+    else text += ", resulting in " + lower1(result);
     return text + ".";
   }
   function storyToStar(s) {
@@ -323,11 +328,12 @@
       const d = e.date.replace(/-/g, "");
       L.push("BEGIN:VEVENT", "UID:" + e.uid + "@careercrumbs", "DTSTAMP:" + stamp);
       if (e.time) {
+        // UTC with a Z: some Android importers read floating times as UTC and shift them.
         const [h, m] = e.time.split(":").map(Number);
-        const endMin = h * 60 + m + (e.minutes || 15);
-        const endDate = endMin >= 1440 ? addDays(e.date, 1).replace(/-/g, "") : d;
-        const em = endMin % 1440;
-        L.push("DTSTART:" + d + "T" + pad(h) + pad(m) + "00", "DTEND:" + endDate + "T" + pad(Math.floor(em / 60)) + pad(em % 60) + "00");
+        const start = parse(e.date);
+        start.setHours(h, m, 0, 0);
+        const end = new Date(start.getTime() + (e.minutes || 15) * 60000);
+        L.push("DTSTART:" + icsUtc(start), "DTEND:" + icsUtc(end));
       } else L.push("DTSTART;VALUE=DATE:" + d, "DTEND;VALUE=DATE:" + addDays(e.date, 1).replace(/-/g, ""));
       L.push("SUMMARY:" + icsEscape(e.summary));
       if (e.desc) L.push("DESCRIPTION:" + icsEscape(e.desc));
@@ -335,7 +341,26 @@
       L.push("END:VEVENT");
     }
     L.push("END:VCALENDAR");
-    return L.join("\r\n") + "\r\n";
+    return L.map(fold).join("\r\n") + "\r\n";
+  }
+  const icsUtc = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  // RFC 5545: lines longer than 75 octets continue on the next line after a space.
+  function fold(line) {
+    const out = [];
+    let cur = "";
+    let bytes = 0;
+    for (const ch of line) {
+      const n = ch.codePointAt(0) < 0x80 ? 1 : ch.codePointAt(0) < 0x800 ? 2 : ch.codePointAt(0) < 0x10000 ? 3 : 4;
+      if (bytes + n > (out.length ? 74 : 75)) {
+        out.push(cur);
+        cur = "";
+        bytes = 0;
+      }
+      cur += ch;
+      bytes += n;
+    }
+    out.push(cur);
+    return out.join("\r\n ");
   }
   function interviewEvent(job) {
     const dt = job.interviewAt;
@@ -366,28 +391,150 @@
 
   // ---------- workspace ----------
   const emptyWorkspace = () => ({
-    profile: { name: "", targetRole: "", packs: [] },
+    profile: { name: "", targetRole: "", packs: [], packsAsked: false, reminders: "ask", lastExport: "" },
     jobs: [],
     stories: [],
     interview: { answers: {}, custom: [], practice: [] },
     storySeq: 0,
   });
-  function normalize(ws) {
-    const b = emptyWorkspace();
-    const out = Object.assign({}, b, ws || {});
-    out.profile = Object.assign({}, b.profile, (ws && ws.profile) || {});
-    if (!Array.isArray(out.profile.packs)) out.profile.packs = [];
-    out.jobs = (Array.isArray(out.jobs) ? out.jobs : []).map((j) => Object.assign({ status: "Saved", history: [] }, j));
-    out.stories = Array.isArray(out.stories) ? out.stories : [];
-    const iv = (ws && ws.interview) || {};
-    out.interview = {
-      answers: iv.answers && typeof iv.answers === "object" && !Array.isArray(iv.answers) ? Object.assign({}, iv.answers) : {},
-      custom: Array.isArray(iv.custom) ? iv.custom : [],
-      practice: Array.isArray(iv.practice) ? iv.practice : [],
+  // Everything here may come from an imported file, so check types, formats and ids.
+  // Ids end up in HTML attributes; anything that isn't a plain id is replaced.
+  const ID_RE = /^[\w-]{1,40}$/;
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const DT_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/;
+  const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  const str = (v, max) => (v == null || typeof v === "object" ? "" : String(v)).slice(0, max || 5000);
+  const dateStr = (v) => (typeof v === "string" && DATE_RE.test(v) ? v : "");
+  const dtStr = (v) => (typeof v === "string" && DT_RE.test(v.slice(0, 16)) ? v.slice(0, 16) : "");
+  const safeUrl = (v) => (typeof v === "string" && /^https?:\/\/[^\s"'<>]+$/i.test(v.trim()) ? v.trim() : "");
+  function idMapper(prefix) {
+    const seen = new Set();
+    const map = {};
+    return {
+      map,
+      take(v) {
+        let id = typeof v === "string" && ID_RE.test(v) && !seen.has(v) ? v : uid(prefix);
+        while (seen.has(id)) id = uid(prefix);
+        seen.add(id);
+        if (typeof v === "string") map[v] = id;
+        return id;
+      },
     };
-    out.storySeq = Math.max(Number(out.storySeq) || 0, out.stories.reduce((m, s) => Math.max(m, s.n || 0), 0));
+  }
+  function normalize(ws) {
+    ws = isObj(ws) ? ws : {};
+    const b = emptyWorkspace();
+    const p = isObj(ws.profile) ? ws.profile : {};
+    const profile = {
+      name: str(p.name, 120),
+      targetRole: str(p.targetRole, 120),
+      packs: Array.isArray(p.packs) ? p.packs.filter((k) => ["warehouse", "service", "lead"].includes(k)) : [],
+      packsAsked: !!p.packsAsked,
+      reminders: p.reminders === "off" ? "off" : "ask",
+      lastExport: dateStr(p.lastExport),
+      changesSinceExport: Math.max(0, Math.floor(Number(p.changesSinceExport) || 0)),
+    };
+    const jobIds = idMapper("j");
+    const jobs = (Array.isArray(ws.jobs) ? ws.jobs : []).filter(isObj).slice(0, 500).map((j) => {
+      const checkins = {};
+      if (isObj(j.checkins)) for (const k of Object.keys(j.checkins)) if (/^[ai](3|7|30)$/.test(k) && j.checkins[k]) checkins[k] = true;
+      return {
+        id: jobIds.take(j.id),
+        title: str(j.title, 200),
+        company: str(j.company, 200),
+        status: STATUSES.includes(j.status) ? j.status : "Saved",
+        pay: j.pay === "salaried" ? "salaried" : "hourly",
+        appliedAt: dateStr(j.appliedAt),
+        interviewAt: dtStr(j.interviewAt),
+        followUpAt: dateStr(j.followUpAt),
+        contact: str(j.contact, 200),
+        link: safeUrl(j.link),
+        notes: str(j.notes, 5000),
+        created: dateStr(j.created),
+        thankYouSent: !!j.thankYouSent,
+        checkins,
+        history: (Array.isArray(j.history) ? j.history : []).filter((h) => isObj(h) && STATUSES.includes(h.status) && !isNaN(Date.parse(h.at))).map((h) => ({ status: h.status, at: new Date(h.at).toISOString() })).slice(-50),
+      };
+    });
+    const storyIds = idMapper("s");
+    const stories = (Array.isArray(ws.stories) ? ws.stories : []).filter(isObj).slice(0, 500).map((x) => ({
+      id: storyIds.take(x.id),
+      n: Math.max(0, Math.floor(Number(x.n) || 0)),
+      date: dateStr(x.date),
+      title: str(x.title, 200),
+      situation: str(x.situation),
+      task: str(x.task),
+      action: str(x.action),
+      result: str(x.result),
+    }));
+    const iv = isObj(ws.interview) ? ws.interview : {};
+    const qIds = idMapper("q");
+    for (const q of BANK) qIds.take(q.id);
+    const custom = (Array.isArray(iv.custom) ? iv.custom : []).filter((c) => isObj(c) && str(c.q).trim()).slice(0, 300).map((c) => ({
+      id: qIds.take(c.id),
+      q: str(c.q, 500),
+      jobId: jobIds.map[c.jobId] || "",
+    }));
+    const answers = {};
+    if (isObj(iv.answers)) {
+      for (const [k, a] of Object.entries(iv.answers)) {
+        const key = qIds.map[k] || (ID_RE.test(k) ? k : null);
+        if (!key || !isObj(a)) continue;
+        answers[key] = {
+          mode: a.mode === "star" ? "star" : "free",
+          text: str(a.text), s: str(a.s), t: str(a.t), a: str(a.a), r: str(a.r),
+          ready: !!a.ready, pick: !!a.pick,
+          storyId: storyIds.map[a.storyId] || "",
+          textAt: str(a.textAt, 40), starAt: str(a.starAt, 40), prevText: str(a.prevText),
+        };
+      }
+    }
+    const practice = (Array.isArray(iv.practice) ? iv.practice : []).filter((x) => isObj(x) && typeof x.q === "string").map((x) => ({ q: qIds.map[x.q] || (ID_RE.test(x.q) ? x.q : ""), date: dateStr(x.date), ok: !!x.ok })).filter((x) => x.q).slice(-300);
+    const out = Object.assign(b, { profile, jobs, stories, interview: { answers, custom, practice } });
+    out.storySeq = Math.max(Math.floor(Number(ws.storySeq) || 0), stories.reduce((m, x) => Math.max(m, x.n), 0));
     return out;
   }
+
+  // Import only what looks like a CareerCrumbs backup with something in it.
+  function checkBackup(data) {
+    const bad = { ok: false, reason: "That file isn't a CareerCrumbs backup, so nothing was changed." };
+    if (!isObj(data)) return bad;
+    if (!(data.app === "CareerCrumbs" || Array.isArray(data.jobs) || Array.isArray(data.stories) || isObj(data.interview))) return bad;
+    const ws = normalize(data);
+    const counts = { jobs: ws.jobs.length, answers: Object.keys(ws.interview.answers).length, stories: ws.stories.length, questions: ws.interview.custom.length };
+    if (!counts.jobs && !counts.answers && !counts.stories && !counts.questions) return { ok: false, reason: "That backup is empty, so nothing was changed." };
+    return { ok: true, ws, counts };
+  }
+  function isFresh(ws) {
+    return !ws.jobs.length && !ws.stories.length && !Object.keys(ws.interview.answers).length && !ws.interview.custom.length && !ws.interview.practice.length && !ws.profile.name;
+  }
+  // Upcoming interviews first, then offers and anything due, then by the next date; closed last.
+  function jobOrder(jobs, now) {
+    const t = today(now);
+    const key = (j) => {
+      if (j.status === "Closed") return [5, j.appliedAt || ""];
+      if (j.interviewAt && j.interviewAt.slice(0, 10) >= t) return [0, j.interviewAt];
+      if (j.status === "Offer") return [1, ""];
+      if (dueCheckIn(j, now) || (j.followUpAt && j.followUpAt <= t)) return [2, j.followUpAt || ""];
+      const next = [nextCheckIn(j, now) && nextCheckIn(j, now).date, j.followUpAt].filter(Boolean).sort()[0];
+      return next ? [3, next] : [4, j.appliedAt || ""];
+    };
+    return jobs.slice().sort((a, b) => {
+      const ka = key(a), kb = key(b);
+      return ka[0] - kb[0] || (ka[1] < kb[1] ? -1 : ka[1] > kb[1] ? 1 : 0);
+    });
+  }
+  // Fisher-Yates; sort(() => Math.random() - 0.5) is biased.
+  function shuffle(arr, rand) {
+    const a = arr.slice();
+    rand = rand || Math.random;
+    for (let i = a.length - 1; i > 0; i--) {
+      const k = Math.floor(rand() * (i + 1));
+      [a[i], a[k]] = [a[k], a[i]];
+    }
+    return a;
+  }
+
 
   // Sample answers that show the shape of a good one. Shown behind "See an example"; never saved as the person's answer.
   const EXAMPLES = {
@@ -410,7 +557,7 @@
     CHECKIN_DAYS, checkIns, dueCheckIn, nextCheckIn, markCheckedIn, reminderEvents, remindersIcs,
     STATUSES, setStatus, jobBadge, todo, nextInterview, messages,
     bulletFromStory, storyToStar, bankFor, status, readiness, jobQuestions, cheatSheet, interviewIcs,
-    emptyWorkspace, normalize, EXAMPLES,
+    emptyWorkspace, normalize, checkBackup, isFresh, jobOrder, shuffle, EXAMPLES,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.CC = api;
