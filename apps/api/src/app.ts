@@ -55,6 +55,7 @@ import privacyRoutes from './routes/privacy';
 import discordRoutes from './routes/discord';
 import webhooksRoutes from './routes/webhooks';
 import enforcerRoutes from './routes/enforcer';
+import setupRoutes from './routes/setup';
 import donationsRoutes from './routes/donations';
 import verifyRoutes from './routes/verify';
 import overlayRoutes from './routes/overlay';
@@ -357,6 +358,7 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   await app.register(privacyRoutes, { prefix: '/guilds' });
   await app.register(discordRoutes, { prefix: '/guilds' });
   await app.register(enforcerRoutes, { prefix: '/guilds' });
+  await app.register(setupRoutes, { prefix: '/guilds' });
   await app.register(oauthIntegrationsRoutes, { prefix: '/integrations' });
   await app.register(donationsRoutes, { prefix: '/donations' });
   await app.register(webhooksRoutes, { prefix: '/webhooks', bodyLimit: 5 * 1024 * 1024 });
