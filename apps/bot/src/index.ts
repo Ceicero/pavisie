@@ -1,7 +1,7 @@
 // Discord gateway bot process bootstrap (ARCHITECTURE.md §9).
 import type { Client } from 'discord.js';
 import { GatewayIntentBits } from 'discord.js';
-import { createLogger, createRedis, loadEnv, listFromCsv, requireEnv, env } from '@pavisie/core';
+import { assertServiceEnv, createLogger, createRedis, loadEnv, listFromCsv, env } from '@pavisie/core';
 import { ensureGuild, markGuildLeft, prisma } from '@pavisie/database';
 import { allPlugins, PluginRegistry, type PrivilegedIntentsEnabled } from '@pavisie/plugins';
 import { createClient } from './client';
@@ -20,7 +20,7 @@ const DEFAULT_HEALTH_PORT = 3002;
 
 async function main(): Promise<void> {
   loadEnv();
-  requireEnv('DISCORD_TOKEN', 'DATABASE_URL', 'REDIS_URL', 'DISCORD_CLIENT_ID');
+  assertServiceEnv('bot');
 
   const logger = createLogger('bot');
   const redisUrl = env.REDIS_URL as string;
