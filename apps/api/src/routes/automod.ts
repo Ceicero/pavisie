@@ -1,6 +1,6 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { AuditAction, NotFoundError, buildPaginated, paginate } from '@pavisie/core';
+import { AuditAction, NotFoundError, buildPaginated, paginate, partialWithoutDefaults } from '@pavisie/core';
 import { testRuleWithText } from '@pavisie/plugins/automod/test-rule';
 import type { AutomodEventDto, AutomodRuleDto, Paginated } from '@pavisie/types';
 import { automodActionsSchema, automodRuleConfigSchema } from '../lib/automod-schemas';
@@ -14,7 +14,7 @@ const ruleTestBodySchema = z.object({ text: z.string().min(1).max(2000) });
 const ruleTestResponseSchema = z.object({
   matched: z.boolean(),
   reason: z.string().optional(),
-  evidence: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+  evidence: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 });
 
 const ruleBodySchema = z.object({
@@ -30,7 +30,7 @@ const ruleBodySchema = z.object({
   cooldownSeconds: z.number().int().min(0).max(86400).default(0),
   priority: z.number().int().min(0).max(1000).default(0),
 });
-const ruleUpdateBodySchema = ruleBodySchema.partial();
+const ruleUpdateBodySchema = partialWithoutDefaults(ruleBodySchema);
 
 const dryRunToggleSchema = z.object({ dryRun: z.boolean() });
 
