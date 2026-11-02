@@ -18,6 +18,7 @@ import {
 } from '@pavisie/ui';
 import { useGuild } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
+import { StreamerStarterCard } from '@/components/dashboard/setup/streamer-starter-card';
 
 const QUICK_LINKS = [
   { href: 'plugins', label: 'Manage plugins', icon: Puzzle },
@@ -81,6 +82,8 @@ export default function GuildOverviewPage() {
         <StatCard label="Open tickets" value={stats.openTickets ?? '—'} icon={<LifeBuoy />} />
         <StatCard label="Cases (7d)" value={stats.moderationCasesLast7d ?? '—'} icon={<Gavel />} />
       </div>
+
+      <StreamerStarterCard guildId={guildId} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
