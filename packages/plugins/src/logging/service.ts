@@ -52,9 +52,11 @@ export class LoggingServiceImpl implements LoggingService {
   constructor(private readonly ctx: PluginContext) {
     this.batcher = new LogBatcher({
       send: (channelId, embeds) => this.sendBatch(channelId, embeds),
-      onError: (channelId, err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        this.ctx.logger.error({ channelId, err: message }, 'logging: failed to flush a batch of log embeds');
+      onError: (channelId, err, attempts) => {
+        this.ctx.logger.error(
+          { channelId, attempts, code: (err as { code?: unknown } | null)?.code, err },
+          'logging: failed to flush a batch of log embeds — dropped it',
+        );
       },
     });
   }

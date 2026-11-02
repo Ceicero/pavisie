@@ -20,6 +20,9 @@ const usePretty = !isProduction && Boolean(process.stdout.isTTY);
 const options: LoggerOptions = {
   level: env.LOG_LEVEL,
   redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
+  // Emit `"level":"warn"` instead of pino's numeric `"level":40`: Railway's log viewer only understands level
+  // names, so with numbers every warn/error line showed up (and filtered) as info.
+  formatters: { level: (label) => ({ level: label }) },
   ...(usePretty
     ? { transport: { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:standard' } } }
     : {}),
