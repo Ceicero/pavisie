@@ -9,14 +9,13 @@ import { bullConnectionOptionsFromUrl } from './lib/redis-options';
 import { createBotActionsWorker } from './host/bot-actions';
 import { createCrashAlerter, createCrashTerminator, installCrashHandlers } from './host/crash-alerts';
 import { createDataRequestsWorker } from './host/data-requests';
-import { startHealthServer } from './host/health';
+import { createGatewayMonitor } from './host/gateway-monitor';
+import { resolveHealthPort, startHealthServer } from './host/health';
 import { loadPlugins } from './host/loader';
 import { describeTarget, registerCommands, type RegisterTarget } from './host/register-commands';
 import { routeInteraction } from './host/router';
 import { handleMessageCommand } from './host/prefix';
 import { startWorkers } from './workers';
-
-const DEFAULT_HEALTH_PORT = 3002;
 
 async function main(): Promise<void> {
   loadEnv();
@@ -43,7 +42,7 @@ async function main(): Promise<void> {
   // build/wire everything before calling `client.login()` below (standard discord.js bootstrap ordering — the
   // client is only actually used once `ready` fires, by which point it genuinely is `<true>`).
   const client = createClient(intents) as unknown as Client<true>;
-  installCrashHandlers({
+  const terminate = installCrashHandlers({
     client,
     logger,
     channelId: env.ALERT_CHANNEL_ID,
@@ -199,11 +198,35 @@ async function main(): Promise<void> {
     logger,
   });
 
+  // Tracks how long the gateway has been down, for /health's 503 and the watchdog. discord.js normally reconnects
+  // by itself, so the watchdog (BOT_WATCHDOG_MINUTES, 0 disables) only fires for a connection that never returns;
+  // exiting then lets Railway's restart policy start a fresh process.
+  const watchdogMinutes = env.BOT_WATCHDOG_MINUTES;
+  const gatewayMonitor = createGatewayMonitor({
+    client,
+    logger,
+    ...(watchdogMinutes > 0
+      ? {
+          watchdog: {
+            afterMs: watchdogMinutes * 60_000,
+            onTrip: (notReadyForMs) => {
+              const err = new Error(
+                `Discord gateway not ready for ${Math.round(notReadyForMs / 60_000)} minute(s) (limit ${watchdogMinutes}); restarting`,
+              );
+              logger.error({ err, notReadyForMs }, 'gateway watchdog tripped');
+              void terminate('watchdog', err);
+            },
+          },
+        }
+      : {}),
+  });
+
   const healthServer = startHealthServer({
-    port: env.BOT_HEALTH_PORT ?? DEFAULT_HEALTH_PORT,
+    port: resolveHealthPort(env),
     client,
     host,
     logger,
+    monitor: gatewayMonitor,
   });
 
   // Discord refuses the gateway handshake (close code 4014) when the process asks for a privileged intent the
@@ -239,6 +262,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
     logger.info({ signal }, 'shutting down');
 
+    gatewayMonitor.stop();
     try {
       await healthServer.close();
     } catch (err) {
