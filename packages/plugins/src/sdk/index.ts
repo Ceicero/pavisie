@@ -12,3 +12,4 @@ export * from './guards';
 export * from './discord-utils';
 export * from './locales';
 export * from './help-hint';
+export * from './public-embed';

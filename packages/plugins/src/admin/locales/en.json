@@ -54,6 +54,10 @@
         "already": "Already had rules for: {types}, so I left them as they are.",
         "dryRunNote": "The new automod rules start in **dry-run**: matches are logged and nothing is deleted yet. Check `/automod review`, then use `/automod rule dryrun` on each rule and `/automod dryrun off` when you're happy."
       }
+    },
+    "footer": {
+      "on": "The \"Powered by Pavisie\" footer is **on** for public messages (go-live alerts, giveaways, polls, starboard). Turn it off any time with `/setup footer enabled:false` or under Dashboard → Settings.",
+      "off": "The \"Powered by Pavisie\" footer is now **off**. Public messages keep their own footers untouched. Turn it back on any time with `/setup footer enabled:true` or under Dashboard → Settings."
     }
   },
   "config": {
