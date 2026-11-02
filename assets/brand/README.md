@@ -2,8 +2,8 @@
 
 | File                  | What it is                                                                                                                                                            | Used by                                                                                                                                                                                                                                        |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pavisie-skull.png`  | Canonical Pavisie logo, used everywhere: a gold laurel-wreath medallion with a skull, on pure black, square (1024×1024). Lossless PNG; takes precedence over the `.jpg` when both exist. | Website, dashboard sidebar, bot avatar (`pnpm --filter @pavisie/bot set-avatar`), embed icons via `WEB_URL/brand/pavisie-skull.<ext>` (served from the web app's `public/brand/`), Discord Developer Portal app icon (manual upload). |
-| `pavisie-skull.jpg`  | The same art re-encoded as JPEG. Kept only for backwards-compatible URLs/cached references that still name the `.jpg` file — not used as the preferred source anywhere. | Served alongside the `.png` from every app's `public/brand/` so old `.jpg` links keep working; never referenced as the preferred `logo` in a manifest.                                                                                        |
+| `pavisie-skull.png`  | Canonical Pavisie logo, used everywhere: a grey skull under a gold laurel wreath, on a transparent background, square (1024×1024). PNG; takes precedence over the `.jpg` when both exist. | Website, dashboard sidebar, bot avatar (`pnpm --filter @pavisie/bot set-avatar`), embed icons via `WEB_URL/brand/pavisie-skull.<ext>` (served from the web app's `public/brand/`), Discord Developer Portal app icon (manual upload). |
+| `pavisie-skull.jpg`  | The same art re-encoded as JPEG on a black background, because JPEG has no transparency. Kept only for backwards-compatible URLs/cached references that still name the `.jpg` file — not used as the preferred source anywhere. | Served alongside the `.png` from every app's `public/brand/` so old `.jpg` links keep working; never referenced as the preferred `logo` in a manifest.                                                                                        |
 
 `pnpm brand:sync` (run automatically before `dev`/`build` of the web and dashboard apps) copies every shared logo
 file that exists (`pavisie-skull.png` and `pavisie-skull.jpg`) into each app's `public/brand/` folder unchanged,
@@ -23,7 +23,7 @@ favicon, below.
 
 ## Browser-tab favicons
 
-`apps/web/src/app/icon.png` and `apps/dashboard/src/app/icon.png` (256×256 RGB, black background kept) are the
+`apps/web/src/app/icon.png` and `apps/dashboard/src/app/icon.png` (256×256, transparent background) are the
 committed favicons for the two apps, picked up automatically by Next's app-router file convention (no `icons` entry
 needed in `metadata`). They are static, hand-generated files — `scripts/sync-brand.mjs` does not touch them — so
 regenerate and re-commit both whenever `assets/brand/pavisie-skull.png` changes.
@@ -36,7 +36,7 @@ re-check with `node -e "require.resolve('sharp')"` before assuming this). Regene
 ```
 python -c "
 from PIL import Image
-src = Image.open('assets/brand/pavisie-skull.png').convert('RGB')
+src = Image.open('assets/brand/pavisie-skull.png').convert('RGBA')
 resized = src.resize((256, 256), Image.LANCZOS)
 for t in ['apps/web/src/app/icon.png', 'apps/dashboard/src/app/icon.png']:
     resized.save(t, format='PNG', optimize=True)
