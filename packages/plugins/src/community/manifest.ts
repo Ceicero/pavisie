@@ -3,19 +3,14 @@ import { z } from 'zod';
 import { defineManifest } from '../sdk';
 
 /**
- * Object default that is parsed, so nested `.default()` values are part of the default itself.
- * Zod 4 calls this `.prefault({})`. Zod 3.25's `.default({})` parses on the way out, but
- * `defaultValue()` still returns the bare `{}`, which is what the dashboard schema publishes.
+ * Object default that is parsed, so nested `.default()` values are part of the default itself (and of the
+ * default the dashboard schema publishes). Under zod 4 a plain `.default({})` would return the bare `{}`.
  */
 function prefaultObject<S extends z.ZodRawShape>(shape: S) {
   const objectSchema = z.object(shape);
-  const withPrefault = objectSchema as z.ZodObject<S> & {
-    prefault?: (value: Record<string, never>) => z.ZodTypeAny;
-  };
-  if (typeof withPrefault.prefault === 'function') {
-    return withPrefault.prefault({});
-  }
-  return objectSchema.default(() => objectSchema.parse({}));
+  return objectSchema.default(
+    () => objectSchema.parse({}) as z.core.util.NoUndefined<z.output<typeof objectSchema>>,
+  );
 }
 
 export const configSchema = z.object({

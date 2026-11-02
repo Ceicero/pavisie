@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { configSchema } from '../manifest';
 
+/** zod 4 exposes `_def.defaultValue` as a getter (zod 3: a function); read it either way. */
+function defaultOf(schema: z.ZodDefault): unknown {
+  const value = (schema._def as { defaultValue: unknown }).defaultValue;
+  return typeof value === 'function' ? (value as () => unknown)() : value;
+}
+
 describe('community config object defaults', () => {
   it('fills nested giveaway, poll, and suggestion defaults from an empty config', () => {
     const config = configSchema.parse({});
@@ -23,9 +29,9 @@ describe('community config object defaults', () => {
       polls instanceof z.ZodDefault &&
       suggestions instanceof z.ZodDefault
     ) {
-      expect(giveaways._def.defaultValue()).toEqual({ defaultWinners: 1 });
-      expect(polls._def.defaultValue()).toEqual({ maxOptions: 10 });
-      expect(suggestions._def.defaultValue()).toMatchObject({ threads: true, dmAuthorOnStatus: true });
+      expect(defaultOf(giveaways)).toEqual({ defaultWinners: 1 });
+      expect(defaultOf(polls)).toEqual({ maxOptions: 10 });
+      expect(defaultOf(suggestions)).toMatchObject({ threads: true, dmAuthorOnStatus: true });
     }
   });
 
@@ -33,9 +39,9 @@ describe('community config object defaults', () => {
     const field = configSchema.shape.eventReminderMinutes;
     expect(field).toBeInstanceOf(z.ZodDefault);
     if (field instanceof z.ZodDefault) {
-      const first = field._def.defaultValue() as number[];
+      const first = defaultOf(field) as number[];
       first.push(5);
-      expect(field._def.defaultValue()).toEqual([60, 10]);
+      expect(defaultOf(field)).toEqual([60, 10]);
     }
   });
 });
