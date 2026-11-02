@@ -54,6 +54,7 @@ export function RuleActionsEditor({ actions, onChange, disabled }: RuleActionsEd
           {action.type === 'timeout' ? (
             <Input
               type="number"
+              aria-label="Timeout minutes"
               className="w-32"
               placeholder="Minutes"
               min={1}
