@@ -40,7 +40,7 @@ export default async function PluginDetailPage({ params }: PageProps) {
       <div className="mx-auto max-w-6xl px-6 pb-6 pt-10 sm:pb-8 sm:pt-14">
         <a
           href="/features"
-          className="text-sm text-grey-4 underline decoration-white/20 underline-offset-4 hover:text-grey-7"
+          className="rounded-sm text-sm text-grey-4 underline decoration-white/20 underline-offset-4 hover:text-grey-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-5"
         >
           ← All features &amp; commands
         </a>

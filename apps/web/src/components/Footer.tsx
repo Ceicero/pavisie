@@ -21,6 +21,9 @@ const COLUMNS: { title: string; links: { href: string; label: string; external?:
   },
 ];
 
+const LINK_CLASS =
+  'rounded-sm text-sm text-grey-3 transition-colors hover:text-grey-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-5';
+
 export function Footer() {
   const support = supportServerUrl();
   const year = new Date().getFullYear();
@@ -28,10 +31,10 @@ export function Footer() {
   return (
     <footer className="border-t border-white/10">
       <div className="mx-auto max-w-6xl px-6 py-12">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
-          <div className="col-span-2">
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="sm:col-span-2 lg:col-span-1">
             <Logo />
-            <p className="mt-3 max-w-xs text-sm text-grey-3">{siteCopy.footer.tagline}</p>
+            <p className="mt-3 max-w-xs text-sm leading-relaxed text-grey-3">{siteCopy.footer.tagline}</p>
           </div>
           {COLUMNS.map((col) => (
             <div key={col.title}>
@@ -39,7 +42,7 @@ export function Footer() {
               <ul className="mt-3 space-y-2">
                 {col.links.map((link) => (
                   <li key={link.href}>
-                    <a href={link.href} className="text-sm text-grey-3 transition-colors hover:text-grey-7">
+                    <a href={link.href} className={LINK_CLASS}>
                       {link.label}
                     </a>
                   </li>
@@ -52,24 +55,16 @@ export function Footer() {
             <ul className="mt-3 space-y-2">
               {support && (
                 <li>
-                  <a
-                    href={support}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-grey-3 transition-colors hover:text-grey-7"
-                  >
+                  <a href={support} target="_blank" rel="noopener noreferrer" className={LINK_CLASS}>
                     Support server
+                    <span className="sr-only"> (opens in a new tab)</span>
                   </a>
                 </li>
               )}
               <li>
-                <a
-                  href={GITHUB_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-grey-3 transition-colors hover:text-grey-7"
-                >
+                <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className={LINK_CLASS}>
                   GitHub
+                  <span className="sr-only"> (opens in a new tab)</span>
                 </a>
               </li>
             </ul>

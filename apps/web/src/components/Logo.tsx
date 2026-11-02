@@ -20,12 +20,19 @@ export function Logo({ className, imageSize = 28, withWordmark = true, href = '/
   const showImage = Boolean(brand.logo) && !failed;
 
   return (
-    <Link href={href} className={clsx('inline-flex items-center gap-2.5 select-none', className)}>
+    <Link
+      href={href}
+      aria-label="Pavisie, home"
+      className={clsx(
+        'inline-flex items-center gap-2.5 rounded-md select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-5',
+        className,
+      )}
+    >
       {showImage ? (
         // Fixed small brand mark; next/image adds no value here and this repo keeps images.unoptimized anyway.
         <img
           src={brand.logo ?? undefined}
-          alt="Pavisie"
+          alt=""
           width={imageSize}
           height={imageSize}
           className="rounded-md object-cover"
