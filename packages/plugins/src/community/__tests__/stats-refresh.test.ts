@@ -223,6 +223,26 @@ describe('statsRefreshJob', () => {
     await expect(statsRefreshJob.processor(ctx, {} as never)).resolves.toBeUndefined();
   });
 
+  it('does not retry a channel when Discord rate-limits the rename', async () => {
+    const ch = fakeChannel('c1', 'Members: 0', async () => {
+      const err = new Error('You are being rate limited.');
+      err.name = 'RateLimitError';
+      throw err;
+    });
+    const guild = fakeGuild([ch]);
+    const { ctx, cfg } = buildCtx(guild, {
+      statsChannels: [{ channelId: 'c1', template: 'Members: {members}' }],
+    });
+
+    const result = await refreshGuildStats(ctx, guild as never, cfg);
+    expect(result.renamed).toBe(0);
+    expect(ch.setName).toHaveBeenCalledTimes(1);
+
+    guild.memberCount = 99;
+    await refreshGuildStats(ctx, guild as never, cfg);
+    expect(ch.setName).toHaveBeenCalledTimes(1);
+  });
+
   it('declares the 5-minute repeat and concurrency 1', () => {
     expect(statsRefreshJob.name).toBe('stats-refresh');
     expect(statsRefreshJob.repeat).toEqual({ pattern: '*/5 * * * *' });
@@ -386,7 +406,7 @@ describe('stats channel rename throttling', () => {
     expect(await redis.get(statsBlockedKey(GUILD_ID))).toBeNull();
   });
 
-  it("respects Discord's retry_after on a 429 and doesn't retry early", async () => {
+  it('skips a 429 instead of waiting out retry_after or renaming again', async () => {
     const ch = fakeChannel('c1', 'Members: 0', async () => {
       throw Object.assign(new Error('You are being rate limited.'), {
         status: 429,
@@ -401,12 +421,13 @@ describe('stats channel rename throttling', () => {
     const warn = vi.spyOn(ctx.logger, 'warn');
 
     await refreshGuildStats(ctx, guild as never, cfg);
+    // The per-channel budget stays at 10 minutes. The 1500s retry_after is not waited out.
     const ttl = await redis.ttl(statsChannelRenameKey(GUILD_ID, 'c1'));
-    expect(ttl).toBeGreaterThan(1400);
-    expect(ttl).toBeLessThanOrEqual(1500);
+    expect(ttl).toBeGreaterThan(9 * 60);
+    expect(ttl).toBeLessThanOrEqual(10 * 60);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({ channelId: 'c1', retryAfterMs: 1_500_000 }),
-      expect.stringContaining('rate limited'),
+      expect.stringContaining('not queued'),
     );
 
     // Next periodic tick (guild gate expired, channel budget NOT): no second API call.

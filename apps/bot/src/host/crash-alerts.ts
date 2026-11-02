@@ -73,9 +73,10 @@ export function createCrashAlerter(
 }
 
 /**
- * Logs process-level crashes and Discord client errors at error level, and posts crash alerts. Installed right
- * after the client is built (before login) so a failure anywhere during startup is still caught. An
- * uncaughtException is logged and alerted but, as before, does not exit the process.
+ * Logs process-level crashes and Discord client errors, and posts crash alerts. Installed right after the
+ * client is built (before login) so a failure anywhere during startup is still caught.
+ * `unhandledRejection` stays at error and does not exit. `uncaughtException` logs at fatal (so Railway shows
+ * the level name) and exits after the alert attempt, so the platform restarts the bot.
  */
 export function installCrashHandlers(options: CrashAlerterOptions): void {
   const { client, logger } = options;
@@ -86,8 +87,10 @@ export function installCrashHandlers(options: CrashAlerterOptions): void {
     void alert('unhandledRejection', reason);
   });
   process.on('uncaughtException', (err, origin) => {
-    logger.error({ err, origin }, 'uncaughtException');
-    void alert('uncaughtException', err);
+    logger.fatal({ err, origin }, 'uncaughtException');
+    void alert('uncaughtException', err).finally(() => {
+      process.exit(1);
+    });
   });
 
   // Without an 'error' listener an emitted client error is thrown as an uncaught exception.

@@ -137,6 +137,14 @@ jobs:
       NEXT_PUBLIC_API_URL: http://localhost:3001
       SESSION_SECRET: ci-e2e-session-secret-not-for-production-use-only
       ENCRYPTION_KEY: Y2ktZTJlLWVuY3J5cHRpb24ta2V5LTMyLWJ5dGVzISE=
+      # The API process refuses to boot without these (apps/api/src/index.ts). They are disposable
+      # stand-ins, the same ones apps/api/test/setup.ts uses; e2e never talks to Discord.
+      DISCORD_CLIENT_ID: test-discord-client-id
+      DISCORD_CLIENT_SECRET: test-discord-client-secret
+      DISCORD_OAUTH_REDIRECT_URI: http://localhost:3001/auth/discord/callback
+      NEXT_PUBLIC_DISCORD_CLIENT_ID: test-discord-client-id
+      NEXT_PUBLIC_INVITE_PERMISSIONS: ''
+      NEXT_PUBLIC_SUPPORT_SERVER_URL: ''
 
     steps:
       - name: Checkout

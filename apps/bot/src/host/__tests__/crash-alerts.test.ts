@@ -94,13 +94,15 @@ describe('installCrashHandlers', () => {
     for (const [event, listener] of added.splice(0)) process.off(event, listener);
   });
 
-  it('logs process crashes and client error/shardError events at error level', () => {
+  it('logs rejections at error, and an uncaught exception at fatal before exiting', async () => {
     const before = {
       rejection: process.listeners('unhandledRejection').length,
       exception: process.listeners('uncaughtException').length,
     };
     const { client, emitter } = fakeClient({ ready: false });
     const error = vi.spyOn(logger, 'error');
+    const fatal = vi.spyOn(logger, 'fatal');
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as typeof process.exit);
 
     installCrashHandlers({ client, logger, channelId: undefined });
     const rejection = process.listeners('unhandledRejection').at(-1) as (...args: unknown[]) => void;
@@ -114,13 +116,15 @@ describe('installCrashHandlers', () => {
     exception(err, 'uncaughtException');
     emitter.emit('error', err);
     emitter.emit('shardError', err, 0);
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
 
     expect(error.mock.calls.map((call) => call[1])).toEqual([
       'unhandledRejection',
-      'uncaughtException',
       'discord client error',
       'discord shard error (websocket connection)',
     ]);
+    expect(fatal).toHaveBeenCalledWith({ err, origin: 'uncaughtException' }, 'uncaughtException');
     expect(error).toHaveBeenCalledWith({ err, shardId: 0 }, expect.any(String));
+    exit.mockRestore();
   });
 });
