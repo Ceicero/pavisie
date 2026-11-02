@@ -29,7 +29,7 @@ export const configSchema = z.object({
       /** Master switch for keyword triggers (needs the Message Content intent). */
       triggersEnabled: z.boolean().default(false),
     })
-    .default({}),
+    .prefault({}),
   suggestions: prefaultObject({
     channelId: z.string().nullable().default(null),
     threads: z.boolean().default(true),
@@ -51,7 +51,7 @@ export const configSchema = z.object({
       maxPerGuild: z.number().int().min(1).max(100).default(25),
       defaultCooldownSeconds: z.number().int().min(3).max(600).default(10),
     })
-    .default({}),
+    .prefault({}),
   autoPublish: z
     .object({
       /** Announcement (type 5) channel ids whose new messages the bot crossposts. */
@@ -59,7 +59,7 @@ export const configSchema = z.object({
       /** Also publish messages sent by other bots/webhooks (default: humans + this bot only). */
       includeBots: z.boolean().default(false),
     })
-    .default({}),
+    .prefault({}),
   autoThreads: z
     .array(
       z.object({
@@ -107,7 +107,7 @@ export const configSchema = z.object({
        * When false, only an admin can set or remove a birthday (for themselves or another member). */
       allowSelfService: z.boolean().default(true),
     })
-    .default({}),
+    .prefault({}),
 });
 
 export type CommunityConfig = z.infer<typeof configSchema>;
