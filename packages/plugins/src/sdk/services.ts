@@ -276,6 +276,20 @@ export interface EnforcerService {
   repairChannels(guildId: string): Promise<{ muteApplied: number; muteFailed: number }>;
 }
 
+/** What the dashboard's "Streamer starter pack" button asks the bot to do (a `bot-actions` job's merged `{ guildId, payload, requestedBy }`). */
+export interface AdminStreamerStarterRequest {
+  guildId: string;
+  payload?: { requestId: string; twitchLogin?: string | null; alertChannelId?: string | null };
+  /** Discord user id of the dashboard user; recorded as the audit actor. */
+  requestedBy?: string;
+}
+
+/** Registered by the `admin` plugin; reached through the `bot-actions` queue (dashboard -> bot). */
+export interface AdminService {
+  /** Runs the streamer starter pack and stores the report in Redis for the API to hand back (`streamerStarterResultKey`). Never throws: a failure is stored as the result. */
+  streamerStarter(input: AdminStreamerStarterRequest): Promise<void>;
+}
+
 /** Snapshot of the Twitch chat bot's EventSub WebSocket connection, for the plugin's `health()`. */
 export interface TwitchChatRuntimeStatus {
   /** False when TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET are unset or no `TwitchBotIdentity` row exists — everything else no-ops. */
@@ -355,6 +369,7 @@ export interface ServiceMap {
   integrations: IntegrationsService;
   ai: AiService;
   host: HostService;
+  admin: AdminService;
   enforcer: EnforcerService;
   twitchChat: TwitchChatService;
 }

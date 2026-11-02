@@ -10,7 +10,51 @@
     "sessionExpired": "This setup session expired (15 minutes of inactivity). Run `/setup wizard` again.",
     "notWizardOwner": "Only the person who started /setup wizard can use these controls.",
     "cancelled": "Setup cancelled. Nothing was changed. Run `/setup wizard` again anytime.",
-    "complete": "Setup complete."
+    "complete": "Setup complete.",
+    "streamer": {
+      "embedTitle": "Streamer starter pack",
+      "embedDescription": "Here is what I set up. Anything marked ☑️ was already configured and I left it alone. Every setting below can still be changed whenever you like.",
+      "changeIt": "Change it: {where}",
+      "notesTitle": "Heads up",
+      "alreadyRunning": "The streamer starter pack is already running for this server. Give it a moment and check the result.",
+      "genericFailure": "something went wrong while setting this up. It has been logged. Run it again to retry.",
+      "failed": "Could not finish this step: {error}",
+      "unavailable": "This feature is not available on this bot right now ({reason}).",
+      "pluginEnabled": "Turned on the **{plugin}** plugin.",
+      "twitch": {
+        "title": "Twitch go-live alerts",
+        "where": "`/integration alerts list|add|remove`, or Dashboard → Integrations.",
+        "created": "Watching **{login}**: a go-live alert will be posted in {channel}.",
+        "alreadyWatching": "Already watching **{login}**, left as it is.",
+        "alreadyAny": "This server already has {count} Twitch alert(s), left as they are.",
+        "noLogin": "No Twitch login was given, so no alert was added yet. Add one with `/integration alerts add provider:twitch`, run `/setup streamer twitch_login:yourname`, or use Dashboard → Integrations.",
+        "invalidLogin": "\"{login}\" is not a valid Twitch username (letters, numbers and underscores, up to 25 characters), so no alert was added.",
+        "noChannel": "No channel to post **{login}**'s alerts in. Run this in a text channel or pass `alert_channel`.",
+        "unconfigured": "Twitch alerts are not set up on this bot (no Twitch credentials), so no alert was added.",
+        "channelProblem": "I can't fully post in {channel} yet (missing: {missing}). Give me those permissions there or the go-live alert won't appear."
+      },
+      "stats": {
+        "title": "Server stats channel",
+        "where": "`/statschannel list|create|remove|interval`, or Dashboard → Community.",
+        "created": "Created the **{category}** category with a locked voice channel {channel} showing `{template}`.",
+        "already": "This server already has {count} stats channel(s), left as they are.",
+        "missingPermission": "Skipped: I need the **Manage Channels** permission to create the stats channel. Give it to me and run this again."
+      },
+      "leveling": {
+        "title": "Leveling",
+        "where": "`/level config`, or Dashboard → Engagement.",
+        "enabled": "Leveling is on with the default settings: members earn XP for chatting and for time in voice.",
+        "already": "Leveling was already on, so its settings are untouched."
+      },
+      "automod": {
+        "title": "Basic automod",
+        "where": "`/automod rule list|edit|toggle|delete`, or Dashboard → Automod.",
+        "created": "Added {count} rule(s): {names}. They only delete the message. Nobody is timed out or banned.",
+        "keptExisting": "Already had a rule for: {types}. Those were left as they are.",
+        "already": "Already had rules for: {types}, so I left them as they are.",
+        "dryRunNote": "The new automod rules start in **dry-run**: matches are logged and nothing is deleted yet. Check `/automod review`, then use `/automod rule dryrun` on each rule and `/automod dryrun off` when you're happy."
+      }
+    }
   },
   "config": {
     "guildTitle": "Config — guild",
