@@ -54,6 +54,8 @@ export interface WebhookEndpointDetailDto extends WebhookEndpointDto {
   channelId: string | null;
   failureCount: number;
   lastDeliveryAt: string | null;
+  /** Inbound only: deliveries must include a signed `X-Pavisie-Timestamp` header. */
+  requireTimestamp: boolean;
 }
 
 export interface WebhookDeliveryDto {

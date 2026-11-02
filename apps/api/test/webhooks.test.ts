@@ -14,7 +14,7 @@ function genericSignature(secret: string, body: string): string {
   return createHmac('sha256', secret).update(body).digest('hex');
 }
 
-function endpointOverrides(secretPlain: string) {
+function endpointOverrides(secretPlain: string, extra: Record<string, unknown> = {}) {
   return {
     webhookEndpoint: {
       findFirst: async () => ({
@@ -24,6 +24,8 @@ function endpointOverrides(secretPlain: string) {
         enabled: true,
         deletedAt: null,
         secretEnc: encryptSecret(secretPlain),
+        requireTimestamp: false,
+        ...extra,
       }),
       update: async () => ({}),
     },
@@ -169,6 +171,36 @@ describe('webhook signature verification', () => {
     it('400s a malformed timestamp', async () => {
       const { res } = await send({ 'x-pavisie-timestamp': 'abc', 'x-pavisie-signature': 'x' }, body);
       expect(res.statusCode).toBe(400);
+    });
+  });
+
+  describe('per-endpoint requireTimestamp', () => {
+    const body = JSON.stringify({ hello: 'strict' });
+    async function post(headers: Record<string, string>) {
+      const { app, queues } = await buildTestApp(endpointOverrides(GENERIC_SECRET, { requireTimestamp: true }));
+      const res = await app.inject({
+        method: 'POST',
+        url: '/webhooks/generic/endpoint-1',
+        headers: { 'content-type': 'application/json', ...headers },
+        payload: body,
+      });
+      await app.close();
+      return { res, queues };
+    }
+
+    it('rejects a validly body-signed delivery without the timestamp header', async () => {
+      const { res, queues } = await post({ 'x-pavisie-signature': genericSignature(GENERIC_SECRET, body) });
+      expect(res.statusCode).toBe(401);
+      expect(queues.calls).toHaveLength(0);
+    });
+
+    it('accepts a fresh timestamped delivery', async () => {
+      const ts = String(Math.floor(Date.now() / 1000));
+      const { res } = await post({
+        'x-pavisie-timestamp': ts,
+        'x-pavisie-signature': genericSignature(GENERIC_SECRET, `${ts}.${body}`),
+      });
+      expect(res.statusCode).toBe(202);
     });
   });
 

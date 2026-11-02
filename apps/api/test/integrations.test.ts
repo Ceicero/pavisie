@@ -501,6 +501,44 @@ function stubTwitchHelix() {
   return requests;
 }
 
+describe('inbound webhook requireTimestamp setting', () => {
+  it('creates with requireTimestamp, toggles it via PATCH, and audits the change', async () => {
+    const { app, cookieHeader, csrfToken, prismaCalls } = await setupAuthedApp(webhookEndpointOverrides());
+    const headers = { cookie: cookieHeader, 'x-csrf-token': csrfToken };
+    const create = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/integrations/webhooks`,
+      headers,
+      payload: { name: 'strict', requireTimestamp: true },
+    });
+    expect(create.statusCode).toBe(201);
+    const { id } = create.json() as { id: string };
+
+    const list = await app.inject({ method: 'GET', url: `/guilds/${GUILD_ID}/integrations/webhooks`, headers });
+    expect((list.json() as Array<{ requireTimestamp: boolean }>)[0]!.requireTimestamp).toBe(true);
+
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: `/guilds/${GUILD_ID}/integrations/webhooks/${id}`,
+      headers,
+      payload: { requireTimestamp: false },
+    });
+    expect(patch.statusCode).toBe(200);
+    expect(patch.json().requireTimestamp).toBe(false);
+    const audit = prismaCalls.filter((c) => c.model === 'auditLog' && c.method === 'create').at(-1);
+    expect(JSON.stringify(audit!.args)).toContain('integration.webhook.update');
+
+    const missing = await app.inject({
+      method: 'PATCH',
+      url: `/guilds/${GUILD_ID}/integrations/webhooks/nope`,
+      headers,
+      payload: { requireTimestamp: true },
+    });
+    expect(missing.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
 describe('Twitch is an alert provider, not an OAuth one', () => {
   it('reports twitch as a non-oauth alert provider while instagram and the calendars stay oauth', async () => {
     const { app, cookieHeader } = await setupAuthedApp(guildOverrides());
