@@ -302,7 +302,7 @@ function requestWithBotToken(path: string, token: string): Promise<Response> {
  * Fetches a path with the bot token, bypassing the cache. On a 429, waits out `retry_after` (capped at 5s)
  * and retries exactly once before giving up — mirrors `fetchDiscordUserGuildsUncached`.
  */
-async function fetchWithBotToken<T>(path: string): Promise<T> {
+export async function fetchWithBotToken<T>(path: string): Promise<T> {
   if (!env.DISCORD_TOKEN) {
     throw new AppError(
       'bot_token_missing',
