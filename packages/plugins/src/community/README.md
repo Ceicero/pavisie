@@ -134,8 +134,13 @@ Constraints (also stated in the UI):
   - Each channel is renamed at most once per 10 minutes, whoever asks: a Redis `SET NX EX` key per channel
     (`pavisie:community:stats-rename:<guildId>:<channelId>`, TTL 10 minutes). A channel skipped by it counts as "already
     up to date" and is picked up on a later pass.
-  - **A rate limit is skipped.** A `RateLimitError` (or a raw 429) pushes that channel's Redis key out to Discord's
-    `retry_after` (never shorter than 10 minutes) and nothing retries before then.
+  - **A rate limit is skipped, not waited out.** discord.js would otherwise queue a rename that hits the channel-name
+    sublimit and sleep until it clears (up to ~10 minutes), hanging the job. `createClient` (`apps/bot/src/client.ts`)
+    sets the REST option `rejectOnRateLimit` to `statsRenameRateLimitFilter`, which says "reject" only for a channel
+    PATCH whose channel has a stats rename in flight; every other request keeps discord.js's normal queueing. The
+    resulting `RateLimitError` (or a raw 429) pushes that channel's Redis key out to Discord's `retry_after` (never
+    shorter than 10 minutes) and nothing retries before then. Any client that renames stats channels must install the
+    filter, or a rate-limited rename will wait inside `setName` again.
   - **A permission error pauses the guild.** 50013 Missing Permissions / 50001 Missing Access stop that pass's renames
     for the guild and set a Redis key holding a fingerprint of the stats config and the bot's permissions on those
     channels. The periodic job skips the guild until the fingerprint changes (one warn naming the guild per change);

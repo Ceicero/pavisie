@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RedisMock from 'ioredis-mock';
-import { DiscordAPIError, RateLimitError } from 'discord.js';
+import { DiscordAPIError, REST, RateLimitError, Routes } from 'discord.js';
 import { createTestContext } from '../../sdk/testing';
 import { CHANNEL_RENAME_INTERVAL_MS } from '../stats-channels';
-import { renameStatsChannel, statsChannelRenameKey, type RenameableChannel } from '../stats-rename';
+import {
+  renameStatsChannel,
+  statsChannelRenameKey,
+  statsRenameRateLimitFilter,
+  type RenameableChannel,
+} from '../stats-rename';
 
 const GUILD_ID = 'guild-1';
 /** A snowflake-shaped id: @discordjs/rest only treats 17-19 digit numbers as major parameters. */
@@ -180,5 +185,113 @@ describe('renameStatsChannel', () => {
       expect.objectContaining({ guildId: GUILD_ID, channelId: CHANNEL_ID, code: 50035, err }),
       expect.stringContaining('Invalid Form Body'),
     );
+  });
+});
+
+describe('statsRenameRateLimitFilter', () => {
+  const patchChannel = { global: false, method: 'PATCH', route: '/channels/:id', majorParameter: CHANNEL_ID };
+
+  it('is false for everything while no stats rename is in flight', () => {
+    expect(statsRenameRateLimitFilter(patchChannel)).toBe(false);
+  });
+
+  it('is true only for the in-flight channel’s PATCH /channels/:id', async () => {
+    const { ctx } = createTestContext();
+    let during: Record<string, boolean> = {};
+    const ch = channelWith(async () => {
+      during = {
+        rename: statsRenameRateLimitFilter(patchChannel),
+        lowercaseMethod: statsRenameRateLimitFilter({ ...patchChannel, method: 'patch' }),
+        otherChannel: statsRenameRateLimitFilter({ ...patchChannel, majorParameter: '999999999999999999' }),
+        otherMethod: statsRenameRateLimitFilter({ ...patchChannel, method: 'DELETE' }),
+        messagesRoute: statsRenameRateLimitFilter({ ...patchChannel, route: '/channels/:id/messages' }),
+        global: statsRenameRateLimitFilter({ ...patchChannel, global: true }),
+      };
+    });
+
+    await renameStatsChannel(ctx, GUILD_ID, ch, 'Members: 42');
+    expect(during).toEqual({
+      rename: true,
+      lowercaseMethod: true,
+      otherChannel: false,
+      otherMethod: false,
+      messagesRoute: false,
+      global: false,
+    });
+    // ...and the channel is released as soon as the call settles.
+    expect(statsRenameRateLimitFilter(patchChannel)).toBe(false);
+  });
+
+  it('releases the channel when the rename throws', async () => {
+    const { ctx } = createTestContext();
+    let during = false;
+    const ch = channelWith(async () => {
+      during = statsRenameRateLimitFilter(patchChannel);
+      throw new Error('boom');
+    });
+
+    await renameStatsChannel(ctx, GUILD_ID, ch, 'Members: 42');
+    expect(during).toBe(true);
+    expect(statsRenameRateLimitFilter(patchChannel)).toBe(false);
+  });
+
+  // The behaviour the filter exists for, against the real REST layer: Discord answers the rename with a 429 that
+  // carries a ~9 minute sublimit. Without the filter discord.js would sleep that long inside `setName`.
+  describe('with discord.js’s REST layer', () => {
+    function restThatAlwaysRateLimits() {
+      const makeRequest = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ message: 'You are being rate limited.', retry_after: 540, global: false }),
+            {
+              status: 429,
+              headers: {
+                'Content-Type': 'application/json',
+                'Retry-After': '540',
+                'X-RateLimit-Scope': 'shared',
+              },
+            },
+          ),
+      );
+      const rest = new REST({
+        makeRequest,
+        rejectOnRateLimit: statsRenameRateLimitFilter,
+        hashSweepInterval: 0,
+        handlerSweepInterval: 0,
+      }).setToken('test-token');
+      return { rest, makeRequest };
+    }
+
+    it('turns the channel-name sublimit into a skip right away, and leaves the channel throttled', async () => {
+      const { ctx, redis } = createTestContext();
+      const { rest, makeRequest } = restThatAlwaysRateLimits();
+      const ch = channelWith(async (name) => {
+        await rest.patch(Routes.channel(CHANNEL_ID), { body: { name } });
+      });
+
+      const outcome = await renameStatsChannel(ctx, GUILD_ID, ch, 'Members: 42');
+
+      expect(outcome.status).toBe('rate-limited');
+      // 540 s from Retry-After plus discord.js's 50 ms offset.
+      expect(outcome).toMatchObject({ retryAfterMs: expect.any(Number) });
+      expect((outcome as { retryAfterMs: number }).retryAfterMs).toBeGreaterThanOrEqual(540_000);
+      expect(makeRequest).toHaveBeenCalledTimes(1); // not retried
+      expect(await redis.ttl(statsChannelRenameKey(GUILD_ID, CHANNEL_ID))).toBeGreaterThan(539);
+    });
+
+    it('does not reject a request for a channel with no stats rename in flight', async () => {
+      const { rest } = restThatAlwaysRateLimits();
+      // Same 429, but nothing registered the channel: the filter says "keep queueing", so the request stays
+      // pending instead of throwing. Race it against a short timer to prove that without waiting 9 minutes.
+      const pending = rest.patch(Routes.channel(CHANNEL_ID), { body: { name: 'x' } }).then(
+        () => 'resolved',
+        () => 'rejected',
+      );
+      const outcome = await Promise.race([
+        pending,
+        new Promise((r) => setTimeout(() => r('still queued'), 200)),
+      ]);
+      expect(outcome).toBe('still queued');
+    });
   });
 });
