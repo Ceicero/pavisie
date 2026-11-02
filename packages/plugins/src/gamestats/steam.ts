@@ -82,7 +82,7 @@ async function resolveVanity(ctx: PluginContext, apiKey: string, vanity: string)
   try {
     res = await fetch(`${API_BASE}/ISteamUser/ResolveVanityURL/v1/?${params.toString()}`);
   } catch (err) {
-    logRequestFailure(ctx, 'resolve vanity request threw', { err: err instanceof Error ? err.message : String(err) });
+    logRequestFailure(ctx, 'resolve vanity request threw', { err });
     return { ok: false, error: 'error' };
   }
   if (!res.ok) {
@@ -131,7 +131,7 @@ export async function getPlayerSummary(ctx: PluginContext, steamId: string): Pro
   try {
     res = await fetch(`${API_BASE}/ISteamUser/GetPlayerSummaries/v2/?${params.toString()}`);
   } catch (err) {
-    logRequestFailure(ctx, 'player summary request threw', { err: err instanceof Error ? err.message : String(err) });
+    logRequestFailure(ctx, 'player summary request threw', { err });
     return null;
   }
   if (!res.ok) {
@@ -191,7 +191,7 @@ export async function getGameStats(
   try {
     res = await fetch(`${API_BASE}/ISteamUserStats/GetUserStatsForGame/v2/?${params.toString()}`);
   } catch (err) {
-    logRequestFailure(ctx, 'get stats request threw', { err: err instanceof Error ? err.message : String(err) });
+    logRequestFailure(ctx, 'get stats request threw', { err });
     return { ok: false, reason: 'error' };
   }
 

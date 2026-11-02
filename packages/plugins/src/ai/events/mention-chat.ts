@@ -74,7 +74,7 @@ async function fetchMentionChatHistory(
       {
         guildId: message.guildId,
         channelId: message.channelId,
-        err: err instanceof Error ? err.message : String(err),
+        err,
       },
       'ai: mention-chat failed to fetch recent-message context, continuing without it',
     );
@@ -97,7 +97,7 @@ async function reportMentionChatFailure(
     {
       guildId: message.guildId,
       channelId: message.channelId,
-      err: err instanceof Error ? err.message : String(err),
+      err,
     },
     'ai: mention-chat reply failed',
   );

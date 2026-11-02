@@ -62,7 +62,7 @@ function reencryptValue(
   } catch (err) {
     summary.failed += 1;
     logger.error(
-      { table: label, id, err: err instanceof Error ? err.message : String(err) },
+      { table: label, id, err },
       'failed to decrypt value — left unchanged (neither ENCRYPTION_KEY nor ENCRYPTION_KEY_PREVIOUS could open it)',
     );
     return undefined;

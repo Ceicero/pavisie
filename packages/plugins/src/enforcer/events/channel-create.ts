@@ -43,7 +43,7 @@ export const channelCreateHandler: PluginEventHandler<'channelCreate'> = {
       await applyMuteRoleToChannel(channel, role, 'Enforcer: apply mute role overwrite (new channel)');
     } catch (err) {
       ctx.logger.warn(
-        { err: err instanceof Error ? err.message : String(err), guildId: channel.guild.id, channelId: channel.id },
+        { err, guildId: channel.guild.id, channelId: channel.id },
         'enforcer: failed to apply mute role overwrite to newly created channel',
       );
     }

@@ -81,7 +81,7 @@ export const captchaPollJob: PluginJob = {
         } catch (err) {
           ctx.logger.error(
             {
-              err: err instanceof Error ? err.message : String(err),
+              err,
               guildId: tokenContext.guildId,
               userId: tokenContext.userId,
             },

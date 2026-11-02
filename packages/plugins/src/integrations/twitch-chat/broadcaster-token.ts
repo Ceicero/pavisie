@@ -116,9 +116,8 @@ async function refreshBroadcasterToken(
     });
   } catch (err) {
     // Network failure reaching Twitch's token endpoint — transient, leave the connection untouched.
-    const message = err instanceof Error ? err.message : String(err);
     ctx.logger.warn(
-      { err: message },
+      { err },
       'integrations/twitch-chat: broadcaster token refresh request threw; leaving connection untouched, will retry next tick',
     );
     return null;
@@ -158,9 +157,8 @@ async function refreshBroadcasterToken(
   } catch (err) {
     // Twitch already issued a new (one-time-use) refresh token by this point — it's lost either way, but a
     // parse/DB blip right after a successful exchange is still transient in nature; don't brick the row for it.
-    const message = err instanceof Error ? err.message : String(err);
     ctx.logger.warn(
-      { err: message },
+      { err },
       'integrations/twitch-chat: broadcaster token refresh post-processing failed; leaving connection untouched, will retry next tick',
     );
     return null;

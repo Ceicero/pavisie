@@ -126,10 +126,7 @@ async function applyQuarantine(
     await member.roles.add(config.quarantineRoleId, reason);
     return { type: 'quarantine', applied: true };
   } catch (err) {
-    ctx.logger.error(
-      { guildId, userId, err: err instanceof Error ? err.message : String(err) },
-      'automod: failed to assign quarantine role',
-    );
+    ctx.logger.error({ guildId, userId, err }, 'automod: failed to assign quarantine role');
     return {
       type: 'quarantine',
       applied: false,
@@ -233,10 +230,7 @@ async function postAlert(
       allowedMentions: { parse: [] },
     });
   } catch (err) {
-    ctx.logger.error(
-      { guildId: guild.id, err: err instanceof Error ? err.message : String(err) },
-      'automod: failed to post alert embed',
-    );
+    ctx.logger.error({ guildId: guild.id, err }, 'automod: failed to post alert embed');
   }
 }
 
@@ -690,7 +684,7 @@ async function applyRaidLockdown(
       await guild.setVerificationLevel(GuildVerificationLevel.High, reason);
     } catch (err) {
       ctx.logger.error(
-        { guildId: guild.id, err: err instanceof Error ? err.message : String(err) },
+        { guildId: guild.id, err },
         'automod: failed to raise verification level during raid lockdown',
       );
     }

@@ -52,7 +52,7 @@ export class PlatformEvents {
   private logListenerError(event: PlatformEventName, err: unknown): void {
     const message = err instanceof Error ? err.message : String(err);
     if (this.logger) {
-      this.logger.error({ event, err: message }, 'PlatformEvents listener threw');
+      this.logger.error({ event, err }, 'PlatformEvents listener threw');
     } else {
       // last-resort fallback when no logger was supplied
       console.error(`PlatformEvents listener for "${event}" threw:`, message);

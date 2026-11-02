@@ -154,9 +154,8 @@ async function refreshBotIdentity(ctx: PluginContext, identity: TwitchBotIdentit
     });
   } catch (err) {
     // Network failure reaching Twitch's token endpoint — transient, leave the row untouched.
-    const message = err instanceof Error ? err.message : String(err);
     ctx.logger.warn(
-      { err: message },
+      { err },
       'integrations/twitch-chat: token refresh request threw; leaving identity untouched, will retry next tick',
     );
     return null;
@@ -190,9 +189,8 @@ async function refreshBotIdentity(ctx: PluginContext, identity: TwitchBotIdentit
   } catch (err) {
     // Twitch already issued a new (one-time-use) refresh token by this point — it's lost either way, but a
     // parse/DB blip right after a successful exchange is still transient in nature; don't brick the row for it.
-    const message = err instanceof Error ? err.message : String(err);
     ctx.logger.warn(
-      { err: message },
+      { err },
       'integrations/twitch-chat: token refresh post-processing failed; leaving identity untouched, will retry next tick',
     );
     return null;
@@ -353,7 +351,7 @@ export async function sendChatMessage(
       // so this is an edge case; just log and treat as success (the message may or may not have actually been sent,
       // but we can't determine that)
       ctx.logger.warn(
-        { err: err instanceof Error ? err.message : String(err) },
+        { err },
         'integrations/twitch-chat: failed to parse send chat message response',
       );
     }
@@ -361,7 +359,7 @@ export async function sendChatMessage(
     return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    ctx.logger.warn({ err: message }, 'integrations/twitch-chat: send chat message request threw');
+    ctx.logger.warn({ err }, 'integrations/twitch-chat: send chat message request threw');
     return { ok: false, error: message };
   }
 }
@@ -486,8 +484,7 @@ export async function getUserByLogin(ctx: PluginContext, login: string): Promise
     const user = json.data[0];
     return { ok: true, value: user ? { id: user.id, login: user.login, displayName: user.display_name } : null };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    ctx.logger.warn({ err: message }, 'integrations/twitch-chat: get user by login failed');
+    ctx.logger.warn({ err }, 'integrations/twitch-chat: get user by login failed');
     return { ok: false };
   }
 }
@@ -509,8 +506,7 @@ export async function deleteEventSubSubscription(ctx: PluginContext, subscriptio
     );
     return res.ok;
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    ctx.logger.warn({ err: message }, 'integrations/twitch-chat: delete EventSub subscription failed');
+    ctx.logger.warn({ err }, 'integrations/twitch-chat: delete EventSub subscription failed');
     return false;
   }
 }
@@ -533,8 +529,7 @@ export async function getStream(ctx: PluginContext, broadcasterId: string): Prom
     const stream = json.data[0];
     return { ok: true, value: stream ? { startedAt: stream.started_at } : null };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    ctx.logger.warn({ err: message }, 'integrations/twitch-chat: get stream failed');
+    ctx.logger.warn({ err }, 'integrations/twitch-chat: get stream failed');
     return { ok: false };
   }
 }
@@ -556,8 +551,7 @@ export async function getChannelInfo(ctx: PluginContext, broadcasterId: string):
     const channel = json.data[0];
     return { ok: true, value: channel ? { title: channel.title || null } : null };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    ctx.logger.warn({ err: message }, 'integrations/twitch-chat: get channel info failed');
+    ctx.logger.warn({ err }, 'integrations/twitch-chat: get channel info failed');
     return { ok: false };
   }
 }

@@ -44,7 +44,7 @@ async function applyRoleRewards(
       await member.roles.remove(plan.toRemove, `Pavisie engagement: level rewards (${mode})`);
   } catch (err) {
     ctx.logger.warn(
-      { guildId, userId: member.id, err: err instanceof Error ? err.message : String(err) },
+      { guildId, userId: member.id, err },
       'engagement: failed to apply level reward roles (likely missing Manage Roles or role hierarchy)',
     );
   }

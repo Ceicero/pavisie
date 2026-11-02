@@ -42,10 +42,7 @@ async function notifyAboutAfkMentions(ctx: PluginContext, message: Message<true>
       allowedMentions: { parse: [] },
     });
   } catch (err) {
-    ctx.logger.warn(
-      { err: err instanceof Error ? err.message : String(err), guildId: message.guildId },
-      'utility: failed to send an AFK mention notice',
-    );
+    ctx.logger.warn({ err, guildId: message.guildId }, 'utility: failed to send an AFK mention notice');
   }
 }
 

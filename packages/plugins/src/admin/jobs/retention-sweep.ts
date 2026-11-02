@@ -42,7 +42,7 @@ export const retentionSweepJob: PluginJob = {
         }
       } catch (err) {
         // Isolate failures per guild — one guild's bad policy/DB hiccup must not abort the sweep for everyone else.
-        ctx.logger.error({ err: String(err), guildId }, 'admin: retention sweep failed for a guild');
+        ctx.logger.error({ err, guildId }, 'admin: retention sweep failed for a guild');
       }
     }
 

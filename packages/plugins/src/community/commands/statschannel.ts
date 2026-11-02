@@ -172,10 +172,7 @@ async function handleCreate(c: CommandContext): Promise<void> {
       });
     }
   } catch (err) {
-    ctx.logger.warn(
-      { guildId, err: err instanceof Error ? err.message : String(err) },
-      'community: /statschannel create failed to create the channel',
-    );
+    ctx.logger.warn({ guildId, err }, 'community: /statschannel create failed to create the channel');
     await interaction.reply({ embeds: [errorEmbed(t('statschannel.createFailed'))], ephemeral: true });
     return;
   }
