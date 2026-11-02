@@ -1,17 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RedisMock from 'ioredis-mock';
-import type { Client } from 'discord.js';
+import { RateLimitError, type Client } from 'discord.js';
 import { createTestContext } from '../../sdk/testing';
 import type { CommunityConfig } from '../manifest';
 import { configSchema } from '../manifest';
-import {
-  rateLimitRetryAfterMs,
-  refreshGuildStats,
-  statsBlockedKey,
-  statsChannelRenameKey,
-  statsLastKey,
-  statsRefreshJob,
-} from '../jobs/stats-refresh';
+import { refreshGuildStats, statsBlockedKey, statsLastKey, statsRefreshJob } from '../jobs/stats-refresh';
+import { rateLimitRetryAfterMs, statsChannelRenameKey } from '../stats-rename';
 
 const GUILD_ID = 'guild-1';
 
@@ -259,6 +253,68 @@ describe('stats channel rename throttling', () => {
     const ttl = await redis.ttl(key);
     expect(ttl).toBeGreaterThan(9 * 60);
     expect(ttl).toBeLessThanOrEqual(10 * 60);
+  });
+
+  it('shares one per-channel budget between the periodic job and a manual refresh, in either order', async () => {
+    const jobFirst = fakeChannel('c1', 'Members: 0');
+    const guildA = fakeGuild([jobFirst]);
+    const a = buildCtx(guildA, { statsChannels: [{ channelId: 'c1', template: 'Members: {members}' }] });
+
+    await statsRefreshJob.processor(a.ctx, {} as never);
+    expect(jobFirst.setName).toHaveBeenCalledTimes(1);
+    // An admin runs `/statschannel refresh` (it calls refreshGuildStats) right after, with a new count.
+    guildA.memberCount = 50;
+    const manual = await refreshGuildStats(a.ctx, guildA as never, a.cfg);
+    expect(manual.renamed).toBe(0);
+    expect(jobFirst.setName).toHaveBeenCalledTimes(1);
+
+    await new RedisMock().flushall();
+    const manualFirst = fakeChannel('c1', 'Members: 0');
+    const guildB = fakeGuild([manualFirst]);
+    const b = buildCtx(guildB, { statsChannels: [{ channelId: 'c1', template: 'Members: {members}' }] });
+
+    await refreshGuildStats(b.ctx, guildB as never, b.cfg);
+    expect(manualFirst.setName).toHaveBeenCalledTimes(1);
+    // The refresh also reset the per-guild gate, and even with that expired the channel budget still holds.
+    guildB.memberCount = 50;
+    await b.redis.del(statsLastKey(GUILD_ID));
+    await statsRefreshJob.processor(b.ctx, {} as never);
+    expect(manualFirst.setName).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a RateLimitError from discord.js and leaves the other channels to carry on', async () => {
+    const limited = fakeChannel('c1', 'Members: 0', async () => {
+      throw new RateLimitError({
+        global: false,
+        hash: 'h',
+        limit: 2,
+        majorParameter: 'c1',
+        method: 'PATCH',
+        retryAfter: 540_050,
+        route: '/channels/:id',
+        scope: 'shared',
+        sublimitTimeout: 540_050,
+        timeToReset: 540_050,
+        url: 'https://discord.com/api/v10/channels/c1',
+      });
+    });
+    const other = fakeChannel('c2', 'Bots: 0');
+    const guild = fakeGuild([limited, other]);
+    const { ctx, cfg, redis } = buildCtx(guild, {
+      statsChannels: [
+        { channelId: 'c1', template: 'Members: {members}' },
+        { channelId: 'c2', template: 'Bots: {bots}' },
+      ],
+    });
+
+    const result = await refreshGuildStats(ctx, guild as never, cfg);
+    expect(result).toMatchObject({ renamed: 1, missingPermission: false });
+    expect(other.setName).toHaveBeenCalledTimes(1);
+    // Two minutes short of retry_after: still no second attempt on the limited channel.
+    expect(await redis.ttl(statsChannelRenameKey(GUILD_ID, 'c1'))).toBeGreaterThan(530);
+    await refreshGuildStats(ctx, guild as never, cfg);
+    expect(limited.setName).toHaveBeenCalledTimes(1);
+    expect(await redis.get(statsBlockedKey(GUILD_ID))).toBeNull();
   });
 
   it('makes no API call when the rendered name already matches', async () => {

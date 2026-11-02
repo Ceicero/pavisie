@@ -40,7 +40,7 @@ default.
 | `/statschannel add <channel> <template>`                                     | Attach an existing voice/category/text channel as a counter                                                | Admin                                     |
 | `/statschannel remove <channel>`                                             | Stop updating a counter (config only — the channel is not deleted)                                         | Admin                                     |
 | `/statschannel list`                                                         | Show counters, templates, current rendered value, last refresh                                             | Admin                                     |
-| `/statschannel refresh`                                                      | Refresh every counter now (at most once per 5 minutes)                                                     | Admin                                     |
+| `/statschannel refresh`                                                      | Refresh every counter now (at most once per 5 minutes; each channel is renamed at most once per 10)        | Admin                                     |
 | `/statschannel interval <minutes>`                                           | Set the automatic refresh interval (10-1440 minutes)                                                       | Admin                                     |
 | `/birthday set <month> <day> [user]`                                         | Share your birthday in this server (month + day only — never a year), or set one for another member        | Self: Everyone (or Admin if self-service is off); `user`: Admin |
 | `/birthday remove [user]`                                                    | Delete your birthday from this server, or another member's                                                 | Self: Everyone (or Admin if self-service is off); `user`: Admin |
@@ -126,8 +126,21 @@ becomes a channel literally named "{memebrs}"; the rendered name is truncated to
 Constraints (also stated in the UI):
 
 - **Discord allows 2 channel-name edits per 10 minutes per channel.** Counters therefore refresh on a schedule
-  (`statsRefreshMinutes`, minimum 10) and `/statschannel refresh` is limited to once per 5 minutes; member
+  (`statsRefreshMinutes`, minimum 10) and `/statschannel refresh` is limited to once per 5 minutes per server; member
   join/leave events deliberately do _not_ trigger a rename.
+- **One shared rename path.** The periodic job and `/statschannel refresh` both call `refreshGuildStats`, which renames
+  each channel through `renameStatsChannel` (`stats-rename.ts`), so they follow the same rules and can't undo each other:
+  - A channel already showing the right name makes no API call and spends no rename budget.
+  - Each channel is renamed at most once per 10 minutes, whoever asks: a Redis `SET NX EX` key per channel
+    (`pavisie:community:stats-rename:<guildId>:<channelId>`, TTL 10 minutes). A channel skipped by it counts as "already
+    up to date" and is picked up on a later pass.
+  - **A rate limit is skipped.** A `RateLimitError` (or a raw 429) pushes that channel's Redis key out to Discord's
+    `retry_after` (never shorter than 10 minutes) and nothing retries before then.
+  - **A permission error pauses the guild.** 50013 Missing Permissions / 50001 Missing Access stop that pass's renames
+    for the guild and set a Redis key holding a fingerprint of the stats config and the bot's permissions on those
+    channels. The periodic job skips the guild until the fingerprint changes (one warn naming the guild per change);
+    `/statschannel refresh` still tries, and a successful rename lifts the pause.
+  - Any other failure is logged at warn with Discord's error code and message (and the error's stack) and skipped.
 - **`{online}` is not offered** — it needs the Presence privileged intent, which Pavisie does not enable. The
   command rejects it with that explanation.
 - `{humans}`/`{bots}` need the Server Members intent; without it `{humans}` = `{members}` and `{bots}` = 0 (the
@@ -189,7 +202,7 @@ show`) works without it; the plugin degrades rather than disables when the inten
 - `community:event-reminder` — delayed, one per configured reminder mark (`jobId ev-<id>-<minutes>`).
 - `community:suggestion-sync` — every minute; reflects dashboard suggestion status/note edits into the posted Discord embed (dashboard writes only touch the database).
 - `community:sticky-repost` — delayed catch-up re-post for a channel whose cooldown blocked an immediate one (`jobId sticky-<guildId>-<channelId>`, delay = the sticky's cooldown; enqueuing while one is pending is a no-op, so a burst of messages yields one re-post now and one after the cooldown).
-- `community:stats-refresh` — every 5 minutes; renames each guild's stats channels at most once per `statsRefreshMinutes` (Redis `SET NX EX` gate per guild) and each individual channel at most once per 10 minutes (Redis `SET NX EX` gate per channel, since Discord's 2-renames/10-min limit is per channel; a 429 pushes that gate out to Discord's `retry_after`), concurrency 1, never throws. Skips unavailable (outage) guilds. A rename failing with 50013 Missing Permissions or 50001 Missing Access pauses the guild's automatic renames (one warn naming the guild) until its stats config or the bot's permissions on those channels change; `/statschannel refresh` still tries, and a successful rename lifts the pause.
+- `community:stats-refresh` — every 5 minutes; refreshes each guild's stats channels at most once per `statsRefreshMinutes` (Redis `SET NX EX` gate per guild), concurrency 1, never throws. Skips unavailable (outage) guilds and guilds paused by a permission error. Per-channel rules (see "Server-stats counter channels") are shared with `/statschannel refresh`.
 - `community:birthday-announce` — hourly (top of the hour); for each available guild with birthdays enabled + a channel, when the guild-local hour equals `birthdays.announceHour`, posts one message per birthday due today (Feb 29 → Feb 28 in non-leap years; `lastAnnouncedYear IS NULL OR <> current year`, since a plain `NOT` would silently skip never-announced rows under Postgres NULL semantics), adds the optional role, and stamps `lastAnnouncedYear` so nothing is announced twice in a year. Members who left are skipped, not deleted.
 - `community:birthday-role-remove` — delayed ~24h per birthday role grant (`jobId bday-role-<guild>-<user>-<year>`); removes the role if the member still has it.
 

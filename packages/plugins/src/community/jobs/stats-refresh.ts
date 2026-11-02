@@ -3,12 +3,8 @@ import type { Guild } from 'discord.js';
 import { redisKey } from '@pavisie/core';
 import type { PluginContext, PluginJob } from '../../sdk';
 import type { CommunityConfig } from '../manifest';
-import {
-  CHANNEL_RENAME_INTERVAL_MS,
-  collectCounts,
-  renderStatsName,
-  type GuildCounts,
-} from '../stats-channels';
+import { collectCounts, renderStatsName, type GuildCounts } from '../stats-channels';
+import { renameStatsChannel } from '../stats-rename';
 
 /** Redis key holding the ISO timestamp of a guild's last stats refresh; doubles as the periodic-job gate (TTL = `statsRefreshMinutes`). */
 export function statsLastKey(guildId: string): string {
@@ -25,20 +21,6 @@ export function statsBlockedKey(guildId: string): string {
   return redisKey('community', 'stats-blocked', guildId);
 }
 
-/**
- * Redis NX key throttling renames of ONE channel — Discord allows 2 renames per 10 minutes PER CHANNEL, but
- * `statsLastKey` above only gates how often a whole GUILD's refresh pass runs. That's not the same budget: a
- * guild with several stats channels, or an admin's manual `/statschannel refresh` landing between periodic
- * passes, could still push a single channel over its own 10-minute limit even while the guild-level gate holds.
- * The value is the ISO time of the last rename and the TTL is `CHANNEL_RENAME_INTERVAL_MS` (10 min), or Discord's
- * `retry_after` when a rename was rate limited.
- */
-export function statsChannelRenameKey(guildId: string, channelId: string): string {
-  return redisKey('community', 'stats-rename', guildId, channelId);
-}
-
-const MISSING_ACCESS_CODE = 50001;
-const MISSING_PERMISSIONS_CODE = 50013;
 /** Safety-net expiry for `statsBlockedKey` so a guild the bot left doesn't keep a key forever. */
 const BLOCKED_TTL_SECONDS = 30 * 24 * 3600;
 
@@ -57,32 +39,6 @@ export function statsPermissionFingerprint(
     return `${entry.channelId}\t${entry.template}\t${perms}`;
   });
   return createHash('sha256').update(parts.join('\n')).digest('hex').slice(0, 16);
-}
-
-function discordErrorCode(err: unknown): unknown {
-  return (err as { code?: unknown } | null)?.code;
-}
-
-/**
- * How long Discord told us to wait, in ms, if `err` is a rate limit: `@discordjs/rest`'s RateLimitError carries
- * `retryAfter` (ms) / `sublimitTimeout`, a raw 429 response carries `retry_after` (seconds). `null` otherwise.
- */
-export function rateLimitRetryAfterMs(err: unknown): number | null {
-  if (!err || typeof err !== 'object') return null;
-  const e = err as {
-    status?: unknown;
-    retryAfter?: unknown;
-    sublimitTimeout?: unknown;
-    rawError?: { retry_after?: unknown };
-  };
-  if (typeof e.retryAfter === 'number') {
-    return Math.max(e.retryAfter, typeof e.sublimitTimeout === 'number' ? e.sublimitTimeout : 0);
-  }
-  if (e.status === 429) {
-    const seconds = e.rawError?.retry_after;
-    return typeof seconds === 'number' ? Math.ceil(seconds * 1000) : CHANNEL_RENAME_INTERVAL_MS;
-  }
-  return null;
 }
 
 export interface StatsRefreshResult {
@@ -110,7 +66,9 @@ export async function guildTimezone(ctx: PluginContext, guildId: string): Promis
 
 /**
  * Renames every configured stats channel of `guild` to its rendered template. Missing channels are dropped from
- * config (info log). Rename failures never throw:
+ * config (info log). Used by both the periodic job and `/statschannel refresh`; every per-channel rule (skip
+ * unchanged, one rename per channel per 10 minutes, skip rate limits) lives in `renameStatsChannel`. Rename failures
+ * never throw:
  * - 50013 Missing Permissions / 50001 Missing Access stop renames for the rest of the guild and set
  *   `statsBlockedKey`, so the periodic job leaves the guild alone until its config or the bot's permissions change
  *   (warned once per change, naming the guild).
@@ -153,50 +111,29 @@ export async function refreshGuildStats(
     // Keep walking the list after a permission error so `kept` stays complete, but make no more API calls.
     if (permissionError) continue;
 
-    const name = renderStatsName(entry.template, counts);
-    if (channel.name === name) {
-      result.unchanged += 1;
-      continue;
-    }
-
-    const renameKey = statsChannelRenameKey(guild.id, entry.channelId);
-    const claimedBudget = await ctx.redis.set(
-      renameKey,
-      now.toISOString(),
-      'EX',
-      Math.floor(CHANNEL_RENAME_INTERVAL_MS / 1000),
-      'NX',
+    const outcome = await renameStatsChannel(
+      ctx,
+      guild.id,
+      channel,
+      renderStatsName(entry.template, counts),
+      now,
     );
-    if (!claimedBudget) {
-      // This channel was renamed (or rate limited) too recently — try again next pass rather than risk
-      // Discord's per-channel rename limit.
-      result.unchanged += 1;
-      continue;
-    }
-
-    try {
-      await channel.setName(name, 'Server stats');
-      result.renamed += 1;
-    } catch (err) {
-      const code = discordErrorCode(err);
-      const message = err instanceof Error ? err.message : String(err);
-      const retryAfterMs = rateLimitRetryAfterMs(err);
-      if (code === MISSING_PERMISSIONS_CODE || code === MISSING_ACCESS_CODE) {
+    switch (outcome.status) {
+      case 'renamed':
+        result.renamed += 1;
+        break;
+      case 'unchanged':
+      case 'throttled':
+        result.unchanged += 1;
+        break;
+      case 'no-permission':
         result.missingPermission = true;
-        permissionError = { channelId: entry.channelId, code, message };
-      } else if (retryAfterMs !== null) {
-        const waitMs = Math.max(retryAfterMs, CHANNEL_RENAME_INTERVAL_MS);
-        await ctx.redis.set(renameKey, now.toISOString(), 'EX', Math.ceil(waitMs / 1000));
-        ctx.logger.warn(
-          { guildId: guild.id, channelId: entry.channelId, code, retryAfterMs },
-          'community: stats channel rename rate limited — waiting out retry_after',
-        );
-      } else {
-        ctx.logger.warn(
-          { guildId: guild.id, channelId: entry.channelId, code, err },
-          `community: stats channel rename failed: ${message}`,
-        );
-      }
+        permissionError = { channelId: entry.channelId, code: outcome.code, message: outcome.message };
+        break;
+      case 'rate-limited':
+      case 'failed':
+        // Already logged by `renameStatsChannel`; nothing is retried before the next pass.
+        break;
     }
   }
 

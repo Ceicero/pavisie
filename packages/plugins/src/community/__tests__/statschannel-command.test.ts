@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import RedisMock from 'ioredis-mock';
 import type { ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { createTestContext } from '../../sdk/testing';
 import type { CommandContext } from '../../sdk';
 import { command as statsChannelCommand } from '../commands/statschannel';
 import { configSchema } from '../manifest';
+import { statsChannelRenameKey } from '../stats-rename';
 import en from '../locales/en.json';
 
 /** Looks a dotted key up in the plugin's real `en.json` with `{var}` interpolation (same stand-in as ai/__tests__/mod-assist.test.ts). */
@@ -163,6 +165,41 @@ describe('/statschannel', () => {
     await statsChannelCommand.execute(c);
     expect(setConfigCalls[0]).toEqual({ statsChannels: [] });
     expect(firstReplyText(replies)).toContain('was not deleted');
+  });
+
+  describe('refresh', () => {
+    // ioredis-mock instances share one in-memory store per process.
+    beforeEach(async () => {
+      await new RedisMock().flushall();
+    });
+
+    function withStatsChannel(name: string) {
+      const built = buildCommandContext({ sub: 'refresh' }, [
+        { channelId: 'c1', template: 'Members: {members}' },
+      ]);
+      const channel = { id: 'c1', name, setName: vi.fn(async () => channel) };
+      Object.assign(built.c.interaction.guild.channels.cache, {
+        get: (id: string) => (id === 'c1' ? channel : undefined),
+      });
+      return { ...built, channel };
+    }
+
+    it('renames a stale channel and records the rename in the channel’s Redis throttle', async () => {
+      const { c, channel } = withStatsChannel('Members: 0');
+      await statsChannelCommand.execute(c);
+      expect(channel.setName).toHaveBeenCalledWith('Members: 10', 'Server stats');
+      expect(await c.ctx.redis.ttl(statsChannelRenameKey('guild-1', 'c1'))).toBeGreaterThan(9 * 60);
+    });
+
+    it('does not rename a channel the job (or an earlier refresh) renamed under 10 minutes ago', async () => {
+      const { c, channel } = withStatsChannel('Members: 0');
+      // What the periodic job leaves behind after renaming this channel; the per-guild refresh gate has expired.
+      await c.ctx.redis.set(statsChannelRenameKey('guild-1', 'c1'), new Date().toISOString(), 'EX', 7 * 60);
+
+      await statsChannelCommand.execute(c);
+      expect(channel.setName).not.toHaveBeenCalled();
+      expect(c.interaction.editReply).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('is admin-only and requires Manage Channels from the bot', () => {
