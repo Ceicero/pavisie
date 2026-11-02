@@ -18,3 +18,4 @@ export * from './utils/ids';
 export * from './utils/pagination';
 export * from './events';
 export * from './constants';
+export * from './service-env';
