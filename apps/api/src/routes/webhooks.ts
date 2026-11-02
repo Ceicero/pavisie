@@ -82,10 +82,9 @@ export default async function webhooksRoutes(app: ZodFastifyInstance): Promise<v
 
     const secret = decryptSecret(endpoint.secretEnc);
     if (!verifyGithubSignature(raw, secret, signatureHeader)) {
-      await app.prisma.webhookEndpoint.update({
-        where: { id: endpointId },
-        data: { failureCount: { increment: 1 } },
-      });
+      // Don't write to the DB on an unauthenticated request: anyone who knows/guesses an endpoint id could
+      // otherwise inflate `failureCount` (misleading admins) and force a DB write per request. Log instead.
+      request.log.warn({ endpointId }, 'webhook signature verification failed');
       throw invalidSignature();
     }
 
@@ -213,10 +212,9 @@ export default async function webhooksRoutes(app: ZodFastifyInstance): Promise<v
 
     const secret = decryptSecret(endpoint.secretEnc);
     if (!verifyHmacSha256(raw, secret, signatureHeader)) {
-      await app.prisma.webhookEndpoint.update({
-        where: { id: endpointId },
-        data: { failureCount: { increment: 1 } },
-      });
+      // Don't write to the DB on an unauthenticated request: anyone who knows/guesses an endpoint id could
+      // otherwise inflate `failureCount` (misleading admins) and force a DB write per request. Log instead.
+      request.log.warn({ endpointId }, 'webhook signature verification failed');
       throw invalidSignature();
     }
 
