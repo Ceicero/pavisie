@@ -72,8 +72,8 @@ export function TopBar() {
   const invite = inviteUrl();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/75 sm:px-6">
-      <Logo imageSize={28} />
+    <header className="sticky top-0 z-30 flex h-14 min-w-0 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/75 sm:px-6">
+      <Logo imageSize={28} className="min-w-0 shrink" />
 
       {guildId ? (
         // `GuildSwitcher`'s trigger is `w-full` (sized for its old home filling the sidebar

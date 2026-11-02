@@ -75,7 +75,7 @@ export function MatcherBuilder({ matchers, onChange, disabled }: MatcherBuilderP
               }
               disabled={disabled}
             >
-              <SelectTrigger className="w-64">
+              <SelectTrigger aria-label="Matcher type" className="w-64">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

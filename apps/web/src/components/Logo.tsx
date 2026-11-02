@@ -48,7 +48,9 @@ export function Logo({ className, imageSize = 28, withWordmark = true, href = '/
           P
         </span>
       )}
-      {withWordmark && <span className="text-base font-semibold tracking-tight text-grey-7">Pavisie</span>}
+      {withWordmark && (
+        <span className="truncate text-base font-semibold tracking-tight text-grey-7">Pavisie</span>
+      )}
     </Link>
   );
 }

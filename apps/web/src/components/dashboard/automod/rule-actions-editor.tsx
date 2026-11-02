@@ -40,7 +40,7 @@ export function RuleActionsEditor({ actions, onChange, disabled }: RuleActionsEd
             onValueChange={(v) => update(i, { type: v as AutomodActionType })}
             disabled={disabled}
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger aria-label="Action" className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
