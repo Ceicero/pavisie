@@ -9,6 +9,17 @@ const PAST_SKEW_MS = 30_000;
 
 const MISSING_ACCESS = 50_001;
 const MISSING_PERMISSIONS = 50_013;
+const UNKNOWN_CHANNEL = 10_003;
+const UNKNOWN_MESSAGE = 10_008;
+
+/** Discord `code` on an API error, accepting the number discord.js uses and the numeric string some mocks pass. */
+function readErrorCode(err: unknown): number | null {
+  if (!err || typeof err !== 'object' || !('code' in err)) return null;
+  const code = (err as { code: unknown }).code;
+  if (typeof code === 'number' && Number.isFinite(code)) return code;
+  if (typeof code === 'string' && /^-?\d+$/.test(code)) return Number(code);
+  return null;
+}
 
 /** `null` when `ms` is a usable duration; otherwise why it was rejected. */
 export function durationIssue(ms: number | null): 'invalid' | 'range' | null {
@@ -50,7 +61,62 @@ export function duplicateOptionLabels(labels: string[]): string[] {
 
 /** Discord 50001 / 50013 — the bot cannot see or send in the target channel. */
 export function isMissingChannelPermission(err: unknown): boolean {
-  if (!err || typeof err !== 'object' || !('code' in err)) return false;
-  const code = (err as { code: unknown }).code;
+  const code = readErrorCode(err);
   return code === MISSING_ACCESS || code === MISSING_PERMISSIONS;
+}
+
+/** Discord 10003 — the channel was deleted (or the id never existed). */
+export function isUnknownChannel(err: unknown): boolean {
+  return readErrorCode(err) === UNKNOWN_CHANNEL;
+}
+
+/** Discord 10008 — the message was already deleted. */
+export function isUnknownMessage(err: unknown): boolean {
+  return readErrorCode(err) === UNKNOWN_MESSAGE;
+}
+
+export type ChannelPresence = 'live' | 'gone' | 'unknown';
+
+/**
+ * Whether `channelId` still exists in `guild`. `gone` only when Discord says so (null or 10003). Missing access
+ * and any other failure stay `unknown` so callers don't drop config for a channel they merely can't see right now.
+ * Guilds without a `channels.fetch` (tests, partial fixtures) are `unknown`.
+ */
+export async function channelPresence(
+  guild: { channels?: { fetch?: (id: string) => Promise<unknown> } },
+  channelId: string,
+): Promise<ChannelPresence> {
+  const channels = guild.channels;
+  const fetchChannel = channels?.fetch;
+  if (typeof fetchChannel !== 'function') return 'unknown';
+  try {
+    const channel = await fetchChannel.call(channels, channelId);
+    return channel ? 'live' : 'gone';
+  } catch (err) {
+    if (isUnknownChannel(err)) return 'gone';
+    return 'unknown';
+  }
+}
+
+/**
+ * `true`/`false` when `channel.permissionsFor(member)` can answer; `null` when the member or the permission
+ * lookup isn't available (don't treat "couldn't check" as a denial).
+ *
+ * The channel is typed loosely on purpose: discord.js overloads `permissionsFor`, and a precise parameter
+ * type is not assignable from those overloads.
+ */
+export function botHasChannelPermission(
+  channel: object,
+  member: unknown,
+  permission: bigint,
+): boolean | null {
+  const lookup = (
+    channel as {
+      permissionsFor?: (member: unknown) => { has: (permission: bigint) => boolean } | null;
+    }
+  ).permissionsFor;
+  if (!member || typeof lookup !== 'function') return null;
+  const perms = lookup.call(channel, member);
+  if (!perms) return false;
+  return perms.has(permission);
 }

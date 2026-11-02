@@ -318,7 +318,10 @@ describe('repostSticky — overlap lock (B3)', () => {
       },
     });
 
-    const [a, b] = await Promise.all([repostSticky(ctx, guild, stickyRow), repostSticky(ctx, guild, stickyRow)]);
+    const [a, b] = await Promise.all([
+      repostSticky(ctx, guild, stickyRow),
+      repostSticky(ctx, guild, stickyRow),
+    ]);
 
     expect(channel.send).toHaveBeenCalledTimes(1);
     expect(channel.messages.delete).toHaveBeenCalledTimes(1);
@@ -366,10 +369,9 @@ describe('repostSticky — send failures and permission pre-checks (B6)', () => 
     const guild = fakeGuild(channel);
     const { ctx, services } = buildCtx(guild);
     const log = vi.fn(async () => undefined);
-    services.register(
-      'logging',
-      { log } as unknown as NonNullable<ReturnType<typeof services.get<'logging'>>>,
-    );
+    services.register('logging', { log } as unknown as NonNullable<
+      ReturnType<typeof services.get<'logging'>>
+    >);
 
     await expect(repostSticky(ctx, guild, stickyRow)).resolves.toBeNull();
     expect(log).toHaveBeenCalledTimes(1);
@@ -385,7 +387,9 @@ describe('repostSticky — send failures and permission pre-checks (B6)', () => 
     });
     const guild = fakeGuild(channel);
     const embedSticky = { ...stickyRow, content: null, embed: { title: 'Rules' } };
-    const { ctx } = buildCtx(guild, { prismaOverrides: { stickyMessage: { findUnique: async () => embedSticky } } });
+    const { ctx } = buildCtx(guild, {
+      prismaOverrides: { stickyMessage: { findUnique: async () => embedSticky } },
+    });
 
     const result = await repostSticky(ctx, guild, embedSticky);
 
@@ -400,7 +404,9 @@ describe('repostSticky — send failures and permission pre-checks (B6)', () => 
     });
     const guild = fakeGuild(channel);
     const { ctx } = buildCtx(guild, {
-      prismaOverrides: { stickyMessage: { update: async () => ({ ...stickyRow, lastMessageId: 'new-sticky-msg' }) } },
+      prismaOverrides: {
+        stickyMessage: { update: async () => ({ ...stickyRow, lastMessageId: 'new-sticky-msg' }) },
+      },
     });
 
     const result = await repostSticky(ctx, guild, stickyRow);
@@ -560,6 +566,42 @@ describe('upsertSticky', () => {
     expect(channel.send).not.toHaveBeenCalled();
   });
 
+  it('tells the caller the post failed when Discord rejects the first send, and keeps the row', async () => {
+    const channel = fakeChannel({
+      send: vi.fn(async () => {
+        throw Object.assign(new Error('Missing Permissions'), { code: 50013 });
+      }),
+    });
+    const guild = fakeGuild(channel);
+    let finds = 0;
+    const row = { ...stickyRow, lastMessageId: null };
+    const { ctx, prismaCalls } = buildCtx(guild, {
+      prismaOverrides: {
+        stickyMessage: {
+          findUnique: async () => {
+            finds += 1;
+            return finds === 1 ? null : row;
+          },
+          count: async () => 0,
+          upsert: async () => row,
+        },
+      },
+    });
+
+    await expect(
+      upsertSticky(ctx, {
+        guild,
+        guildId: GUILD_ID,
+        channelId: CHANNEL_ID,
+        content: 'hello',
+        cooldownSeconds: 10,
+        actorId: MEMBER_ID,
+      }),
+    ).rejects.toMatchObject({ code: 'postFailed' });
+    expect(prismaCalls.some((call) => call.method === 'delete')).toBe(false);
+    expect(channel.send).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects an embed sticky when the channel lacks Embed Links', async () => {
     const channel = fakeChannel({
       permissionsFor: () => ({ has: (perm: unknown) => perm !== PermissionFlagsBits.EmbedLinks }),
@@ -674,10 +716,7 @@ describe('stickyChannelDeleteHandler (B7)', () => {
     });
     await redis.set(stickyChannelsKey(GUILD_ID), JSON.stringify([CHANNEL_ID]));
 
-    await stickyChannelDeleteHandler.handler(
-      ctx,
-      { id: CHANNEL_ID, guild: { id: GUILD_ID } } as never,
-    );
+    await stickyChannelDeleteHandler.handler(ctx, { id: CHANNEL_ID, guild: { id: GUILD_ID } } as never);
 
     const deleteCall = prismaCalls.find((c) => c.model === 'stickyMessage' && c.method === 'deleteMany');
     expect(deleteCall?.args[0]).toMatchObject({ where: { guildId: GUILD_ID, channelId: CHANNEL_ID } });
@@ -698,10 +737,7 @@ describe('stickyChannelDeleteHandler (B7)', () => {
     });
     await redis.set(stickyChannelsKey(GUILD_ID), JSON.stringify(['some-other-channel']));
 
-    await stickyChannelDeleteHandler.handler(
-      ctx,
-      { id: CHANNEL_ID, guild: { id: GUILD_ID } } as never,
-    );
+    await stickyChannelDeleteHandler.handler(ctx, { id: CHANNEL_ID, guild: { id: GUILD_ID } } as never);
 
     expect(await redis.get(stickyChannelsKey(GUILD_ID))).not.toBeNull();
   });

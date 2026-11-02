@@ -19,6 +19,7 @@ import {
   parseBirthday,
   upcomingSorted,
 } from '../birthdays';
+import { channelPresence, nonBlank } from '../command-input';
 import type { CommunityConfig } from '../manifest';
 
 const MONTH_CHOICES = [
@@ -323,6 +324,13 @@ async function handleUpcoming(c: CommandContext): Promise<void> {
     where: { guildId },
     select: { userId: true, month: true, day: true },
   });
+  if (rows.length === 0) {
+    await interaction.reply({
+      embeds: [infoEmbed(t('birthday.upcomingTitle'), t('birthday.upcomingEmpty'))],
+      ephemeral,
+    });
+    return;
+  }
   const today = localNow(await guildTimezone(c));
   const upcoming = upcomingSorted(rows, today, 15);
   const lines = upcoming.map((b) => {
@@ -356,14 +364,25 @@ async function handleConfig(c: CommandContext): Promise<void> {
   const publicList = interaction.options.getBoolean('public_list');
   const allowSelfService = interaction.options.getBoolean('allow_self_service');
 
+  const presence = await channelPresence(interaction.guild, channelOption.id);
+  if (presence === 'gone') {
+    await interaction.reply({ embeds: [errorEmbed(t('birthday.channelGone'))], ephemeral: true });
+    return;
+  }
   const channel = await resolveTextChannel(interaction.guild, channelOption.id);
   if (!channel) {
     await interaction.reply({ embeds: [errorEmbed(t('birthday.badChannel'))], ephemeral: true });
     return;
   }
 
+  let messageToSave: string | undefined;
   if (message !== null) {
-    const unknown = findUnknownMessageTokens(message);
+    const trimmed = nonBlank(message);
+    if (!trimmed) {
+      await interaction.reply({ embeds: [errorEmbed(t('birthday.emptyMessage'))], ephemeral: true });
+      return;
+    }
+    const unknown = findUnknownMessageTokens(trimmed);
     if (unknown.length > 0) {
       await interaction.reply({
         embeds: [
@@ -373,12 +392,20 @@ async function handleConfig(c: CommandContext): Promise<void> {
       });
       return;
     }
+    messageToSave = trimmed;
   }
 
   if (roleOption) {
+    const cachedRole = interaction.guild.roles.cache?.get(roleOption.id) ?? null;
     const guildRole =
-      interaction.guild.roles.cache.get(roleOption.id) ??
-      (await interaction.guild.roles.fetch(roleOption.id).catch(() => null));
+      cachedRole ??
+      (typeof interaction.guild.roles.fetch === 'function'
+        ? await interaction.guild.roles.fetch(roleOption.id).catch(() => null)
+        : null);
+    if (!guildRole) {
+      await interaction.reply({ embeds: [errorEmbed(t('birthday.role.missing'))], ephemeral: true });
+      return;
+    }
     const permissionsBitfield =
       typeof roleOption.permissions === 'string'
         ? BigInt(roleOption.permissions)
@@ -406,16 +433,22 @@ async function handleConfig(c: CommandContext): Promise<void> {
     enabled: enabled ?? true,
     ...(hour !== null ? { announceHour: hour } : {}),
     ...(roleOption ? { roleId: roleOption.id } : {}),
-    ...(message !== null ? { message } : {}),
+    ...(messageToSave !== undefined ? { message: messageToSave } : {}),
     ...(publicList !== null ? { publicList } : {}),
     ...(allowSelfService !== null ? { allowSelfService } : {}),
   };
   // `setConfig` audits the change automatically (config changes are the only birthday audit trail).
-  await ctx.setConfig<CommunityConfig>(
-    guildId,
-    { birthdays: next },
-    { id: interaction.user.id, source: 'bot' },
-  );
+  try {
+    await ctx.setConfig<CommunityConfig>(
+      guildId,
+      { birthdays: next },
+      { id: interaction.user.id, source: 'bot' },
+    );
+  } catch (err) {
+    ctx.logger.warn({ err, guildId }, 'community: failed to save birthday settings');
+    await interaction.reply({ embeds: [errorEmbed(t('birthday.saveFailed'))], ephemeral: true });
+    return;
+  }
 
   await interaction.reply({
     embeds: [
@@ -441,11 +474,28 @@ async function handleConfigView(c: CommandContext): Promise<void> {
   const b = config.birthdays;
   const count = await ctx.prisma.birthday.count({ where: { guildId } });
   const timezone = await guildTimezone(c);
+  let channelLine = '—';
+  if (b.channelId) {
+    const presence = await channelPresence(interaction.guild, b.channelId);
+    channelLine = presence === 'gone' ? t('birthday.channelMissing') : `<#${b.channelId}>`;
+  }
+  let roleLine = '—';
+  if (b.roleId) {
+    const cached = interaction.guild.roles.cache?.get(b.roleId);
+    if (cached) {
+      roleLine = `<@&${b.roleId}>`;
+    } else if (typeof interaction.guild.roles.fetch === 'function') {
+      const fetched = await interaction.guild.roles.fetch(b.roleId).catch(() => null);
+      roleLine = fetched ? `<@&${b.roleId}>` : t('birthday.role.missing');
+    } else {
+      roleLine = `<@&${b.roleId}>`;
+    }
+  }
   const lines = [
     `**${t('birthday.cfgEnabled')}:** ${b.enabled ? t('birthday.on') : t('birthday.off')}`,
-    `**${t('birthday.cfgChannel')}:** ${b.channelId ? `<#${b.channelId}>` : '—'}`,
+    `**${t('birthday.cfgChannel')}:** ${channelLine}`,
     `**${t('birthday.cfgHour')}:** ${String(b.announceHour).padStart(2, '0')}:00 (${timezone})`,
-    `**${t('birthday.cfgRole')}:** ${b.roleId ? `<@&${b.roleId}>` : '—'}`,
+    `**${t('birthday.cfgRole')}:** ${roleLine}`,
     `**${t('birthday.cfgPublicList')}:** ${b.publicList ? t('birthday.on') : t('birthday.off')}`,
     `**${t('birthday.cfgAllowSelfService')}:** ${b.allowSelfService ? t('birthday.on') : t('birthday.off')}`,
     `**${t('birthday.cfgMessage')}:** ${b.message}`,

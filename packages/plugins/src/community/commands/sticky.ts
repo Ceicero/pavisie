@@ -16,8 +16,15 @@ import {
   type CommandContext,
   type PluginCommand,
 } from '../../sdk';
+import { channelPresence, nonBlank } from '../command-input';
 import type { CommunityConfig } from '../manifest';
-import { removeSticky, STICKY_CONTENT_MAX, StickyError, upsertSticky } from '../sticky';
+import {
+  pruneStickyForChannel,
+  removeSticky,
+  STICKY_CONTENT_MAX,
+  StickyError,
+  upsertSticky,
+} from '../sticky';
 import { stickyPreview } from '../sticky-keys';
 
 export const STICKY_COOLDOWN_MIN = 3;
@@ -131,6 +138,10 @@ async function handleSet(c: CommandContext): Promise<void> {
     await interaction.reply({ embeds: [errorEmbed(t('sticky.badChannel'))], ephemeral: true });
     return;
   }
+  if ((await channelPresence(interaction.guild, channelId)) === 'gone') {
+    await interaction.reply({ embeds: [errorEmbed(t('sticky.channelGone'))], ephemeral: true });
+    return;
+  }
 
   const config = await c.config<CommunityConfig>();
   if (!config.sticky.enabled) {
@@ -138,11 +149,28 @@ async function handleSet(c: CommandContext): Promise<void> {
     return;
   }
 
-  const content = interaction.options.getString('content');
-  const cooldownSeconds = interaction.options.getInteger('cooldown') ?? config.sticky.defaultCooldownSeconds;
+  const rawContent = interaction.options.getString('content');
+  const cooldownOption = interaction.options.getInteger('cooldown');
+  if (
+    cooldownOption !== null &&
+    (cooldownOption < STICKY_COOLDOWN_MIN || cooldownOption > STICKY_COOLDOWN_MAX)
+  ) {
+    await interaction.reply({
+      embeds: [errorEmbed(t('sticky.badCooldown', { min: STICKY_COOLDOWN_MIN, max: STICKY_COOLDOWN_MAX }))],
+      ephemeral: true,
+    });
+    return;
+  }
+  const cooldownSeconds = cooldownOption ?? config.sticky.defaultCooldownSeconds;
 
-  if (!content) {
+  // No content option opens the editor (embed title/description live there). Whitespace is not content.
+  if (rawContent === null) {
     await interaction.showModal(buildStickyModal(interaction.user.id, channelId, cooldownSeconds));
+    return;
+  }
+  const content = nonBlank(rawContent);
+  if (!content) {
+    await interaction.reply({ embeds: [errorEmbed(t('sticky.empty'))], ephemeral: true });
     return;
   }
 
@@ -180,14 +208,18 @@ async function handleRemove(c: CommandContext): Promise<void> {
     await interaction.reply({ embeds: [errorEmbed(t('sticky.badChannel'))], ephemeral: true });
     return;
   }
+  const gone = (await channelPresence(interaction.guild, channelId)) === 'gone';
   await interaction.deferReply({ ephemeral: true });
+  // A deleted channel still has a row to clear. removeSticky skips the message delete when the channel is gone,
+  // and an already-deleted sticky message (10008) does not fail the removal.
   const removed = await removeSticky(ctx, guildId, channelId, interaction.user.id);
+  const text = !removed
+    ? t('sticky.notFound', { channel: `<#${channelId}>` })
+    : gone
+      ? t('sticky.removedDeletedChannel')
+      : t('sticky.removed', { channel: `<#${channelId}>` });
   await interaction.editReply({
-    embeds: [
-      removed
-        ? successEmbed(t('sticky.removed', { channel: `<#${channelId}>` }))
-        : errorEmbed(t('sticky.notFound', { channel: `<#${channelId}>` })),
-    ],
+    embeds: [removed ? successEmbed(text) : errorEmbed(text)],
   });
 }
 
@@ -201,11 +233,29 @@ async function handleList(c: CommandContext): Promise<void> {
     });
     return;
   }
-  const lines = rows.map((s) => {
+  const live: typeof rows = [];
+  const gone: string[] = [];
+  for (const row of rows) {
+    if ((await channelPresence(interaction.guild, row.channelId)) === 'gone') gone.push(row.channelId);
+    else live.push(row);
+  }
+  for (const channelId of gone) {
+    await pruneStickyForChannel(ctx, guildId, channelId);
+  }
+  if (live.length === 0) {
+    const body =
+      gone.length > 0
+        ? `${t('sticky.pruned', { count: gone.length })}\n${t('sticky.listEmpty')}`
+        : t('sticky.listEmpty');
+    await interaction.reply({ embeds: [infoEmbed(t('sticky.listTitle'), body)], ephemeral: true });
+    return;
+  }
+  const lines = live.map((s) => {
     const posted = s.lastPostedAt ? `<t:${Math.floor(s.lastPostedAt.getTime() / 1000)}:R>` : '—';
     const link = s.lastMessageId ? ` · [jump](${stickyJumpLink(guildId, s.channelId, s.lastMessageId)})` : '';
     return `<#${s.channelId}> — ${stickyPreview(s)} — last posted ${posted}${link}`;
   });
+  if (gone.length > 0) lines.push(t('sticky.pruned', { count: gone.length }));
   await interaction.reply({ embeds: [listEmbed(t('sticky.listTitle'), lines)], ephemeral: true });
 }
 

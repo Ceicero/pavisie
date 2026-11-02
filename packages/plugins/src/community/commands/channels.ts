@@ -8,7 +8,41 @@ import {
   type PluginCommand,
 } from '../../sdk';
 import { ARCHIVE_MINUTES, CHANNEL_AUTOMATION_MAX, type ArchiveMinutes } from '../channel-automations';
+import { botHasChannelPermission, channelPresence, nonBlank } from '../command-input';
 import type { AutoThreadRule, CommunityConfig } from '../manifest';
+
+const THREAD_TOKENS = ['user', 'user.tag', 'server', 'date'];
+
+/** Tokens in `template` that auto-thread rendering will leave as literal text. */
+function unknownThreadTokens(template: string): string[] {
+  const unknown: string[] = [];
+  for (const match of template.matchAll(/\{([a-zA-Z._]+)\}/g)) {
+    const token = match[1] ?? '';
+    if (!THREAD_TOKENS.includes(token) && !unknown.includes(token)) unknown.push(token);
+  }
+  return unknown;
+}
+
+async function saveConfig(c: CommandContext, patch: Partial<CommunityConfig>): Promise<boolean> {
+  try {
+    await c.ctx.setConfig<CommunityConfig>(c.guildId, patch, { id: c.interaction.user.id, source: 'bot' });
+    return true;
+  } catch (err) {
+    c.ctx.logger.warn({ err, guildId: c.guildId }, 'community: failed to save channel automation config');
+    await c.interaction.reply({ embeds: [errorEmbed(c.t('channelauto.saveFailed'))], ephemeral: true });
+    return false;
+  }
+}
+
+async function splitLiveIds(c: CommandContext, ids: string[]): Promise<{ live: string[]; gone: string[] }> {
+  const live: string[] = [];
+  const gone: string[] = [];
+  for (const id of ids) {
+    if ((await channelPresence(c.interaction.guild, id)) === 'gone') gone.push(id);
+    else live.push(id);
+  }
+  return { live, gone };
+}
 
 const ARCHIVE_CHOICES = [
   { name: '1 hour', value: 60 },
@@ -121,11 +155,23 @@ function formatArchive(minutes: number): string {
 // ---------------------------------------------------------------------------
 
 async function handlePublishAdd(c: CommandContext): Promise<void> {
-  const { interaction, ctx, guildId, t } = c;
+  const { interaction, t } = c;
   const channel = interaction.options.getChannel('channel', true);
   if (channel.type !== ChannelType.GuildAnnouncement) {
     await interaction.reply({
       embeds: [errorEmbed(t('channelauto.publish.notAnnouncement'))],
+      ephemeral: true,
+    });
+    return;
+  }
+  if ((await channelPresence(interaction.guild, channel.id)) === 'gone') {
+    await interaction.reply({ embeds: [errorEmbed(t('channelauto.channelGone'))], ephemeral: true });
+    return;
+  }
+  const me = interaction.guild.members?.me ?? null;
+  if (botHasChannelPermission(channel, me, PermissionFlagsBits.ViewChannel) === false) {
+    await interaction.reply({
+      embeds: [errorEmbed(t('channelauto.publish.cantView', { channel: `<#${channel.id}>` }))],
       ephemeral: true,
     });
     return;
@@ -142,15 +188,11 @@ async function handlePublishAdd(c: CommandContext): Promise<void> {
   }
 
   const channelIds = current.includes(channel.id) ? current : [...current, channel.id];
-  await ctx.setConfig<CommunityConfig>(
-    guildId,
-    { autoPublish: { ...config.autoPublish, channelIds } },
-    { id: interaction.user.id, source: 'bot' },
-  );
+  const saved = await saveConfig(c, { autoPublish: { ...config.autoPublish, channelIds } });
+  if (!saved) return;
 
   const lines = [t('channelauto.publish.added', { channel: `<#${channel.id}>` })];
-  const me = interaction.guild.members.me;
-  const perms = 'permissionsFor' in channel && me ? channel.permissionsFor(me) : null;
+  const perms = me && 'permissionsFor' in channel ? channel.permissionsFor(me) : null;
   if (perms && !perms.has(PermissionFlagsBits.ManageMessages)) {
     lines.push(t('channelauto.publish.missingManageMessages', { channel: `<#${channel.id}>` }));
   }
@@ -158,7 +200,7 @@ async function handlePublishAdd(c: CommandContext): Promise<void> {
 }
 
 async function handlePublishRemove(c: CommandContext): Promise<void> {
-  const { interaction, ctx, guildId, t } = c;
+  const { interaction, t } = c;
   const channel = interaction.options.getChannel('channel', true);
   const config = await c.config<CommunityConfig>();
   if (!config.autoPublish.channelIds.includes(channel.id)) {
@@ -168,16 +210,13 @@ async function handlePublishRemove(c: CommandContext): Promise<void> {
     });
     return;
   }
-  await ctx.setConfig<CommunityConfig>(
-    guildId,
-    {
-      autoPublish: {
-        ...config.autoPublish,
-        channelIds: config.autoPublish.channelIds.filter((id) => id !== channel.id),
-      },
+  const saved = await saveConfig(c, {
+    autoPublish: {
+      ...config.autoPublish,
+      channelIds: config.autoPublish.channelIds.filter((id) => id !== channel.id),
     },
-    { id: interaction.user.id, source: 'bot' },
-  );
+  });
+  if (!saved) return;
   await interaction.reply({
     embeds: [successEmbed(t('channelauto.publish.removed', { channel: `<#${channel.id}>` }))],
     ephemeral: true,
@@ -187,15 +226,24 @@ async function handlePublishRemove(c: CommandContext): Promise<void> {
 async function handlePublishList(c: CommandContext): Promise<void> {
   const { interaction, t } = c;
   const config = await c.config<CommunityConfig>();
-  const ids = config.autoPublish.channelIds;
-  if (ids.length === 0) {
+  const { live, gone } = await splitLiveIds(c, config.autoPublish.channelIds);
+  if (gone.length > 0) {
+    const saved = await saveConfig(c, { autoPublish: { ...config.autoPublish, channelIds: live } });
+    if (!saved) return;
+  }
+  if (live.length === 0) {
+    const body =
+      gone.length > 0
+        ? `${t('channelauto.pruned', { count: gone.length })}\n${t('channelauto.publish.listEmpty')}`
+        : t('channelauto.publish.listEmpty');
     await interaction.reply({
-      embeds: [infoEmbed(t('channelauto.publish.listTitle'), t('channelauto.publish.listEmpty'))],
+      embeds: [infoEmbed(t('channelauto.publish.listTitle'), body)],
       ephemeral: true,
     });
     return;
   }
-  const lines = ids.map((id) => `<#${id}>`);
+  const lines = live.map((id) => `<#${id}>`);
+  if (gone.length > 0) lines.push(t('channelauto.pruned', { count: gone.length }));
   if (config.autoPublish.includeBots) lines.push(t('channelauto.publish.includeBotsOn'));
   await interaction.reply({
     embeds: [listEmbed(t('channelauto.publish.listTitle'), lines)],
@@ -208,10 +256,52 @@ async function handlePublishList(c: CommandContext): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function handleThreadAdd(c: CommandContext): Promise<void> {
-  const { interaction, ctx, guildId, t } = c;
+  const { interaction, t } = c;
   const channel = interaction.options.getChannel('channel', true);
+  if ((await channelPresence(interaction.guild, channel.id)) === 'gone') {
+    await interaction.reply({ embeds: [errorEmbed(t('channelauto.channelGone'))], ephemeral: true });
+    return;
+  }
+  const me = interaction.guild.members?.me ?? null;
+  if (botHasChannelPermission(channel, me, PermissionFlagsBits.ViewChannel) === false) {
+    await interaction.reply({
+      embeds: [errorEmbed(t('channelauto.thread.cantView', { channel: `<#${channel.id}>` }))],
+      ephemeral: true,
+    });
+    return;
+  }
+
   const config = await c.config<CommunityConfig>();
   const existing = config.autoThreads.find((r) => r.channelId === channel.id);
+
+  const nameRaw = interaction.options.getString('name');
+  let nameTemplate: string;
+  if (nameRaw === null) {
+    nameTemplate = existing?.nameTemplate || '{user} — {date}';
+  } else {
+    const name = nonBlank(nameRaw);
+    if (!name) {
+      await interaction.reply({ embeds: [errorEmbed(t('channelauto.thread.emptyName'))], ephemeral: true });
+      return;
+    }
+    nameTemplate = name;
+  }
+
+  const starterRaw = interaction.options.getString('starter');
+  let starterMessage: string | null;
+  if (starterRaw === null) {
+    starterMessage = existing?.starterMessage ?? null;
+  } else {
+    const starter = nonBlank(starterRaw);
+    if (!starter) {
+      await interaction.reply({
+        embeds: [errorEmbed(t('channelauto.thread.emptyStarter'))],
+        ephemeral: true,
+      });
+      return;
+    }
+    starterMessage = starter;
+  }
 
   if (!existing && config.autoThreads.length >= CHANNEL_AUTOMATION_MAX) {
     await interaction.reply({
@@ -221,43 +311,53 @@ async function handleThreadAdd(c: CommandContext): Promise<void> {
     return;
   }
 
-  const name = interaction.options.getString('name');
   const archive = interaction.options.getInteger('archive');
   const requireAttachment = interaction.options.getBoolean('require_attachment');
-  const starter = interaction.options.getString('starter');
 
   const rule: AutoThreadRule = {
     channelId: channel.id,
-    nameTemplate: name?.trim() || existing?.nameTemplate || '{user} — {date}',
+    nameTemplate,
     archiveMinutes:
       archive !== null && (ARCHIVE_MINUTES as readonly number[]).includes(archive)
         ? (archive as ArchiveMinutes)
         : (existing?.archiveMinutes ?? 1440),
     requireAttachment: requireAttachment ?? existing?.requireAttachment ?? false,
-    starterMessage: starter !== null ? starter.trim() || null : (existing?.starterMessage ?? null),
+    starterMessage,
   };
 
   const autoThreads = existing
     ? config.autoThreads.map((r) => (r.channelId === channel.id ? rule : r))
     : [...config.autoThreads, rule];
 
-  await ctx.setConfig<CommunityConfig>(guildId, { autoThreads }, { id: interaction.user.id, source: 'bot' });
-  await interaction.reply({
-    embeds: [
-      successEmbed(
-        t('channelauto.thread.added', {
-          channel: `<#${channel.id}>`,
-          name: rule.nameTemplate,
-          archive: formatArchive(rule.archiveMinutes),
-        }),
-      ),
-    ],
-    ephemeral: true,
-  });
+  const saved = await saveConfig(c, { autoThreads });
+  if (!saved) return;
+
+  const lines = [
+    t('channelauto.thread.added', {
+      channel: `<#${channel.id}>`,
+      name: rule.nameTemplate,
+      archive: formatArchive(rule.archiveMinutes),
+    }),
+  ];
+  if (botHasChannelPermission(channel, me, PermissionFlagsBits.CreatePublicThreads) === false) {
+    lines.push(t('channelauto.thread.missingCreateThreads', { channel: `<#${channel.id}>` }));
+  }
+  const unknown = [
+    ...new Set([
+      ...unknownThreadTokens(rule.nameTemplate),
+      ...(rule.starterMessage ? unknownThreadTokens(rule.starterMessage) : []),
+    ]),
+  ];
+  if (unknown.length > 0) {
+    lines.push(
+      t('channelauto.thread.unknownTokens', { tokens: unknown.map((token) => `{${token}}`).join(', ') }),
+    );
+  }
+  await interaction.reply({ embeds: [successEmbed(lines.join('\n'))], ephemeral: true });
 }
 
 async function handleThreadRemove(c: CommandContext): Promise<void> {
-  const { interaction, ctx, guildId, t } = c;
+  const { interaction, t } = c;
   const channel = interaction.options.getChannel('channel', true);
   const config = await c.config<CommunityConfig>();
   if (!config.autoThreads.some((r) => r.channelId === channel.id)) {
@@ -267,11 +367,10 @@ async function handleThreadRemove(c: CommandContext): Promise<void> {
     });
     return;
   }
-  await ctx.setConfig<CommunityConfig>(
-    guildId,
-    { autoThreads: config.autoThreads.filter((r) => r.channelId !== channel.id) },
-    { id: interaction.user.id, source: 'bot' },
-  );
+  const saved = await saveConfig(c, {
+    autoThreads: config.autoThreads.filter((r) => r.channelId !== channel.id),
+  });
+  if (!saved) return;
   await interaction.reply({
     embeds: [successEmbed(t('channelauto.thread.removed', { channel: `<#${channel.id}>` }))],
     ephemeral: true,
@@ -281,19 +380,34 @@ async function handleThreadRemove(c: CommandContext): Promise<void> {
 async function handleThreadList(c: CommandContext): Promise<void> {
   const { interaction, t } = c;
   const config = await c.config<CommunityConfig>();
-  if (config.autoThreads.length === 0) {
+  const { gone } = await splitLiveIds(
+    c,
+    config.autoThreads.map((rule) => rule.channelId),
+  );
+  const goneIds = new Set(gone);
+  const liveRules = config.autoThreads.filter((rule) => !goneIds.has(rule.channelId));
+  if (gone.length > 0) {
+    const saved = await saveConfig(c, { autoThreads: liveRules });
+    if (!saved) return;
+  }
+  if (liveRules.length === 0) {
+    const body =
+      gone.length > 0
+        ? `${t('channelauto.pruned', { count: gone.length })}\n${t('channelauto.thread.listEmpty')}`
+        : t('channelauto.thread.listEmpty');
     await interaction.reply({
-      embeds: [infoEmbed(t('channelauto.thread.listTitle'), t('channelauto.thread.listEmpty'))],
+      embeds: [infoEmbed(t('channelauto.thread.listTitle'), body)],
       ephemeral: true,
     });
     return;
   }
-  const lines = config.autoThreads.map((r) => {
+  const lines = liveRules.map((r) => {
     const flags = [formatArchive(r.archiveMinutes)];
     if (r.requireAttachment) flags.push('attachments only');
     if (r.starterMessage) flags.push('starter message');
     return `<#${r.channelId}> — \`${r.nameTemplate}\` (${flags.join(', ')})`;
   });
+  if (gone.length > 0) lines.push(t('channelauto.pruned', { count: gone.length }));
   await interaction.reply({ embeds: [listEmbed(t('channelauto.thread.listTitle'), lines)], ephemeral: true });
 }
 
