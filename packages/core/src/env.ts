@@ -94,6 +94,9 @@ const envSchema = z.object({
   BOT_HEALTH_PORT: z.coerce.number().int().positive().optional(),
   /** Optional private channel id; the bot posts a short alert there on unhandledRejection / uncaughtException. */
   ALERT_CHANNEL_ID: z.string().optional(),
+  /** Optional Discord webhook URL for the same crash alerts. Unlike ALERT_CHANNEL_ID it works while the gateway
+   * client is not connected (e.g. a crash during startup). It is a secret: never log it. */
+  ALERT_WEBHOOK_URL: z.string().optional(),
   ENABLE_MESSAGE_CONTENT_INTENT: boolFromString(false),
   ENABLE_GUILD_MEMBERS_INTENT: boolFromString(true),
   ENABLE_GUILD_PRESENCES_INTENT: boolFromString(false),

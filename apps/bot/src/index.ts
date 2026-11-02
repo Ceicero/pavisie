@@ -7,7 +7,7 @@ import { allPlugins, PluginRegistry, type PrivilegedIntentsEnabled } from '@pavi
 import { createClient } from './client';
 import { bullConnectionOptionsFromUrl } from './lib/redis-options';
 import { createBotActionsWorker } from './host/bot-actions';
-import { installCrashHandlers } from './host/crash-alerts';
+import { createCrashAlerter, createCrashTerminator, installCrashHandlers } from './host/crash-alerts';
 import { createDataRequestsWorker } from './host/data-requests';
 import { startHealthServer } from './host/health';
 import { loadPlugins } from './host/loader';
@@ -43,7 +43,12 @@ async function main(): Promise<void> {
   // build/wire everything before calling `client.login()` below (standard discord.js bootstrap ordering — the
   // client is only actually used once `ready` fires, by which point it genuinely is `<true>`).
   const client = createClient(intents) as unknown as Client<true>;
-  installCrashHandlers({ client, logger, channelId: env.ALERT_CHANNEL_ID });
+  installCrashHandlers({
+    client,
+    logger,
+    channelId: env.ALERT_CHANNEL_ID,
+    webhookUrl: env.ALERT_WEBHOOK_URL,
+  });
 
   const host = await loadPlugins({
     plugins: allPlugins,
@@ -298,5 +303,9 @@ main().catch((err: unknown) => {
   // no-console: `error`/`warn` are allowed by the root eslint config. Fatal boot failure (e.g. missing env vars)
   // must be visible even before the logger/redis/db are up, at the top-level process entrypoint.
   console.error('Fatal error during bot startup:', err instanceof Error ? err.message : err);
-  process.exit(1);
+  // The gateway client may not exist or be logged in yet, so only the webhook can carry this alert. Exits 1 once
+  // the alert is out (or after the short cap), as it did before.
+  const logger = createLogger('bot');
+  const alert = createCrashAlerter({ logger, webhookUrl: env.ALERT_WEBHOOK_URL });
+  void createCrashTerminator({ alert, logger })('startupFailure', err);
 });
