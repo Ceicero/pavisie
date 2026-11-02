@@ -24,11 +24,13 @@ error text and which of `bot` / `api` / `dashboard` / `web` printed it.
 Read the last few lines the process printed before it exited — `apps/bot` fails fast with a clear
 message rather than hanging, so the cause is almost always right there.
 
-**"Missing required environment variable(s): DISCORD_TOKEN"** (or `DATABASE_URL` / `REDIS_URL` /
-`DISCORD_CLIENT_ID`)
-→ One of the required values in your `.env` is blank. Open `.env` in the repo root, fill it in, and
-restart. See the README's [local setup](README.md#local-setup) section for where each value comes
-from.
+**"[pavisie:bot] Refusing to start: … environment variables are missing or invalid."**
+→ The startup check lists each offending variable by name with a reason, for example
+`DISCORD_TOKEN: missing` or `REDIS_URL: must be a redis:// or rediss:// connection URL` (values are never
+printed). Open `.env` in the repo root, fix exactly those lines, and restart. The same message format is used
+by `api`, `web` and `dashboard` (with their own service name). See the README's
+[local setup](README.md#local-setup) section for where each value comes from, and
+`infra/DEPLOYMENT.md` §6 for the full reference.
 
 **Bot process crashes immediately with a Discord.js `AuthenticationError` / "401: Unauthorized"**
 → `DISCORD_TOKEN` is wrong or was reset. In the [Discord Developer Portal](https://discord.com/developers/applications) →
