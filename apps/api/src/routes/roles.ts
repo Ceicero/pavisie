@@ -32,6 +32,7 @@ import {
   welcomeGoodbyeBodySchema,
 } from '../lib/roles/schemas';
 import { requireGuildAccess } from '../lib/guild-access';
+import { assertPanelRolesAssignable } from '../lib/roles/assignability';
 import { guildIdParamSchema, paginationQuerySchema } from '../lib/schemas';
 
 const ROLES_PLUGIN_ID = 'roles' as const;
@@ -112,6 +113,15 @@ export default async function rolesRoutes(app: ZodFastifyInstance): Promise<void
       const session = request.session!;
       const { options, ...panelFields } = request.body;
       await assertGroupInGuild(app, guildId, panelFields.groupId);
+      if (options) {
+        const { allowElevatedRoles } = await getRolesConfig(app, guildId);
+        await assertPanelRolesAssignable({
+          guildId,
+          actorId: session.userId,
+          roleIds: options.map((o) => o.roleId),
+          allowElevatedRoles: Boolean(allowElevatedRoles),
+        });
+      }
 
       const row = await app.prisma.rolePanel.create({
         data: {
@@ -149,6 +159,15 @@ export default async function rolesRoutes(app: ZodFastifyInstance): Promise<void
 
       const { options, ...panelFields } = request.body;
       await assertGroupInGuild(app, guildId, panelFields.groupId);
+      if (options) {
+        const { allowElevatedRoles } = await getRolesConfig(app, guildId);
+        await assertPanelRolesAssignable({
+          guildId,
+          actorId: session.userId,
+          roleIds: options.map((o) => o.roleId),
+          allowElevatedRoles: Boolean(allowElevatedRoles),
+        });
+      }
       if (options) {
         await app.prisma.rolePanelOption.deleteMany({ where: { panelId } });
       }
