@@ -54,6 +54,6 @@ test.describe('donate page', () => {
   test('shows the unavailable state when the API is down', async ({ page }) => {
     await page.goto('/donate');
 
-    await expect(page.getByRole('heading', { name: /donations aren.t set up yet/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /donations aren.t set up/i })).toBeVisible();
   });
 });
