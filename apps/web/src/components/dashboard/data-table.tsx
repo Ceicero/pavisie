@@ -38,7 +38,7 @@ export function DataTable<T>({
   loading,
   error,
   onRetry,
-  emptyTitle = 'Nothing here yet',
+  emptyTitle = 'No entries',
   emptyDescription,
   onRowClick,
 }: DataTableProps<T>) {
@@ -73,8 +73,23 @@ export function DataTable<T>({
         {rows.map((row) => (
           <TableRow
             key={rowKey(row)}
+            tabIndex={onRowClick ? 0 : undefined}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
-            className={onRowClick ? 'cursor-pointer' : undefined}
+            onKeyDown={
+              onRowClick
+                ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onRowClick(row);
+                    }
+                  }
+                : undefined
+            }
+            className={
+              onRowClick
+                ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
+                : undefined
+            }
           >
             {columns.map((col) => (
               <TableCell key={col.key} className={col.className}>

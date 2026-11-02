@@ -103,7 +103,6 @@ html.light {
   filter: blur(80px);
   mix-blend-mode: screen;
   background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 70%);
-  will-change: transform;
 }
 
 html.light .smoke-blob {
@@ -161,6 +160,47 @@ html.light .smoke-blob {
 html.light .glass {
   background-color: rgba(10, 10, 10, 0.03);
   border-color: rgba(10, 10, 10, 0.1);
+}
+
+/* Marketing components hardcode white-alpha borders and washes. Those disappear on the light
+   theme (white on near-white). Remap them to the same alpha on near-black so contrast holds
+   without restyling each call site. Dashboard `dark:` variants use different class names. */
+html.light .border-white\/5,
+html.light .border-white\/10,
+html.light .border-white\/15,
+html.light .border-white\/25,
+html.light .divide-white\/10 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(10, 10, 10, 0.12);
+}
+
+html.light .hover\:border-white\/25:hover {
+  border-color: rgba(10, 10, 10, 0.28);
+}
+
+html.light .bg-white\/\[0\.02\],
+html.light .bg-white\/\[0\.03\],
+html.light .bg-white\/\[0\.04\],
+html.light .bg-white\/\[0\.05\],
+html.light .bg-white\/\[0\.06\] {
+  background-color: rgba(10, 10, 10, 0.04);
+}
+
+html.light .hover\:bg-white\/\[0\.02\]:hover,
+html.light .hover\:bg-white\/\[0\.04\]:hover,
+html.light .hover\:bg-white\/\[0\.05\]:hover,
+html.light .hover\:bg-white\/\[0\.06\]:hover {
+  background-color: rgba(10, 10, 10, 0.06);
+}
+
+html.light .decoration-white\/20 {
+  text-decoration-color: rgba(10, 10, 10, 0.28);
+}
+
+/* Primary fill is gold-5 (remapped to the darker gold-4 stop in light mode) with near-white
+   text. The shared hover step is gold-6, which is a bright-on-black stop and fails contrast
+   against that light text. Darken the hover instead. */
+html.light .bg-gold-5:hover {
+  background-color: hsl(var(--gold-3));
 }
 
 .site-content {

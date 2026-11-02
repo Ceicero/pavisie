@@ -85,15 +85,21 @@ export function TopBar() {
 
       {!inApp ? (
         <nav aria-label="Primary" className="hidden items-center gap-6 md:flex">
-          {SITE_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded text-sm text-grey-3 transition-colors hover:text-gold-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-5"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {SITE_LINKS.map((link) => {
+            const current = pathname === link.href || pathname?.startsWith(`${link.href}/`);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={current ? 'page' : undefined}
+                className={`rounded text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-5 ${
+                  current ? 'text-gold-5' : 'text-grey-3 hover:text-gold-5'
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
       ) : null}
 
@@ -141,12 +147,15 @@ function AccountMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-ring">
+      <DropdownMenuTrigger
+        aria-label="Account menu"
+        className="flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
         {user?.avatarUrl ? (
           <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />
         ) : (
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-            <UserIcon className="h-4 w-4 text-muted-foreground" />
+            <UserIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           </div>
         )}
       </DropdownMenuTrigger>
@@ -170,6 +179,8 @@ function AccountMenu() {
  * `DashboardTabStrip` and was removed (see `TopBar`'s doc comment).
  */
 function HamburgerMenu() {
+  const pathname = usePathname();
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -178,11 +189,16 @@ function HamburgerMenu() {
         </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
-        {SITE_LINKS.map((link) => (
-          <DropdownMenuItem asChild key={link.href}>
-            <Link href={link.href}>{link.label}</Link>
-          </DropdownMenuItem>
-        ))}
+        {SITE_LINKS.map((link) => {
+          const current = pathname === link.href || pathname?.startsWith(`${link.href}/`);
+          return (
+            <DropdownMenuItem asChild key={link.href}>
+              <Link href={link.href} aria-current={current ? 'page' : undefined}>
+                {link.label}
+              </Link>
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -13,6 +13,10 @@ import { DashboardTabStrip } from '@/components/dashboard/dashboard-tab-strip';
  * `DashboardTabStrip` (which already gives every breakpoint below `lg` a way to reach all 16
  * sections), so nothing opens it anymore; it's kept wired (rather than ripped out of
  * `AppSidebar`, a shared/reused component) since leaving it permanently closed is harmless.
+ *
+ * Height is the viewport minus the site `TopBar` (`h-14`). A full `min-h-dvh` here sits inside
+ * that bar and forces an extra screenful of scroll. The page region is a `div`, not a second
+ * `<main>` — `SiteChrome` already owns the landmark.
  */
 export default function GuildLayout({ children }: { children: React.ReactNode }) {
   const params = useParams<{ guildId: string }>();
@@ -20,11 +24,11 @@ export default function GuildLayout({ children }: { children: React.ReactNode })
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
   return (
-    <div className="flex min-h-dvh">
+    <div className="flex min-h-[calc(100dvh-3.5rem)]">
       <AppSidebar guildId={guildId} mobileOpen={mobileOpen} onMobileOpenChange={setMobileOpen} />
       <div className="flex min-w-0 flex-1 flex-col">
         <DashboardTabStrip guildId={guildId} />
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <div className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</div>
       </div>
     </div>
   );
