@@ -215,7 +215,7 @@ PUBLIC_WEBHOOK_BASE_URL=      # public https base for inbound webhooks (EventSub
 
 | id             | Folder             | Command groups / top-level commands                                                                                                                                                                                                                                                                                                                                             | Default                                                |
 | -------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `admin`        | `src/admin`        | `/setup wizard\|status`, `/config view\|set\|reset`, `/plugin enable\|disable\|status\|list`, `/permissions audit`, `/health`                                                                                                                                                                                                                                                   | always enabled (cannot be disabled)                    |
+| `admin`        | `src/admin`        | `/setup wizard\|status\|streamer\|footer`, `/config view\|set\|reset`, `/plugin enable\|disable\|status\|list`, `/permissions audit`, `/health`                                                                                                                                                                                                                                                   | always enabled (cannot be disabled)                    |
 | `moderation`   | `src/moderation`   | `/mod warn\|warnings\|clearwarns\|timeout\|untimeout\|kick\|ban\|unban\|softban\|purge\|lock\|unlock\|slowmode\|nick\|note\|case\|cases\|appeal-setup`, `/mod role add\|remove` (subcommand group), `/appeal` (member-facing appeal flow), context menus: "Warn user", "View cases"                                                                                             | enabled                                                |
 | `automod`      | `src/automod`      | `/automod rule create\|list\|view\|edit\|delete\|toggle\|test`, `/automod exempt add\|remove\|list`, `/automod dryrun`, `/automod review`, `/automod status`                                                                                                                                                                                                                    | enabled, **dry-run on** by default                     |
 | `enforcer`     | `src/enforcer`     | `/enforcer setup\|status\|policy create\|list\|view\|edit\|delete\|toggle\|test\|import\|flag\|search\|record\|history\|export\|appeal\|mute\|unmute`, context menu "Flag for review"                                                                                                                                                                                           | disabled                                               |
@@ -437,6 +437,7 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 - `logging`: `{ log(guildId, kind: LogKind, payload: LogPayload): Promise<void> }` — kind ∈ `member.join|member.leave|message.edit|message.delete|role.update|channel.update|guild.update|moderation.action|voice.join|voice.leave|invite.use|bot.error|webhook.failure|automod.trigger|ticket.event|verification.event`
 - `automod`: `{ quarantine(guildId, userId, reason) }`
 - `tickets`, `roles` (`assignRoles`, `verifyMember`), `integrations` (`sendOutbound(guildId, endpointId, payload)`), `ai` (`complete(...)`) — each plugin registers its service in `onLoad` and consumers call `ctx.services.get('x')` and no-op gracefully if absent.
+- `admin`: `{ streamerStarter({ guildId, payload, requestedBy }) }` — registered by the `admin` plugin; reached only through the `bot-actions` queue (`admin.streamerStarter`), see §19f.
 - `twitchChat`: `{ status(): TwitchChatRuntimeStatus; reconcileNow(): Promise<void>; stop(): Promise<void> }` — the `integrations` plugin's Twitch chat bot runtime; registered from the same `onLoad` (§19a).
 
 ### 7.6 Platform events (`@pavisie/types` `PlatformEventMap`)
@@ -539,6 +540,7 @@ with a configurable prefix, default `+`. For example: `/mod ban @user spam` can 
 - Route files (one per feature; each exports `default async function routes(app: FastifyInstance)` registered under prefix `/guilds/:guildId`):
   - `routes/auth.ts`, `routes/guilds.ts` (list, `GET /:guildId` overview — returns `GuildOverviewDto`: `guild` (with `iconUrl`/`botPresent`, a placeholder "Unknown server" row if the bot has never synced the guild), `config`, `stats` (memberCount, pluginsEnabled/pluginCount, openTickets, pendingReviews, moderationCasesLast7d), `plugins` (via `lib/plugin-summaries.ts`'s `buildPluginSummaries`, shared with `routes/plugins.ts`), `setupIncomplete`/`setupIssues`, plus deprecated top-level `pluginCount`/`pluginsEnabled` for older consumers; `GET/PATCH /:guildId/config`)
   - `routes/plugins.ts` — `GET /:guildId/plugins` (manifest summary + enabled + availability + health), `POST /:guildId/plugins/:pluginId/enable|disable`, `GET/PUT /:guildId/plugins/:pluginId/config` (validated with the plugin's zod configSchema; `PUT` also rejects any top-level body key that isn't one of that plugin's own `configSchema` keys with a 400 `validation_error` naming the offending + valid keys — via `assertKnownConfigKeys`, also enforced as a backstop inside `GuildConfigStore.setConfig` itself — so a wrongly-shaped write, e.g. `{ config: {...} }` instead of the bare config object, fails loudly instead of a silent no-op 200 with the extra key persisted into the stored raw JSON, since zod objects strip unknown keys by default)
+  - `routes/setup.ts` — the dashboard half of the streamer starter pack (§19f): `POST /:guildId/setup/streamer-starter` (body `{ twitchLogin?, alertChannelId? }`, a login needs a channel) queues an `admin.streamerStarter` bot action for the signed-in user and answers 202 `{ requestId }`; `GET /:guildId/setup/streamer-starter/:requestId` returns `{ status: 'pending' }` until the bot has stored the `done`/`failed` result in Redis (the key includes the guild id)
   - `routes/audit.ts` — `GET /:guildId/audit?cursor&limit&action&actorId`, `GET /:guildId/audit/export.csv`
   - `routes/moderation.ts` — cases list/get/update reason/export.csv, warnings, notes, appeals
   - `routes/automod.ts` — rules CRUD, events (review queue) list/resolve, dry-run toggle
@@ -1604,6 +1606,27 @@ server**. Everything is built with a `platform` discriminator (`CreatorSessionDa
   for `channel:read:redemptions` (encrypted, per channel) until they disconnect it, the channel's rewards, the overlay
   link (encrypted) and — only if they add one — their own OpenAI key for TTS (encrypted, never shown again); viewers'
   redemption text is used in memory only and never stored or logged. No new env vars.
+
+## 19f. Streamer starter pack and the "Powered by Pavisie" footer (inside the `admin` plugin)
+
+- **Starter pack.** `/setup streamer [twitch_login] [alert_channel]` (admin) and the overview page's "Streamer starter pack"
+  button turn on Twitch go-live alerts, a "Server Stats" category with a locked `Members: {members}` voice channel, leveling
+  and a delete-only automod baseline (invite links, mention spam, scam links; dry-run like every new rule). One function does
+  it for both: `planStreamerStarter` (pure) decides from a snapshot of the guild, `applyStreamerStarter` applies through
+  ports (`packages/plugins/src/admin/starter-pack.ts`), and `starter-pack-runtime.ts` supplies the real ports. The API cannot
+  create channels or validate the login the way the bot does, so the dashboard route only queues the bot action
+  `admin.streamerStarter` (dispatched to the new `admin` service, §7.5) and the bot runs the same runtime, then stores a
+  `StreamerStarterResultDto` at `pavisie:admin:streamer-starter:<guildId>:<requestId>` (1h) for the dashboard to poll.
+- **Idempotent, fills gaps only.** "Already configured" means: an active Twitch alert for that login exists; `community.statsChannels`
+  is not empty; a non-deleted automod rule of that type exists; leveling plugin on and `leveling.enabled`. Those are never
+  touched or duplicated. Leveling keeps every other setting (the shallow config write re-spreads the current `leveling`).
+  A per-guild Redis lock (120s) stops two concurrent runs racing. Missing Manage Channels skips only the stats step; a bad
+  Twitch login fails only the alert step. One audit entry `setup.streamer_starter` per run (actor = the Discord user,
+  source `bot` or `dashboard`), next to the usual `plugin.enable` / `plugin.config.update` / `automod.rule.create` rows.
+- **Footer.** `publicEmbed(ctx, guildId, embed)` (`sdk/public-embed.ts`) applies "Powered by Pavisie" to public embeds
+  (integration alerts, giveaways, polls, starboard) unless `admin.poweredByFooter` is false (default true; `/setup footer`,
+  `/config set admin.poweredByFooter`, Dashboard → Settings → Branding). It appends to an existing footer, replaces the plain
+  brand footer, and is idempotent. Ephemeral replies and staff/mod-log embeds do not use it.
 
 ## 20. Brand tokens: gold-and-black
 
