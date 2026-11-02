@@ -34,6 +34,7 @@ export const AuditAction = {
   CommunityStickyRemove: 'community.sticky.remove',
   RetentionUpdate: 'retention.update',
   DataExportRequest: 'data.export.request',
+  DataExportDownload: 'data.export.download',
   DataDeleteRequest: 'data.delete.request',
   SetupWizardComplete: 'setup.wizard.complete',
   CommunityTagCreate: 'community.tag.create',
