@@ -24,7 +24,7 @@ export const configSchema = z.object({
   djRoleId: z.string().nullable().default(null),
   defaultVolume: z.number().int().min(0).max(150).default(100),
   /** Saved playlists, keyed by (lowercased) name — `/music playlist save|load|list|delete`. */
-  playlists: z.record(z.string(), playlistSchema).default({}),
+  playlists: z.record(z.string(), playlistSchema).prefault({}),
 });
 export type MediaConfig = z.infer<typeof configSchema>;
 

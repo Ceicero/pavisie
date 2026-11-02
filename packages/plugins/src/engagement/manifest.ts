@@ -42,10 +42,10 @@ const tempVoiceSchema = z.object({
 });
 
 export const configSchema = z.object({
-  leveling: levelingSchema.default({}),
-  rep: repSchema.default({}),
-  starboard: starboardSchema.default({}),
-  tempVoice: tempVoiceSchema.default({}),
+  leveling: levelingSchema.prefault({}),
+  rep: repSchema.prefault({}),
+  starboard: starboardSchema.prefault({}),
+  tempVoice: tempVoiceSchema.prefault({}),
 });
 
 export type EngagementConfig = z.infer<typeof configSchema>;
