@@ -5,7 +5,7 @@
 import { randomInt } from 'node:crypto';
 import type { GuildMember } from 'discord.js';
 import type { CommunityEvent, Giveaway, Poll, Suggestion } from '@pavisie/database';
-import { fetchMemberSafe, resolveTextChannel, safeDm, type PluginContext } from '../sdk';
+import { fetchMemberSafe, publicEmbed, resolveTextChannel, safeDm, type PluginContext } from '../sdk';
 import {
   buildEventComponents,
   buildEventEmbed,
@@ -48,7 +48,7 @@ async function editPollMessage(ctx: PluginContext, poll: Poll): Promise<void> {
   try {
     const message = await channel.messages.fetch(poll.messageId);
     await message.edit({
-      embeds: [buildPollEmbed(poll, tallies)],
+      embeds: [await publicEmbed(ctx, poll.guildId, buildPollEmbed(poll, tallies))],
       components: buildPollComponents(poll.id, options, poll.closed),
     });
   } catch {
@@ -90,7 +90,7 @@ async function editGiveawayMessage(
   try {
     const message = await channel.messages.fetch(giveaway.messageId);
     await message.edit({
-      embeds: [buildGiveawayEmbed(giveaway, entryCount)],
+      embeds: [await publicEmbed(ctx, giveaway.guildId, buildGiveawayEmbed(giveaway, entryCount))],
       components: buildGiveawayComponents(giveaway.id, giveaway.ended),
     });
   } catch {
@@ -182,7 +182,7 @@ export async function cancelGiveaway(ctx: PluginContext, giveawayId: string): Pr
         const message = await channel.messages.fetch(updated.messageId);
         await message.edit({
           content: 'This giveaway was cancelled.',
-          embeds: [buildGiveawayEmbed(updated, 0)],
+          embeds: [await publicEmbed(ctx, updated.guildId, buildGiveawayEmbed(updated, 0))],
           components: [],
         });
       } catch {

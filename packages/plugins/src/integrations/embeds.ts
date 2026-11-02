@@ -1,6 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { EMBED_LIMITS, truncate } from '@pavisie/core';
-import { resolveTextChannel, roleMention, type PluginContext } from '../sdk';
+import { publicEmbed, resolveTextChannel, roleMention, type PluginContext } from '../sdk';
 import type { AlertEmbedData } from './formatters/types';
 
 /** Converts a provider formatter's plain-data `AlertEmbedData` into a real discord.js embed, right before sending
@@ -51,7 +51,8 @@ export async function postAlert(
     const channel = await resolveTextChannel(guild, target.channelId);
     if (!channel) return false;
 
-    const embed = toEmbedBuilder(data);
+    // A public post: carries the "Powered by Pavisie" footer unless the server turned it off.
+    const embed = await publicEmbed(ctx, target.guildId, toEmbedBuilder(data));
     const content = target.roleId ? roleMention(target.roleId) : undefined;
     await channel.send({
       content,

@@ -1,5 +1,5 @@
 import type { ButtonInteraction } from 'discord.js';
-import { errorEmbed, successEmbed, type ComponentHandler } from '../../sdk';
+import { errorEmbed, publicEmbed, successEmbed, type ComponentHandler } from '../../sdk';
 import { evaluateGiveawayEligibility } from '../actions';
 import { buildGiveawayComponents, buildGiveawayEmbed } from '../render';
 
@@ -52,7 +52,7 @@ const enterButton: ComponentHandler = {
     const entryCount = await c.ctx.prisma.giveawayEntry.count({ where: { giveawayId } });
     await interaction.message
       .edit({
-        embeds: [buildGiveawayEmbed(giveaway, entryCount)],
+        embeds: [await publicEmbed(c.ctx, c.guildId, buildGiveawayEmbed(giveaway, entryCount))],
         components: buildGiveawayComponents(giveaway.id, giveaway.ended),
       })
       .catch(() => undefined);
