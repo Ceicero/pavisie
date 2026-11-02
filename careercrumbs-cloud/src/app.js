@@ -6,11 +6,10 @@
 
   // ---------- state ----------
   let ws = C.emptyWorkspace();
-  let mode = "loading"; // loading | cloud | local
+  let mode = "loading"; // loading | local
   let syncState = "idle";
   let route = "home";
   const ui = { jobFilter: "Active", pack: "all", prepJob: null, sheetOpen: false };
-  let db = null, uidv = null, downloads = null;
 
   // ---------- Ruhv & icons ----------
   // Ruhv, the CareerCrumbs mouse: one solid shape in currentColor; the eye and smile are cut-outs.
@@ -57,10 +56,7 @@
   const STATUS_PILL = { none: ["", "Not started"], draft: ["warn", "Draft"], ready: ["solid", "Ready"] };
 
   // ---------- persistence ----------
-  // One document per area, in the viewer's own private space.
-  const MODULES = { profile: ["profile"], jobs: ["jobs"], stories: ["stories", "storySeq"], interview: ["interview"] };
-  const KEY_TO_MOD = {};
-  for (const [m, keys] of Object.entries(MODULES)) for (const k of keys) KEY_TO_MOD[k] = m;
+  // Everything lives in this device's storage under one key.
   const LS_KEY = "careercrumbs:v2";
   const dirty = new Set();
   let flushTimer = null, flushing = false;
@@ -68,7 +64,7 @@
   // Everything saves on its own; there is no account or setup step.
   function persist(...keys) {
     if (!keys.includes("profile") || keys.length > 1) ws.profile.changesSinceExport = (ws.profile.changesSinceExport || 0) + 1;
-    for (const k of keys) dirty.add(KEY_TO_MOD[k] || k);
+    dirty.add("ws");
     setSync("saving");
     clearTimeout(flushTimer);
     flushTimer = setTimeout(flush, 500);
@@ -81,31 +77,14 @@
     if (flushing) return void (flushTimer = setTimeout(flush, 300));
     flushing = true;
     try {
-      if (mode === "cloud") {
-        while (dirty.size) {
-          const m = dirty.values().next().value;
-          const body = { savedAt: new Date().toISOString() };
-          for (const k of MODULES[m]) body[k] = ws[k];
-          await db.doc("data/users/" + uidv + "/" + m).set(body);
-          dirty.delete(m);
-        }
-      } else {
-        localStorage.setItem(LS_KEY, JSON.stringify(ws));
-        dirty.clear();
-      }
+      localStorage.setItem(LS_KEY, JSON.stringify(ws));
+      dirty.clear();
       setSync("saved");
     } catch (e) {
-      // Viewers who can't write to their account space still keep their work in this browser.
-      if (mode === "cloud" && e && ["not_granted", "invalid_argument", "revoked", "capability_disabled"].includes(e.code)) {
-        mode = "local";
-        flushing = false;
-        toast("Saving on this device instead of your account.");
-        return flush();
-      }
-      // Browsers throw a DOMException named QuotaExceededError (code 22); the claude.ai store uses quota_exceeded.
+      // Browsers throw a DOMException named QuotaExceededError (code 22).
       // Changes stay marked unsaved, so the next edit or leaving the app tries again.
       setSync("error");
-      const full = e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === "quota_exceeded");
+      const full = e && (e.name === "QuotaExceededError" || e.code === 22);
       if (full) {
         ws.interview.practice = ws.interview.practice.slice(-100);
         toast("Your phone's storage for CareerCrumbs is full. Export a backup, then delete old jobs.", "Export", () => A.export());
@@ -116,7 +95,7 @@
   }
   function setSync(s) {
     syncState = s;
-    const label = mode === "loading" ? "Loading" : s === "saving" ? "Saving…" : s === "error" ? "Not saved" : mode === "cloud" ? "Saved to your account" : "Saved on this device";
+    const label = mode === "loading" ? "Loading" : s === "saving" ? "Saving…" : s === "error" ? "Not saved" : "Saved on this device";
     document.querySelectorAll(".sync").forEach((el) => {
       el.dataset.s = s;
       el.title = label;
@@ -128,48 +107,23 @@
     window.addEventListener("hashchange", onHash);
     onHash(true);
     render();
-    const claude = window.claude;
-    if (claude && claude.use) {
-      const [d, u, dl] = await Promise.all(["db", "user", "downloads"].map((n) => claude.use(n).catch(() => null)));
-      downloads = dl;
-      uidv = u && u.id ? await u.id().catch(() => null) : null;
-      if (d && uidv) db = d;
-    }
     let loaded = null;
-    let where = "local";
-    if (db) {
-      try {
-        const snap = await db.collection("data/users/" + uidv).get();
-        if (!snap.empty) {
-          loaded = {};
-          for (const doc of snap.docs) {
-            const body = doc.data() || {};
-            for (const k of MODULES[doc.id] || []) if (k in body) loaded[k] = body[k];
-          }
-        }
-        where = "cloud";
-      } catch (e) {
-        db = null;
-      }
-    }
     let corrupt = false;
-    if (where === "local") {
-      let raw = null;
-      try { raw = localStorage.getItem(LS_KEY); } catch (e) {}
-      if (raw) {
-        try {
-          loaded = JSON.parse(raw);
-        } catch (e) {
-          // Keep the unreadable copy instead of overwriting it on the next save.
-          corrupt = true;
-          try { localStorage.setItem(LS_KEY + ":corrupt-" + t0(), raw); } catch (e2) {}
-        }
+    let raw = null;
+    try { raw = localStorage.getItem(LS_KEY); } catch (e) {}
+    if (raw) {
+      try {
+        loaded = JSON.parse(raw);
+      } catch (e) {
+        // Keep the unreadable copy instead of overwriting it on the next save.
+        corrupt = true;
+        try { localStorage.setItem(LS_KEY + ":corrupt-" + t0(), raw); } catch (e2) {}
       }
-      // Ask the browser not to evict this site's storage when space runs low.
-      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     }
+    // Ask the browser not to evict this site's storage when space runs low.
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     ws = C.normalize(loaded || {});
-    mode = where;
+    mode = "local";
     setSync("saved");
     render();
     if (corrupt) toast("Some saved data couldn't be read. A copy was kept on this device; import a backup if you have one.");
@@ -184,7 +138,7 @@
   }
   // Standalone website only: cache the app for offline use and offer new versions.
   function registerOffline() {
-    if (window.claude || native || !("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
+    if (native || !("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
     navigator.serviceWorker.register("sw.js").then((reg) => {
       const offer = (w) => toast("A new version of CareerCrumbs is ready.", "Update", () => w.postMessage("skip-waiting"));
       if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
@@ -307,7 +261,6 @@
 
   // Remind people to back up when their data only lives on this device.
   function backupDue() {
-    if (mode === "cloud") return false;
     const changes = ws.profile.changesSinceExport || 0;
     if (!ws.profile.lastExport) return changes >= 15;
     return changes >= 20 || (changes > 0 && C.daysBetween(ws.profile.lastExport, t0()) >= 14);
@@ -462,7 +415,7 @@
     const p = ws.profile;
     let theme = "system";
     try { theme = localStorage.getItem("careercrumbs:theme") || "system"; } catch (e) {}
-    const where = mode === "cloud" ? "Saved to your claude.ai account and private to you." : (native ? "Saved on this phone. Export a backup now and then." : "Saved in this browser only. Export a backup now and then.");
+    const where = native ? "Saved on this phone. Export a backup now and then." : "Saved in this browser only. Export a backup now and then.";
     return (
       '<div class="view">' + head("Your details and your data", "Me") +
       '<section class="card stack"><h2>About you</h2><form class="stack" data-form="profile">' + field("name", "Your name", p.name, { hint: "Signs your follow-up and thank-you messages." }) + field("targetRole", "Job you're going for", p.targetRole, { ph: "Warehouse associate, cashier, shift lead…" }) +
@@ -471,7 +424,7 @@
       '<section class="card stack"><h2>Check-in reminders</h2><p class="muted">CareerCrumbs reminds you to reconnect <b>3 days, 1 week and 1 month</b> after you apply or interview. Salaried jobs start at 1 week. Due check-ins show on Home with a message ready to send.</p><p class="muted">For an alert on your phone, add them to your calendar. Your calendar app does the notifying, and you can delete them anytime.</p>' +
       '<div class="row"><button class="btn brown" data-act="reminders-all">' + icon("bell") + "Add all upcoming check-ins (" + C.reminderEvents(ws.jobs).length + ')</button></div><div class="field"><span>When I add or update a job</span><div class="chips" role="group" aria-label="Calendar offer">' + [["ask", "Offer to add reminders"], ["off", "Don\'t ask"]].map(([v, l]) => '<button class="chip" data-act="remind-pref" data-v="' + esc(v) + '" aria-pressed="' + ((p.reminders || "ask") === v) + '">' + l + "</button>").join("") + "</div></div></section>" +
       '<section class="card stack"><h2>Look</h2><div class="chips" role="group" aria-label="Theme">' + [["system", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([v, l]) => '<button class="chip" data-act="theme" data-v="' + esc(v) + '" aria-pressed="' + (theme === v) + '">' + l + "</button>").join("") + "</div></section>" +
-      '<section class="card stack"><h2>Your data</h2><p class="muted">' + esc(where) + "</p>" + (mode === "cloud" ? "" : '<p class="' + (ws.profile.lastExport ? "muted" : "warn-text") + '">Last backup: ' + (ws.profile.lastExport ? esc(C.fmtDateY(ws.profile.lastExport)) : "never") + "</p>") + '<div class="row"><button class="btn ghost" data-act="export">Export backup</button><label class="btn ghost" for="import-file">Import backup</label><input class="sr" id="import-file" type="file" accept=".json,application/json"></div><div data-import></div><div class="row divider"><button class="btn danger sm" data-act="ask-erase">Erase everything</button></div><div data-erase></div></section>' +
+      '<section class="card stack"><h2>Your data</h2><p class="muted">' + esc(where) + "</p>" + '<p class="' + (ws.profile.lastExport ? "muted" : "warn-text") + '">Last backup: ' + (ws.profile.lastExport ? esc(C.fmtDateY(ws.profile.lastExport)) : "never") + "</p>" + '<div class="row"><button class="btn ghost" data-act="export">Export backup</button><label class="btn ghost" for="import-file">Import backup</label><input class="sr" id="import-file" type="file" accept=".json,application/json"></div><div data-import></div><div class="row divider"><button class="btn danger sm" data-act="ask-erase">Erase everything</button></div><div data-erase></div></section>' +
       '<p class="muted small">CareerCrumbs has no AI and sends your answers nowhere. What you write is yours.</p></div>'
     );
   };
@@ -582,18 +535,10 @@
       if (e && e.name !== "AbortError") copyText(text);
     }
   }
-  // Order matters: the Android app's bridge, the claude.ai save prompt, the phone's share sheet
-  // (Drive, Gmail, Calendar), a normal download, then a sheet to copy from.
+  // Order matters: the Android app's bridge, the phone's share sheet (Drive, Gmail, Calendar),
+  // a normal download, then a sheet to copy from.
   async function saveFile(name, data) {
     if (native) return void native.saveFile(name, data);
-    if (downloads) {
-      try {
-        await downloads.save({ filename: name, data });
-        return toast("Saved " + name);
-      } catch (e) {
-        if (e && e.code === "declined") return;
-      }
-    }
     const type = name.endsWith(".ics") ? "text/calendar" : name.endsWith(".json") ? "application/json" : "text/plain";
     let file = null;
     try { file = new File([data], name, { type }); } catch (e) {}
@@ -605,7 +550,7 @@
         if (e && e.name === "AbortError") return;
       }
     }
-    if (file && mode !== "cloud") {
+    if (file) {
       try {
         const url = URL.createObjectURL(file);
         const a = Object.assign(document.createElement("a"), { href: url, download: name });
@@ -636,7 +581,7 @@
     "ask-reset"() {
       confirmIn($("[data-reset]"), "This clears everything saved in CareerCrumbs on this device.", "Reset", () => {
         ws = C.emptyWorkspace();
-        for (const m of Object.keys(MODULES)) dirty.add(m);
+        dirty.add("ws");
         save();
       });
     },
@@ -798,11 +743,11 @@
       confirmIn($("[data-erase]"), "This deletes every job, answer and story. Export a backup first if you might want them.", "Erase everything", () => {
         const before = ws;
         ws = C.emptyWorkspace();
-        for (const m of Object.keys(MODULES)) dirty.add(m);
+        dirty.add("ws");
         save();
         toast("Erased", "Undo", () => {
           ws = before;
-          for (const m of Object.keys(MODULES)) dirty.add(m);
+          dirty.add("ws");
           save();
           toast("Restored");
         });
@@ -1000,11 +945,11 @@
         const before = ws;
         try { localStorage.setItem(LS_KEY + ":before-import", JSON.stringify(before)); } catch (e) {}
         ws = check.ws;
-        for (const m of Object.keys(MODULES)) dirty.add(m);
+        dirty.add("ws");
         save();
         toast("Backup restored", "Undo", () => {
           ws = before;
-          for (const m of Object.keys(MODULES)) dirty.add(m);
+          dirty.add("ws");
           save();
           toast("Your previous data is back");
         });

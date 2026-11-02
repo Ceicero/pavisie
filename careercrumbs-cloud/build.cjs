@@ -1,6 +1,5 @@
-// Builds two outputs from the same source:
-//   careercrumbs.html — the claude.ai page (the artifact supplies the document head)
-//   site/             — the standalone website: full document, manifest, offline cache, icons, privacy page
+// Builds site/, the standalone website: full document, manifest, offline cache, icons, privacy page.
+// The Android app (android/build.sh) packages the same build.
 // Optional env: SITE_URL (https://… with trailing slash) adds canonical, og:url and absolute og:image;
 // CONTACT_EMAIL fills in the privacy page contact.
 const fs = require("fs");
@@ -14,12 +13,6 @@ const styles = src("styles.css");
 const logic = src("logic.js");
 const app = src("app.js");
 
-// 1. claude.ai page
-const artifact = src("shell.html").replace("/*STYLES*/", () => styles).replace("/*LOGIC*/", () => logic).replace("/*APP*/", () => app);
-fs.writeFileSync(here("careercrumbs.html"), artifact);
-console.log("careercrumbs.html", (artifact.length / 1024).toFixed(1) + " KB");
-
-// 2. standalone site
 const out = here("site");
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, "fonts"), { recursive: true });
