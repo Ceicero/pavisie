@@ -1698,7 +1698,7 @@ same origin (`https://pavisie.com`) post-merge, so this allowlist has one effect
 
 ## 22. Brand assets (logo = bot avatar)
 
-The Pavisie logo and bot avatar is a gold laurel-wreath medallion with a skull, on pure black, square,
+The Pavisie logo and bot avatar is a charcoal skull with glowing gold eyes, crowned by a gold laurel wreath, on pure black, square,
 1024×1024, used everywhere: website, dashboard, bot embed icon, and Discord avatar. Canonical file:
 `assets/brand/pavisie-skull.png` (present in the repo, lossless PNG; takes precedence over the `.jpg` when both
 exist). `assets/brand/pavisie-skull.jpg` is the same art re-encoded as JPEG, kept only so any URL or cached
