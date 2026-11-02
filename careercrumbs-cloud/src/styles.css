@@ -262,3 +262,12 @@ details.more[open] summary { margin-bottom: 12px; }
 .sheet { max-height: calc(100vh - 40px - env(safe-area-inset-top, 0px)); max-height: calc(100dvh - 40px - env(safe-area-inset-top, 0px)); }
 @media (min-width: 700px) { .sheet { max-height: 88vh; max-height: 88dvh; } }
 @media (min-width: 900px) { .rail { height: 100vh; height: 100dvh; } }
+
+/* ---------- lock screen & account ---------- */
+.lock { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); }
+.lock-card { width: 100%; max-width: 360px; display: grid; gap: 16px; justify-items: center; text-align: center; }
+.lock-card form { width: 100%; text-align: left; }
+.lock-card .btn { width: 100%; }
+.input.pin { font: 600 1.4rem/1 var(--mono); letter-spacing: 0.3em; text-align: center; }
+.danger-link { color: var(--bad); }
+.divider-top { padding-top: 14px; border-top: 1px solid var(--line); }
