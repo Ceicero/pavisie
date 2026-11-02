@@ -3,6 +3,7 @@ import { parseDuration } from '@pavisie/core';
 import {
   errorEmbed,
   listEmbed,
+  publicEmbed,
   resolveTextChannel,
   successEmbed,
   type CommandContext,
@@ -136,7 +137,7 @@ async function handleStart(c: CommandContext): Promise<void> {
   });
 
   const message = await channel.send({
-    embeds: [buildGiveawayEmbed(giveaway, 0)],
+    embeds: [await publicEmbed(ctx, guildId, buildGiveawayEmbed(giveaway, 0))],
     components: buildGiveawayComponents(giveaway.id, false),
   });
   await ctx.prisma.giveaway.update({ where: { id: giveaway.id }, data: { messageId: message.id } });

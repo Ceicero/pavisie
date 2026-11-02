@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { hasStaffLevel, parseDuration } from '@pavisie/core';
-import { errorEmbed, successEmbed, type CommandContext, type PluginCommand } from '../../sdk';
+import { errorEmbed, publicEmbed, successEmbed, type CommandContext, type PluginCommand } from '../../sdk';
 import { closePoll } from '../actions';
 import type { CommunityConfig } from '../manifest';
 import { buildPollComponents, buildPollEmbed, tallyPollFromRows } from '../render';
@@ -117,7 +117,7 @@ async function handleCreate(c: CommandContext): Promise<void> {
 
   const tallies = tallyPollFromRows(poll, poll.options, []);
   await interaction.reply({
-    embeds: [buildPollEmbed(poll, tallies)],
+    embeds: [await publicEmbed(ctx, guildId, buildPollEmbed(poll, tallies))],
     components: buildPollComponents(poll.id, poll.options, false),
   });
   const message = await interaction.fetchReply();
@@ -171,7 +171,7 @@ async function handleResults(c: CommandContext): Promise<void> {
     return;
   }
   const tallies = tallyPollFromRows(poll, poll.options, poll.votes);
-  await interaction.reply({ embeds: [buildPollEmbed(poll, tallies)] });
+  await interaction.reply({ embeds: [await publicEmbed(c.ctx, c.guildId, buildPollEmbed(poll, tallies))] });
 }
 
 export const command: PluginCommand = {

@@ -1,6 +1,12 @@
 import { EMBED_LIMITS, truncate } from '@pavisie/core';
 import type { Message, MessageReaction, PartialMessageReaction, PartialUser, User } from 'discord.js';
-import { brandEmbed, resolveTextChannel, type PluginContext, type PluginEventHandler } from '../../sdk';
+import {
+  brandEmbed,
+  publicEmbed,
+  resolveTextChannel,
+  type PluginContext,
+  type PluginEventHandler,
+} from '../../sdk';
 import type { EngagementConfig, EngagementStarboardConfig } from '../manifest';
 import { CUSTOM_EMOJI_PATTERN, countEligibleReactors, decideStarboardAction } from '../service';
 
@@ -141,7 +147,11 @@ async function handleReactionChange(
   }
 
   if (!starChannel) return;
-  const embed = buildStarboardEmbed(message, eligibleCount, starboard, ctx.intentsEnabled.messageContent);
+  const embed = await publicEmbed(
+    ctx,
+    guildId,
+    buildStarboardEmbed(message, eligibleCount, starboard, ctx.intentsEnabled.messageContent),
+  );
 
   if (action === 'post') {
     const posted = await starChannel.send({ embeds: [embed] }).catch(() => null);
