@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import commands from '../src/data/commands.json';
+import commands from '../src/data/commands.json' with { type: 'json' };
 
 /**
  * Smoke tests for the public website (ARCHITECTURE.md §17). No API and no auth needed: these pages are public,
