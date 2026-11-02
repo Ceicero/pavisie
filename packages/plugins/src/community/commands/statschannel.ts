@@ -11,11 +11,18 @@ import {
 import {
   channelMention,
   errorEmbed,
+  infoEmbed,
   listEmbed,
   successEmbed,
   type CommandContext,
   type PluginCommand,
 } from '../../sdk';
+import {
+  botHasChannelPermission,
+  channelPresence,
+  isMissingChannelPermission,
+  nonBlank,
+} from '../command-input';
 import type { CommunityConfig } from '../manifest';
 import { guildTimezone, refreshGuildStats, statsLastKey } from '../jobs/stats-refresh';
 import {
@@ -109,10 +116,18 @@ const data = new SlashCommandBuilder()
       ),
   );
 
-/** Validates a template's tokens; replies with the specific error and returns `false` when it is unusable. */
-async function validateTemplate(c: CommandContext, template: string): Promise<boolean> {
-  const check = checkTemplateTokens(template);
-  if (check.ok) return true;
+/**
+ * Validates a template. Replies with the specific error and returns `null` when it is unusable; otherwise the
+ * trimmed template to store.
+ */
+async function validateTemplate(c: CommandContext, template: string): Promise<string | null> {
+  const trimmed = nonBlank(template);
+  if (!trimmed) {
+    await c.interaction.reply({ embeds: [errorEmbed(c.t('statschannel.emptyTemplate'))], ephemeral: true });
+    return null;
+  }
+  const check = checkTemplateTokens(trimmed);
+  if (check.ok) return trimmed;
   const message = check.wantsOnline
     ? c.t('statschannel.onlineNotSupported')
     : c.t('statschannel.badToken', {
@@ -120,7 +135,7 @@ async function validateTemplate(c: CommandContext, template: string): Promise<bo
         known: STATS_TOKENS.map((tk) => `{${tk}}`).join(' '),
       });
   await c.interaction.reply({ embeds: [errorEmbed(message)], ephemeral: true });
-  return false;
+  return null;
 }
 
 async function currentCounts(c: CommandContext, guild: Guild) {
@@ -132,13 +147,23 @@ function humansNote(c: CommandContext): string {
   return c.ctx.intentsEnabled.guildMembers ? '' : `\n${c.t('statschannel.humansNote')}`;
 }
 
+async function saveConfig(c: CommandContext, patch: Partial<CommunityConfig>): Promise<boolean> {
+  try {
+    await c.ctx.setConfig<CommunityConfig>(c.guildId, patch, { id: c.interaction.user.id, source: 'bot' });
+    return true;
+  } catch (err) {
+    c.ctx.logger.warn({ err, guildId: c.guildId }, 'community: failed to save stats channel config');
+    await c.interaction.reply({ embeds: [errorEmbed(c.t('statschannel.configFailed'))], ephemeral: true });
+    return false;
+  }
+}
+
 async function handleCreate(c: CommandContext): Promise<void> {
   const { interaction, ctx, guildId, t } = c;
-  const template = interaction.options.getString('template', true);
+  const template = await validateTemplate(c, interaction.options.getString('template', true));
+  if (!template) return;
   const category = interaction.options.getChannel('category') as CategoryChannel | null;
   const kind = interaction.options.getString('kind') ?? 'voice';
-
-  if (!(await validateTemplate(c, template))) return;
 
   const cfg = await c.config<CommunityConfig>();
   if (cfg.statsChannels.length >= MAX_STATS_CHANNELS) {
@@ -176,15 +201,27 @@ async function handleCreate(c: CommandContext): Promise<void> {
       { guildId, err: err instanceof Error ? err.message : String(err) },
       'community: /statschannel create failed to create the channel',
     );
-    await interaction.reply({ embeds: [errorEmbed(t('statschannel.createFailed'))], ephemeral: true });
+    const key = isMissingChannelPermission(err)
+      ? 'statschannel.createFailed'
+      : 'statschannel.createFailedOther';
+    await interaction.reply({ embeds: [errorEmbed(t(key))], ephemeral: true });
     return;
   }
 
-  await ctx.setConfig<CommunityConfig>(
-    guildId,
-    { statsChannels: [...cfg.statsChannels, { channelId: created.id, template }] },
-    { id: interaction.user.id, source: 'bot' },
-  );
+  try {
+    await ctx.setConfig<CommunityConfig>(
+      guildId,
+      { statsChannels: [...cfg.statsChannels, { channelId: created.id, template }] },
+      { id: interaction.user.id, source: 'bot' },
+    );
+  } catch (err) {
+    if (typeof created.delete === 'function') {
+      await created.delete('Rolling back a stats channel that was not saved').catch(() => undefined);
+    }
+    ctx.logger.warn({ err, guildId }, 'community: failed to save a new stats channel');
+    await interaction.reply({ embeds: [errorEmbed(t('statschannel.saveFailed'))], ephemeral: true });
+    return;
+  }
 
   await interaction.reply({
     embeds: [
@@ -195,11 +232,23 @@ async function handleCreate(c: CommandContext): Promise<void> {
 }
 
 async function handleAdd(c: CommandContext): Promise<void> {
-  const { interaction, ctx, guildId, t } = c;
+  const { interaction, t } = c;
   const channel = interaction.options.getChannel('channel', true);
-  const template = interaction.options.getString('template', true);
+  const template = await validateTemplate(c, interaction.options.getString('template', true));
+  if (!template) return;
 
-  if (!(await validateTemplate(c, template))) return;
+  if ((await channelPresence(interaction.guild, channel.id)) === 'gone') {
+    await interaction.reply({ embeds: [errorEmbed(t('statschannel.channelGone'))], ephemeral: true });
+    return;
+  }
+  const me = interaction.guild.members?.me ?? null;
+  if (botHasChannelPermission(channel, me, PermissionFlagsBits.ManageChannels) === false) {
+    await interaction.reply({
+      embeds: [errorEmbed(t('statschannel.cantManage', { channel: channelMention(channel.id) }))],
+      ephemeral: true,
+    });
+    return;
+  }
 
   const cfg = await c.config<CommunityConfig>();
   if (cfg.statsChannels.some((entry) => entry.channelId === channel.id)) {
@@ -217,11 +266,10 @@ async function handleAdd(c: CommandContext): Promise<void> {
     return;
   }
 
-  await ctx.setConfig<CommunityConfig>(
-    guildId,
-    { statsChannels: [...cfg.statsChannels, { channelId: channel.id, template }] },
-    { id: interaction.user.id, source: 'bot' },
-  );
+  const saved = await saveConfig(c, {
+    statsChannels: [...cfg.statsChannels, { channelId: channel.id, template }],
+  });
+  if (!saved) return;
 
   const counts = await currentCounts(c, interaction.guild);
   await interaction.reply({
@@ -238,7 +286,7 @@ async function handleAdd(c: CommandContext): Promise<void> {
 }
 
 async function handleRemove(c: CommandContext): Promise<void> {
-  const { interaction, ctx, guildId, t } = c;
+  const { interaction, t } = c;
   const channel = interaction.options.getChannel('channel', true);
   const cfg = await c.config<CommunityConfig>();
   if (!cfg.statsChannels.some((entry) => entry.channelId === channel.id)) {
@@ -248,11 +296,10 @@ async function handleRemove(c: CommandContext): Promise<void> {
     });
     return;
   }
-  await ctx.setConfig<CommunityConfig>(
-    guildId,
-    { statsChannels: cfg.statsChannels.filter((entry) => entry.channelId !== channel.id) },
-    { id: interaction.user.id, source: 'bot' },
-  );
+  const saved = await saveConfig(c, {
+    statsChannels: cfg.statsChannels.filter((entry) => entry.channelId !== channel.id),
+  });
+  if (!saved) return;
   await interaction.reply({
     embeds: [successEmbed(t('statschannel.removed', { channel: channelMention(channel.id) }))],
     ephemeral: true,
@@ -263,16 +310,25 @@ async function handleList(c: CommandContext): Promise<void> {
   const { interaction, ctx, guildId, t } = c;
   const cfg = await c.config<CommunityConfig>();
   if (cfg.statsChannels.length === 0) {
-    await interaction.reply({ embeds: [listEmbed(t('statschannel.listTitle'), [])], ephemeral: true });
+    await interaction.reply({
+      embeds: [infoEmbed(t('statschannel.listTitle'), t('statschannel.listEmpty'))],
+      ephemeral: true,
+    });
     return;
   }
   const counts = await currentCounts(c, interaction.guild);
   const lastIso = await ctx.redis.get(statsLastKey(guildId));
   const last = lastIso ? new Date(lastIso) : null;
-  const lines = cfg.statsChannels.map(
-    (entry) =>
-      `${channelMention(entry.channelId)} — \`${entry.template}\` → **${renderStatsName(entry.template, counts)}**`,
-  );
+  const lines: string[] = [];
+  for (const entry of cfg.statsChannels) {
+    const mention = channelMention(entry.channelId);
+    const presence = await channelPresence(interaction.guild, entry.channelId);
+    if (presence === 'gone') {
+      lines.push(t('statschannel.channelMissing', { channel: mention }));
+      continue;
+    }
+    lines.push(`${mention} — \`${entry.template}\` → **${renderStatsName(entry.template, counts)}**`);
+  }
   lines.push(
     t('statschannel.lastRefresh', {
       when:
@@ -289,7 +345,10 @@ async function handleRefresh(c: CommandContext): Promise<void> {
   const { interaction, ctx, guildId, t } = c;
   const cfg = await c.config<CommunityConfig>();
   if (cfg.statsChannels.length === 0) {
-    await interaction.reply({ embeds: [listEmbed(t('statschannel.listTitle'), [])], ephemeral: true });
+    await interaction.reply({
+      embeds: [infoEmbed(t('statschannel.listTitle'), t('statschannel.listEmpty'))],
+      ephemeral: true,
+    });
     return;
   }
 
@@ -336,13 +395,10 @@ async function handleRefresh(c: CommandContext): Promise<void> {
 }
 
 async function handleInterval(c: CommandContext): Promise<void> {
-  const { interaction, ctx, guildId, t } = c;
+  const { interaction, t } = c;
   const minutes = interaction.options.getInteger('minutes', true);
-  await ctx.setConfig<CommunityConfig>(
-    guildId,
-    { statsRefreshMinutes: minutes },
-    { id: interaction.user.id, source: 'bot' },
-  );
+  const saved = await saveConfig(c, { statsRefreshMinutes: minutes });
+  if (!saved) return;
   await interaction.reply({
     embeds: [successEmbed(t('statschannel.intervalSet', { minutes }))],
     ephemeral: true,

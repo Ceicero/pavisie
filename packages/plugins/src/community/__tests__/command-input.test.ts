@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  botHasChannelPermission,
+  channelPresence,
   duplicateOptionLabels,
   durationIssue,
   isInThePast,
   isMissingChannelPermission,
+  isUnknownChannel,
+  isUnknownMessage,
   MAX_OPEN_MS,
   MIN_OPEN_MS,
   nonBlank,
@@ -39,7 +43,57 @@ describe('community command input', () => {
   it('recognizes Discord missing-access and missing-permissions errors', () => {
     expect(isMissingChannelPermission(Object.assign(new Error('nope'), { code: 50013 }))).toBe(true);
     expect(isMissingChannelPermission(Object.assign(new Error('nope'), { code: 50001 }))).toBe(true);
+    expect(isMissingChannelPermission(Object.assign(new Error('nope'), { code: '50013' }))).toBe(true);
     expect(isMissingChannelPermission(new Error('network'))).toBe(false);
     expect(isMissingChannelPermission(null)).toBe(false);
+  });
+
+  it('recognizes deleted channels and deleted messages', () => {
+    expect(isUnknownChannel(Object.assign(new Error('gone'), { code: 10003 }))).toBe(true);
+    expect(isUnknownChannel(Object.assign(new Error('gone'), { code: '10003' }))).toBe(true);
+    expect(isUnknownMessage(Object.assign(new Error('gone'), { code: 10008 }))).toBe(true);
+    expect(isUnknownChannel(Object.assign(new Error('nope'), { code: 50013 }))).toBe(false);
+    expect(isUnknownMessage(null)).toBe(false);
+  });
+
+  it('treats a missing channel as gone and a permission error as unknown', async () => {
+    await expect(channelPresence({}, 'ch1')).resolves.toBe('unknown');
+    await expect(channelPresence({ channels: { fetch: async () => ({ id: 'ch1' }) } }, 'ch1')).resolves.toBe(
+      'live',
+    );
+    await expect(channelPresence({ channels: { fetch: async () => null } }, 'ch1')).resolves.toBe('gone');
+    await expect(
+      channelPresence(
+        {
+          channels: {
+            fetch: async () => {
+              throw Object.assign(new Error('Unknown Channel'), { code: 10003 });
+            },
+          },
+        },
+        'ch1',
+      ),
+    ).resolves.toBe('gone');
+    await expect(
+      channelPresence(
+        {
+          channels: {
+            fetch: async () => {
+              throw Object.assign(new Error('Missing Access'), { code: 50001 });
+            },
+          },
+        },
+        'ch1',
+      ),
+    ).resolves.toBe('unknown');
+  });
+
+  it('does not treat a missing permission lookup as a denial', () => {
+    expect(botHasChannelPermission({}, { id: 'bot' }, 1n)).toBeNull();
+    expect(botHasChannelPermission({ permissionsFor: () => null }, { id: 'bot' }, 1n)).toBe(false);
+    expect(botHasChannelPermission({ permissionsFor: () => ({ has: () => true }) }, { id: 'bot' }, 1n)).toBe(
+      true,
+    );
+    expect(botHasChannelPermission({ permissionsFor: () => ({ has: () => true }) }, null, 1n)).toBeNull();
   });
 });
