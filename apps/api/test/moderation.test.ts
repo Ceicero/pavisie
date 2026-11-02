@@ -143,6 +143,14 @@ function moderationOverrides() {
           appeals.set(existing.id, updated);
           return updated;
         },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        updateMany: async (args: any) => {
+          const existing = appeals.get(args.where.id);
+          if (!existing || existing.guildId !== args.where.guildId) return { count: 0 };
+          if (args.where.status && existing.status !== args.where.status) return { count: 0 };
+          appeals.set(existing.id, { ...existing, ...args.data });
+          return { count: 1 };
+        },
       },
       pluginConfig: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -350,6 +358,35 @@ describe('moderation appeals', () => {
       payload: { accept: false },
     });
     expect(second.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('only one of two concurrent decisions wins', async () => {
+    const { app, mutHeaders, store } = await authedContext();
+    const appealId = randomUUID();
+    store.appeals.set(appealId, {
+      id: appealId,
+      guildId: GUILD_ID,
+      caseId: null,
+      userId: '333333333333333333',
+      content: 'Please reconsider.',
+      status: 'PENDING',
+      reviewedBy: null,
+      reviewedAt: null,
+      decisionNote: null,
+      createdAt: new Date(),
+    });
+    const decide = (accept: boolean) =>
+      app.inject({
+        method: 'POST',
+        url: `/guilds/${GUILD_ID}/moderation/appeals/${appealId}/decide`,
+        headers: mutHeaders,
+        payload: { accept },
+      });
+    const results = await Promise.all([decide(true), decide(false)]);
+    expect(results.map((r) => r.statusCode).sort()).toEqual([200, 404]);
+    const winner = results.find((r) => r.statusCode === 200)!;
+    expect(store.appeals.get(appealId)!.status).toBe(winner.json().status);
     await app.close();
   });
 
