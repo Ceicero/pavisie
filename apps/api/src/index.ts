@@ -1,17 +1,8 @@
-import { createLogger, env, loadEnv, requireEnv } from '@pavisie/core';
+import { assertServiceEnv, createLogger, env, loadEnv } from '@pavisie/core';
 import { buildApp } from './app';
 
 loadEnv();
-requireEnv(
-  'DATABASE_URL',
-  'REDIS_URL',
-  'DISCORD_CLIENT_ID',
-  'DISCORD_CLIENT_SECRET',
-  'SESSION_SECRET',
-  'ENCRYPTION_KEY',
-  'DISCORD_OAUTH_REDIRECT_URI',
-  'DASHBOARD_URL',
-);
+assertServiceEnv('api');
 
 const log = createLogger('api-bootstrap');
 
