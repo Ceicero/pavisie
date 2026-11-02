@@ -92,6 +92,8 @@ const envSchema = z.object({
    * ('guild' targets DEV_GUILD_ID and is instant; 'global' can take up to an hour to propagate). */
   REGISTER_COMMANDS_ON_BOOT: z.enum(['off', 'global', 'guild']).default('off'),
   BOT_HEALTH_PORT: z.coerce.number().int().positive().optional(),
+  /** Optional private channel id; the bot posts a short alert there on unhandledRejection / uncaughtException. */
+  ALERT_CHANNEL_ID: z.string().optional(),
   ENABLE_MESSAGE_CONTENT_INTENT: boolFromString(false),
   ENABLE_GUILD_MEMBERS_INTENT: boolFromString(true),
   ENABLE_GUILD_PRESENCES_INTENT: boolFromString(false),

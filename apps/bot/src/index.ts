@@ -7,6 +7,7 @@ import { allPlugins, PluginRegistry, type PrivilegedIntentsEnabled } from '@pavi
 import { createClient } from './client';
 import { bullConnectionOptionsFromUrl } from './lib/redis-options';
 import { createBotActionsWorker } from './host/bot-actions';
+import { installCrashHandlers } from './host/crash-alerts';
 import { createDataRequestsWorker } from './host/data-requests';
 import { startHealthServer } from './host/health';
 import { loadPlugins } from './host/loader';
@@ -42,6 +43,7 @@ async function main(): Promise<void> {
   // build/wire everything before calling `client.login()` below (standard discord.js bootstrap ordering — the
   // client is only actually used once `ready` fires, by which point it genuinely is `<true>`).
   const client = createClient(intents) as unknown as Client<true>;
+  installCrashHandlers({ client, logger, channelId: env.ALERT_CHANNEL_ID });
 
   const host = await loadPlugins({
     plugins: allPlugins,
@@ -289,12 +291,6 @@ async function main(): Promise<void> {
   });
   process.on('SIGTERM', () => {
     void shutdown('SIGTERM');
-  });
-  process.on('unhandledRejection', (reason) => {
-    logger.error({ err: reason }, 'unhandledRejection');
-  });
-  process.on('uncaughtException', (err) => {
-    logger.error({ err }, 'uncaughtException');
   });
 }
 
