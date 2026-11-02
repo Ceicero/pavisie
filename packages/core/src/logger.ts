@@ -1,7 +1,8 @@
 import pino, { type Logger, type LoggerOptions } from 'pino';
 import { env, isProduction } from './env';
 
-const REDACT_PATHS = [
+/** Exported for tests. */
+export const REDACT_PATHS = [
   '*.token',
   '*.accessToken',
   '*.refreshToken',
@@ -13,6 +14,10 @@ const REDACT_PATHS = [
   '*.content',
   '*.messageContent',
   '*.apiKey',
+  // discord.js REST errors (DiscordAPIError / HTTPError) carry the request they failed on — message text, embeds
+  // and attachment buffers. Logging caught errors as `err` objects would otherwise write all of that out.
+  'err.requestBody',
+  'err.cause.requestBody',
 ];
 
 const usePretty = !isProduction && Boolean(process.stdout.isTTY);
