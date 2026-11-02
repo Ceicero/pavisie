@@ -56,14 +56,44 @@
   const STATUS_PILL = { none: ["", "Not started"], draft: ["warn", "Draft"], ready: ["solid", "Ready"] };
 
   // ---------- persistence ----------
-  // Everything lives in this device's storage under one key.
+  // The workspace lives in this device's storage under one key. With a PIN, it's stored encrypted.
+  // With an account, a copy also syncs to the cloud.
   const LS_KEY = "careercrumbs:v2";
+  const LOCK_KEY = "careercrumbs:lock";
+  const AUTH_KEY = "careercrumbs:auth";
+  const SYNC_KEY = "careercrumbs:sync";
+  const FAILS_KEY = "careercrumbs:lock-fails";
+  const AUTO_LOCK_MS = 5 * 60000;
+  const Vault = window.CCVault;
+  const Sync = window.CCSync;
+  const cloud = Sync && Sync.configured(window.CC_CONFIG) ? Sync.createClient(window.CC_CONFIG) : null;
   const dirty = new Set();
   let flushTimer = null, flushing = false;
+  let lockKey = null; // AES key while unlocked; null when there's no PIN
+  let session = null; // signed-in account, or null
+  let syncMeta = { rev: null, dirty: false, last: "", error: "" };
+  let changeSeq = 0;
 
-  // Everything saves on its own; there is no account or setup step.
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsJSON = (k) => { try { return JSON.parse(lsGet(k) || "null"); } catch (e) { return null; } };
+  const lsDel = (k) => { try { localStorage.removeItem(k); } catch (e) {} };
+  const pinOn = () => !!lsGet(LOCK_KEY);
+  async function writeStore(k, v) {
+    localStorage.setItem(k, JSON.stringify(lockKey ? await Vault.encrypt(lockKey, v) : v));
+  }
+  async function readValue(v) {
+    if (!Vault || !Vault.isBox(v)) return v;
+    return lockKey ? Vault.decrypt(lockKey, v) : null;
+  }
+  const saveSyncMeta = () => { try { localStorage.setItem(SYNC_KEY, JSON.stringify(syncMeta)); } catch (e) {} };
+
+  // Everything saves on its own; there is no setup step.
   function persist(...keys) {
     if (!keys.includes("profile") || keys.length > 1) ws.profile.changesSinceExport = (ws.profile.changesSinceExport || 0) + 1;
+    if (session) {
+      syncMeta.dirty = true;
+      changeSeq++;
+    }
     dirty.add("ws");
     setSync("saving");
     clearTimeout(flushTimer);
@@ -73,13 +103,22 @@
     persist(...keys);
     render();
   }
+  // Saves to this device without marking a change to sync (used when taking data from the account).
+  function persistLocal() {
+    dirty.add("ws");
+    clearTimeout(flushTimer);
+    flushTimer = setTimeout(flush, 100);
+  }
   async function flush() {
     if (flushing) return void (flushTimer = setTimeout(flush, 300));
+    if (mode !== "local") return;
     flushing = true;
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify(ws));
+      await writeStore(LS_KEY, ws);
       dirty.clear();
+      saveSyncMeta();
       setSync("saved");
+      if (session && syncMeta.dirty) scheduleSync();
     } catch (e) {
       // Browsers throw a DOMException named QuotaExceededError (code 22).
       // Changes stay marked unsaved, so the next edit or leaving the app tries again.
@@ -93,35 +132,60 @@
       flushing = false;
     }
   }
+  function syncLabel(s) {
+    if (mode === "loading") return "Loading";
+    if (s === "saving") return "Saving…";
+    if (s === "error") return "Not saved";
+    if (!session) return "Saved on this device";
+    if (syncMeta.error === "offline") return "Saved here · syncs when online";
+    if (syncMeta.error) return "Saved here · sync paused";
+    return syncMeta.dirty ? "Syncing…" : "Synced";
+  }
   function setSync(s) {
     syncState = s;
-    const label = mode === "loading" ? "Loading" : s === "saving" ? "Saving…" : s === "error" ? "Not saved" : "Saved on this device";
+    const label = syncLabel(s);
     document.querySelectorAll(".sync").forEach((el) => {
-      el.dataset.s = s;
+      el.dataset.s = s === "saved" && session && (syncMeta.dirty || syncMeta.error) ? "saving" : s;
       el.title = label;
       el.innerHTML = '<i></i><span class="sync-t">' + esc(label) + "</span>";
     });
   }
+
   async function boot() {
     applyTheme();
     window.addEventListener("hashchange", onHash);
     onHash(true);
+    syncMeta = Object.assign(syncMeta, lsJSON(SYNC_KEY) || {});
+    // Ask the browser not to evict this site's storage when space runs low.
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    registerOffline();
+    if (pinOn() && Vault && Vault.available()) {
+      mode = "locked";
+      return render();
+    }
     render();
+    await loadData();
+  }
+  // Reads the saved workspace (decrypting with the PIN key if there is one) and opens the app.
+  async function loadData() {
     let loaded = null;
     let corrupt = false;
-    let raw = null;
-    try { raw = localStorage.getItem(LS_KEY); } catch (e) {}
+    const raw = lsGet(LS_KEY);
     if (raw) {
       try {
-        loaded = JSON.parse(raw);
+        loaded = await readValue(JSON.parse(raw));
       } catch (e) {
         // Keep the unreadable copy instead of overwriting it on the next save.
         corrupt = true;
         try { localStorage.setItem(LS_KEY + ":corrupt-" + t0(), raw); } catch (e2) {}
       }
     }
-    // Ask the browser not to evict this site's storage when space runs low.
-    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    try {
+      const a = await readValue(lsJSON(AUTH_KEY));
+      session = cloud && a && a.user && a.refresh_token ? a : null;
+    } catch (e) {
+      session = null;
+    }
     ws = C.normalize(loaded || {});
     mode = "local";
     setSync("saved");
@@ -134,7 +198,7 @@
       curHref = location.href;
       A[go]();
     }
-    registerOffline();
+    if (session) syncPull();
   }
   // Standalone website only: cache the app for offline use and offer new versions.
   function registerOffline() {
@@ -157,13 +221,172 @@
   }
   // Android can close the app any time it's in the background, so write pending changes right away.
   function saveNow() {
-    if (!dirty.size) return;
+    if (!dirty.size) return Promise.resolve();
     clearTimeout(flushTimer);
-    flush();
+    return flush();
   }
-  document.addEventListener("visibilitychange", () => document.hidden && saveNow());
+  let hiddenAt = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      saveNow();
+      return;
+    }
+    if (lockKey && hiddenAt && Date.now() - hiddenAt > AUTO_LOCK_MS) lockNow();
+    else if (session && mode === "local") syncPull();
+  });
   window.addEventListener("pagehide", saveNow);
+  window.addEventListener("online", () => session && mode === "local" && (syncMeta.dirty ? syncPush() : syncPull()));
 
+  // ---------- PIN lock ----------
+  // Locking drops the key and the data from memory; only the encrypted copy stays.
+  async function lockNow() {
+    await saveNow();
+    clearTimeout(syncTimer);
+    if (ui.sheetOpen) closeSheet();
+    lockKey = null;
+    session = null;
+    ws = C.emptyWorkspace();
+    mode = "locked";
+    render();
+  }
+  async function tryUnlock(pin) {
+    const fails = lsJSON(FAILS_KEY) || { n: 0, at: 0 };
+    const wait = Vault.lockoutMs(fails.n) - (Date.now() - fails.at);
+    if (wait > 0) return "Too many tries. Wait " + Math.ceil(wait / 1000) + " seconds, then try again.";
+    const key = await Vault.unlock(lsJSON(LOCK_KEY), pin);
+    if (!key) {
+      const n = fails.n + 1;
+      try { localStorage.setItem(FAILS_KEY, JSON.stringify({ n, at: Date.now() })); } catch (e) {}
+      const next = Vault.lockoutMs(n);
+      return "That PIN isn't right." + (next ? " Wait " + Math.round(next / 1000) + " seconds before the next try." : "");
+    }
+    lsDel(FAILS_KEY);
+    lockKey = key;
+    await loadData();
+    return "";
+  }
+  // Re-save everything this device keeps, with or without encryption, after the PIN changes.
+  async function rewriteAll() {
+    await writeStore(LS_KEY, ws);
+    if (session) await writeStore(AUTH_KEY, session);
+    else lsDel(AUTH_KEY);
+    lsDel(LS_KEY + ":before-import");
+  }
+
+  // ---------- account sync ----------
+  let syncTimer = null, syncing = false;
+  async function signedOut(message) {
+    session = null;
+    lsDel(AUTH_KEY);
+    syncMeta = { rev: null, dirty: false, last: "", error: "" };
+    saveSyncMeta();
+    setSync(syncState);
+    render();
+    if (message) toast(message);
+  }
+  // Runs a request with a fresh token; one retry after refreshing on 401.
+  async function authed(fn) {
+    if (!session) throw new Error("Not signed in");
+    const refresh = async () => {
+      try {
+        session = await cloud.refresh(session);
+        await writeStore(AUTH_KEY, session);
+      } catch (e) {
+        if (!e.offline) await signedOut("Please sign in again to keep syncing.");
+        throw e;
+      }
+    };
+    if (Sync.needsRefresh(session)) await refresh();
+    try {
+      return await fn(session);
+    } catch (e) {
+      if (e.status !== 401) throw e;
+      await refresh();
+      return fn(session);
+    }
+  }
+  function scheduleSync() {
+    if (!session) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncPush, 1500);
+  }
+  function syncFailed(e) {
+    syncMeta.error = e && e.offline ? "offline" : "error";
+    saveSyncMeta();
+    setSync(syncState);
+  }
+  async function syncPush() {
+    if (!session || syncing || mode !== "local") return;
+    syncing = true;
+    const seq = changeSeq;
+    const data = JSON.parse(JSON.stringify(ws));
+    try {
+      let row;
+      if (syncMeta.rev == null) {
+        const remote = await authed((s) => cloud.pull(s));
+        if (remote) {
+          syncing = false;
+          return chooseVersion(remote, false);
+        }
+        row = await authed((s) => cloud.create(s, data));
+      } else row = await authed((s) => cloud.push(s, data, syncMeta.rev));
+      if (!row) {
+        // Another device saved first.
+        const remote = await authed((s) => cloud.pull(s));
+        syncing = false;
+        if (remote) return chooseVersion(remote, false);
+        syncMeta.rev = null;
+        return syncPush();
+      }
+      syncMeta.rev = row.rev;
+      syncMeta.last = new Date().toISOString();
+      syncMeta.error = "";
+      if (changeSeq === seq) syncMeta.dirty = false;
+      saveSyncMeta();
+      if (route === "me" && !ui.sheetOpen) render();
+      if (syncMeta.dirty) scheduleSync();
+    } catch (e) {
+      if (session) syncFailed(e);
+    } finally {
+      syncing = false;
+      setSync(syncState);
+    }
+  }
+  async function syncPull() {
+    if (!session || syncing || mode !== "local") return;
+    try {
+      const remote = await authed((s) => cloud.pull(s));
+      syncMeta.error = "";
+      if (!remote) {
+        syncMeta.rev = null;
+        syncMeta.dirty = true;
+        return syncPush();
+      }
+      if (remote.rev === syncMeta.rev) return syncMeta.dirty ? syncPush() : setSync(syncState);
+      if (!syncMeta.dirty || C.isFresh(ws)) return takeAccountVersion(remote);
+      chooseVersion(remote, false);
+    } catch (e) {
+      if (session) syncFailed(e);
+    }
+  }
+  function takeAccountVersion(remote) {
+    ws = C.normalize(remote.data);
+    syncMeta = { rev: remote.rev, dirty: false, last: new Date().toISOString(), error: "" };
+    saveSyncMeta();
+    persistLocal();
+    render();
+  }
+  const counts = (w) => [plural(w.jobs.length, "job"), plural(Object.keys(w.interview.answers).length, "answer"), w.stories.length + (w.stories.length === 1 ? " story" : " stories")].join(", ");
+  // Both this device and the account changed: the person picks which version to keep.
+  function chooseVersion(remote, firstSignIn) {
+    const theirs = C.normalize(remote.data);
+    ui.remote = remote;
+    openSheet(firstSignIn ? "Which data should we keep?" : "Changed on another device", '<div class="sheet-body"><p class="muted">' + (firstSignIn ? "Your account already has CareerCrumbs data, and so does this device." : "This device and your account both have changes since they last synced.") + ' Pick one to keep; the other is replaced.</p>' +
+      '<button class="start" data-act="keep-account"><span><span class="eyebrow">Your account' + (remote.updated_at ? " · saved " + esc(C.relDays(String(remote.updated_at).slice(0, 10))) : "") + "</span><b>Use the account's data</b><small>" + esc(counts(theirs)) + "</small></span>" + icon("chev") + "</button>" +
+      '<button class="start" data-act="keep-device"><span><span class="eyebrow">This device</span><b>Keep this device\'s data</b><small>' + esc(counts(ws)) + "</small></span>" + icon("chev") + "</button>" +
+      '<button class="linkbtn" data-act="export">Save a backup of this device first</button></div>');
+  }
   // ---------- routing ----------
   function onHash(initial) {
     const h = (location.hash || "").replace(/^#/, "");
@@ -185,6 +408,12 @@
   function render() {
     const app = $("#app");
     if (!app) return;
+    if (mode === "locked") {
+      app.innerHTML = lockScreen();
+      const pin = $("#unlock-pin");
+      if (pin && !ui.sheetOpen) pin.focus({ preventScroll: true });
+      return;
+    }
     const title = NAV.find((n) => n[0] === route)[1];
     let body;
     try {
@@ -219,6 +448,10 @@
   function recoveryScreen(e) {
     return '<div class="view"><section class="card stack"><h2>Something went wrong showing this page</h2><p class="muted">Your data is still saved on this device. Save a copy, then try again. If it keeps happening, reset the app and import your copy.</p><p class="small muted mono">' + esc(String(e && e.message || e)) + '</p><div class="row"><button class="btn brown" data-act="export-raw">Save my data</button><button class="btn ghost" data-act="retry">Try again</button><button class="btn danger" data-act="ask-reset">Reset the app</button></div><div data-reset></div></section></div>';
   }
+  function lockScreen() {
+    return '<main class="lock"><div class="lock-card">' + ruhv("ruhv-hero") + '<h1>CareerCrumbs is locked</h1><form class="stack" data-form="unlock"><label class="field" for="unlock-pin"><span>Enter your PIN</span><input class="input pin" id="unlock-pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8" required></label><p class="warn-text small" data-unlock-msg role="alert"></p><button class="btn brown">Unlock</button></form>' +
+      '<button class="linkbtn" data-act="forgot-pin">Forgot your PIN?</button><div data-forgot></div></div></main>';
+  }
   const V = {};
 
   // ---------- HOME ----------
@@ -240,7 +473,7 @@
         '<button class="start" data-act="answer" data-id="c1"><span><span class="eyebrow">About 2 minutes</span><b>Answer “Tell me about yourself”</b><small>Almost every interview starts with it. We show you an example first.</small></span>' + icon("chev") + "</button>" +
         '<button class="start" data-act="new-job"><span><span class="eyebrow">30 seconds</span><b>Add a job you applied for</b><small>Just the title and company. We\'ll remind you to follow up.</small></span>' + icon("chev") + "</button>" +
         '<button class="start" data-act="practice"><span><span class="eyebrow">5 minutes</span><b>Practise 5 interview questions</b><small>Say your answers out loud with a timer.</small></span>' + icon("chev") + "</button>" +
-        "</div></div>"
+        "</div>" + (cloud && !session ? '<p class="muted center-text">Already use CareerCrumbs on another device? <button class="linkbtn" data-act="sign-in">Sign in</button></p>' : "") + "</div>"
       );
     }
     return (
@@ -376,11 +609,11 @@
 
   // Practice: flashcards with a timer. Your own answer stays hidden until you ask for it.
   let timer = null;
-  const session = { list: [], i: 0, ok: 0 };
+  const drill = { list: [], i: 0, ok: 0 };
   function practiceCard() {
-    const q = session.list[session.i];
+    const q = drill.list[drill.i];
     const a = C.answerText(ws.interview.answers[q.id]);
-    return '<div class="sheet-body practice"><div class="row between"><span class="eyebrow">Question ' + (session.i + 1) + " of " + session.list.length + '</span><span class="mono small muted">' + esc(C.PACKS[q.pack]) + '</span></div><p class="question">' + esc(q.q) + '</p><div class="timer" data-timer>0:00</div><p class="small muted center-text">Say your answer out loud. Aim for one to two minutes.</p><div class="row center"><button class="btn ghost" data-act="timer">Start timer</button></div>' +
+    return '<div class="sheet-body practice"><div class="row between"><span class="eyebrow">Question ' + (drill.i + 1) + " of " + drill.list.length + '</span><span class="mono small muted">' + esc(C.PACKS[q.pack]) + '</span></div><p class="question">' + esc(q.q) + '</p><div class="timer" data-timer>0:00</div><p class="small muted center-text">Say your answer out loud. Aim for one to two minutes.</p><div class="row center"><button class="btn ghost" data-act="timer">Start timer</button></div>' +
       (a ? '<details class="peek"><summary>Show my answer</summary><div class="out">' + esc(a) + "</div></details>" : '<p class="small muted">You haven\'t written an answer for this one yet. Try it anyway, then write it down.</p>') +
       '<div class="row center"><button class="btn ghost" data-act="practice-mark" data-ok="0">Needs work</button><button class="btn brown" data-act="practice-mark" data-ok="1">Nailed it</button></div></div>';
   }
@@ -421,6 +654,7 @@
       '<section class="card stack"><h2>About you</h2><form class="stack" data-form="profile">' + field("name", "Your name", p.name, { hint: "Signs your follow-up and thank-you messages." }) + field("targetRole", "Job you're going for", p.targetRole, { ph: "Warehouse associate, cashier, shift lead…" }) +
       '<div class="field"><span>Question sets for your kind of job</span><div class="togglechips">' + ["warehouse", "service", "lead"].map((k) => '<label><input type="checkbox" name="packs" value="' + esc(k) + '"' + ((p.packs || []).includes(k) ? " checked" : "") + "><span>" + esc(C.PACKS[k]) + "</span></label>").join("") + "</div><small>Common and behavioral questions are always included.</small></div>" +
       '<div class="row"><button class="btn brown">Save</button></div></form></section>' +
+      accountCard() +
       '<section class="card stack"><h2>Check-in reminders</h2><p class="muted">CareerCrumbs reminds you to reconnect <b>3 days, 1 week and 1 month</b> after you apply or interview. Salaried jobs start at 1 week. Due check-ins show on Home with a message ready to send.</p><p class="muted">For an alert on your phone, add them to your calendar. Your calendar app does the notifying, and you can delete them anytime.</p>' +
       '<div class="row"><button class="btn brown" data-act="reminders-all">' + icon("bell") + "Add all upcoming check-ins (" + C.reminderEvents(ws.jobs).length + ')</button></div><div class="field"><span>When I add or update a job</span><div class="chips" role="group" aria-label="Calendar offer">' + [["ask", "Offer to add reminders"], ["off", "Don\'t ask"]].map(([v, l]) => '<button class="chip" data-act="remind-pref" data-v="' + esc(v) + '" aria-pressed="' + ((p.reminders || "ask") === v) + '">' + l + "</button>").join("") + "</div></div></section>" +
       '<section class="card stack"><h2>Look</h2><div class="chips" role="group" aria-label="Theme">' + [["system", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([v, l]) => '<button class="chip" data-act="theme" data-v="' + esc(v) + '" aria-pressed="' + (theme === v) + '">' + l + "</button>").join("") + "</div></section>" +
@@ -428,6 +662,30 @@
       '<p class="muted small">CareerCrumbs has no AI and sends your answers nowhere. What you write is yours.</p></div>'
     );
   };
+
+  function accountCard() {
+    let h = '<section class="card stack"><h2>Account &amp; PIN</h2>';
+    if (cloud) {
+      if (session) {
+        h += '<p>Signed in as <b>' + esc(session.user.email) + "</b>.</p><p class=\"muted small\">" + esc(syncMeta.last ? "Last synced " + C.relDays(syncMeta.last.slice(0, 10)) + (syncMeta.error ? ". " + syncLabel("saved") + "." : ".") : "Not synced yet.") + "</p>" +
+          '<div class="row"><button class="btn ghost" data-act="sync-now">Sync now</button><button class="btn ghost" data-act="sign-out">Sign out</button></div><div data-signout></div>' +
+          '<div class="row"><button class="linkbtn danger-link" data-act="ask-delete-account">Delete my account</button></div><div data-delacct></div>';
+      } else {
+        h += '<p class="muted">Optional. Sign in with your email to back up your jobs, answers and stories, and use them on your phone and computer. No password: we email you a 6-digit code.</p><div class="row"><button class="btn brown" data-act="sign-in">Sign in with email</button></div>';
+      }
+    }
+    if (Vault && Vault.available()) {
+      h += '<div class="stack-s' + (cloud ? " divider-top" : "") + '"><b>PIN lock</b>';
+      if (pinOn()) {
+        h += '<p class="muted small">On. CareerCrumbs locks after 5 minutes in the background, and your data on this device is encrypted. Backups you export aren\'t PIN-protected, so keep them somewhere private.</p><div class="row"><button class="btn ghost" data-act="lock-now">Lock now</button><button class="btn ghost" data-act="pin-change">Change PIN</button><button class="btn ghost" data-act="pin-off">Turn off</button></div>';
+      } else {
+        h += '<p class="muted small">Lock CareerCrumbs with a 4 to 8 digit PIN so someone using your phone can\'t read your answers. Your data on this device is encrypted with it.' + (cloud ? "" : " If you forget the PIN, you'll need a backup to get your data back.") + '</p><div class="row"><button class="btn ghost" data-act="pin-set">Set a PIN</button></div>';
+      }
+      h += "</div>";
+    }
+    return h + "</section>";
+  }
+  const pinField = (name, label, auto) => '<label class="field" for="f-' + name + '"><span>' + label + '</span><input class="input pin" id="f-' + name + '" name="' + name + '" type="password" inputmode="numeric" autocomplete="' + auto + '" minlength="4" maxlength="8" pattern="[0-9]{4,8}" required></label>';
 
   // ---------- sheets, toasts, files ----------
   // Sheets sit in browser history, so the phone's Back button closes the sheet instead of
@@ -575,7 +833,8 @@
     retry: () => render(),
     "export-raw"() {
       let raw = "";
-      try { raw = localStorage.getItem(LS_KEY) || JSON.stringify(ws); } catch (e) { raw = JSON.stringify(ws); }
+      // With a PIN the stored copy is encrypted, so save what's in memory instead.
+      try { raw = lockKey ? JSON.stringify(ws) : localStorage.getItem(LS_KEY) || JSON.stringify(ws); } catch (e) { raw = JSON.stringify(ws); }
       saveFile("careercrumbs-data-" + t0() + ".json", raw);
     },
     "ask-reset"() {
@@ -583,6 +842,70 @@
         ws = C.emptyWorkspace();
         dirty.add("ws");
         save();
+      });
+    },
+    // Account
+    "sign-in"() {
+      openSheet("Sign in", '<form data-form="signin-email"><p class="muted">We\'ll email you a 6-digit code. No password to remember. Signing in is optional; CareerCrumbs works the same without it.</p><label class="field" for="f-email"><span>Email</span><input class="input" id="f-email" name="email" type="email" inputmode="email" autocomplete="email" required></label><p class="warn-text small" data-auth-msg role="alert"></p><div class="sheet-foot"><span class="grow"></span><button class="btn brown">Send code</button></div></form>');
+    },
+    "resend-code"() {
+      if (ui.signinEmail) sendCode(ui.signinEmail, true);
+    },
+    "sync-now"() {
+      syncMeta.error = "";
+      syncMeta.dirty ? syncPush() : syncPull();
+      toast("Syncing…");
+    },
+    "sign-out"() {
+      confirmIn($("[data-signout]"), "Sign out? Your data stays on this device; it just stops syncing.", "Sign out", async () => {
+        await saveNow();
+        const s = session;
+        await signedOut("Signed out. Your data is still on this device.");
+        cloud.signOut(s);
+      });
+    },
+    "ask-delete-account"() {
+      confirmIn($("[data-delacct]"), "Delete your account and the copy of your data saved in it? This can't be undone. The data on this device stays until you erase it.", "Delete account", async () => {
+        try {
+          await authed((s) => cloud.deleteAccount(s));
+          await signedOut("Your account and its saved data were deleted.");
+        } catch (e) {
+          toast(e.offline ? "You're offline. Try again when you're connected." : "Couldn't delete the account: " + e.message);
+        }
+      });
+    },
+    "keep-account"() {
+      const r = ui.remote;
+      closeSheet();
+      if (r) takeAccountVersion(r);
+      toast("Using your account's data.");
+    },
+    "keep-device"() {
+      const r = ui.remote;
+      closeSheet();
+      if (!r) return;
+      syncMeta.rev = r.rev;
+      syncMeta.dirty = true;
+      changeSeq++;
+      saveSyncMeta();
+      syncPush();
+      toast("Keeping this device's data. Your account is being updated.");
+    },
+    // PIN
+    "pin-set"() {
+      openSheet("Set a PIN", '<form data-form="pin-set"><p class="muted">Use 4 to 8 digits you\'ll remember. A 6-digit PIN is a good choice.</p>' + pinField("pin", "New PIN", "new-password") + pinField("pin2", "Type it again", "new-password") + '<p class="warn-text small" data-pin-msg role="alert"></p><p class="muted small">A PIN stops someone picking up your phone from reading your answers. It isn\'t meant to stop a determined attacker with your unlocked phone and special tools.</p><div class="sheet-foot"><span class="grow"></span><button class="btn brown">Turn on PIN</button></div></form>');
+    },
+    "pin-change"() {
+      openSheet("Change PIN", '<form data-form="pin-change">' + pinField("old", "Current PIN", "current-password") + pinField("pin", "New PIN", "new-password") + pinField("pin2", "Type the new PIN again", "new-password") + '<p class="warn-text small" data-pin-msg role="alert"></p><div class="sheet-foot"><span class="grow"></span><button class="btn brown">Change PIN</button></div></form>');
+    },
+    "pin-off"() {
+      openSheet("Turn off PIN", '<form data-form="pin-off"><p class="muted">Your data on this device will be stored without encryption again.</p>' + pinField("old", "Current PIN", "current-password") + '<p class="warn-text small" data-pin-msg role="alert"></p><div class="sheet-foot"><span class="grow"></span><button class="btn danger">Turn off PIN</button></div></form>');
+    },
+    "lock-now": () => lockNow(),
+    "forgot-pin"() {
+      confirmIn($("[data-forgot]"), "There's no way to recover a PIN. You can erase CareerCrumbs on this device and start over" + (cloud ? "; if you used an account, sign in again to get your data back" : ", then import a backup if you have one") + ".", "Erase and start over", () => {
+        try { Object.keys(localStorage).filter((k) => k.startsWith("careercrumbs:") && k !== "careercrumbs:theme").forEach((k) => localStorage.removeItem(k)); } catch (e) {}
+        location.reload();
       });
     },
     "cancel-confirm": (el) => (el.closest(".confirm").parentElement.innerHTML = ""),
@@ -688,10 +1011,10 @@
       let pool = (job ? C.jobQuestions(ws, job) : C.bankFor(ws, ["mine", "common", "behavioral"].concat(ws.profile.packs || []))).filter((q) => q.pack !== "ask");
       const work = pool.filter((q) => needsWork(q.id));
       pool = work.concat(C.shuffle(pool.filter((q) => !work.includes(q))));
-      session.list = pool.slice(0, 5);
-      session.i = 0;
-      session.ok = 0;
-      if (!session.list.length) return toast("Add some questions first.");
+      drill.list = pool.slice(0, 5);
+      drill.i = 0;
+      drill.ok = 0;
+      if (!drill.list.length) return toast("Add some questions first.");
       clearInterval(timer);
       openSheet("Practice", practiceCard());
     },
@@ -710,15 +1033,15 @@
     },
     "practice-mark"(el) {
       clearInterval(timer);
-      const q = session.list[session.i];
+      const q = drill.list[drill.i];
       const ok = el.dataset.ok === "1";
       ws.interview.practice = ws.interview.practice.concat([{ q: q.id, date: t0(), ok }]).slice(-300);
       persist("interview");
-      if (ok) session.ok++;
-      session.i++;
+      if (ok) drill.ok++;
+      drill.i++;
       const body = $(".sheet .sheet-body");
-      if (session.i < session.list.length) body.outerHTML = practiceCard();
-      else body.outerHTML = '<div class="sheet-body practice center-text">' + ruhv("ruhv-hero") + "<h2>" + session.ok + " of " + session.list.length + ' nailed</h2><p class="muted">' + (session.ok === session.list.length ? "Great run. Do another set tomorrow to keep it fresh." : "The ones that need work are saved under Needs work. Rewrite them, then practise again.") + '</p><div class="row center"><button class="btn ghost" data-act="close">Done</button><button class="btn brown" data-act="practice">Another 5</button></div></div>';
+      if (drill.i < drill.list.length) body.outerHTML = practiceCard();
+      else body.outerHTML = '<div class="sheet-body practice center-text">' + ruhv("ruhv-hero") + "<h2>" + drill.ok + " of " + drill.list.length + ' nailed</h2><p class="muted">' + (drill.ok === drill.list.length ? "Great run. Do another set tomorrow to keep it fresh." : "The ones that need work are saved under Needs work. Rewrite them, then practise again.") + '</p><div class="row center"><button class="btn ghost" data-act="close">Done</button><button class="btn brown" data-act="practice">Another 5</button></div></div>';
     },
 
     "new-story": () => openSheet("Add a story", storyForm()),
@@ -740,7 +1063,7 @@
       saveFile("careercrumbs-backup-" + t0() + ".json", JSON.stringify(Object.assign({ app: "CareerCrumbs", version: 2, exported: new Date().toISOString() }, ws), null, 2));
     },
     "ask-erase"() {
-      confirmIn($("[data-erase]"), "This deletes every job, answer and story. Export a backup first if you might want them.", "Erase everything", () => {
+      confirmIn($("[data-erase]"), "This deletes every job, answer and story" + (session ? ", on this device and in your account" : "") + ". Export a backup first if you might want them.", "Erase everything", () => {
         const before = ws;
         ws = C.emptyWorkspace();
         dirty.add("ws");
@@ -836,7 +1159,100 @@
 
   // form handlers
   const val = (f, n) => (f.elements[n] ? String(f.elements[n].value || "").trim() : "");
+  async function sendCode(email, resend) {
+    const msg = (t) => { const el = $("[data-auth-msg]"); if (el) el.textContent = t; };
+    try {
+      await cloud.sendCode(email);
+      ui.signinEmail = email;
+      if (resend) return toast("New code sent to " + email);
+      openSheet("Check your email", '<form data-form="signin-code"><p class="muted">We sent a 6-digit code to <b>' + esc(email) + '</b>. It can take a minute. Check your spam folder if it doesn\'t arrive.</p><label class="field" for="f-code"><span>Code</span><input class="input pin" id="f-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></label><p class="warn-text small" data-auth-msg role="alert"></p><div class="sheet-foot"><button type="button" class="btn ghost sm" data-act="resend-code">Send a new code</button><span class="grow"></span><button class="btn brown">Sign in</button></div></form>');
+    } catch (e) {
+      msg(e.offline ? "You're offline. Connect and try again." : e.status === 429 ? "Too many codes requested. Wait a few minutes and try again." : "Couldn't send the code: " + e.message);
+    }
+  }
   const F = {
+    async unlock(f) {
+      const btn = f.querySelector("button");
+      btn.disabled = true;
+      const err = await tryUnlock(val(f, "pin"));
+      btn.disabled = false;
+      const el = $("[data-unlock-msg]");
+      if (err && el) {
+        el.textContent = err;
+        f.elements.pin.value = "";
+        f.elements.pin.focus();
+      }
+    },
+    "signin-email"(f) {
+      const email = val(f, "email");
+      if (!Sync.validEmail(email)) return void ($("[data-auth-msg]").textContent = "Check the email address.");
+      sendCode(email, false);
+    },
+    async "signin-code"(f) {
+      const msg = (t) => ($("[data-auth-msg]").textContent = t);
+      const code = val(f, "code").replace(/\D/g, "");
+      if (code.length !== 6) return msg("The code has 6 digits.");
+      try {
+        session = await cloud.verifyCode(ui.signinEmail, code);
+      } catch (e) {
+        return msg(e.offline ? "You're offline. Connect and try again." : "That code didn't work. Check it, or send a new one.");
+      }
+      await writeStore(AUTH_KEY, session);
+      syncMeta = { rev: null, dirty: false, last: "", error: "" };
+      closeSheet();
+      toast("Signed in. Your data now syncs to your account.");
+      // First sync: an empty account takes this device's data; an empty device takes the account's.
+      try {
+        const remote = await authed((s) => cloud.pull(s));
+        if (!remote) {
+          syncMeta.dirty = true;
+          changeSeq++;
+          return syncPush();
+        }
+        if (C.isFresh(ws)) return takeAccountVersion(remote);
+        if (JSON.stringify(C.normalize(remote.data)) === JSON.stringify(ws)) {
+          syncMeta.rev = remote.rev;
+          saveSyncMeta();
+          return render();
+        }
+        chooseVersion(remote, true);
+      } catch (e) {
+        syncFailed(e);
+      }
+    },
+    async "pin-set"(f) {
+      const msg = (t) => ($("[data-pin-msg]").textContent = t);
+      const pin = val(f, "pin");
+      if (!Vault.validPin(pin)) return msg("Use 4 to 8 digits.");
+      if (pin !== val(f, "pin2")) return msg("The two PINs don't match.");
+      const { meta, key } = await Vault.createLock(pin);
+      lockKey = key;
+      await rewriteAll();
+      localStorage.setItem(LOCK_KEY, JSON.stringify(meta));
+      closeSheet();
+      toast("PIN is on. You'll need it after 5 minutes away.");
+    },
+    async "pin-change"(f) {
+      const msg = (t) => ($("[data-pin-msg]").textContent = t);
+      if (!(await Vault.unlock(lsJSON(LOCK_KEY), val(f, "old")))) return msg("Your current PIN isn't right.");
+      const pin = val(f, "pin");
+      if (!Vault.validPin(pin)) return msg("Use 4 to 8 digits for the new PIN.");
+      if (pin !== val(f, "pin2")) return msg("The two new PINs don't match.");
+      const { meta, key } = await Vault.createLock(pin);
+      lockKey = key;
+      await rewriteAll();
+      localStorage.setItem(LOCK_KEY, JSON.stringify(meta));
+      closeSheet();
+      toast("PIN changed.");
+    },
+    async "pin-off"(f) {
+      if (!(await Vault.unlock(lsJSON(LOCK_KEY), val(f, "old")))) return void ($("[data-pin-msg]").textContent = "That PIN isn't right.");
+      lockKey = null;
+      await rewriteAll();
+      lsDel(LOCK_KEY);
+      closeSheet();
+      toast("PIN is off.");
+    },
     job(f) {
       const id = f.dataset.id;
       const data = { title: val(f, "title"), company: val(f, "company"), appliedAt: val(f, "appliedAt"), interviewAt: val(f, "interviewAt"), followUpAt: val(f, "followUpAt"), pay: val(f, "pay") || "hourly", contact: val(f, "contact"), link: val(f, "link"), notes: val(f, "notes") };
@@ -943,7 +1359,7 @@
       const parts = [plural(c.jobs, "job"), plural(c.answers, "answer"), c.stories + (c.stories === 1 ? " story" : " stories")];
       confirmIn($("[data-import]"), "Replace everything with this backup (" + parts.join(", ") + ")? You can undo right after.", "Replace", () => {
         const before = ws;
-        try { localStorage.setItem(LS_KEY + ":before-import", JSON.stringify(before)); } catch (e) {}
+        writeStore(LS_KEY + ":before-import", before).catch(() => {});
         ws = check.ws;
         dirty.add("ws");
         save();

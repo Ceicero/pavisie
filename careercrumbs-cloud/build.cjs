@@ -2,6 +2,8 @@
 // The Android app (android/build.sh) packages the same build.
 // Optional env: SITE_URL (https://… with trailing slash) adds canonical, og:url and absolute og:image;
 // CONTACT_EMAIL fills in the privacy page contact.
+// SUPABASE_URL and SUPABASE_ANON_KEY turn on optional accounts (see supabase/README.md). The anon key is
+// public by design; row-level security in the database keeps each account's data to itself.
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -12,6 +14,10 @@ const site = (f) => fs.readFileSync(here("site-src", f), "utf8");
 const styles = src("styles.css");
 const logic = src("logic.js");
 const app = src("app.js");
+const supaUrl = process.env.SUPABASE_URL || "";
+const supaKey = process.env.SUPABASE_ANON_KEY || "";
+if (supaUrl && !/^https:\/\/[\w.-]+(:\d+)?\/?$/.test(supaUrl)) throw new Error("SUPABASE_URL must be an https URL like https://abc.supabase.co");
+const config = "window.CC_CONFIG = " + JSON.stringify(supaUrl && supaKey ? { url: supaUrl, anonKey: supaKey } : null).replace(/</g, "\\u003c") + ";";
 
 const out = here("site");
 fs.rmSync(out, { recursive: true, force: true });
@@ -26,7 +32,10 @@ const index = site("shell.html")
   .replace("<!--SITE_URL_META-->", () => urlMeta)
   .replace("/*FONTS*/", () => site("fonts/fonts.css"))
   .replace("/*STYLES*/", () => styles)
+  .replace("/*CONFIG*/", () => config)
   .replace("/*LOGIC*/", () => logic)
+  .replace("/*VAULT*/", () => src("vault.js"))
+  .replace("/*SYNC*/", () => src("sync.js"))
   .replace("/*APP*/", () => app);
 fs.writeFileSync(path.join(out, "index.html"), index);
 
@@ -50,4 +59,4 @@ const hash = crypto.createHash("sha256");
 for (const f of files.sort()) hash.update(f).update(fs.readFileSync(path.join(out, f)));
 const version = hash.digest("hex").slice(0, 10);
 fs.writeFileSync(path.join(out, "sw.js"), site("sw.js").replace("/*VERSION*/", version).replace("/*FILES*/", JSON.stringify(["./"].concat(files))));
-console.log("site/", files.length + 1, "files, version", version, "· index.html", (index.length / 1024).toFixed(1) + " KB");
+console.log("site/", files.length + 1, "files, version", version, "· index.html", (index.length / 1024).toFixed(1) + " KB · accounts " + (supaUrl && supaKey ? "on" : "off"));

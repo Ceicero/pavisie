@@ -3,7 +3,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "test": "node --test test/logic.test.cjs",
+    "test": "node --test test/logic.test.cjs test/auth.test.cjs",
     "build": "node build.cjs"
   }
 }

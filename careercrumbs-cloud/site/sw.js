@@ -1,6 +1,6 @@
 // CareerCrumbs offline support: the whole app is a handful of static files, cached on install.
 // VERSION changes with every build, so a new build installs alongside and the page offers to reload.
-const VERSION = "0ba466cc83";
+const VERSION = "14c11c4a27";
 const CACHE = "careercrumbs-" + VERSION;
 const FILES = ["./","fonts/barlow-400.woff2","fonts/barlow-500.woff2","fonts/barlow-600.woff2","fonts/barlow-700.woff2","fonts/barlow-condensed-600.woff2","fonts/barlow-condensed-700.woff2","fonts/ibm-plex-mono-400.woff2","fonts/ibm-plex-mono-500.woff2","fonts/ibm-plex-mono-600.woff2","icons/apple-touch-icon.png","icons/favicon-32.png","icons/icon-192.png","icons/icon-512.png","icons/maskable-512.png","index.html","manifest.webmanifest","privacy.html","robots.txt"];
 

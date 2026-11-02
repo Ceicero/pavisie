@@ -28,6 +28,9 @@ jobs:
         run: bash careercrumbs-cloud/android/build.sh
         env:
           VERSION_CODE: ${{ github.run_number }}
+          # Optional: set these as repository variables to build with accounts on.
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
       - uses: actions/upload-artifact@v4
         with:
           name: careercrumbs-test-apk
