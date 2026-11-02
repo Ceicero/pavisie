@@ -154,7 +154,7 @@
     "lastRefresh": "Last refresh: {when} · auto-refresh every {minutes} min",
     "never": "never",
     "refreshed": "Stats refreshed — {renamed} renamed, {unchanged} already up to date, {dropped} missing channel(s) removed.",
-    "missingPermission": "Some channels could not be renamed: I'm missing Manage Channels on them.",
+    "missingPermission": "Some channels could not be renamed: I'm missing Manage Channels or View Channel on them. Automatic refreshes are paused until that's fixed.",
     "tooSoon": "Too soon — stats channels can be renamed at most once per 5 minutes. Try again {when}.",
     "intervalSet": "Stats channels will now refresh every {minutes} minutes.",
     "humansNote": "Note: the Server Members intent is off, so {humans} equals {members} and {bots} is 0."
