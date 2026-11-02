@@ -1,5 +1,16 @@
-import type { PluginJob } from '../../sdk';
+import type { PluginContext, PluginJob } from '../../sdk';
 import { deliverReminder } from '../actions';
+
+async function guildTimezone(ctx: PluginContext, guildId: string | null): Promise<string> {
+  if (!guildId) return 'UTC';
+  const host = ctx.services.get('host');
+  if (!host) return 'UTC';
+  try {
+    return (await host.getGuildConfig(guildId)).timezone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
 
 /**
  * Catch-up sweep for one-off reminders whose delayed job may have been lost (process restart mid-delay, Redis
@@ -21,6 +32,33 @@ export const reminderSweepJob: PluginJob<Record<string, never>> = {
           'community: reminder-sweep failed to deliver a reminder',
         );
       });
+    }
+
+    // Recurring reminders are not swept for delivery (that would double-send). If Redis lost their scheduler
+    // on restart they would never fire again, and `delivered` stays false so they can be restored here.
+    const recurring = await ctx.prisma.reminder.findMany({
+      where: { delivered: false, recurring: { not: null } },
+      take: 200,
+    });
+    const queue = ctx.queue('reminder-deliver');
+    if (typeof queue.getJobScheduler !== 'function') return;
+    for (const reminder of recurring) {
+      if (!reminder.recurring) continue;
+      try {
+        const scheduler = await queue.getJobScheduler(`rem-${reminder.id}`);
+        if (scheduler) continue;
+        const timezone = await guildTimezone(ctx, reminder.guildId);
+        await queue.upsertJobScheduler(
+          `rem-${reminder.id}`,
+          { pattern: reminder.recurring, tz: timezone },
+          { name: 'reminder-deliver', data: { reminderId: reminder.id } },
+        );
+      } catch (err) {
+        ctx.logger.error(
+          { err, reminderId: reminder.id },
+          'community: reminder-sweep could not restore a recurring scheduler',
+        );
+      }
     }
   },
 };

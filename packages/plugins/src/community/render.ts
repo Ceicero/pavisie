@@ -12,7 +12,7 @@ import type {
   CommunityEvent,
 } from '@pavisie/database';
 import { brandEmbed, buildCustomId } from '../sdk';
-import { tallyPoll, type PollOptionTally } from './service';
+import { pollOutcome, tallyPoll, type PollOptionTally } from './service';
 
 const BAR_WIDTH = 12;
 
@@ -50,14 +50,27 @@ export function buildPollEmbed(poll: Poll, tallies: PollOptionTally[]) {
     poll.multiSelect ? 'multiple choice' : 'single choice',
   ].join(' · ');
 
+  const fields: EmbedField[] = [
+    { name: 'Status', value: status, inline: true },
+    { name: 'Total votes', value: String(total), inline: true },
+    { name: 'Settings', value: flags, inline: true },
+  ];
+  if (poll.closed) {
+    const outcome = pollOutcome(tallies);
+    const votesLabel = `${outcome.votes} vote${outcome.votes === 1 ? '' : 's'}`;
+    const result =
+      outcome.kind === 'winner'
+        ? `${outcome.labels[0]} (${votesLabel})`
+        : outcome.kind === 'tie'
+          ? `Tie: ${outcome.labels.join(', ')} (${votesLabel} each)`
+          : 'No votes';
+    fields.push({ name: 'Result', value: result, inline: false });
+  }
+
   return brandEmbed()
     .setTitle(poll.question)
     .setDescription(lines.join('\n\n') || '_No options._')
-    .addFields([
-      { name: 'Status', value: status, inline: true },
-      { name: 'Total votes', value: String(total), inline: true },
-      { name: 'Settings', value: flags, inline: true },
-    ])
+    .addFields(fields)
     .setFooter({ text: `${BRAND.name} · Poll #${poll.id.slice(-6)}`, iconURL: brandIconUrl(env) });
 }
 

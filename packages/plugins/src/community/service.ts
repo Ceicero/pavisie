@@ -103,6 +103,33 @@ export function pickWinners<T extends GiveawayEntryLike>(
   return winners;
 }
 
+/** Drops duplicate user ids, keeping the first entry. A member can only win once per draw. */
+export function uniqueGiveawayEntries<T extends GiveawayEntryLike>(entries: readonly T[]): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const entry of entries) {
+    if (seen.has(entry.userId)) continue;
+    seen.add(entry.userId);
+    unique.push(entry);
+  }
+  return unique;
+}
+
+/**
+ * Entries eligible for a reroll: previous winners are excluded, and the draw is smaller when fewer fresh
+ * entries remain. Falling back to the previous winners would hand the prize to the same people again; an
+ * empty result means "nobody new to draw" and the caller must leave the stored winners alone.
+ */
+export function rerollPool<T extends GiveawayEntryLike>(
+  entries: readonly T[],
+  previousWinnerIds: readonly string[],
+  count: number,
+): T[] {
+  if (count <= 0) return [];
+  const previous = new Set(previousWinnerIds);
+  return uniqueGiveawayEntries(entries).filter((entry) => !previous.has(entry.userId));
+}
+
 export type GiveawayEligibilityReason = 'ended' | 'missing_role' | 'account_too_new' | 'below_min_level';
 
 export interface GiveawayEligibilityInput {
@@ -199,6 +226,27 @@ export type SuggestionStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'IMPLEMENTED'
 /** Any status may transition to any other status except itself (a no-op the caller should skip). Staff decisions are never blocked by prior state (they can walk a suggestion back from DENIED, etc). */
 export function isValidSuggestionTransition(from: SuggestionStatus, to: SuggestionStatus): boolean {
   return from !== to;
+}
+
+export interface PollOutcome {
+  kind: 'none' | 'winner' | 'tie';
+  optionIds: string[];
+  labels: string[];
+  votes: number;
+}
+
+/** The leading option, or every option that shares the highest count when the poll is tied. */
+export function pollOutcome(tallies: readonly PollOptionTally[]): PollOutcome {
+  if (tallies.length === 0) return { kind: 'none', optionIds: [], labels: [], votes: 0 };
+  const top = Math.max(...tallies.map((tally) => tally.votes));
+  if (top <= 0) return { kind: 'none', optionIds: [], labels: [], votes: 0 };
+  const leaders = tallies.filter((tally) => tally.votes === top);
+  return {
+    kind: leaders.length === 1 ? 'winner' : 'tie',
+    optionIds: leaders.map((tally) => tally.optionId),
+    labels: leaders.map((tally) => tally.label),
+    votes: top,
+  };
 }
 
 // ---------------------------------------------------------------------------

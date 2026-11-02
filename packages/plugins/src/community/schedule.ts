@@ -16,6 +16,93 @@ export type ParsedSchedule =
   | { kind: 'at'; runAt: Date }
   | { kind: 'invalid'; reason: string };
 
+const EXPLICIT_OFFSET = /(?:[zZ]|[+-]\d{2}(?::?\d{2})?)$/;
+const CIVIL_TIME =
+  /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/;
+
+interface CivilParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function timezoneIsValid(timezone: string): boolean {
+  return DateTime.now().setZone(timezone).isValid;
+}
+
+function sameCivilTime(dt: DateTime, parts: CivilParts): boolean {
+  return (
+    dt.year === parts.year &&
+    dt.month === parts.month &&
+    dt.day === parts.day &&
+    dt.hour === parts.hour &&
+    dt.minute === parts.minute &&
+    dt.second === parts.second
+  );
+}
+
+/**
+ * Luxon accepts a civil time that falls in a DST gap by shifting it forward an hour, and it picks one of the two
+ * instants for a fall-back overlap, ignoring `disambiguation`. Either mistake schedules a reminder or event an
+ * hour off. Explicit offsets are unambiguous and are kept as-is. Returns `null` when `input` is not a datetime.
+ */
+function parseZonedDateTime(
+  input: string,
+  timezone: string,
+): { ok: true; date: Date } | { ok: false; reason: string } | null {
+  if (EXPLICIT_OFFSET.test(input)) {
+    const iso = DateTime.fromISO(input, { zone: timezone });
+    if (!iso.isValid) return null;
+    return { ok: true, date: iso.toJSDate() };
+  }
+
+  const match = CIVIL_TIME.exec(input);
+  if (!match) {
+    const iso = DateTime.fromISO(input, { zone: timezone });
+    if (!iso.isValid) return null;
+    return { ok: true, date: iso.toJSDate() };
+  }
+
+  if (!timezoneIsValid(timezone)) {
+    return { ok: false, reason: `Unknown timezone "${timezone}".` };
+  }
+
+  const parts: CivilParts = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: match[4] !== undefined ? Number(match[4]) : 0,
+    minute: match[5] !== undefined ? Number(match[5]) : 0,
+    second: match[6] !== undefined ? Number(match[6]) : 0,
+  };
+  const dt = DateTime.fromObject(
+    { ...parts, millisecond: 0 },
+    { zone: timezone },
+  );
+  if (!dt.isValid) return null;
+  if (!sameCivilTime(dt, parts)) {
+    return {
+      ok: false,
+      reason: `That time doesn't exist in ${timezone} because clocks spring forward and skip it. Pick another time, or include an offset like -04:00.`,
+    };
+  }
+
+  for (const deltaMin of [-120, -90, -60, -30, 30, 60, 90, 120]) {
+    const other = DateTime.fromMillis(dt.toMillis() + deltaMin * 60_000, { zone: timezone });
+    if (other.isValid && other.offset !== dt.offset && sameCivilTime(other, parts)) {
+      return {
+        ok: false,
+        reason: `That time happens twice in ${timezone} when clocks fall back. Include an offset so the instant is unambiguous, for example -04:00 or -05:00.`,
+      };
+    }
+  }
+
+  return { ok: true, date: dt.toJSDate() };
+}
+
 /** True if `expr` validates as a cron-parser expression under `timezone`. */
 export function validateCron(
   expr: string,
@@ -51,9 +138,10 @@ export function parseSchedule(input: string, timezone: string, now: Date = new D
     }
   }
 
-  const iso = DateTime.fromISO(trimmed, { zone: timezone });
-  if (iso.isValid) {
-    return { kind: 'at', runAt: iso.toJSDate() };
+  const zoned = parseZonedDateTime(trimmed, timezone);
+  if (zoned) {
+    if (!zoned.ok) return { kind: 'invalid', reason: zoned.reason };
+    return { kind: 'at', runAt: zoned.date };
   }
 
   const durationMs = parseDuration(trimmed);
@@ -81,10 +169,8 @@ export function parseAt(
     return { ok: false, reason: 'Provide an ISO date/time or a duration like "10m" or "2h".' };
   }
 
-  const iso = DateTime.fromISO(trimmed, { zone: timezone });
-  if (iso.isValid) {
-    return { ok: true, date: iso.toJSDate() };
-  }
+  const zoned = parseZonedDateTime(trimmed, timezone);
+  if (zoned) return zoned;
 
   const durationMs = parseDuration(trimmed);
   if (durationMs !== null && durationMs > 0) {

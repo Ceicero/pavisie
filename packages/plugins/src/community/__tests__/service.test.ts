@@ -4,8 +4,11 @@ import {
   decidePollVote,
   isValidSuggestionTransition,
   pickWinners,
+  pollOutcome,
+  rerollPool,
   tallyPoll,
   toggleSuggestionVote,
+  uniqueGiveawayEntries,
   upcomingReminderMinutes,
 } from '../service';
 
@@ -167,6 +170,57 @@ describe('isValidSuggestionTransition', () => {
 
   it('rejects a no-op transition to the same status', () => {
     expect(isValidSuggestionTransition('APPROVED', 'APPROVED')).toBe(false);
+  });
+});
+
+describe('rerollPool', () => {
+  const entries = [{ userId: 'a' }, { userId: 'b' }, { userId: 'a' }];
+
+  it('excludes previous winners and duplicate entrants', () => {
+    expect(rerollPool(entries, ['a'], 1).map((entry) => entry.userId)).toEqual(['b']);
+  });
+
+  it('returns nobody when the only entrant already won', () => {
+    expect(rerollPool([{ userId: 'a' }], ['a'], 1)).toEqual([]);
+    expect(rerollPool([], [], 1)).toEqual([]);
+  });
+
+  it('returns nobody when no new winners were requested', () => {
+    expect(rerollPool(entries, [], 0)).toEqual([]);
+  });
+
+  it('keeps a single entrant eligible for the original draw', () => {
+    expect(uniqueGiveawayEntries(entries).map((entry) => entry.userId)).toEqual(['a', 'b']);
+  });
+});
+
+describe('pollOutcome', () => {
+  const tallies = [
+    { optionId: 'a', label: 'Cats', position: 0, votes: 2 },
+    { optionId: 'b', label: 'Dogs', position: 1, votes: 2 },
+    { optionId: 'c', label: 'Birds', position: 2, votes: 1 },
+  ];
+
+  it('reports a tie between every option that shares the top count', () => {
+    expect(pollOutcome(tallies)).toEqual({
+      kind: 'tie',
+      optionIds: ['a', 'b'],
+      labels: ['Cats', 'Dogs'],
+      votes: 2,
+    });
+  });
+
+  it('reports a single winner', () => {
+    expect(pollOutcome([{ ...tallies[0]!, votes: 3 }, tallies[1]!, tallies[2]!])).toMatchObject({
+      kind: 'winner',
+      optionIds: ['a'],
+      labels: ['Cats'],
+      votes: 3,
+    });
+  });
+
+  it('reports no result when nobody voted', () => {
+    expect(pollOutcome(tallies.map((tally) => ({ ...tally, votes: 0 }))).kind).toBe('none');
   });
 });
 

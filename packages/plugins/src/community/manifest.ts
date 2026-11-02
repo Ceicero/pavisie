@@ -2,6 +2,22 @@ import { GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
 import { z } from 'zod';
 import { defineManifest } from '../sdk';
 
+/**
+ * Object default that is parsed, so nested `.default()` values are part of the default itself.
+ * Zod 4 calls this `.prefault({})`. Zod 3.25's `.default({})` parses on the way out, but
+ * `defaultValue()` still returns the bare `{}`, which is what the dashboard schema publishes.
+ */
+function prefaultObject<S extends z.ZodRawShape>(shape: S) {
+  const objectSchema = z.object(shape);
+  const withPrefault = objectSchema as z.ZodObject<S> & {
+    prefault?: (value: Record<string, never>) => z.ZodTypeAny;
+  };
+  if (typeof withPrefault.prefault === 'function') {
+    return withPrefault.prefault({});
+  }
+  return objectSchema.default(() => objectSchema.parse({}));
+}
+
 export const configSchema = z.object({
   tags: z
     .object({
@@ -14,24 +30,21 @@ export const configSchema = z.object({
       triggersEnabled: z.boolean().default(false),
     })
     .default({}),
-  suggestions: z
-    .object({
-      channelId: z.string().nullable().default(null),
-      threads: z.boolean().default(true),
-      dmAuthorOnStatus: z.boolean().default(true),
-    })
-    .default({}),
-  giveaways: z
-    .object({
-      defaultWinners: z.number().int().min(1).max(50).default(1),
-    })
-    .default({}),
-  eventReminderMinutes: z.array(z.number().int().min(1).max(10_080)).max(5).default([60, 10]),
-  polls: z
-    .object({
-      maxOptions: z.number().int().min(2).max(10).default(10),
-    })
-    .default({}),
+  suggestions: prefaultObject({
+    channelId: z.string().nullable().default(null),
+    threads: z.boolean().default(true),
+    dmAuthorOnStatus: z.boolean().default(true),
+  }),
+  giveaways: prefaultObject({
+    defaultWinners: z.number().int().min(1).max(50).default(1),
+  }),
+  eventReminderMinutes: z
+    .array(z.number().int().min(1).max(10_080))
+    .max(5)
+    .default(() => [60, 10]),
+  polls: prefaultObject({
+    maxOptions: z.number().int().min(2).max(10).default(10),
+  }),
   sticky: z
     .object({
       enabled: z.boolean().default(true),

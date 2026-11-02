@@ -26,6 +26,7 @@ import { giveawayEndJob } from './jobs/giveaway-end';
 import { announcementRunJob } from './jobs/announcement-run';
 import { reminderDeliverJob } from './jobs/reminder-deliver';
 import { reminderSweepJob } from './jobs/reminder-sweep';
+import { communityCatchupJob } from './jobs/community-catchup';
 import { eventReminderJob } from './jobs/event-reminder';
 import { suggestionSyncJob } from './jobs/suggestion-sync';
 import { stickyRepostJob } from './jobs/sticky-repost';
@@ -68,6 +69,7 @@ export const plugin = definePlugin({
     announcementRunJob,
     reminderDeliverJob,
     reminderSweepJob,
+    communityCatchupJob,
     eventReminderJob,
     suggestionSyncJob,
     stickyRepostJob,

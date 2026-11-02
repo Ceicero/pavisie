@@ -78,4 +78,34 @@ describe('parseAt', () => {
   it('rejects garbage input', () => {
     expect(parseAt('whenever', 'UTC', now).ok).toBe(false);
   });
+
+  it('interprets a zone-less ISO time in the guild timezone', () => {
+    const result = parseAt('2026-06-01T10:00:00', 'America/New_York', now);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.date.toISOString()).toBe('2026-06-01T14:00:00.000Z');
+  });
+
+  it('keeps an explicit offset instead of reinterpreting it in the guild timezone', () => {
+    const result = parseAt('2026-11-01T01:30:00-04:00', 'America/New_York', now);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.date.toISOString()).toBe('2026-11-01T05:30:00.000Z');
+  });
+
+  it('rejects a local time that clocks skip on a spring-forward day', () => {
+    const result = parseAt('2026-03-08T02:30:00', 'America/New_York', now);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason.toLowerCase()).toContain('spring');
+  });
+
+  it('rejects an ambiguous local time on a fall-back day', () => {
+    const result = parseSchedule('2026-11-01T01:30:00', 'America/New_York', now);
+    expect(result.kind).toBe('invalid');
+    if (result.kind === 'invalid') expect(result.reason.toLowerCase()).toContain('fall back');
+  });
+
+  it('still accepts the first valid local time after a spring-forward gap', () => {
+    const result = parseAt('2026-03-08T03:30:00', 'America/New_York', now);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.date.toISOString()).toBe('2026-03-08T07:30:00.000Z');
+  });
 });
