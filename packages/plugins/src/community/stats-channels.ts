@@ -23,6 +23,9 @@ export const CHANNEL_NAME_MAX = 100;
 /** Discord allows 2 channel-name edits per 10 minutes per channel; we keep 1 per 5 minutes so manual + periodic refreshes fit. */
 export const RENAME_BUDGET_MS = 5 * 60_000;
 
+/** Minimum gap between two renames of the SAME channel (periodic or manual) — half of Discord's 2-per-10-minutes budget. */
+export const CHANNEL_RENAME_INTERVAL_MS = 10 * 60_000;
+
 const TOKEN_PATTERN = /\{([a-zA-Z_]+)\}/g;
 
 function isStatsToken(name: string): name is StatsToken {
