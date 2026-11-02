@@ -51,10 +51,7 @@ export const tagTriggersHandler: PluginEventHandler<'messageCreate'> = {
       await ctx.prisma.tag.update({ where: { id: tag.id }, data: { uses: { increment: 1 } } });
     } catch (err) {
       // No message content in logs — only the tag id and the error.
-      ctx.logger.warn(
-        { guildId: message.guildId, tagId: match.id, err: err instanceof Error ? err.message : String(err) },
-        'tag auto-responder failed',
-      );
+      ctx.logger.warn({ guildId: message.guildId, tagId: match.id, err }, 'tag auto-responder failed');
     }
   },
 };

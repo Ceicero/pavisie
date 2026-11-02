@@ -139,7 +139,7 @@ export async function applyAutoRoles(
       });
     } catch (err) {
       ctx.logger.warn(
-        { err: err instanceof Error ? err.message : String(err), guildId, userId },
+        { err, guildId, userId },
         'roles: failed to schedule a delayed auto-role job',
       );
     }
@@ -204,7 +204,7 @@ export async function grantAutoRoles(
     assigned = [];
     failed = assignable;
     ctx.logger.warn(
-      { err: err instanceof Error ? err.message : String(err), guildId: guild.id, userId: member.id },
+      { err, guildId: guild.id, userId: member.id },
       'roles: failed to add auto-roles',
     );
   }
@@ -284,7 +284,7 @@ async function deliverWelcomeGoodbye(params: {
       sent = true;
     } catch (err) {
       ctx.logger.warn(
-        { err: err instanceof Error ? err.message : String(err), guildId: guild.id },
+        { err, guildId: guild.id },
         'roles: failed to send welcome/goodbye message',
       );
     }
@@ -338,7 +338,7 @@ export function createRolesService(ctx: PluginContext): RolesService {
       await member.roles.add(allowedToAdd, input.reason).catch((err: unknown) => {
         ctx.logger.error(
           {
-            err: err instanceof Error ? err.message : String(err),
+            err,
             guildId: input.guildId,
             userId: input.userId,
           },
@@ -350,7 +350,7 @@ export function createRolesService(ctx: PluginContext): RolesService {
       await member.roles.remove(removeRoleIds, input.reason).catch((err: unknown) => {
         ctx.logger.error(
           {
-            err: err instanceof Error ? err.message : String(err),
+            err,
             guildId: input.guildId,
             userId: input.userId,
           },
@@ -416,7 +416,7 @@ export function createRolesService(ctx: PluginContext): RolesService {
       if (!reaction.me || wantedSet.has(panelEmojiKey(reaction.emoji))) continue;
       await reaction.users.remove().catch((err: unknown) => {
         ctx.logger.warn(
-          { err: err instanceof Error ? err.message : String(err), guildId: panel.guildId, panelId: panel.id },
+          { err, guildId: panel.guildId, panelId: panel.id },
           'roles: failed to remove a stale reaction from a reaction-style panel',
         );
       });
@@ -427,7 +427,7 @@ export function createRolesService(ctx: PluginContext): RolesService {
       if (already) continue;
       await message.react(emoji).catch((err: unknown) => {
         ctx.logger.warn(
-          { err: err instanceof Error ? err.message : String(err), guildId: panel.guildId, panelId: panel.id },
+          { err, guildId: panel.guildId, panelId: panel.id },
           'roles: failed to add a reaction to a reaction-style panel',
         );
       });

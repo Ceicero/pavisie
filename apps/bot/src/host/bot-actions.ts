@@ -121,7 +121,7 @@ export function createBotActionsWorker(deps: BotActionsWorkerDeps): Worker<BotAc
 
   worker.on('failed', (job, err) => {
     deps.logger.error(
-      { jobId: job?.id, type: job?.data.type, guildId: job?.data.guildId, err: err.message },
+      { jobId: job?.id, type: job?.data.type, guildId: job?.data.guildId, err },
       'bot-actions job failed',
     );
   });

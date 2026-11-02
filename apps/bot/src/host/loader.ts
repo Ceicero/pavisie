@@ -177,10 +177,7 @@ export async function loadPlugins(deps: LoadPluginsDeps): Promise<LoadedHost> {
             await handler.handler(ctx, ...args);
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            logger.error(
-              { plugin: pluginId, event: handler.event, err: message },
-              'plugin event handler threw',
-            );
+            logger.error({ plugin: pluginId, event: handler.event, err }, 'plugin event handler threw');
             events.emit('plugin.error', {
               pluginId,
               guildId: guildId ?? firstGuildIdArg(args),

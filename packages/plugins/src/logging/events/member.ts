@@ -27,10 +27,7 @@ async function attributeInvite(ctx: PluginContext, member: GuildMember): Promise
     await writeInviteSnapshot(ctx.redis, member.guild.id, current);
     return diff ? `Used invite \`${diff.code}\` (${diff.usesBefore} → ${diff.usesAfter} uses).` : null;
   } catch (err) {
-    ctx.logger.warn(
-      { guildId: member.guild.id, err: err instanceof Error ? err.message : String(err) },
-      'logging: invite-use attribution failed',
-    );
+    ctx.logger.warn({ guildId: member.guild.id, err }, 'logging: invite-use attribution failed');
     return null;
   }
 }

@@ -230,7 +230,7 @@ export function createDataRequestsWorker(deps: DataRequestsWorkerDeps): Worker<D
 
   worker.on('failed', (job, err) => {
     deps.logger.error(
-      { jobId: job?.id, name: job?.name, guildId: job?.data.guildId, err: err.message },
+      { jobId: job?.id, name: job?.name, guildId: job?.data.guildId, err },
       'data-requests job failed',
     );
   });

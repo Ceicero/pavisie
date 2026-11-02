@@ -178,7 +178,7 @@ async function computeAiAssist(
     return parseAiAssistResponse(result.text);
   } catch (err) {
     ctx.logger.warn(
-      { err: String(err), guildId },
+      { err, guildId },
       'enforcer: AI assist scoring failed — flagging without a risk score',
     );
     return null;
@@ -529,7 +529,7 @@ async function recordEscalatedAction(
     });
   } catch (err) {
     ctx.logger.error(
-      { err: String(err), guildId: escalation.case.guildId, flagRecordId, caseId: escalation.case.id },
+      { err, guildId: escalation.case.guildId, flagRecordId, caseId: escalation.case.id },
       'enforcer: failed to record an automatic warn-escalation in the ledger',
     );
   }
@@ -860,7 +860,7 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
           // the generic error message (which is exactly what invited the double-apply in the first place).
           ctx.logger.error(
             {
-              err: String(err),
+              err,
               guildId: input.guildId,
               recordId: record.id,
               decision: input.decision,

@@ -340,7 +340,7 @@ export class ModerationServiceImpl implements ModerationService {
     }
 
     await this.postModLog(row).catch((err: unknown) =>
-      this.ctx.logger.warn({ err: String(err), caseId: row.id }, 'moderation: failed to post mod-log embed'),
+      this.ctx.logger.warn({ err, caseId: row.id }, 'moderation: failed to post mod-log embed'),
     );
 
     const logging = this.ctx.services.get('logging');
@@ -354,7 +354,7 @@ export class ModerationServiceImpl implements ModerationService {
           fields: [{ name: 'Type', value: row.type, inline: true }],
         })
         .catch((err: unknown) =>
-          this.ctx.logger.warn({ err: String(err) }, 'moderation: logging.log failed'),
+          this.ctx.logger.warn({ err }, 'moderation: logging.log failed'),
         );
     }
 
@@ -480,7 +480,7 @@ export class ModerationServiceImpl implements ModerationService {
         if (acquired === 'OK') return lockKey;
       } catch (err) {
         this.ctx.logger.warn(
-          { err: String(err), guildId, userId },
+          { err, guildId, userId },
           'moderation: warn-escalation lock acquisition errored — proceeding unlocked',
         );
         return null;
@@ -538,7 +538,7 @@ export class ModerationServiceImpl implements ModerationService {
       return escalatedCase ? { rule, case: escalatedCase } : null;
     } catch (err) {
       this.ctx.logger.error(
-        { err: String(err), guildId, targetId, rule },
+        { err, guildId, targetId, rule },
         'moderation: automatic escalation action failed',
       );
       return null;
@@ -606,7 +606,7 @@ export class ModerationServiceImpl implements ModerationService {
         .add('expire', { caseId: row.id }, { jobId: `case-${row.id}`, delay: row.durationMs });
     } catch (err) {
       this.ctx.logger.error(
-        { err: String(err), caseId: row.id },
+        { err, caseId: row.id },
         'moderation: failed to schedule expiry job',
       );
     }
@@ -1107,7 +1107,7 @@ export class ModerationServiceImpl implements ModerationService {
 
     const staffNotified = await this.postAppealPrompt(appeal, caseNumber).catch((err: unknown) => {
       this.ctx.logger.warn(
-        { err: String(err), appealId: appeal.id },
+        { err, appealId: appeal.id },
         'moderation: failed to post appeal prompt',
       );
       return false;
@@ -1229,14 +1229,14 @@ export class ModerationServiceImpl implements ModerationService {
         await this.markExpiredForActiveTimeout(appeal.guildId, appeal.userId);
       } catch (err) {
         this.ctx.logger.warn(
-          { err: String(err), appealId: appeal.id },
+          { err, appealId: appeal.id },
           'moderation: could not auto-remove timeout after accepted appeal',
         );
       }
     } else if (caseRow.type === 'BAN') {
       await this.postUnbanOfferButton(appeal, caseRow.caseNumber).catch((err: unknown) =>
         this.ctx.logger.warn(
-          { err: String(err), appealId: appeal.id },
+          { err, appealId: appeal.id },
           'moderation: failed to post unban-now offer',
         ),
       );
@@ -1314,7 +1314,7 @@ export class ModerationServiceImpl implements ModerationService {
         applied += 1;
       } catch (err) {
         this.ctx.logger.error(
-          { err: String(err), appealId: appeal.id },
+          { err, appealId: appeal.id },
           'moderation: appeal-sync failed to apply a decision',
         );
       } finally {

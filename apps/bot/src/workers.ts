@@ -53,7 +53,7 @@ export function startWorkers(deps: StartWorkersDeps): StartedWorkers {
 
       worker.on('failed', (bullJob, err) => {
         deps.logger.error(
-          { plugin: plugin.manifest.id, job: job.name, jobId: bullJob?.id, err: err.message },
+          { plugin: plugin.manifest.id, job: job.name, jobId: bullJob?.id, err },
           'plugin job failed',
         );
         ctx.events.emit('plugin.error', {

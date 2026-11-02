@@ -67,10 +67,7 @@ function messageForThrown(
   if (isAppError(err) && err.expose) {
     return err.message;
   }
-  logger.error(
-    { ...context, err: err instanceof Error ? err.message : String(err) },
-    'router: handler threw an unexpected error',
-  );
+  logger.error({ ...context, err }, 'router: handler threw an unexpected error');
   return t('errors.generic');
 }
 

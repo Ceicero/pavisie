@@ -18,7 +18,7 @@ export function createRedis(url: string, options: CreateRedisOptions = {}): Redi
   };
   const client = new Redis(url, redisOptions);
   client.on('error', (err: Error) => {
-    log.error({ err: err.message }, 'Redis client error');
+    log.error({ err }, 'Redis client error');
   });
   return client;
 }

@@ -40,7 +40,7 @@ export const tempVoiceSweepJob: PluginJob = {
           {
             guildId: row.guildId,
             channelId: row.channelId,
-            err: err instanceof Error ? err.message : String(err),
+            err,
           },
           'engagement: tempvoice sweep failed for one channel',
         );

@@ -169,13 +169,13 @@ async function createTempVoiceChannel(
 
     await member.voice.setChannel(created.id).catch((err: unknown) => {
       ctx.logger.warn(
-        { guildId, channelId: created.id, err: err instanceof Error ? err.message : String(err) },
+        { guildId, channelId: created.id, err },
         'engagement: created temp voice channel but could not move member into it',
       );
     });
   } catch (err) {
     ctx.logger.warn(
-      { guildId, hubChannelId: hub.id, err: err instanceof Error ? err.message : String(err) },
+      { guildId, hubChannelId: hub.id, err },
       'engagement: failed to create temp voice channel',
     );
   }

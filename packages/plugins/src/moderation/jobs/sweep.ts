@@ -65,10 +65,7 @@ export const sweepJob: PluginJob<Record<string, never>> = {
           });
         }
       } catch (err) {
-        ctx.logger.error(
-          { err: String(err), caseId: row.id },
-          'moderation: sweep job failed to reverse an overdue case',
-        );
+        ctx.logger.error({ err, caseId: row.id }, 'moderation: sweep job failed to reverse an overdue case');
       }
     }
   },

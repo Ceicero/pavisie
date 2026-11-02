@@ -164,8 +164,7 @@ export async function synthesizeTts(
     await ctx.redis.set(redisKey('overlay', 'tts', channel.id, audioId), base64, 'EX', AUDIO_TTL_SECONDS);
     return { audioId };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    ctx.logger.warn({ err: message }, 'integrations/twitch-chat: TTS synthesis request threw');
+    ctx.logger.warn({ err }, 'integrations/twitch-chat: TTS synthesis request threw');
     return null;
   }
 }

@@ -97,10 +97,7 @@ export class LoggingServiceImpl implements LoggingService {
           },
         });
       } catch (err) {
-        this.ctx.logger.error(
-          { guildId, kind, err: err instanceof Error ? err.message : String(err) },
-          'logging: failed to store a LogEvent row',
-        );
+        this.ctx.logger.error({ guildId, kind, err }, 'logging: failed to store a LogEvent row');
       }
     }
   }

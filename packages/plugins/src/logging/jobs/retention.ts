@@ -21,10 +21,7 @@ export const retentionJob: PluginJob = {
       try {
         totalPurged += await logging.purgeRetention(guildId);
       } catch (err) {
-        ctx.logger.error(
-          { guildId, err: err instanceof Error ? err.message : String(err) },
-          'logging: retention purge failed for a guild',
-        );
+        ctx.logger.error({ guildId, err }, 'logging: retention purge failed for a guild');
       }
     }
 

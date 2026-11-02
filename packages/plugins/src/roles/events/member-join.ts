@@ -29,7 +29,7 @@ export const memberJoinHandler: PluginEventHandler<'guildMemberAdd'> = {
           await member.kick('Account-age gate: account too new');
         } catch (err) {
           ctx.logger.warn(
-            { err: err instanceof Error ? err.message : String(err), guildId: member.guild.id },
+            { err, guildId: member.guild.id },
             'roles: account-age gate kick failed (missing permission?)',
           );
         }
@@ -63,7 +63,7 @@ export const memberJoinHandler: PluginEventHandler<'guildMemberAdd'> = {
               } catch (roleErr) {
                 ctx.logger.warn(
                   {
-                    err: roleErr instanceof Error ? roleErr.message : String(roleErr),
+                    err: roleErr,
                     guildId: member.guild.id,
                     quarantineRoleId: config.verification.quarantineRoleId,
                   },
@@ -73,7 +73,7 @@ export const memberJoinHandler: PluginEventHandler<'guildMemberAdd'> = {
             } else {
               ctx.logger.warn(
                 {
-                  err: err instanceof Error ? err.message : String(err),
+                  err,
                   guildId: member.guild.id,
                 },
                 'roles: account-age gate quarantine failed (automod unavailable and no fallback role configured)',
@@ -90,7 +90,7 @@ export const memberJoinHandler: PluginEventHandler<'guildMemberAdd'> = {
           } catch (err) {
             ctx.logger.warn(
               {
-                err: err instanceof Error ? err.message : String(err),
+                err,
                 guildId: member.guild.id,
                 quarantineRoleId: config.verification.quarantineRoleId,
               },

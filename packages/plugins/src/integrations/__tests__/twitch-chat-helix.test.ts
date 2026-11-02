@@ -408,7 +408,7 @@ describe('sendChatMessage', () => {
 
     expect(result.ok).toBe(true);
     expect(logSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ err: expect.any(String) }),
+      expect.objectContaining({ err: expect.any(Error) }),
       expect.stringContaining('failed to parse send chat message response'),
     );
   });
