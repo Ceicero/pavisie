@@ -322,6 +322,7 @@ async function handleRefresh(c: CommandContext): Promise<void> {
   }
 
   await interaction.deferReply({ ephemeral: true });
+  // renameStatsChannel applies the per-channel Redis budget and does not wait on Discord 429 retries.
   const result = await refreshGuildStats(ctx, interaction.guild, cfg, now);
   const summary = t('statschannel.refreshed', {
     renamed: result.renamed,

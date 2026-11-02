@@ -43,6 +43,7 @@ async function main(): Promise<void> {
   // build/wire everything before calling `client.login()` below (standard discord.js bootstrap ordering — the
   // client is only actually used once `ready` fires, by which point it genuinely is `<true>`).
   const client = createClient(intents) as unknown as Client<true>;
+  // unhandledRejection stays at error. uncaughtException logs fatal (level name, for Railway) and exits.
   installCrashHandlers({ client, logger, channelId: env.ALERT_CHANNEL_ID });
 
   const host = await loadPlugins({
