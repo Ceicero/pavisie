@@ -37,7 +37,7 @@
 Pavisie is a production-ready, modular "all-in-one" Discord bot platform: moderation, automod,
 logging, tickets, roles and onboarding, leveling and community features, integrations, an optional
 AI assistant, and a full admin dashboard, all built as independently enable/disable-able plugins per
-server. The brand is **gold and black** — a gold laurel-wreath medallion with a skull as the bot's
+server. The brand is **gold and black** — a charcoal skull crowned with a gold laurel wreath as the bot's
 avatar, carried through the dashboard and the public marketing site as a black/grey/white base with a
 gold accent — because Pavisie's pitch isn't a flashy feature list, it's trust: every action the bot
 takes is logged, every permission it asks for is least-privilege and explained, and nothing about how

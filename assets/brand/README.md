@@ -2,7 +2,7 @@
 
 | File                  | What it is                                                                                                                                                            | Used by                                                                                                                                                                                                                                        |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pavisie-skull.png`  | Canonical Pavisie logo, used everywhere: a gold laurel-wreath medallion with a skull, on pure black, square (1024×1024). Lossless PNG; takes precedence over the `.jpg` when both exist. | Website, dashboard sidebar, bot avatar (`pnpm --filter @pavisie/bot set-avatar`), embed icons via `WEB_URL/brand/pavisie-skull.<ext>` (served from the web app's `public/brand/`), Discord Developer Portal app icon (manual upload). |
+| `pavisie-skull.png`  | Canonical Pavisie logo, used everywhere: a charcoal skull with glowing gold eyes, crowned by a gold laurel wreath, centred on pure black, square (1024×1024). Lossless PNG; takes precedence over the `.jpg` when both exist. | Website, dashboard sidebar, bot avatar (`pnpm --filter @pavisie/bot set-avatar`), embed icons via `WEB_URL/brand/pavisie-skull.<ext>` (served from the web app's `public/brand/`), Discord Developer Portal app icon (manual upload). |
 | `pavisie-skull.jpg`  | The same art re-encoded as JPEG. Kept only for backwards-compatible URLs/cached references that still name the `.jpg` file — not used as the preferred source anywhere. | Served alongside the `.png` from every app's `public/brand/` so old `.jpg` links keep working; never referenced as the preferred `logo` in a manifest.                                                                                        |
 
 `pnpm brand:sync` (run automatically before `dev`/`build` of the web and dashboard apps) copies every shared logo
@@ -18,15 +18,18 @@ folder would make the public website display that variant instead (header/hero/a
 dashboard, bot avatar, and embed icons keep reading the shared `pavisie-skull.<ext>` above. No such file is
 currently present in the repo — the shared logo already is the clean/bright art the website wants.
 
+`pavisie-mark.png` is the same art on a transparent background (1254×1254 RGBA), for icons and overlays where the
+black square would show.
+
 Do not commit other raster variants — sizes are generated at build/serve time. The one exception is the browser-tab
 favicon, below.
 
 ## Browser-tab favicons
 
-`apps/web/src/app/icon.png` and `apps/dashboard/src/app/icon.png` (256×256 RGB, black background kept) are the
+`apps/web/src/app/icon.png` and `apps/dashboard/src/app/icon.png` (512×512, black background kept, art cropped tighter than the 1024 logo so it stays legible at tab size) are the
 committed favicons for the two apps, picked up automatically by Next's app-router file convention (no `icons` entry
 needed in `metadata`). They are static, hand-generated files — `scripts/sync-brand.mjs` does not touch them — so
-regenerate and re-commit both whenever `assets/brand/pavisie-skull.png` changes.
+regenerate and re-commit both whenever the logo art changes.
 
 ### Regenerating favicons
 
@@ -36,9 +39,14 @@ re-check with `node -e "require.resolve('sharp')"` before assuming this). Regene
 ```
 python -c "
 from PIL import Image
-src = Image.open('assets/brand/pavisie-skull.png').convert('RGB')
-resized = src.resize((256, 256), Image.LANCZOS)
+m = Image.open('assets/brand/pavisie-mark.png').convert('RGBA')
+art = m.crop(m.getchannel('A').getbbox())
+k = 512 * 0.94 / max(art.size)
+art = art.resize((round(art.width * k), round(art.height * k)), Image.LANCZOS)
+fav = Image.new('RGBA', (512, 512), (0, 0, 0, 255))
+fav.alpha_composite(art, ((512 - art.width) // 2, (512 - art.height) // 2))
+fav = fav.convert('RGB').quantize(256, method=Image.Quantize.MEDIANCUT)
 for t in ['apps/web/src/app/icon.png', 'apps/dashboard/src/app/icon.png']:
-    resized.save(t, format='PNG', optimize=True)
+    fav.save(t, format='PNG', optimize=True)
 "
 ```
