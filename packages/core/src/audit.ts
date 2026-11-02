@@ -29,6 +29,7 @@ export const AuditAction = {
   IntegrationDisconnect: 'integration.disconnect',
   IntegrationWebhookCreate: 'integration.webhook.create',
   IntegrationWebhookDelete: 'integration.webhook.delete',
+  IntegrationWebhookUpdate: 'integration.webhook.update',
   AiSettingsUpdate: 'ai.settings.update',
   CommunityStickySet: 'community.sticky.set',
   CommunityStickyRemove: 'community.sticky.remove',

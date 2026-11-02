@@ -220,6 +220,10 @@ export default async function webhooksRoutes(app: ZodFastifyInstance): Promise<v
     // timestamp is bound into the HMAC, an attacker can't strip the header to replay a timestamped delivery.
     // Senders that omit the header keep the legacy body-only signature (backward compatible).
     let signedPayload: string = raw;
+    if (endpoint.requireTimestamp && typeof timestampHeader !== 'string') {
+      request.log.warn({ endpointId }, 'webhook rejected: endpoint requires X-Pavisie-Timestamp');
+      throw invalidSignature();
+    }
     if (typeof timestampHeader === 'string') {
       const ts = Number(timestampHeader);
       if (!/^\d{1,12}$/.test(timestampHeader) || !Number.isFinite(ts)) {
