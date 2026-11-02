@@ -1341,6 +1341,8 @@ model WebhookEndpoint {
   enabled        Boolean          @default(true)
   lastDeliveryAt DateTime?
   failureCount   Int              @default(0)
+  /// Inbound generic only: reject deliveries without a signed `X-Pavisie-Timestamp` header (replay protection).
+  requireTimestamp Boolean        @default(false)
   deletedAt      DateTime?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
