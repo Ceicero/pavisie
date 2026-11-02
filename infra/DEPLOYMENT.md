@@ -372,6 +372,26 @@ both modes.
 below when they're just "blank = feature disabled" — see `.env.production.example` for the full
 list with comments; every var there is also documented in `docs/ARCHITECTURE.md` §4.
 
+**Startup check.** Every service validates its environment before doing anything else — `bot` and `api` at
+the top of their entrypoint, `web` and `dashboard` when the Next.js server starts (Next's `instrumentation.ts`;
+`next build` is never affected, so CI and the Docker build don't need runtime secrets). If anything is missing
+or malformed the process prints **one** message and exits with code 1, so Railway/Render show a failed deploy
+with the cause as the last log lines:
+
+```
+[pavisie:api] Refusing to start: 2 environment variables are missing or invalid.
+  - DATABASE_URL: missing
+  - API_PORT: must be an integer between 1 and 65535
+Fix: set them on the "api" service (Railway: service > Variables; locally: .env). Values are never printed here. ...
+```
+
+Only variable **names** and a fixed reason are ever printed, never a value. Blank values count as unset. What each
+service refuses to start without: `bot` — `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`, `DATABASE_URL`, `REDIS_URL`; `api` —
+`DATABASE_URL`, `REDIS_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `SESSION_SECRET`, `ENCRYPTION_KEY`,
+`DISCORD_OAUTH_REDIRECT_URI`, `DASHBOARD_URL`; `web` and `dashboard` — nothing. Every other variable is optional as far
+as the check goes, but is rejected if it is set to a malformed value (bad URL, non-numeric port, `ENCRYPTION_KEY` that
+is not 32 bytes, unknown enum value). The "Required?" column above is the deployment guidance; this is the enforced minimum.
+
 | Variable                                                                                                                                                                                                                                                     | Required?                | Which app(s)                                       | Where the value comes from                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `NODE_ENV`                                                                                                                                                                                                                                                   | Yes                      | all                                                | Literal `production`                                                                                                                                                           |
