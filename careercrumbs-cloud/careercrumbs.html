@@ -250,6 +250,25 @@ details.more[open] summary { margin-bottom: 12px; }
 .input, .select { min-width: 0; max-width: 100%; }
 .checkin { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--ink); }
 .checkin b { color: var(--warn); }
+.warn-text { color: var(--bad); font-weight: 600; }
+.nudge { border-color: var(--warn); background: var(--warn-soft); }
+
+/* ---------- accessibility pass: 48px tap targets, nothing under 0.8rem ---------- */
+.btn, .btn.sm, .chip, .tile, .seg button { min-height: 48px; }
+.iconbtn { width: 48px; height: 48px; }
+.select.compact { min-height: 44px; }
+.check { min-height: 48px; }
+.check input, .qrow.ask input { width: 24px; height: 24px; }
+.togglechips span { padding: 12px 16px; }
+.linkbtn { min-height: 44px; display: inline-flex; align-items: center; }
+@media (min-width: 900px) { .rail a:not(.brand) { min-height: 48px; } }
+.eyebrow, .pill, .sync, .ticket-head { font-size: 0.8rem; }
+.tab { font-size: 0.8rem; }
+.small, .qrow small, .field > small, .agenda small, .start small { font-size: 0.875rem; }
+/* Dynamic viewport units keep sheets clear of mobile browser bars and the keyboard. */
+.sheet { max-height: calc(100vh - 40px - env(safe-area-inset-top, 0px)); max-height: calc(100dvh - 40px - env(safe-area-inset-top, 0px)); }
+@media (min-width: 700px) { .sheet { max-height: 88vh; max-height: 88dvh; } }
+@media (min-width: 900px) { .rail { height: 100vh; height: 100dvh; } }
 
 </style>
 <div id="app" class="app"><div class="loading"><span>Opening CareerCrumbs…</span></div></div>
@@ -387,7 +406,8 @@ details.more[open] summary { margin-bottom: 12px; }
     const at = (now || new Date()).toISOString();
     const next = Object.assign({}, job, { status });
     next.history = (job.history || []).concat([{ status, at }]);
-    if (status === "Applied" && !job.appliedAt) next.appliedAt = at.slice(0, 10);
+    // Local calendar date: the UTC date is tomorrow for evening changes in the Americas.
+    if (status === "Applied" && !job.appliedAt) next.appliedAt = today(now);
     return next;
   }
   // Check-ins: when to reconnect after applying and after an interview.
@@ -440,7 +460,7 @@ details.more[open] summary { margin-bottom: 12px; }
     }
     const due = dueCheckIn(job, now);
     if (due) return { tone: "warn", text: "Check in now · " + due.label };
-    if (job.followUpAt && job.followUpAt >= t) {
+    if (job.followUpAt) {
       const n = daysBetween(t, job.followUpAt);
       if (n < 0) return { tone: "bad", text: "Follow-up overdue by " + -n + (n === -1 ? " day" : " days") };
       if (n === 0) return { tone: "warn", text: "Follow up today" };
@@ -500,6 +520,7 @@ details.more[open] summary { margin-bottom: 12px; }
     [/^(handle|handled|manage|managed|ran|run)\b/i, "Managed"],
   ];
   // Template only: the person's own words, and a [placeholder] where something is missing.
+  const PAST_VERB = /^(\w+ed|cut|got|made|kept|won|caught|hit|beat|led|went|became|brought|grew|sold|built|met|took|gave|ran|set|put|paid|held|spent|read|taught|drove|wrote|found|left|lost|brought)\b/i;
   function bulletFromStory(s) {
     let action = clean(s.action) || clean(s.title) || "[what you did]";
     let lead = "";
@@ -512,7 +533,10 @@ details.more[open] summary { margin-bottom: 12px; }
     }
     let text = lead ? lead + " " + lower1(action) : cap(action);
     const result = clean(s.result);
-    text += result ? ", resulting in " + lower1(result) : ", resulting in [the result — add a number if you have one]";
+    // "resulting in saved 2 hours" reads badly; a result that starts with a past-tense verb gets a semicolon.
+    if (!result) text += ", resulting in [the result — add a number if you have one]";
+    else if (PAST_VERB.test(result)) text += "; " + lower1(result);
+    else text += ", resulting in " + lower1(result);
     return text + ".";
   }
   function storyToStar(s) {
@@ -581,11 +605,12 @@ details.more[open] summary { margin-bottom: 12px; }
       const d = e.date.replace(/-/g, "");
       L.push("BEGIN:VEVENT", "UID:" + e.uid + "@careercrumbs", "DTSTAMP:" + stamp);
       if (e.time) {
+        // UTC with a Z: some Android importers read floating times as UTC and shift them.
         const [h, m] = e.time.split(":").map(Number);
-        const endMin = h * 60 + m + (e.minutes || 15);
-        const endDate = endMin >= 1440 ? addDays(e.date, 1).replace(/-/g, "") : d;
-        const em = endMin % 1440;
-        L.push("DTSTART:" + d + "T" + pad(h) + pad(m) + "00", "DTEND:" + endDate + "T" + pad(Math.floor(em / 60)) + pad(em % 60) + "00");
+        const start = parse(e.date);
+        start.setHours(h, m, 0, 0);
+        const end = new Date(start.getTime() + (e.minutes || 15) * 60000);
+        L.push("DTSTART:" + icsUtc(start), "DTEND:" + icsUtc(end));
       } else L.push("DTSTART;VALUE=DATE:" + d, "DTEND;VALUE=DATE:" + addDays(e.date, 1).replace(/-/g, ""));
       L.push("SUMMARY:" + icsEscape(e.summary));
       if (e.desc) L.push("DESCRIPTION:" + icsEscape(e.desc));
@@ -593,7 +618,26 @@ details.more[open] summary { margin-bottom: 12px; }
       L.push("END:VEVENT");
     }
     L.push("END:VCALENDAR");
-    return L.join("\r\n") + "\r\n";
+    return L.map(fold).join("\r\n") + "\r\n";
+  }
+  const icsUtc = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  // RFC 5545: lines longer than 75 octets continue on the next line after a space.
+  function fold(line) {
+    const out = [];
+    let cur = "";
+    let bytes = 0;
+    for (const ch of line) {
+      const n = ch.codePointAt(0) < 0x80 ? 1 : ch.codePointAt(0) < 0x800 ? 2 : ch.codePointAt(0) < 0x10000 ? 3 : 4;
+      if (bytes + n > (out.length ? 74 : 75)) {
+        out.push(cur);
+        cur = "";
+        bytes = 0;
+      }
+      cur += ch;
+      bytes += n;
+    }
+    out.push(cur);
+    return out.join("\r\n ");
   }
   function interviewEvent(job) {
     const dt = job.interviewAt;
@@ -624,28 +668,150 @@ details.more[open] summary { margin-bottom: 12px; }
 
   // ---------- workspace ----------
   const emptyWorkspace = () => ({
-    profile: { name: "", targetRole: "", packs: [] },
+    profile: { name: "", targetRole: "", packs: [], packsAsked: false, reminders: "ask", lastExport: "" },
     jobs: [],
     stories: [],
     interview: { answers: {}, custom: [], practice: [] },
     storySeq: 0,
   });
-  function normalize(ws) {
-    const b = emptyWorkspace();
-    const out = Object.assign({}, b, ws || {});
-    out.profile = Object.assign({}, b.profile, (ws && ws.profile) || {});
-    if (!Array.isArray(out.profile.packs)) out.profile.packs = [];
-    out.jobs = (Array.isArray(out.jobs) ? out.jobs : []).map((j) => Object.assign({ status: "Saved", history: [] }, j));
-    out.stories = Array.isArray(out.stories) ? out.stories : [];
-    const iv = (ws && ws.interview) || {};
-    out.interview = {
-      answers: iv.answers && typeof iv.answers === "object" && !Array.isArray(iv.answers) ? Object.assign({}, iv.answers) : {},
-      custom: Array.isArray(iv.custom) ? iv.custom : [],
-      practice: Array.isArray(iv.practice) ? iv.practice : [],
+  // Everything here may come from an imported file, so check types, formats and ids.
+  // Ids end up in HTML attributes; anything that isn't a plain id is replaced.
+  const ID_RE = /^[\w-]{1,40}$/;
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const DT_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/;
+  const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  const str = (v, max) => (v == null || typeof v === "object" ? "" : String(v)).slice(0, max || 5000);
+  const dateStr = (v) => (typeof v === "string" && DATE_RE.test(v) ? v : "");
+  const dtStr = (v) => (typeof v === "string" && DT_RE.test(v.slice(0, 16)) ? v.slice(0, 16) : "");
+  const safeUrl = (v) => (typeof v === "string" && /^https?:\/\/[^\s"'<>]+$/i.test(v.trim()) ? v.trim() : "");
+  function idMapper(prefix) {
+    const seen = new Set();
+    const map = {};
+    return {
+      map,
+      take(v) {
+        let id = typeof v === "string" && ID_RE.test(v) && !seen.has(v) ? v : uid(prefix);
+        while (seen.has(id)) id = uid(prefix);
+        seen.add(id);
+        if (typeof v === "string") map[v] = id;
+        return id;
+      },
     };
-    out.storySeq = Math.max(Number(out.storySeq) || 0, out.stories.reduce((m, s) => Math.max(m, s.n || 0), 0));
+  }
+  function normalize(ws) {
+    ws = isObj(ws) ? ws : {};
+    const b = emptyWorkspace();
+    const p = isObj(ws.profile) ? ws.profile : {};
+    const profile = {
+      name: str(p.name, 120),
+      targetRole: str(p.targetRole, 120),
+      packs: Array.isArray(p.packs) ? p.packs.filter((k) => ["warehouse", "service", "lead"].includes(k)) : [],
+      packsAsked: !!p.packsAsked,
+      reminders: p.reminders === "off" ? "off" : "ask",
+      lastExport: dateStr(p.lastExport),
+      changesSinceExport: Math.max(0, Math.floor(Number(p.changesSinceExport) || 0)),
+    };
+    const jobIds = idMapper("j");
+    const jobs = (Array.isArray(ws.jobs) ? ws.jobs : []).filter(isObj).slice(0, 500).map((j) => {
+      const checkins = {};
+      if (isObj(j.checkins)) for (const k of Object.keys(j.checkins)) if (/^[ai](3|7|30)$/.test(k) && j.checkins[k]) checkins[k] = true;
+      return {
+        id: jobIds.take(j.id),
+        title: str(j.title, 200),
+        company: str(j.company, 200),
+        status: STATUSES.includes(j.status) ? j.status : "Saved",
+        pay: j.pay === "salaried" ? "salaried" : "hourly",
+        appliedAt: dateStr(j.appliedAt),
+        interviewAt: dtStr(j.interviewAt),
+        followUpAt: dateStr(j.followUpAt),
+        contact: str(j.contact, 200),
+        link: safeUrl(j.link),
+        notes: str(j.notes, 5000),
+        created: dateStr(j.created),
+        thankYouSent: !!j.thankYouSent,
+        checkins,
+        history: (Array.isArray(j.history) ? j.history : []).filter((h) => isObj(h) && STATUSES.includes(h.status) && !isNaN(Date.parse(h.at))).map((h) => ({ status: h.status, at: new Date(h.at).toISOString() })).slice(-50),
+      };
+    });
+    const storyIds = idMapper("s");
+    const stories = (Array.isArray(ws.stories) ? ws.stories : []).filter(isObj).slice(0, 500).map((x) => ({
+      id: storyIds.take(x.id),
+      n: Math.max(0, Math.floor(Number(x.n) || 0)),
+      date: dateStr(x.date),
+      title: str(x.title, 200),
+      situation: str(x.situation),
+      task: str(x.task),
+      action: str(x.action),
+      result: str(x.result),
+    }));
+    const iv = isObj(ws.interview) ? ws.interview : {};
+    const qIds = idMapper("q");
+    for (const q of BANK) qIds.take(q.id);
+    const custom = (Array.isArray(iv.custom) ? iv.custom : []).filter((c) => isObj(c) && str(c.q).trim()).slice(0, 300).map((c) => ({
+      id: qIds.take(c.id),
+      q: str(c.q, 500),
+      jobId: jobIds.map[c.jobId] || "",
+    }));
+    const answers = {};
+    if (isObj(iv.answers)) {
+      for (const [k, a] of Object.entries(iv.answers)) {
+        const key = qIds.map[k] || (ID_RE.test(k) ? k : null);
+        if (!key || !isObj(a)) continue;
+        answers[key] = {
+          mode: a.mode === "star" ? "star" : "free",
+          text: str(a.text), s: str(a.s), t: str(a.t), a: str(a.a), r: str(a.r),
+          ready: !!a.ready, pick: !!a.pick,
+          storyId: storyIds.map[a.storyId] || "",
+          textAt: str(a.textAt, 40), starAt: str(a.starAt, 40), prevText: str(a.prevText),
+        };
+      }
+    }
+    const practice = (Array.isArray(iv.practice) ? iv.practice : []).filter((x) => isObj(x) && typeof x.q === "string").map((x) => ({ q: qIds.map[x.q] || (ID_RE.test(x.q) ? x.q : ""), date: dateStr(x.date), ok: !!x.ok })).filter((x) => x.q).slice(-300);
+    const out = Object.assign(b, { profile, jobs, stories, interview: { answers, custom, practice } });
+    out.storySeq = Math.max(Math.floor(Number(ws.storySeq) || 0), stories.reduce((m, x) => Math.max(m, x.n), 0));
     return out;
   }
+
+  // Import only what looks like a CareerCrumbs backup with something in it.
+  function checkBackup(data) {
+    const bad = { ok: false, reason: "That file isn't a CareerCrumbs backup, so nothing was changed." };
+    if (!isObj(data)) return bad;
+    if (!(data.app === "CareerCrumbs" || Array.isArray(data.jobs) || Array.isArray(data.stories) || isObj(data.interview))) return bad;
+    const ws = normalize(data);
+    const counts = { jobs: ws.jobs.length, answers: Object.keys(ws.interview.answers).length, stories: ws.stories.length, questions: ws.interview.custom.length };
+    if (!counts.jobs && !counts.answers && !counts.stories && !counts.questions) return { ok: false, reason: "That backup is empty, so nothing was changed." };
+    return { ok: true, ws, counts };
+  }
+  function isFresh(ws) {
+    return !ws.jobs.length && !ws.stories.length && !Object.keys(ws.interview.answers).length && !ws.interview.custom.length && !ws.interview.practice.length && !ws.profile.name;
+  }
+  // Upcoming interviews first, then offers and anything due, then by the next date; closed last.
+  function jobOrder(jobs, now) {
+    const t = today(now);
+    const key = (j) => {
+      if (j.status === "Closed") return [5, j.appliedAt || ""];
+      if (j.interviewAt && j.interviewAt.slice(0, 10) >= t) return [0, j.interviewAt];
+      if (j.status === "Offer") return [1, ""];
+      if (dueCheckIn(j, now) || (j.followUpAt && j.followUpAt <= t)) return [2, j.followUpAt || ""];
+      const next = [nextCheckIn(j, now) && nextCheckIn(j, now).date, j.followUpAt].filter(Boolean).sort()[0];
+      return next ? [3, next] : [4, j.appliedAt || ""];
+    };
+    return jobs.slice().sort((a, b) => {
+      const ka = key(a), kb = key(b);
+      return ka[0] - kb[0] || (ka[1] < kb[1] ? -1 : ka[1] > kb[1] ? 1 : 0);
+    });
+  }
+  // Fisher-Yates; sort(() => Math.random() - 0.5) is biased.
+  function shuffle(arr, rand) {
+    const a = arr.slice();
+    rand = rand || Math.random;
+    for (let i = a.length - 1; i > 0; i--) {
+      const k = Math.floor(rand() * (i + 1));
+      [a[i], a[k]] = [a[k], a[i]];
+    }
+    return a;
+  }
+
 
   // Sample answers that show the shape of a good one. Shown behind "See an example"; never saved as the person's answer.
   const EXAMPLES = {
@@ -668,7 +834,7 @@ details.more[open] summary { margin-bottom: 12px; }
     CHECKIN_DAYS, checkIns, dueCheckIn, nextCheckIn, markCheckedIn, reminderEvents, remindersIcs,
     STATUSES, setStatus, jobBadge, todo, nextInterview, messages,
     bulletFromStory, storyToStar, bankFor, status, readiness, jobQuestions, cheatSheet, interviewIcs,
-    emptyWorkspace, normalize, EXAMPLES,
+    emptyWorkspace, normalize, checkBackup, isFresh, jobOrder, shuffle, EXAMPLES,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.CC = api;
@@ -730,7 +896,7 @@ details.more[open] summary { margin-bottom: 12px; }
     '<label class="field" for="f-' + name + '"><span>' + esc(label) + '</span><select class="select" id="f-' + name + '" name="' + name + '">' +
     opts.map((o) => { const [v, l] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(v) + '"' + (String(v) === String(val) ? " selected" : "") + ">" + esc(l) + "</option>"; }).join("") + "</select></label>";
   const head = (eyebrow, title, right) => '<div class="view-head"><div><span class="eyebrow">' + esc(eyebrow) + "</span><h1>" + esc(title) + "</h1></div>" + (right ? '<div class="row">' + right + "</div>" : "") + "</div>";
-  const foot = (delKind, id, label) => '<div class="sheet-foot">' + (id ? '<button type="button" class="btn danger sm" data-act="ask-del" data-kind="' + delKind + '" data-id="' + id + '">Delete</button>' : "") + '<span class="grow"></span><button type="button" class="btn ghost" data-act="close">Cancel</button><button class="btn brown">' + (label || "Save") + '</button></div><div data-confirm></div>';
+  const foot = (delKind, id, label) => '<div class="sheet-foot">' + (id ? '<button type="button" class="btn danger sm" data-act="ask-del" data-kind="' + esc(delKind) + '" data-id="' + esc(id) + '">Delete</button>' : "") + '<span class="grow"></span><button type="button" class="btn ghost" data-act="close">Cancel</button><button class="btn brown">' + (label || "Save") + '</button></div><div data-confirm></div>';
   const jobOptions = () => [["", "Any job"]].concat(ws.jobs.filter((j) => j.status !== "Closed").map((j) => [j.id, j.title + " · " + j.company]));
   const STATUS_PILL = { none: ["", "Not started"], draft: ["warn", "Draft"], ready: ["solid", "Ready"] };
 
@@ -745,6 +911,7 @@ details.more[open] summary { margin-bottom: 12px; }
 
   // Everything saves on its own; there is no account or setup step.
   function persist(...keys) {
+    if (!keys.includes("profile") || keys.length > 1) ws.profile.changesSinceExport = (ws.profile.changesSinceExport || 0) + 1;
     for (const k of keys) dirty.add(KEY_TO_MOD[k] || k);
     setSync("saving");
     clearTimeout(flushTimer);
@@ -767,8 +934,8 @@ details.more[open] summary { margin-bottom: 12px; }
           dirty.delete(m);
         }
       } else {
-        dirty.clear();
         localStorage.setItem(LS_KEY, JSON.stringify(ws));
+        dirty.clear();
       }
       setSync("saved");
     } catch (e) {
@@ -779,8 +946,14 @@ details.more[open] summary { margin-bottom: 12px; }
         toast("Saving on this device instead of your account.");
         return flush();
       }
+      // Browsers throw a DOMException named QuotaExceededError (code 22); the claude.ai store uses quota_exceeded.
+      // Changes stay marked unsaved, so the next edit or leaving the app tries again.
       setSync("error");
-      toast(e && e.code === "quota_exceeded" ? "Storage is full. Export a backup and remove old jobs." : "Couldn't save just now. Your changes are still on screen.");
+      const full = e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === "quota_exceeded");
+      if (full) {
+        ws.interview.practice = ws.interview.practice.slice(-100);
+        toast("Your phone's storage for CareerCrumbs is full. Export a backup, then delete old jobs.", "Export", () => A.export());
+      } else toast("Couldn't save just now. Your changes are still on screen and we'll try again.");
     } finally {
       flushing = false;
     }
@@ -823,14 +996,63 @@ details.more[open] summary { margin-bottom: 12px; }
         db = null;
       }
     }
+    let corrupt = false;
     if (where === "local") {
-      try { loaded = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) {}
+      let raw = null;
+      try { raw = localStorage.getItem(LS_KEY); } catch (e) {}
+      if (raw) {
+        try {
+          loaded = JSON.parse(raw);
+        } catch (e) {
+          // Keep the unreadable copy instead of overwriting it on the next save.
+          corrupt = true;
+          try { localStorage.setItem(LS_KEY + ":corrupt-" + t0(), raw); } catch (e2) {}
+        }
+      }
+      // Ask the browser not to evict this site's storage when space runs low.
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     }
     ws = C.normalize(loaded || {});
     mode = where;
     setSync("saved");
     render();
+    if (corrupt) toast("Some saved data couldn't be read. A copy was kept on this device; import a backup if you have one.");
+    // Home-screen shortcuts open the app with ?go=practice or ?go=new-job.
+    const go = new URLSearchParams(location.search).get("go");
+    if (go === "practice" || go === "new-job") {
+      history.replaceState(history.state, "", location.pathname + location.hash);
+      curHref = location.href;
+      A[go]();
+    }
+    registerOffline();
   }
+  // Standalone website only: cache the app for offline use and offer new versions.
+  function registerOffline() {
+    if (window.claude || native || !("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      const offer = (w) => toast("A new version of CareerCrumbs is ready.", "Update", () => w.postMessage("skip-waiting"));
+      if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+      reg.addEventListener("updatefound", () => {
+        const w = reg.installing;
+        w && w.addEventListener("statechange", () => w.state === "installed" && navigator.serviceWorker.controller && offer(w));
+      });
+    }).catch(() => {});
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloaded) return;
+      reloaded = true;
+      saveNow();
+      location.reload();
+    });
+  }
+  // Android can close the app any time it's in the background, so write pending changes right away.
+  function saveNow() {
+    if (!dirty.size) return;
+    clearTimeout(flushTimer);
+    flush();
+  }
+  document.addEventListener("visibilitychange", () => document.hidden && saveNow());
+  window.addEventListener("pagehide", saveNow);
 
   // ---------- routing ----------
   function onHash(initial) {
@@ -854,8 +1076,14 @@ details.more[open] summary { margin-bottom: 12px; }
     const app = $("#app");
     if (!app) return;
     const title = NAV.find((n) => n[0] === route)[1];
-    const body = mode === "loading" ? '<div class="loading">' + ruhv("ruhv-hero") + "<span>Opening CareerCrumbs…</span></div>" : V[route]();
+    let body;
+    try {
+      body = mode === "loading" ? '<div class="loading">' + ruhv("ruhv-hero") + "<span>Opening CareerCrumbs…</span></div>" : V[route]();
+    } catch (e) {
+      body = recoveryScreen(e);
+    }
     const y = window.scrollY;
+    const focusKey = keyOf(document.activeElement);
     app.innerHTML =
       '<nav class="rail" aria-label="Sections"><a class="brand" href="#home">' + ruhv("brand-mark") + "CareerCrumbs</a>" +
       NAV.map(([r, l]) => '<a href="#' + r + '"' + (route === r ? ' aria-current="page"' : "") + ">" + icon(r) + esc(l) + "</a>").join("") + '<span class="sync"></span></nav>' +
@@ -864,6 +1092,22 @@ details.more[open] summary { margin-bottom: 12px; }
       '<nav class="tabbar" aria-label="Main">' + TABS.map((r) => '<a class="tab" href="#' + r + '"' + (route === r ? ' aria-current="page"' : "") + ">" + icon(r) + "<span>" + esc(NAV.find((n) => n[0] === r)[1]) + "</span></a>").join("") + "</nav>";
     window.scrollTo(0, y);
     setSync(syncState);
+    if (focusKey && !ui.sheetOpen) refocus(focusKey);
+  }
+  // Re-rendering replaces the page, so put keyboard focus back on the same control.
+  function keyOf(el) {
+    if (!el || el === document.body || !app().contains(el)) return null;
+    if (el.id) return "#" + CSS.escape(el.id);
+    if (el.dataset && el.dataset.act) return '[data-act="' + CSS.escape(el.dataset.act) + '"]' + (el.dataset.id ? '[data-id="' + CSS.escape(el.dataset.id) + '"]' : "") + (el.dataset.v ? '[data-v="' + CSS.escape(el.dataset.v) + '"]' : "");
+    return null;
+  }
+  function refocus(sel) {
+    const el = $(sel);
+    if (el) el.focus({ preventScroll: true });
+  }
+  const app = () => $("#app");
+  function recoveryScreen(e) {
+    return '<div class="view"><section class="card stack"><h2>Something went wrong showing this page</h2><p class="muted">Your data is still saved on this device. Save a copy, then try again. If it keeps happening, reset the app and import your copy.</p><p class="small muted mono">' + esc(String(e && e.message || e)) + '</p><div class="row"><button class="btn brown" data-act="export-raw">Save my data</button><button class="btn ghost" data-act="retry">Try again</button><button class="btn danger" data-act="ask-reset">Reset the app</button></div><div data-reset></div></section></div>';
   }
   const V = {};
 
@@ -877,7 +1121,7 @@ details.more[open] summary { margin-bottom: 12px; }
     const nextQ = qs.find((q) => q.pack !== "ask" && C.status(ws, q.id) === "none");
     const count = (s) => ws.jobs.filter((j) => j.status === s).length;
     const h = new Date().getHours();
-    const fresh = !ws.jobs.length && !ws.stories.length && !Object.keys(ws.interview.answers).length;
+    const fresh = C.isFresh(ws);
     if (fresh) {
       return (
         '<div class="view">' + head("No sign-up, nothing to set up", "Let's get you hired") +
@@ -892,11 +1136,12 @@ details.more[open] summary { margin-bottom: 12px; }
     return (
       '<div class="view">' + head(C.fmtDateY(t0()) + (p.targetRole ? " · going for " + p.targetRole : ""), (h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening") + (p.name ? ", " + C.firstName(p.name) : "")) +
       (nx
-        ? '<section class="card dark stack"><span class="eyebrow">Next interview · ' + esc(C.relDays(nx.interviewAt)) + "</span><h2>" + esc(nx.title) + "</h2><p>" + esc(nx.company) + " · " + esc(C.fmtWhen(nx.interviewAt)) + (nx.contact ? " · with " + esc(nx.contact) : "") + '</p><div class="row"><button class="btn brown" data-act="prep" data-id="' + nx.id + '">Prepare for it</button><button class="btn ghost" data-act="cheat" data-id="' + nx.id + '">Cheat sheet</button></div></section>'
+        ? '<section class="card dark stack"><span class="eyebrow">Next interview · ' + esc(C.relDays(nx.interviewAt)) + "</span><h2>" + esc(nx.title) + "</h2><p>" + esc(nx.company) + " · " + esc(C.fmtWhen(nx.interviewAt)) + (nx.contact ? " · with " + esc(nx.contact) : "") + '</p><div class="row"><button class="btn brown" data-act="prep" data-id="' + esc(nx.id) + '">Prepare for it</button><button class="btn ghost" data-act="cheat" data-id="' + esc(nx.id) + '">Cheat sheet</button></div></section>'
         : '<section class="card dark stack"><span class="eyebrow">No interview booked yet</span><h2>Get ready before the call comes</h2><p>Most people only practise after they get the interview. Write your answers now and you\'ll walk in calm.</p><div class="row"><button class="btn brown" data-act="practice">Practise 5 questions</button></div></section>') +
+      (backupDue() ? '<button class="next-q nudge" data-act="export"><span><span class="eyebrow">10 seconds</span><b>Back up your work</b><small class="muted">' + (ws.profile.lastExport ? "Last backup " + esc(C.relDays(ws.profile.lastExport)) : "Your answers live only on this device. Save a copy somewhere safe.") + "</small></span>" + icon("chev") + "</button>" : "") +
       (items.length ? '<section class="stack"><h2>To do</h2><div class="agenda">' + items.map((it) => '<button class="' + it.tone + '" data-act="' + it.act + '" data-id="' + it.job + '"><span class="bar"></span><span><b>' + esc(it.title) + "</b><small>" + esc(it.sub) + "</small></span>" + icon("chev") + "</button>").join("") + "</div></section>" : "") +
       '<section class="card stack"><div class="row between"><h2>Your answers</h2><span class="mono small muted">' + r.ready + " ready · " + r.draft + " drafts · " + r.total + ' questions</span></div><div class="progress big"><i style="width:' + r.pct + '%"></i></div>' +
-      (nextQ ? '<button class="next-q" data-act="answer" data-id="' + nextQ.id + '"><span><span class="eyebrow">Write next</span><b>' + esc(nextQ.q) + "</b></span>" + icon("chev") + "</button>" : "<p>Every question has an answer. Keep practising out loud.</p>") + "</section>" +
+      (nextQ ? '<button class="next-q" data-act="answer" data-id="' + esc(nextQ.id) + '"><span><span class="eyebrow">Write next</span><b>' + esc(nextQ.q) + "</b></span>" + icon("chev") + "</button>" : "<p>Every question has an answer. Keep practising out loud.</p>") + "</section>" +
       '<section class="stack"><div class="row between"><h2>Applications</h2><a class="linkbtn" href="#jobs">All jobs</a></div><div class="tiles">' +
       C.STATUSES.slice(0, 4).map((s) => '<button class="tile" data-act="job-filter" data-v="' + s + '"><span class="eyebrow">' + s + "</span><b>" + count(s) + "</b></button>").join("") + "</div></section>" +
       '<div class="row"><button class="btn ghost" data-act="new-job">' + icon("plus") + 'Add a job</button><button class="btn ghost" data-act="new-story">' + icon("plus") + "Add a story</button></div>" +
@@ -904,12 +1149,20 @@ details.more[open] summary { margin-bottom: 12px; }
     );
   };
 
+  // Remind people to back up when their data only lives on this device.
+  function backupDue() {
+    if (mode === "cloud") return false;
+    const changes = ws.profile.changesSinceExport || 0;
+    if (!ws.profile.lastExport) return changes >= 15;
+    return changes >= 20 || (changes > 0 && C.daysBetween(ws.profile.lastExport, t0()) >= 14);
+  }
+
   // ---------- JOBS ----------
   V.jobs = function () {
     const f = ui.jobFilter;
     const filters = ["Active"].concat(C.STATUSES);
     const match = (j, s) => (s === "Active" ? j.status !== "Closed" : j.status === s);
-    const list = ws.jobs.filter((j) => match(j, f)).sort((a, b) => (String(a.interviewAt || a.followUpAt || "9") < String(b.interviewAt || b.followUpAt || "9") ? -1 : 1));
+    const list = C.jobOrder(ws.jobs.filter((j) => match(j, f)));
     return (
       '<div class="view">' + head(plural(ws.jobs.filter((j) => j.status !== "Closed").length, "active application"), "Jobs", '<button class="btn brown" data-act="new-job">' + icon("plus") + "Add a job</button>") +
       '<div class="chips" role="group" aria-label="Filter jobs">' + filters.map((s) => '<button class="chip" data-act="job-filter" data-v="' + s + '" aria-pressed="' + (f === s) + '">' + s + '<span class="n">' + ws.jobs.filter((j) => match(j, s)).length + "</span></button>").join("") + "</div>" +
@@ -917,10 +1170,10 @@ details.more[open] summary { margin-bottom: 12px; }
         ? '<div class="grid2">' + list.map((j) => {
             const b = C.jobBadge(j);
             const posted = ws.interview.custom.filter((c) => c.jobId === j.id).length;
-            return '<article class="card stack"><div class="row between"><span class="eyebrow">' + esc(j.company) + '</span><label class="sr" for="js-' + j.id + '">Stage</label><select class="select compact" id="js-' + j.id + '" data-change="job-status" data-id="' + j.id + '">' + C.STATUSES.map((s) => "<option" + (s === j.status ? " selected" : "") + ">" + s + "</option>").join("") + "</select></div><h3>" + esc(j.title) + "</h3>" +
+            return '<article class="card stack"><div class="row between"><span class="eyebrow">' + esc(j.company) + '</span><label class="sr" for="js-' + esc(j.id) + '">Stage</label><select class="select compact" id="js-' + esc(j.id) + '" data-change="job-status" data-id="' + esc(j.id) + '">' + C.STATUSES.map((s) => "<option" + (s === j.status ? " selected" : "") + ">" + s + "</option>").join("") + "</select></div><h3>" + esc(j.title) + "</h3>" +
               (b ? '<span class="pill ' + b.tone + '" style="justify-self:start">' + esc(b.text) + "</span>" : "") +
               (j.notes ? '<p class="small muted">' + esc(j.notes) + "</p>" : "") +
-              '<div class="row"><button class="btn sm ' + (j.status === "Interview" ? "brown" : "ghost") + '" data-act="prep" data-id="' + j.id + '">Prep' + (posted ? " · " + posted : "") + '</button><button class="btn sm ghost" data-act="messages" data-id="' + j.id + '">Messages</button>' + (C.reminderEvents([j]).length ? '<button class="btn sm ghost" data-act="reminders" data-id="' + j.id + '" aria-label="Add check-in reminders to my calendar">' + icon("bell") + "Remind me</button>" : "") + '<button class="btn sm ghost" data-act="edit-job" data-id="' + j.id + '">' + icon("edit") + "Details</button></div></article>";
+              '<div class="row"><button class="btn sm ' + (j.status === "Interview" ? "brown" : "ghost") + '" data-act="prep" data-id="' + esc(j.id) + '">Prep' + (posted ? " · " + posted : "") + '</button><button class="btn sm ghost" data-act="messages" data-id="' + esc(j.id) + '">Messages</button>' + (C.reminderEvents([j]).length ? '<button class="btn sm ghost" data-act="reminders" data-id="' + esc(j.id) + '" aria-label="Add check-in reminders to my calendar">' + icon("bell") + "Remind me</button>" : "") + '<button class="btn sm ghost" data-act="edit-job" data-id="' + esc(j.id) + '">' + icon("edit") + "Details</button></div></article>";
           }).join("") + "</div>"
         : '<div class="empty"><b>' + (ws.jobs.length ? "Nothing here" : "No jobs yet") + '</b><span>Add every job you apply for. Follow-up reminders and interview prep come with it.</span><button class="btn brown" data-act="new-job">Add a job</button></div>') +
       "</div>"
@@ -938,7 +1191,7 @@ details.more[open] summary { margin-bottom: 12px; }
       field("contact", "Contact name", j.contact, { ph: "Recruiter or hiring manager" }) + field("link", "Job posting link", j.link, { type: "url", ph: "https://" }) +
       field("notes", "Notes", j.notes, { area: true, rows: 3, ph: "Pay, shift, what they're looking for" }) + "</div></details>" +
       (j.history && j.history.length ? '<div class="stack-s"><span class="eyebrow">Timeline</span><div class="timeline">' + j.history.slice().reverse().map((x) => "<div><b>" + esc(x.status) + '</b> <span class="muted small mono">' + esc(C.fmtDateY(x.at.slice(0, 10))) + "</span></div>").join("") + "</div></div>" : "") +
-      (j.link ? '<a class="linkbtn" href="' + esc(j.link) + '" target="_blank" rel="noopener">Open the posting</a>' : "") +
+      (/^https?:\/\//i.test(j.link || "") ? '<a class="linkbtn" href="' + esc(j.link) + '" target="_blank" rel="noopener noreferrer">Open the posting</a>' : "") +
       foot("job", j.id) + "</form>"
     );
   }
@@ -951,12 +1204,12 @@ details.more[open] summary { margin-bottom: 12px; }
   function questionRow(q, showPack) {
     if (q.pack === "ask") {
       const a = ws.interview.answers[q.id] || {};
-      return '<label class="qrow ask"><input type="checkbox" data-change="pick-ask" data-id="' + q.id + '"' + (a.pick ? " checked" : "") + "><span><b>" + esc(q.q) + "</b>" + (q.tip ? '<small class="muted">' + esc(q.tip) + "</small>" : "") + "</span></label>";
+      return '<label class="qrow ask"><input type="checkbox" data-change="pick-ask" data-id="' + esc(q.id) + '"' + (a.pick ? " checked" : "") + "><span><b>" + esc(q.q) + "</b>" + (q.tip ? '<small class="muted">' + esc(q.tip) + "</small>" : "") + "</span></label>";
     }
     const st = C.status(ws, q.id);
     const words = C.wordCount(C.answerText(ws.interview.answers[q.id]));
     const [cls, label] = STATUS_PILL[st];
-    return '<button class="qrow" data-act="answer" data-id="' + q.id + '"><span class="dot ' + st + '"></span><span><b>' + esc(q.q) + '</b><small class="muted">' + (showPack || q.pack === "mine" ? esc(C.PACKS[q.pack]) + " · " : "") + (words ? words + " words · ~" + C.speakTime(words) : "Tap to write your answer") + (needsWork(q.id) ? " · needs work" : "") + '</small></span><span class="pill ' + cls + '">' + label + "</span></button>";
+    return '<button class="qrow" data-act="answer" data-id="' + esc(q.id) + '"><span class="dot ' + st + '"></span><span><b>' + esc(q.q) + '</b><small class="muted">' + (showPack || q.pack === "mine" ? esc(C.PACKS[q.pack]) + " · " : "") + (words ? words + " words · ~" + C.speakTime(words) : "Tap to write your answer") + (needsWork(q.id) ? " · needs work" : "") + '</small></span><span class="pill ' + cls + '">' + label + "</span></button>";
   }
   V.interview = function () {
     const job = ui.prepJob ? byId(ws.jobs, ui.prepJob) : null;
@@ -973,9 +1226,9 @@ details.more[open] summary { margin-bottom: 12px; }
     return (
       '<div class="view">' + head(job ? "Preparing for " + job.company : "Write it once, say it with confidence", job ? job.title : "Interview prep", '<button class="btn ghost" data-act="add-q">' + icon("plus") + 'Questions</button><button class="btn brown" data-act="practice">' + icon("play") + "Practise</button>") +
       (job
-        ? '<div class="card stack-s"><div class="row between"><span>' + (job.interviewAt ? "Interview <b>" + esc(C.fmtWhen(job.interviewAt)) + "</b>" : "No interview date yet") + '</span><button class="linkbtn small" data-act="unprep">Show all questions</button></div><div class="row"><button class="btn sm ghost" data-act="cheat" data-id="' + job.id + '">Cheat sheet</button>' + (job.interviewAt ? '<button class="btn sm ghost" data-act="ics" data-id="' + job.id + '">Add to calendar</button>' : "") + '<button class="btn sm ghost" data-act="paste-q" data-job="' + job.id + '">Paste questions from the posting</button></div></div>'
+        ? '<div class="card stack-s"><div class="row between"><span>' + (job.interviewAt ? "Interview <b>" + esc(C.fmtWhen(job.interviewAt)) + "</b>" : "No interview date yet") + '</span><button class="linkbtn small" data-act="unprep">Show all questions</button></div><div class="row"><button class="btn sm ghost" data-act="cheat" data-id="' + esc(job.id) + '">Cheat sheet</button>' + (job.interviewAt ? '<button class="btn sm ghost" data-act="ics" data-id="' + esc(job.id) + '">Add to calendar</button>' : "") + '<button class="btn sm ghost" data-act="paste-q" data-job="' + esc(job.id) + '">Paste questions from the posting</button></div></div>'
         : '<p class="muted">Pick a question, write your answer in your own words, and mark it ready when you can say it without reading. CareerCrumbs times your answer so you know if it\'s too short or too long.</p><div class="chips" role="group" aria-label="Question sets">' + packs.map((p) => '<button class="chip" data-act="pack" data-v="' + p + '" aria-pressed="' + (ui.pack === p) + '">' + esc(label(p)) + "</button>").join("") + "</div>" +
-          (!ws.profile.packsAsked ? '<div class="card kind stack-s"><div class="row between"><b>What kind of job are you going for?</b><button class="linkbtn small" data-act="kind-done">Done</button></div><span class="small muted">Tap any that fit to add those questions. Optional.</span><div class="togglechips">' + ["warehouse", "service", "lead"].map((k) => '<label><input type="checkbox" data-change="kind" value="' + k + '"' + ((ws.profile.packs || []).includes(k) ? " checked" : "") + "><span>" + esc(C.PACKS[k]) + "</span></label>").join("") + "</div></div>" : "")) +
+          (!ws.profile.packsAsked ? '<div class="card kind stack-s"><div class="row between"><b>What kind of job are you going for?</b><button class="linkbtn small" data-act="kind-done">Done</button></div><span class="small muted">Tap any that fit to add those questions. Optional.</span><div class="togglechips">' + ["warehouse", "service", "lead"].map((k) => '<label><input type="checkbox" data-change="kind" value="' + esc(k) + '"' + ((ws.profile.packs || []).includes(k) ? " checked" : "") + "><span>" + esc(C.PACKS[k]) + "</span></label>").join("") + "</div></div>" : "")) +
       (answerable.length ? '<div class="stack-s"><div class="small"><b>' + r.ready + "</b> ready · <b>" + r.draft + "</b> drafts · " + r.total + ' questions</div><div class="progress big"><i style="width:' + r.pct + '%"></i></div></div><div class="qlist">' + answerable.map((q) => questionRow(q, !!job || ui.pack === "all" || ui.pack === "work")).join("") + "</div>" : "") +
       (asks.length ? '<section class="stack"><h2>Questions to ask them</h2><p class="muted small">Tick two or three to bring. They go on your cheat sheet.</p><div class="qlist">' + asks.map((q) => questionRow(q)).join("") + "</div></section>" : "") +
       (!qs.length ? '<div class="empty"><b>' + (ui.pack === "mine" ? "No questions of your own yet" : "Nothing marked as needs work") + "</b><span>" + (ui.pack === "mine" ? "Paste the requirements or questions from a job posting and practise each one." : "Practise a few. Anything you stumble on shows up here.") + '</span><button class="btn brown" data-act="' + (ui.pack === "mine" ? "paste-q" : "practice") + '">' + (ui.pack === "mine" ? "Add questions" : "Practise") + "</button></div>" : "") +
@@ -985,14 +1238,14 @@ details.more[open] summary { margin-bottom: 12px; }
   function answerSheet(q) {
     const a = Object.assign({ mode: q.star ? "star" : "free" }, ws.interview.answers[q.id]);
     const star = a.mode === "star";
-    const storyOpts = ws.stories.map((s) => '<option value="' + s.id + '"' + (a.storyId === s.id ? " selected" : "") + ">" + esc(s.title) + "</option>").join("");
+    const storyOpts = ws.stories.map((s) => '<option value="' + esc(s.id) + '"' + (a.storyId === s.id ? " selected" : "") + ">" + esc(s.title) + "</option>").join("");
     return (
-      '<div class="sheet-body" data-answer="' + q.id + '"><p class="question">' + esc(q.q) + "</p>" + (q.tip ? '<p class="tip">' + esc(q.tip) + "</p>" : "") +
+      '<div class="sheet-body" data-answer="' + esc(q.id) + '"><p class="question">' + esc(q.q) + "</p>" + (q.tip ? '<p class="tip">' + esc(q.tip) + "</p>" : "") +
       (C.EXAMPLES[q.id] ? '<details class="peek"><summary>See an example answer</summary><div class="out">' + esc(C.EXAMPLES[q.id]) + '</div><small class="muted">It shows the shape. Use your own words and your own experience.</small></details>' : "") +
       '<div class="seg" role="group" aria-label="Answer style"><button type="button" data-act="mode" data-v="free" aria-pressed="' + !star + '">Free text</button><button type="button" data-act="mode" data-v="star" aria-pressed="' + star + '">STAR</button></div>' +
       (star
         ? (ws.stories.length ? '<label class="field" for="a-story"><span>Fill from a story</span><select class="select" id="a-story" data-change="from-story"><option value="">Choose one of your stories…</option>' + storyOpts + "</select></label>" : '<p class="small muted">Tip: write your stories in Stories, then fill STAR answers from them in one tap.</p>') +
-          [["s", "Situation", "Where were you and what was going on?"], ["t", "Task", "What did you need to do?"], ["a", "Action", "What did you do? Use I, not we."], ["r", "Result", "What happened? Add a number if you can."]].map(([k, l, ph]) => '<label class="field" for="a-' + k + '"><span>' + l + '</span><textarea class="textarea" id="a-' + k + '" data-ans="' + k + '" rows="' + (k === "a" ? 3 : 2) + '" placeholder="' + ph + '">' + esc(a[k] || "") + "</textarea></label>").join("")
+          [["s", "Situation", "Where were you and what was going on?"], ["t", "Task", "What did you need to do?"], ["a", "Action", "What did you do? Use I, not we."], ["r", "Result", "What happened? Add a number if you can."]].map(([k, l, ph]) => '<label class="field" for="a-' + esc(k) + '"><span>' + l + '</span><textarea class="textarea" id="a-' + esc(k) + '" data-ans="' + esc(k) + '" rows="' + (k === "a" ? 3 : 2) + '" placeholder="' + ph + '">' + esc(a[k] || "") + "</textarea></label>").join("")
         : '<label class="field" for="a-text"><span>Your answer</span><textarea class="textarea" id="a-text" data-ans="text" rows="9" placeholder="Write it the way you\'d say it out loud.">' + esc(a.text || "") + "</textarea></label>") +
       '<div class="meter" data-meter></div>' +
       '<div class="sheet-foot"><button type="button" class="btn ghost sm" data-act="copy-answer">' + icon("copy") + 'Copy</button><span class="grow"></span><label class="check"><input type="checkbox" data-change="ready"' + (a.ready ? " checked" : "") + "> I can say this without reading</label></div></div>"
@@ -1032,7 +1285,7 @@ details.more[open] summary { margin-bottom: 12px; }
       '<div class="view">' + head(ws.stories.length + (ws.stories.length === 1 ? " story" : " stories"), "Stories", '<button class="btn brown" data-act="new-story">' + icon("plus") + "Add a story</button>") +
       '<p class="muted">Most interview questions can be answered with the same five to eight stories. Write down real moments: helping a teammate, fixing a mistake, handling a rush, calming a customer, catching a safety problem. Each one becomes a STAR answer and a résumé line.</p>' +
       (list.length
-        ? '<div class="grid2">' + list.map((s) => '<article class="ticket"><div class="ticket-head"><b>STORY-' + String(s.n || 0).padStart(3, "0") + "</b><span>" + esc(C.fmtDateY(s.date)) + "</span></div><h3>" + esc(s.title) + "</h3>" + (s.result ? '<p class="small">' + esc(s.result) + "</p>" : "") + (used[s.id] ? '<span class="pill brown" style="justify-self:start">Used in ' + plural(used[s.id], "answer") + "</span>" : "") + '<div class="tear"></div><div class="row"><button class="btn sm ghost" data-act="edit-story" data-id="' + s.id + '">' + icon("edit") + 'Edit</button><button class="btn sm ghost" data-act="bullet" data-id="' + s.id + '">Résumé line</button></div></article>').join("") + "</div>"
+        ? '<div class="grid2">' + list.map((s) => '<article class="ticket"><div class="ticket-head"><b>STORY-' + String(s.n || 0).padStart(3, "0") + "</b><span>" + esc(C.fmtDateY(s.date)) + "</span></div><h3>" + esc(s.title) + "</h3>" + (s.result ? '<p class="small">' + esc(s.result) + "</p>" : "") + (used[s.id] ? '<span class="pill brown" style="justify-self:start">Used in ' + plural(used[s.id], "answer") + "</span>" : "") + '<div class="tear"></div><div class="row"><button class="btn sm ghost" data-act="edit-story" data-id="' + esc(s.id) + '">' + icon("edit") + 'Edit</button><button class="btn sm ghost" data-act="bullet" data-id="' + esc(s.id) + '">Résumé line</button></div></article>').join("") + "</div>"
         : '<div class="empty"><b>No stories yet</b><span>Think of one shift you\'re proud of. What happened, what did you do, how did it turn out?</span><button class="btn brown" data-act="new-story">Write your first story</button></div>') +
       "</div>"
     );
@@ -1057,33 +1310,73 @@ details.more[open] summary { margin-bottom: 12px; }
     return (
       '<div class="view">' + head("Your details and your data", "Me") +
       '<section class="card stack"><h2>About you</h2><form class="stack" data-form="profile">' + field("name", "Your name", p.name, { hint: "Signs your follow-up and thank-you messages." }) + field("targetRole", "Job you're going for", p.targetRole, { ph: "Warehouse associate, cashier, shift lead…" }) +
-      '<div class="field"><span>Question sets for your kind of job</span><div class="togglechips">' + ["warehouse", "service", "lead"].map((k) => '<label><input type="checkbox" name="packs" value="' + k + '"' + ((p.packs || []).includes(k) ? " checked" : "") + "><span>" + esc(C.PACKS[k]) + "</span></label>").join("") + "</div><small>Common and behavioral questions are always included.</small></div>" +
+      '<div class="field"><span>Question sets for your kind of job</span><div class="togglechips">' + ["warehouse", "service", "lead"].map((k) => '<label><input type="checkbox" name="packs" value="' + esc(k) + '"' + ((p.packs || []).includes(k) ? " checked" : "") + "><span>" + esc(C.PACKS[k]) + "</span></label>").join("") + "</div><small>Common and behavioral questions are always included.</small></div>" +
       '<div class="row"><button class="btn brown">Save</button></div></form></section>' +
       '<section class="card stack"><h2>Check-in reminders</h2><p class="muted">CareerCrumbs reminds you to reconnect <b>3 days, 1 week and 1 month</b> after you apply or interview. Salaried jobs start at 1 week. Due check-ins show on Home with a message ready to send.</p><p class="muted">For an alert on your phone, add them to your calendar. Your calendar app does the notifying, and you can delete them anytime.</p>' +
-      '<div class="row"><button class="btn brown" data-act="reminders-all">' + icon("bell") + "Add all upcoming check-ins (" + C.reminderEvents(ws.jobs).length + ')</button></div><div class="field"><span>When I add or update a job</span><div class="chips" role="group" aria-label="Calendar offer">' + [["ask", "Offer to add reminders"], ["off", "Don\'t ask"]].map(([v, l]) => '<button class="chip" data-act="remind-pref" data-v="' + v + '" aria-pressed="' + ((p.reminders || "ask") === v) + '">' + l + "</button>").join("") + "</div></div></section>" +
-      '<section class="card stack"><h2>Look</h2><div class="chips" role="group" aria-label="Theme">' + [["system", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([v, l]) => '<button class="chip" data-act="theme" data-v="' + v + '" aria-pressed="' + (theme === v) + '">' + l + "</button>").join("") + "</div></section>" +
-      '<section class="card stack"><h2>Your data</h2><p class="muted">' + esc(where) + '</p><div class="row"><button class="btn ghost" data-act="export">Export backup</button><label class="btn ghost" for="import-file">Import backup</label><input class="sr" id="import-file" type="file" accept=".json,application/json"></div><div data-import></div><div class="row divider"><button class="btn danger sm" data-act="ask-erase">Erase everything</button></div><div data-erase></div></section>' +
+      '<div class="row"><button class="btn brown" data-act="reminders-all">' + icon("bell") + "Add all upcoming check-ins (" + C.reminderEvents(ws.jobs).length + ')</button></div><div class="field"><span>When I add or update a job</span><div class="chips" role="group" aria-label="Calendar offer">' + [["ask", "Offer to add reminders"], ["off", "Don\'t ask"]].map(([v, l]) => '<button class="chip" data-act="remind-pref" data-v="' + esc(v) + '" aria-pressed="' + ((p.reminders || "ask") === v) + '">' + l + "</button>").join("") + "</div></div></section>" +
+      '<section class="card stack"><h2>Look</h2><div class="chips" role="group" aria-label="Theme">' + [["system", "Match device"], ["light", "Light"], ["dark", "Dark"]].map(([v, l]) => '<button class="chip" data-act="theme" data-v="' + esc(v) + '" aria-pressed="' + (theme === v) + '">' + l + "</button>").join("") + "</div></section>" +
+      '<section class="card stack"><h2>Your data</h2><p class="muted">' + esc(where) + "</p>" + (mode === "cloud" ? "" : '<p class="' + (ws.profile.lastExport ? "muted" : "warn-text") + '">Last backup: ' + (ws.profile.lastExport ? esc(C.fmtDateY(ws.profile.lastExport)) : "never") + "</p>") + '<div class="row"><button class="btn ghost" data-act="export">Export backup</button><label class="btn ghost" for="import-file">Import backup</label><input class="sr" id="import-file" type="file" accept=".json,application/json"></div><div data-import></div><div class="row divider"><button class="btn danger sm" data-act="ask-erase">Erase everything</button></div><div data-erase></div></section>' +
       '<p class="muted small">CareerCrumbs has no AI and sends your answers nowhere. What you write is yours.</p></div>'
     );
   };
 
   // ---------- sheets, toasts, files ----------
+  // Sheets sit in browser history, so the phone's Back button closes the sheet instead of
+  // changing the page underneath it.
+  let sheetTrigger = null;
+  let curState = history.state;
+  let curHref = location.href;
   function openSheet(title, body) {
+    if (!ui.sheetOpen) {
+      sheetTrigger = keyOf(document.activeElement);
+      history.pushState({ sheet: 1 }, "");
+      curState = history.state;
+      curHref = location.href;
+    }
     ui.sheetOpen = true;
     const host = $("#sheet");
-    host.innerHTML = '<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><div class="sheet-grip"></div><div class="sheet-head"><h2>' + esc(title) + '</h2><button class="iconbtn" data-act="close" aria-label="Close">' + icon("close") + "</button></div>" + body + "</div></div>";
+    host.innerHTML = '<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div class="sheet-grip"></div><div class="sheet-head"><h2 id="sheet-title" tabindex="-1">' + esc(title) + '</h2><button class="iconbtn" data-act="close" aria-label="Close">' + icon("close") + "</button></div>" + body + "</div></div>";
     host.hidden = false;
+    app().inert = true;
     document.body.style.overflow = "hidden";
+    // On phones, focusing a field would pop the keyboard over the sheet; focus the title instead.
+    const first = window.matchMedia("(min-width: 700px)").matches && host.querySelector(".sheet input:not([type=hidden]):not([type=checkbox]), .sheet textarea, .sheet select");
+    (first || $("#sheet-title")).focus({ preventScroll: true });
   }
+  // Closing from code (after saving a form): the history entry stays, marked so Back skips it.
   function closeSheet() {
+    if (history.state && history.state.sheet) {
+      history.replaceState({ dead: 1 }, "");
+      curState = history.state;
+    }
+    finishClose();
+  }
+  // Closing by hand (X, tap outside, Escape) is the same as pressing Back.
+  function dismissSheet() {
+    if (history.state && history.state.sheet) history.back();
+    else finishClose();
+  }
+  function finishClose() {
     const host = $("#sheet");
     host.innerHTML = "";
     host.hidden = true;
+    app().inert = false;
     document.body.style.overflow = "";
     ui.sheetOpen = false;
     clearInterval(timer);
     render();
+    if (sheetTrigger) refocus(sheetTrigger);
+    sheetTrigger = null;
   }
+  window.addEventListener("popstate", () => {
+    const prev = curState;
+    const prevHref = curHref;
+    curState = history.state;
+    curHref = location.href;
+    if (ui.sheetOpen) return finishClose();
+    // Back from an entry left behind by a closed sheet shows nothing new, so keep going.
+    if (prev && prev.dead && prevHref === location.href) history.back();
+  });
   let toastTimer = null;
   function toast(msg, label, fn) {
     const host = $("#toast");
@@ -1106,21 +1399,68 @@ details.more[open] summary { margin-bottom: 12px; }
     }
     try {
       await navigator.clipboard.writeText(text);
-      toast("Copied");
+      return toast("Copied");
+    } catch (e) {}
+    // Older WebViews and non-secure pages: copy through a hidden textarea.
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    ta.remove();
+    if (ok) return toast("Copied");
+    if (el) {
+      el.focus();
+      el.select();
+      toast("Couldn't copy automatically. The text is selected, so long-press to copy it.");
+    } else textSheet("Copy this", text);
+  }
+  const canShareText = () => !native && typeof navigator.share === "function";
+  async function shareText(title, text) {
+    try {
+      await navigator.share({ title, text });
     } catch (e) {
-      if (el) { el.focus(); el.select(); }
-      toast("Couldn't copy here. The text is selected so you can copy it.");
+      if (e && e.name !== "AbortError") copyText(text);
     }
   }
+  // Order matters: the Android app's bridge, the claude.ai save prompt, the phone's share sheet
+  // (Drive, Gmail, Calendar), a normal download, then a sheet to copy from.
   async function saveFile(name, data) {
     if (native) return void native.saveFile(name, data);
-    if (!downloads) return toast("Saving files isn't available here. Use Copy instead.");
-    try {
-      await downloads.save({ filename: name, data });
-      toast("Saved " + name);
-    } catch (e) {
-      if (!e || e.code !== "declined") toast("Couldn't save the file.");
+    if (downloads) {
+      try {
+        await downloads.save({ filename: name, data });
+        return toast("Saved " + name);
+      } catch (e) {
+        if (e && e.code === "declined") return;
+      }
     }
+    const type = name.endsWith(".ics") ? "text/calendar" : name.endsWith(".json") ? "application/json" : "text/plain";
+    let file = null;
+    try { file = new File([data], name, { type }); } catch (e) {}
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: name });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return;
+      }
+    }
+    if (file && mode !== "cloud") {
+      try {
+        const url = URL.createObjectURL(file);
+        const a = Object.assign(document.createElement("a"), { href: url, download: name });
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        return toast("Saved " + name + " to your downloads");
+      } catch (e) {}
+    }
+    textSheet(name, data);
   }
   function textSheet(title, text, file) {
     openSheet(title, '<div class="sheet-body"><textarea class="textarea mono-text" id="ts" rows="16">' + esc(text) + '</textarea><div class="sheet-foot"><span class="grow"></span>' + (file ? '<button class="btn ghost" data-act="ts-file" data-name="' + esc(file) + '">Save file</button>' : "") + '<button class="btn brown" data-act="ts-copy">' + icon("copy") + "Copy</button></div></div>");
@@ -1129,8 +1469,21 @@ details.more[open] summary { margin-bottom: 12px; }
 
   // ---------- actions ----------
   const A = {
-    close: () => closeSheet(),
-    scrim: (el, ev) => ev.target === el && closeSheet(),
+    close: () => dismissSheet(),
+    scrim: (el, ev) => ev.target === el && dismissSheet(),
+    retry: () => render(),
+    "export-raw"() {
+      let raw = "";
+      try { raw = localStorage.getItem(LS_KEY) || JSON.stringify(ws); } catch (e) { raw = JSON.stringify(ws); }
+      saveFile("careercrumbs-data-" + t0() + ".json", raw);
+    },
+    "ask-reset"() {
+      confirmIn($("[data-reset]"), "This clears everything saved in CareerCrumbs on this device.", "Reset", () => {
+        ws = C.emptyWorkspace();
+        for (const m of Object.keys(MODULES)) dirty.add(m);
+        save();
+      });
+    },
     "cancel-confirm": (el) => (el.closest(".confirm").parentElement.innerHTML = ""),
     "new-job": () => openSheet("Add a job", jobForm()),
     "edit-job": (el) => openSheet("Job", jobForm(byId(ws.jobs, el.dataset.id))),
@@ -1143,9 +1496,9 @@ details.more[open] summary { margin-bottom: 12px; }
       const thanksDue = j.status === "Interview" && j.interviewAt && j.interviewAt.slice(0, 10) <= t0() && !j.thankYouSent;
       const first = ms.findIndex((m) => m.id === (thanksDue ? "thanks" : due ? due.message : j.status === "Interview" ? "confirm" : "followup"));
       const checkin = due
-        ? '<div class="checkin" data-checkin><span><b>Check-in due</b> · ' + esc(due.label) + '</span><button class="btn sm brown" data-act="checked-in" data-id="' + j.id + '" data-key="' + due.key + '">I checked in</button></div>'
+        ? '<div class="checkin" data-checkin><span><b>Check-in due</b> · ' + esc(due.label) + '</span><button class="btn sm brown" data-act="checked-in" data-id="' + esc(j.id) + '" data-key="' + esc(due.key) + '">I checked in</button></div>'
         : next ? '<p class="small muted" data-checkin>Next check-in: ' + esc(C.fmtDate(next.date)) + " (" + esc(next.label) + ")</p>" : "";
-      openSheet("Messages · " + j.company, '<div class="sheet-body"><p class="muted small">Ready to copy into an email or text. Fill in anything in [brackets].</p>' + checkin + (ws.profile.name ? "" : '<label class="field" for="sign-name"><span>Your name, to sign the message</span><input class="input" id="sign-name" data-change="sign-name" data-id="' + j.id + '" placeholder="First and last name" autocomplete="name"></label>') + '<div class="chips">' + ms.map((m, i) => '<button class="chip" data-act="msg" data-i="' + i + '" data-id="' + j.id + '" aria-pressed="' + (i === first) + '">' + esc(m.label) + "</button>").join("") + '</div><label class="field" for="msg-subject"><span>Subject</span><input class="input" id="msg-subject" value="' + esc(ms[first].subject) + '"></label><label class="field" for="msg-body"><span>Message</span><textarea class="textarea" id="msg-body" rows="11">' + esc(ms[first].body) + '</textarea></label><div class="sheet-foot">' + (j.status === "Interview" ? '<label class="check"><input type="checkbox" data-change="thanked" data-id="' + j.id + '"' + (j.thankYouSent ? " checked" : "") + "> Thank-you sent</label>" : "") + '<span class="grow"></span><button class="btn brown" data-act="msg-copy">' + icon("copy") + "Copy message</button></div></div>");
+      openSheet("Messages · " + j.company, '<div class="sheet-body"><p class="muted small">Ready to copy into an email or text. Fill in anything in [brackets].</p>' + checkin + (ws.profile.name ? "" : '<label class="field" for="sign-name"><span>Your name, to sign the message</span><input class="input" id="sign-name" data-change="sign-name" data-id="' + esc(j.id) + '" placeholder="First and last name" autocomplete="name"></label>') + '<div class="chips">' + ms.map((m, i) => '<button class="chip" data-act="msg" data-i="' + i + '" data-id="' + esc(j.id) + '" aria-pressed="' + (i === first) + '">' + esc(m.label) + "</button>").join("") + '</div><label class="field" for="msg-subject"><span>Subject</span><input class="input" id="msg-subject" value="' + esc(ms[first].subject) + '"></label><label class="field" for="msg-body"><span>Message</span><textarea class="textarea" id="msg-body" rows="11">' + esc(ms[first].body) + '</textarea></label><div class="sheet-foot">' + (j.status === "Interview" ? '<label class="check"><input type="checkbox" data-change="thanked" data-id="' + esc(j.id) + '"' + (j.thankYouSent ? " checked" : "") + "> Thank-you sent</label>" : "") + '<span class="grow"></span>' + (canShareText() ? '<button class="btn ghost" data-act="msg-share">Share</button>' : "") + '<button class="btn brown" data-act="msg-copy">' + icon("copy") + "Copy message</button></div></div>");
     },
     "checked-in"(el) {
       const i = ws.jobs.findIndex((j) => j.id === el.dataset.id);
@@ -1173,6 +1526,7 @@ details.more[open] summary { margin-bottom: 12px; }
       $("#msg-subject").value = m.subject;
       $("#msg-body").value = m.body;
     },
+    "msg-share": () => shareText($("#msg-subject").value, $("#msg-subject").value + "\n\n" + $("#msg-body").value),
     "msg-copy": () => copyText($("#msg-subject").value + "\n\n" + $("#msg-body").value, $("#msg-body")),
     prep(el) {
       ui.prepJob = el.dataset.id;
@@ -1202,9 +1556,18 @@ details.more[open] summary { margin-bottom: 12px; }
       const a = Object.assign({}, ws.interview.answers[q.id]);
       const cur = a.mode || (q.star ? "star" : "free");
       if (cur === el.dataset.v) return;
-      // Keep the words when switching: STAR joins into free text, free text goes into Action.
-      if (el.dataset.v === "free") a.text = a.text || C.answerText(Object.assign({}, a, { mode: "star" }));
-      else if (!a.a && a.text) a.a = a.text;
+      // Keep the newest words when switching. STAR edited after the free text: rebuild the free text
+      // from STAR and keep the old version in prevText. Free → STAR fills Action only when it's empty.
+      if (el.dataset.v === "free") {
+        const joined = C.answerText(Object.assign({}, a, { mode: "star" }));
+        if (joined && (!a.text || (a.starAt || "") > (a.textAt || ""))) {
+          if (a.text && a.text !== joined) a.prevText = a.text;
+          a.text = joined;
+        }
+      } else if (!a.a && a.text) {
+        a.a = a.text;
+        toast("Your answer is in Action. Split it into the other parts if you like.");
+      }
       a.mode = el.dataset.v;
       ws.interview.answers[q.id] = a;
       persist("interview");
@@ -1223,7 +1586,7 @@ details.more[open] summary { margin-bottom: 12px; }
       const job = ui.prepJob ? byId(ws.jobs, ui.prepJob) : null;
       let pool = (job ? C.jobQuestions(ws, job) : C.bankFor(ws, ["mine", "common", "behavioral"].concat(ws.profile.packs || []))).filter((q) => q.pack !== "ask");
       const work = pool.filter((q) => needsWork(q.id));
-      pool = work.concat(pool.filter((q) => !work.includes(q)).sort(() => Math.random() - 0.5));
+      pool = work.concat(C.shuffle(pool.filter((q) => !work.includes(q))));
       session.list = pool.slice(0, 5);
       session.i = 0;
       session.ok = 0;
@@ -1269,13 +1632,24 @@ details.more[open] summary { margin-bottom: 12px; }
       applyTheme();
       render();
     },
-    export: () => saveFile("careercrumbs-backup-" + t0() + ".json", JSON.stringify(Object.assign({ app: "CareerCrumbs", version: 2, exported: new Date().toISOString() }, ws), null, 2)),
+    export() {
+      ws.profile.lastExport = t0();
+      ws.profile.changesSinceExport = 0;
+      save("profile");
+      saveFile("careercrumbs-backup-" + t0() + ".json", JSON.stringify(Object.assign({ app: "CareerCrumbs", version: 2, exported: new Date().toISOString() }, ws), null, 2));
+    },
     "ask-erase"() {
       confirmIn($("[data-erase]"), "This deletes every job, answer and story. Export a backup first if you might want them.", "Erase everything", () => {
+        const before = ws;
         ws = C.emptyWorkspace();
         for (const m of Object.keys(MODULES)) dirty.add(m);
         save();
-        toast("Erased");
+        toast("Erased", "Undo", () => {
+          ws = before;
+          for (const m of Object.keys(MODULES)) dirty.add(m);
+          save();
+          toast("Restored");
+        });
       });
     },
     "ask-del"(el) {
@@ -1286,10 +1660,17 @@ details.more[open] summary { margin-bottom: 12px; }
         const idx = ws[key].findIndex((x) => x.id === id);
         const removed = ws[key][idx];
         ws[key] = ws[key].filter((x) => x.id !== id);
+        // Questions pasted for this job stay, unlinked; undo links them again.
+        const linked = key === "jobs" ? ws.interview.custom.filter((c) => c.jobId === id) : [];
+        for (const c of linked) c.jobId = "";
         if (key === "jobs" && ui.prepJob === id) ui.prepJob = null;
         closeSheet();
-        save(key);
-        toast("Deleted", "Undo", () => { ws[key].splice(idx, 0, removed); save(key); });
+        save(key, "interview");
+        toast("Deleted", "Undo", () => {
+          ws[key].splice(Math.min(idx, ws[key].length), 0, removed);
+          for (const c of linked) c.jobId = id;
+          save(key, "interview");
+        });
       });
     },
   };
@@ -1423,7 +1804,10 @@ details.more[open] summary { margin-bottom: 12px; }
   document.addEventListener("change", (ev) => {
     const el = ev.target;
     if (el.dataset && el.dataset.change && CH[el.dataset.change]) CH[el.dataset.change](el);
-    if (el.id === "import-file" && el.files && el.files[0]) importFile(el.files[0]);
+    if (el.id === "import-file" && el.files && el.files[0]) {
+      importFile(el.files[0]);
+      el.value = "";
+    }
   });
   document.addEventListener("submit", (ev) => {
     const f = ev.target;
@@ -1439,27 +1823,40 @@ details.more[open] summary { margin-bottom: 12px; }
     const a = Object.assign({ mode: q.star ? "star" : "free" }, ws.interview.answers[q.id]);
     a[el.dataset.ans] = el.value;
     a.updated = new Date().toISOString();
+    if (el.dataset.ans === "text") a.textAt = a.updated;
+    else a.starAt = a.updated;
     ws.interview.answers[q.id] = a;
     updateMeter();
     persist("interview");
   });
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && ui.sheetOpen) closeSheet(); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && ui.sheetOpen) dismissSheet(); });
 
   function importFile(file) {
     const r = new FileReader();
     r.onload = () => {
       let data;
-      try { data = JSON.parse(r.result); } catch (e) { return toast("That file isn't a CareerCrumbs backup."); }
-      const next = C.normalize(data);
-      confirmIn($("[data-import]"), "Replace everything with this backup (" + plural(next.jobs.length, "job") + ", " + plural(Object.keys(next.interview.answers).length, "answer") + ", " + next.stories.length + (next.stories.length === 1 ? " story" : " stories") + ")?", "Replace", () => {
-        ws = next;
+      try { data = JSON.parse(r.result); } catch (e) { return toast("That file isn't a CareerCrumbs backup, so nothing was changed."); }
+      const check = C.checkBackup(data);
+      if (!check.ok) return toast(check.reason);
+      const c = check.counts;
+      const parts = [plural(c.jobs, "job"), plural(c.answers, "answer"), c.stories + (c.stories === 1 ? " story" : " stories")];
+      confirmIn($("[data-import]"), "Replace everything with this backup (" + parts.join(", ") + ")? You can undo right after.", "Replace", () => {
+        const before = ws;
+        try { localStorage.setItem(LS_KEY + ":before-import", JSON.stringify(before)); } catch (e) {}
+        ws = check.ws;
         for (const m of Object.keys(MODULES)) dirty.add(m);
         save();
-        toast("Backup restored");
+        toast("Backup restored", "Undo", () => {
+          ws = before;
+          for (const m of Object.keys(MODULES)) dirty.add(m);
+          save();
+          toast("Your previous data is back");
+        });
       });
     };
     r.readAsText(file);
   }
+
   function applyTheme() {
     let t = "system";
     try { t = localStorage.getItem("careercrumbs:theme") || "system"; } catch (e) {}

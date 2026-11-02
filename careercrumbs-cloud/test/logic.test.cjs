@@ -78,7 +78,9 @@ test("job prep: posting questions first, cheat sheet pulls answers and stories",
 
 test("interview calendar file with a 2-hour reminder", () => {
   const ics = CC.interviewIcs({ id: "j1", title: "Picker", company: "Acme, Inc", interviewAt: "2026-11-03T10:00" }, NOW);
-  assert.match(ics, /DTSTART:20261103T100000\r\nDTEND:20261103T110000/);
+  const utc = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  assert.ok(ics.includes("DTSTART:" + utc(new Date(2026, 10, 3, 10)) + "\r\nDTEND:" + utc(new Date(2026, 10, 3, 11))));
+  assert.match(ics, /DTSTART:\d{8}T\d{6}Z/);
   assert.match(ics, /SUMMARY:Interview: Picker at Acme\\, Inc/);
   assert.match(ics, /TRIGGER:-PT2H/);
 });
@@ -126,8 +128,84 @@ test("reminder calendar: 9am alerts with stable ids, past and done ones skipped"
   assert.deepEqual(ev.map((e) => e.date), ["2026-11-02", "2026-11-06", "2026-11-29"]);
   const ics = CC.remindersIcs(jobs, NOW);
   assert.match(ics, /UID:cc-j1-a3@careercrumbs/);
-  assert.match(ics, /DTSTART:20261102T090000\r\nDTEND:20261102T091500/);
+  const utc = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  assert.ok(ics.includes("DTSTART:" + utc(new Date(2026, 10, 2, 9)) + "\r\nDTEND:" + utc(new Date(2026, 10, 2, 9, 15))));
   assert.match(ics, /TRIGGER:PT0M/);
   const after = CC.reminderEvents([CC.markCheckedIn(jobs[0], "a3")], NOW);
   assert.equal(after.length, 2);
+});
+
+test("review: imported ids that could inject HTML are replaced, references follow", () => {
+  const evil = 'x" onfocus="window.__pwn=1" autofocus x="';
+  const ws = CC.normalize({
+    jobs: [{ id: evil, title: "a", company: "b", interviewAt: 12345, appliedAt: "nope", status: "Hacked", link: "javascript:alert(1)" }],
+    stories: [{ id: "s<1>", title: "t" }],
+    interview: { custom: [{ id: "bad id!", q: "Q?", jobId: evil }], answers: { "bad id!": { text: "hi", storyId: "s<1>" }, '"><img>': { text: "x" } }, practice: [{ q: "bad id!", date: "2026-11-01", ok: true }, "junk"] },
+  });
+  const j = ws.jobs[0];
+  assert.match(j.id, /^[\w-]+$/);
+  assert.equal(j.interviewAt, "");
+  assert.equal(j.appliedAt, "");
+  assert.equal(j.status, "Saved");
+  assert.equal(j.link, "");
+  assert.match(ws.stories[0].id, /^[\w-]+$/);
+  const q = ws.interview.custom[0];
+  assert.match(q.id, /^[\w-]+$/);
+  assert.equal(q.jobId, j.id);
+  assert.equal(ws.interview.answers[q.id].text, "hi");
+  assert.equal(ws.interview.answers[q.id].storyId, ws.stories[0].id);
+  assert.equal(Object.keys(ws.interview.answers).length, 1);
+  assert.equal(ws.interview.practice[0].q, q.id);
+  // Nothing in the app should throw on what came out.
+  assert.doesNotThrow(() => { CC.todo(ws); CC.nextInterview(ws); CC.jobBadge(j); CC.jobOrder(ws.jobs); CC.reminderEvents(ws.jobs); });
+});
+
+test("review: backups must look like CareerCrumbs and have something in them", () => {
+  assert.equal(CC.checkBackup({ hello: 1 }).ok, false);
+  assert.equal(CC.checkBackup("text").ok, false);
+  assert.match(CC.checkBackup({ app: "CareerCrumbs", jobs: [] }).reason, /empty/);
+  const ok = CC.checkBackup({ app: "CareerCrumbs", jobs: [{ title: "Picker", company: "Acme" }] });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.counts.jobs, 1);
+});
+
+test("review: applied date is the local date; overdue follow-ups get a badge", () => {
+  const evening = new Date(2026, 10, 1, 21, 30);
+  assert.equal(CC.setStatus({ status: "Saved", history: [] }, "Applied", evening).appliedAt, "2026-11-01");
+  assert.equal(CC.jobBadge({ status: "Saved", followUpAt: "2026-10-30" }, NOW).text, "Follow-up overdue by 2 days");
+});
+
+test("review: résumé line grammar with a past-tense result", () => {
+  assert.equal(CC.bulletFromStory({ action: "checked labels", result: "saved 2 hours" }), "Checked labels; saved 2 hours.");
+  assert.equal(CC.bulletFromStory({ action: "checked labels", result: "fewer refunds" }), "Checked labels, resulting in fewer refunds.");
+});
+
+test("review: long calendar lines are folded at 75 octets", () => {
+  const ics = CC.interviewIcs({ id: "j1", title: "Warehouse associate on the overnight inventory and receiving team", company: "Northwind Logistics Distribution Centre", interviewAt: "2026-11-03T10:00" }, NOW);
+  for (const line of ics.split("\r\n")) assert.ok(Buffer.byteLength(line) <= 75, line);
+  assert.match(ics, /\r\n /);
+});
+
+test("review: job order puts upcoming interviews first and closed last", () => {
+  const jobs = [
+    { id: "a", status: "Closed", appliedAt: "2026-10-01" },
+    { id: "b", status: "Applied", appliedAt: "2026-10-31" },
+    { id: "c", status: "Interview", interviewAt: "2026-11-05T09:00" },
+    { id: "d", status: "Interview", interviewAt: "2026-10-20T09:00" },
+    { id: "e", status: "Interview", interviewAt: "2026-11-02T09:00" },
+  ];
+  assert.deepEqual(CC.jobOrder(jobs, NOW).map((j) => j.id), ["e", "c", "d", "b", "a"]);
+});
+
+test("review: shuffle keeps every item", () => {
+  const a = [1, 2, 3, 4, 5];
+  assert.deepEqual(CC.shuffle(a).sort(), a);
+  assert.deepEqual(a, [1, 2, 3, 4, 5]);
+});
+
+test("review: first-run screen only for a truly empty workspace", () => {
+  const ws = CC.normalize({});
+  assert.equal(CC.isFresh(ws), true);
+  ws.interview.practice.push({ q: "c1", date: "2026-11-01", ok: true });
+  assert.equal(CC.isFresh(ws), false);
 });

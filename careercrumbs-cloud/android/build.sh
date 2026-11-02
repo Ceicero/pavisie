@@ -16,7 +16,18 @@ echo "build-tools: $BT  platform: android-$API  target: $TARGET_SDK  version: 0.
 
 rm -rf build && mkdir -p build/assets build/classes build/dex
 (cd .. && node build.cjs)
-cp ../careercrumbs.html build/assets/index.html
+# The app runs the standalone site build. Fonts are embedded as data URIs because pages on
+# file:// can't load web fonts from other file:// URLs.
+cp -R ../site/. build/assets/
+rm -f build/assets/sw.js build/assets/robots.txt
+node -e '
+const fs = require("fs"), p = "build/assets/index.html";
+let h = fs.readFileSync(p, "utf8");
+h = h.replace(/url\(fonts\/([\w.-]+\.woff2)\)/g, (m, f) => "url(data:font/woff2;base64," + fs.readFileSync("build/assets/fonts/" + f).toString("base64") + ")");
+h = h.replace(/<link rel="preload"[^>]*>\n?/g, "");
+fs.writeFileSync(p, h);
+'
+rm -rf build/assets/fonts
 
 "$BT/aapt2" compile --dir res -o build/res.zip
 "$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml -A build/assets \

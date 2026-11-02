@@ -11,6 +11,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -21,7 +23,9 @@ import java.nio.charset.StandardCharsets;
 
 // Test build: the CareerCrumbs page in a full-screen WebView, saving to the phone.
 public class MainActivity extends Activity {
+    private static final int PICK_FILE = 41;
     private WebView web;
+    private ValueCallback<Uri[]> pickCallback;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -31,7 +35,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
-        s.setTextZoom(100);
+        // Text size follows the phone's accessibility setting (WebView's default).
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
@@ -43,10 +47,35 @@ public class MainActivity extends Activity {
                 return false;
             }
         });
+        // Lets "Import backup" open the phone's file picker.
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (pickCallback != null) pickCallback.onReceiveValue(null);
+                pickCallback = callback;
+                try {
+                    startActivityForResult(params.createIntent(), PICK_FILE);
+                } catch (Exception e) {
+                    pickCallback = null;
+                    return false;
+                }
+                return true;
+            }
+        });
         web.addJavascriptInterface(new Bridge(), "CCAndroid");
         if (state != null) web.restoreState(state);
         else web.loadUrl("file:///android_asset/index.html");
         setContentView(web);
+    }
+
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        if (request == PICK_FILE && pickCallback != null) {
+            pickCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data));
+            pickCallback = null;
+            return;
+        }
+        super.onActivityResult(request, result, data);
     }
 
     @Override
