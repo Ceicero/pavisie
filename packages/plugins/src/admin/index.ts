@@ -9,6 +9,7 @@ import { command as reportCommand } from './commands/report';
 import { wizardComponents } from './components/wizard';
 import { reportComponents } from './components/report';
 import { retentionSweepJob } from './jobs/retention-sweep';
+import { createAdminService } from './service';
 import en from './locales/en.json';
 
 // Registers the `admin` locale bundle into the shared i18n table (core `t('admin.<key>', ...)`), and the host's
@@ -21,6 +22,9 @@ export const plugin = definePlugin({
   commands: [setupCommand, configCommand, pluginCommand, permissionsCommand, healthCommand, reportCommand],
   components: [...wizardComponents, ...reportComponents],
   jobs: [retentionSweepJob],
+  async onLoad(ctx) {
+    ctx.services.register('admin', createAdminService(ctx));
+  },
   async health() {
     // `admin` is always enabled and has no external dependency of its own; its /health command is what actually
     // probes redis/db/gateway. This just reports "the plugin itself loaded fine".

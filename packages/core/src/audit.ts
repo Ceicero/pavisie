@@ -44,6 +44,7 @@ export const AuditAction = {
   // An admin setting another member's birthday (self-service sets are never audited — see birthday.ts).
   CommunityBirthdaySet: 'community.birthday.set',
   DeveloperReportSubmit: 'developer_report.submit',
+  SetupStreamerStarter: 'setup.streamer_starter',
 } as const;
 
 /** Union of all `AuditAction` string values. */

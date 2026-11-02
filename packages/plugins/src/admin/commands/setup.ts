@@ -1,8 +1,10 @@
-import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { discordTimestamp } from '@pavisie/core';
 import type { PluginId } from '@pavisie/types';
-import { assertStaffLevel, listEmbed, type PluginCommand } from '../../sdk';
+import { assertStaffLevel, errorEmbed, listEmbed, type CommandContext, type PluginCommand } from '../../sdk';
 import { createWizardSession, renderWizardStep, WizardSessionStore } from '../wizard';
+import { StarterAlreadyRunningError, runStreamerStarter } from '../starter-pack-runtime';
+import { starterReportEmbed } from '../starter-pack-embed';
 import { deriveSetupState, describeMissingBotPermissions, describeRoleHierarchyWarnings, describeIntentWarnings, type SetupState } from '../format';
 
 const MISSING_LABELS = { modRoles: 'moderator/admin roles', modLogChannel: 'mod-log channel' } as const;
@@ -28,7 +30,56 @@ const data = new SlashCommandBuilder()
   .setDMPermission(false)
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((sub) => sub.setName('wizard').setDescription('Run the guided setup wizard.'))
-  .addSubcommand((sub) => sub.setName('status').setDescription('Show what has been configured so far.'));
+  .addSubcommand((sub) => sub.setName('status').setDescription('Show what has been configured so far.'))
+  .addSubcommand((sub) =>
+    sub
+      .setName('streamer')
+      .setDescription('One-click streamer preset: Twitch alerts, stats channel, leveling and basic automod.')
+      .addStringOption((opt) =>
+        opt
+          .setName('twitch_login')
+          .setDescription('Your Twitch username, to get go-live alerts (optional).')
+          .setRequired(false)
+          .setMaxLength(100),
+      )
+      .addChannelOption((opt) =>
+        opt
+          .setName('alert_channel')
+          .setDescription('Where go-live alerts are posted (default: this channel).')
+          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+          .setRequired(false),
+      ),
+  );
+
+/** Applies the streamer starter pack and replies with what was turned on, what was left alone and why. */
+async function handleStreamer(c: CommandContext): Promise<void> {
+  const { interaction } = c;
+  const twitchLogin = interaction.options.getString('twitch_login');
+  const picked = interaction.options.getChannel('alert_channel');
+  const here = interaction.channel;
+  const hereIsUsable =
+    here !== null && (here.type === ChannelType.GuildText || here.type === ChannelType.GuildAnnouncement);
+  const alertChannelId = picked?.id ?? (hereIsUsable ? here.id : null);
+
+  // Looking up the Twitch user and creating channels takes longer than the 3 seconds a first reply gets.
+  await interaction.deferReply({ ephemeral: true });
+  try {
+    const report = await runStreamerStarter({
+      ctx: c.ctx,
+      guild: interaction.guild,
+      input: { twitchLogin, alertChannelId },
+      actor: { id: interaction.user.id, source: 'bot' },
+      t: c.t,
+    });
+    await interaction.editReply({ embeds: [starterReportEmbed(report, c.t)] });
+  } catch (err) {
+    if (err instanceof StarterAlreadyRunningError) {
+      await interaction.editReply({ embeds: [errorEmbed(c.t('setup.streamer.alreadyRunning'))] });
+      return;
+    }
+    throw err;
+  }
+}
 
 export const command: PluginCommand = {
   data,
@@ -36,6 +87,11 @@ export const command: PluginCommand = {
   async execute(c) {
     assertStaffLevel(c.staffLevel, 'admin', c.t);
     const sub = c.interaction.options.getSubcommand(true);
+    if (sub === 'streamer') {
+      await handleStreamer(c);
+      return;
+    }
+
     const host = c.ctx.services.require('host');
 
     if (sub === 'wizard') {

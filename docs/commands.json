@@ -27,6 +27,25 @@
               "fullName": "/setup status",
               "description": "Show what has been configured so far.",
               "options": []
+            },
+            {
+              "name": "streamer",
+              "fullName": "/setup streamer",
+              "description": "One-click streamer preset: Twitch alerts, stats channel, leveling and basic automod.",
+              "options": [
+                {
+                  "name": "twitch_login",
+                  "description": "Your Twitch username, to get go-live alerts (optional).",
+                  "required": false,
+                  "type": "String"
+                },
+                {
+                  "name": "alert_channel",
+                  "description": "Where go-live alerts are posted (default: this channel).",
+                  "required": false,
+                  "type": "Channel"
+                }
+              ]
             }
           ]
         },
