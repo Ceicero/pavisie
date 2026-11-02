@@ -13,6 +13,11 @@ const REDACT_PATHS = [
   '*.content',
   '*.messageContent',
   '*.apiKey',
+  // The alert webhook URL embeds its own token. It is never logged on purpose; this is a backstop.
+  'webhookUrl',
+  '*.webhookUrl',
+  'ALERT_WEBHOOK_URL',
+  '*.ALERT_WEBHOOK_URL',
 ];
 
 const usePretty = !isProduction && Boolean(process.stdout.isTTY);
