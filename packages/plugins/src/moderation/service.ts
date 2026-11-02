@@ -289,8 +289,8 @@ export class ModerationServiceImpl implements ModerationService {
   private async sendCaseDmToUser(user: User, row: PreDmCase, guildName: string): Promise<boolean> {
     const result = await safeDm(user, { embeds: [buildCaseDmEmbed(row, guildName)] });
     if (!result.sent) {
-      this.ctx.logger.info(
-        { userId: user.id, caseNumber: row.caseNumber, error: result.error },
+      this.ctx.logger.warn(
+        { userId: user.id, caseNumber: row.caseNumber, err: result.cause ?? result.error },
         'moderation: DM notification failed (not fatal)',
       );
     }

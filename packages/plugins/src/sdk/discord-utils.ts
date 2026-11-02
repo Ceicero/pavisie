@@ -17,6 +17,8 @@ export { userMention, roleMention, channelMention };
 export interface SafeDmResult {
   sent: boolean;
   error?: string;
+  /** The caught error itself, so callers can log it with its stack and code (`error` is message-only). */
+  cause?: unknown;
 }
 
 /** Attempts to DM `user`. Never throws — DMs routinely fail (blocked bot, closed DMs, shared server left) and that must never break the calling flow. */
@@ -28,7 +30,7 @@ export async function safeDm(
     await user.send(payload);
     return { sent: true };
   } catch (err) {
-    return { sent: false, error: err instanceof Error ? err.message : String(err) };
+    return { sent: false, error: err instanceof Error ? err.message : String(err), cause: err };
   }
 }
 
