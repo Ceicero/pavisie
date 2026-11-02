@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { hasStaffLevel, parseDuration } from '@pavisie/core';
 import { errorEmbed, successEmbed, type CommandContext, type PluginCommand } from '../../sdk';
 import { closePoll } from '../actions';
+import { duplicateOptionLabels, durationIssue, nonBlank } from '../command-input';
 import type { CommunityConfig } from '../manifest';
 import { buildPollComponents, buildPollEmbed, tallyPollFromRows } from '../render';
 
@@ -68,7 +69,11 @@ async function handleCreate(c: CommandContext): Promise<void> {
   const { interaction, ctx, guildId, t } = c;
   const config = await c.config<CommunityConfig>();
 
-  const question = interaction.options.getString('question', true);
+  const question = nonBlank(interaction.options.getString('question', true));
+  if (!question) {
+    await interaction.reply({ embeds: [errorEmbed(t('poll.emptyQuestion'))], ephemeral: true });
+    return;
+  }
   const rawOptions: string[] = [];
   for (let i = 1; i <= MAX_OPTIONS; i++) {
     const value = interaction.options.getString(`option${i}`);
@@ -77,6 +82,14 @@ async function handleCreate(c: CommandContext): Promise<void> {
 
   if (rawOptions.length < 2) {
     await interaction.reply({ embeds: [errorEmbed(t('poll.needTwoOptions'))], ephemeral: true });
+    return;
+  }
+  const duplicates = duplicateOptionLabels(rawOptions);
+  if (duplicates.length > 0) {
+    await interaction.reply({
+      embeds: [errorEmbed(t('poll.duplicateOptions', { options: duplicates.join(', ') }))],
+      ephemeral: true,
+    });
     return;
   }
   if (rawOptions.length > config.polls.maxOptions) {
@@ -91,8 +104,10 @@ async function handleCreate(c: CommandContext): Promise<void> {
   let endsAt: Date | null = null;
   if (durationStr) {
     const ms = parseDuration(durationStr);
-    if (ms === null || ms <= 0) {
-      await interaction.reply({ embeds: [errorEmbed(t('poll.badDuration'))], ephemeral: true });
+    const durationProblem = durationIssue(ms);
+    if (durationProblem || ms === null) {
+      const key = durationProblem === 'range' ? 'poll.durationRange' : 'poll.badDuration';
+      await interaction.reply({ embeds: [errorEmbed(t(key))], ephemeral: true });
       return;
     }
     endsAt = new Date(Date.now() + ms);
@@ -171,7 +186,8 @@ async function handleResults(c: CommandContext): Promise<void> {
     return;
   }
   const tallies = tallyPollFromRows(poll, poll.options, poll.votes);
-  await interaction.reply({ embeds: [buildPollEmbed(poll, tallies)] });
+  // Anonymous polls hide who voted. Keep the lookup ephemeral so it isn't posted into the channel.
+  await interaction.reply({ embeds: [buildPollEmbed(poll, tallies)], ephemeral: poll.anonymous });
 }
 
 export const command: PluginCommand = {

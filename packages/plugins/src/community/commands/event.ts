@@ -6,6 +6,7 @@ import {
 } from 'discord.js';
 import {
   errorEmbed,
+  infoEmbed,
   listEmbed,
   resolveTextChannel,
   successEmbed,
@@ -13,6 +14,7 @@ import {
   type PluginCommand,
 } from '../../sdk';
 import { cancelEvent } from '../actions';
+import { isInThePast, isMissingChannelPermission, nonBlank } from '../command-input';
 import { buildEventComponents, buildEventEmbed, summarizeRsvps } from '../render';
 import { parseAt } from '../schedule';
 import type { CommunityConfig } from '../manifest';
@@ -80,7 +82,11 @@ async function handleCreate(c: CommandContext): Promise<void> {
   const { interaction, ctx, guildId, t } = c;
   const config = await c.config<CommunityConfig>();
 
-  const title = interaction.options.getString('title', true);
+  const title = nonBlank(interaction.options.getString('title', true));
+  if (!title) {
+    await interaction.reply({ embeds: [errorEmbed(t('event.emptyTitle'))], ephemeral: true });
+    return;
+  }
   const startsAtStr = interaction.options.getString('starts-at', true);
   const endsAtStr = interaction.options.getString('ends-at');
   const description = interaction.options.getString('description');
@@ -96,6 +102,10 @@ async function handleCreate(c: CommandContext): Promise<void> {
     await interaction.reply({ embeds: [errorEmbed(startsAt.reason)], ephemeral: true });
     return;
   }
+  if (isInThePast(startsAt.date)) {
+    await interaction.reply({ embeds: [errorEmbed(t('event.past'))], ephemeral: true });
+    return;
+  }
   let endsAt: Date | null = null;
   if (endsAtStr) {
     const parsedEnd = parseAt(endsAtStr, timezone);
@@ -104,6 +114,10 @@ async function handleCreate(c: CommandContext): Promise<void> {
       return;
     }
     endsAt = parsedEnd.date;
+    if (endsAt.getTime() <= startsAt.date.getTime()) {
+      await interaction.reply({ embeds: [errorEmbed(t('event.endsBeforeStart'))], ephemeral: true });
+      return;
+    }
   }
 
   const channel = await resolveTextChannel(interaction.guild, channelId);
@@ -113,6 +127,7 @@ async function handleCreate(c: CommandContext): Promise<void> {
   }
 
   let discordEventId: string | null = null;
+  let discordEventFailed = false;
   if (createDiscordEvent) {
     try {
       const scheduledEvent = await interaction.guild.scheduledEvents.create({
@@ -126,45 +141,63 @@ async function handleCreate(c: CommandContext): Promise<void> {
       });
       discordEventId = scheduledEvent.id;
     } catch (err) {
+      discordEventFailed = true;
       ctx.logger.warn({ err, guildId }, 'community: failed to create a native Discord scheduled event');
     }
   }
 
-  const event = await ctx.prisma.communityEvent.create({
-    data: {
-      guildId,
-      title,
-      description,
-      startsAt: startsAt.date,
-      endsAt,
-      channelId: channel.id,
-      hostId: interaction.user.id,
-      discordEventId,
-      reminderMinutes: config.eventReminderMinutes,
-    },
-  });
+  let createdEventId: string | null = null;
+  let messageId: string | null = null;
+  try {
+    const event = await ctx.prisma.communityEvent.create({
+      data: {
+        guildId,
+        title,
+        description,
+        startsAt: startsAt.date,
+        endsAt,
+        channelId: channel.id,
+        hostId: interaction.user.id,
+        discordEventId,
+        reminderMinutes: config.eventReminderMinutes,
+      },
+    });
+    createdEventId = event.id;
 
-  const message = await channel.send({
-    embeds: [buildEventEmbed(event, { going: 0, maybe: 0, declined: 0 })],
-    components: buildEventComponents(event.id, false),
-  });
-  const updated = await ctx.prisma.communityEvent.update({
-    where: { id: event.id },
-    data: { messageId: message.id },
-  });
+    const message = await channel.send({
+      embeds: [buildEventEmbed(event, { going: 0, maybe: 0, declined: 0 })],
+      components: buildEventComponents(event.id, false),
+    });
+    messageId = message.id;
+    const updated = await ctx.prisma.communityEvent.update({
+      where: { id: event.id },
+      data: { messageId: message.id },
+    });
 
-  const queue = ctx.queue('event-reminder');
-  for (const minutes of upcomingReminderMinutes(config.eventReminderMinutes, updated.startsAt, new Date())) {
-    const fireAt = updated.startsAt.getTime() - minutes * 60_000;
-    await queue.add(
-      'event-reminder',
-      { eventId: updated.id, minutesBefore: minutes },
-      { jobId: `ev-${updated.id}-${minutes}`, delay: Math.max(0, fireAt - Date.now()) },
-    );
+    const queue = ctx.queue('event-reminder');
+    for (const minutes of upcomingReminderMinutes(config.eventReminderMinutes, updated.startsAt, new Date())) {
+      const fireAt = updated.startsAt.getTime() - minutes * 60_000;
+      await queue.add(
+        'event-reminder',
+        { eventId: updated.id, minutesBefore: minutes },
+        { jobId: `ev-${updated.id}-${minutes}`, delay: Math.max(0, fireAt - Date.now()) },
+      );
+    }
+  } catch (err) {
+    if (messageId) await channel.messages.delete(messageId).catch(() => undefined);
+    if (createdEventId) {
+      await ctx.prisma.communityEvent.delete({ where: { id: createdEventId } }).catch(() => undefined);
+    }
+    if (discordEventId) await interaction.guild.scheduledEvents.delete(discordEventId).catch(() => undefined);
+    ctx.logger.warn({ err, guildId }, 'community: failed to post an event');
+    const key = isMissingChannelPermission(err) ? 'event.badChannel' : 'event.postFailed';
+    await interaction.reply({ embeds: [errorEmbed(t(key))], ephemeral: true });
+    return;
   }
 
+  const note = discordEventFailed ? `\n${t('event.discordEventFailed')}` : '';
   await interaction.reply({
-    embeds: [successEmbed(t('event.created', { channel: `<#${channel.id}>` }))],
+    embeds: [successEmbed(t('event.created', { channel: `<#${channel.id}>` }) + note)],
     ephemeral: true,
   });
 }
@@ -176,6 +209,13 @@ async function handleList(c: CommandContext): Promise<void> {
     orderBy: { startsAt: 'asc' },
     take: 25,
   });
+  if (events.length === 0) {
+    await interaction.reply({
+      embeds: [infoEmbed(t('event.listTitle'), t('event.listEmpty'))],
+      ephemeral: true,
+    });
+    return;
+  }
   const lines = events.map((e) => `📅 **${e.title}** — ${e.startsAt.toISOString()} · \`${e.id}\``);
   await interaction.reply({ embeds: [listEmbed(t('event.listTitle'), lines)], ephemeral: true });
 }

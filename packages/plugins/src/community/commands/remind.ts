@@ -2,6 +2,7 @@ import { ChannelType, SlashCommandBuilder } from 'discord.js';
 import { hasStaffLevel } from '@pavisie/core';
 import {
   errorEmbed,
+  infoEmbed,
   listEmbed,
   resolveTextChannel,
   successEmbed,
@@ -9,6 +10,7 @@ import {
   type PluginCommand,
 } from '../../sdk';
 import { cancelReminder } from '../actions';
+import { isInThePast, nonBlank } from '../command-input';
 import { parseAt, validateCron } from '../schedule';
 
 const data = new SlashCommandBuilder()
@@ -55,7 +57,11 @@ const data = new SlashCommandBuilder()
 async function handleSet(c: CommandContext): Promise<void> {
   const { interaction, ctx, guildId, t } = c;
   const when = interaction.options.getString('when', true);
-  const message = interaction.options.getString('message', true);
+  const message = nonBlank(interaction.options.getString('message', true));
+  if (!message) {
+    await interaction.reply({ embeds: [errorEmbed(t('remind.emptyMessage'))], ephemeral: true });
+    return;
+  }
   const channel = interaction.options.getChannel('channel');
   const recurring = interaction.options.getString('recurring');
 
@@ -65,6 +71,11 @@ async function handleSet(c: CommandContext): Promise<void> {
   const parsedAt = parseAt(when, timezone);
   if (!parsedAt.ok) {
     await interaction.reply({ embeds: [errorEmbed(parsedAt.reason)], ephemeral: true });
+    return;
+  }
+  // Recurring reminders are driven by the cron schedule; `when` is only the first fire time for one-offs.
+  if (!recurring && isInThePast(parsedAt.date)) {
+    await interaction.reply({ embeds: [errorEmbed(t('remind.past'))], ephemeral: true });
     return;
   }
 
@@ -87,30 +98,39 @@ async function handleSet(c: CommandContext): Promise<void> {
     }
   }
 
-  const reminder = await ctx.prisma.reminder.create({
-    data: {
-      guildId,
-      userId: interaction.user.id,
-      channelId: channel?.id ?? null,
-      content: message,
-      remindAt: parsedAt.date,
-      recurring: recurring ?? null,
-    },
-  });
+  let reminderId: string | null = null;
+  try {
+    const reminder = await ctx.prisma.reminder.create({
+      data: {
+        guildId,
+        userId: interaction.user.id,
+        channelId: channel?.id ?? null,
+        content: message,
+        remindAt: parsedAt.date,
+        recurring: recurring ?? null,
+      },
+    });
+    reminderId = reminder.id;
 
-  const queue = ctx.queue('reminder-deliver');
-  if (recurring) {
-    await queue.upsertJobScheduler(
-      `rem-${reminder.id}`,
-      { pattern: recurring, tz: timezone },
-      { name: 'reminder-deliver', data: { reminderId: reminder.id } },
-    );
-  } else {
-    await queue.add(
-      'reminder-deliver',
-      { reminderId: reminder.id },
-      { jobId: `rem-${reminder.id}`, delay: Math.max(0, parsedAt.date.getTime() - Date.now()) },
-    );
+    const queue = ctx.queue('reminder-deliver');
+    if (recurring) {
+      await queue.upsertJobScheduler(
+        `rem-${reminder.id}`,
+        { pattern: recurring, tz: timezone },
+        { name: 'reminder-deliver', data: { reminderId: reminder.id } },
+      );
+    } else {
+      await queue.add(
+        'reminder-deliver',
+        { reminderId: reminder.id },
+        { jobId: `rem-${reminder.id}`, delay: Math.max(0, parsedAt.date.getTime() - Date.now()) },
+      );
+    }
+  } catch (err) {
+    if (reminderId) await ctx.prisma.reminder.delete({ where: { id: reminderId } }).catch(() => undefined);
+    ctx.logger.warn({ err, guildId }, 'community: failed to save a reminder');
+    await interaction.reply({ embeds: [errorEmbed(t('remind.saveFailed'))], ephemeral: true });
+    return;
   }
 
   await interaction.reply({
@@ -126,6 +146,13 @@ async function handleList(c: CommandContext): Promise<void> {
     orderBy: { remindAt: 'asc' },
     take: 25,
   });
+  if (reminders.length === 0) {
+    await interaction.reply({
+      embeds: [infoEmbed(t('remind.listTitle'), t('remind.listEmpty'))],
+      ephemeral: true,
+    });
+    return;
+  }
   const lines = reminders.map(
     (r) =>
       `**${r.content.slice(0, 60)}${r.content.length > 60 ? '…' : ''}** — ${r.remindAt.toISOString()}${r.recurring ? ` (recurring: \`${r.recurring}\`)` : ''} · \`${r.id}\``,
