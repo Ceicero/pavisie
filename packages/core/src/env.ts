@@ -92,6 +92,14 @@ const envSchema = z.object({
    * ('guild' targets DEV_GUILD_ID and is instant; 'global' can take up to an hour to propagate). */
   REGISTER_COMMANDS_ON_BOOT: z.enum(['off', 'global', 'guild']).default('off'),
   BOT_HEALTH_PORT: z.coerce.number().int().positive().optional(),
+  /** Injected by Railway and similar platforms; the bot's health server uses it when BOT_HEALTH_PORT is unset. */
+  PORT: z.coerce.number().int().positive().optional(),
+  /** Minutes the gateway may stay disconnected before the bot logs, alerts and exits so the platform restarts it.
+   * Default 5; 0 disables the watchdog. A blank value counts as unset. */
+  BOT_WATCHDOG_MINUTES: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().min(0).default(5),
+  ),
   /** Optional private channel id; the bot posts a short alert there on unhandledRejection / uncaughtException. */
   ALERT_CHANNEL_ID: z.string().optional(),
   /** Optional Discord webhook URL for the same crash alerts. Unlike ALERT_CHANNEL_ID it works while the gateway
