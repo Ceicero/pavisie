@@ -2110,7 +2110,9 @@
           "fullName": "/welcome",
           "type": "slash",
           "description": "Configure the message sent when a member joins. • +help",
-          "staffLevel": "moderator",
+          "discordPermissions": [
+            "ManageGuild"
+          ],
           "options": [],
           "subcommands": [
             {
@@ -2170,7 +2172,9 @@
           "fullName": "/goodbye",
           "type": "slash",
           "description": "Configure the message sent when a member leaves. • +help",
-          "staffLevel": "moderator",
+          "discordPermissions": [
+            "ManageGuild"
+          ],
           "options": [],
           "subcommands": [
             {

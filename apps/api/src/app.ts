@@ -133,7 +133,8 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   const app = Fastify({
     loggerInstance: deps.logger ?? createLogger('api'),
     genReqId: () => randomUUID(),
-    trustProxy: env.TRUST_PROXY,
+    // fastify >=5.12 types omit the numeric hop-count form, but lib/request.js still handles `typeof tp === 'number'`.
+    trustProxy: env.TRUST_PROXY as boolean | string,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);

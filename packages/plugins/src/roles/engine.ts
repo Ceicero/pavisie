@@ -56,6 +56,27 @@ export function checkRoleAssignable(input: RoleAssignabilityInput): RoleAssignab
   return { ok: true };
 }
 
+export interface ActorRoleManageInput {
+  /** The candidate role's position. */
+  rolePosition: number;
+  /** The acting staff member's highest role position (undefined if it couldn't be resolved). */
+  actorTopRolePosition: number | undefined;
+  /** True if the actor owns the guild (owners bypass hierarchy, as in Discord itself). */
+  actorIsOwner: boolean;
+}
+
+/**
+ * Config-time guard: a staff member may only attach a role to a self-assign panel / auto-role list if that role is
+ * strictly below their own highest role (or they own the guild). Without this, a moderator-level staff member could
+ * expose a role above their own for self-assignment and escalate themselves. Fails closed when the actor's position
+ * is unknown.
+ */
+export function canActorManageRole(input: ActorRoleManageInput): boolean {
+  if (input.actorIsOwner) return true;
+  if (input.actorTopRolePosition === undefined) return false;
+  return input.rolePosition < input.actorTopRolePosition;
+}
+
 // ---------------------------------------------------------------------------
 // Auto-roles on join
 // ---------------------------------------------------------------------------

@@ -32,6 +32,7 @@ import {
   welcomeGoodbyeBodySchema,
 } from '../lib/roles/schemas';
 import { requireGuildAccess } from '../lib/guild-access';
+import { assertPanelRolesAssignable } from '../lib/roles/assignability';
 import { guildIdParamSchema, paginationQuerySchema } from '../lib/schemas';
 
 const ROLES_PLUGIN_ID = 'roles' as const;
@@ -74,6 +75,13 @@ const panelParamSchema = guildIdParamSchema.extend({ panelId: z.string().min(1) 
 const verificationParamSchema = guildIdParamSchema.extend({ requestId: z.string().min(1) });
 const verificationDecisionSchema = z.object({ note: z.string().trim().max(1000).optional() });
 
+/** Rejects a `groupId` that doesn't belong to `guildId` (prevents linking a panel to another server's role group). */
+async function assertGroupInGuild(app: ZodFastifyInstance, guildId: string, groupId: string | null | undefined) {
+  if (!groupId) return;
+  const group = await app.prisma.roleGroup.findFirst({ where: { id: groupId, guildId } });
+  if (!group) throw new NotFoundError('Role group not found.');
+}
+
 async function getRolesConfig(app: ZodFastifyInstance, guildId: string): Promise<RolesConfig> {
   return app.configStore.getConfig<RolesConfig>(guildId, ROLES_PLUGIN_ID);
 }
@@ -104,6 +112,16 @@ export default async function rolesRoutes(app: ZodFastifyInstance): Promise<void
       const guildId = request.guildId!;
       const session = request.session!;
       const { options, ...panelFields } = request.body;
+      await assertGroupInGuild(app, guildId, panelFields.groupId);
+      if (options) {
+        const { allowElevatedRoles } = await getRolesConfig(app, guildId);
+        await assertPanelRolesAssignable({
+          guildId,
+          actorId: session.userId,
+          roleIds: options.map((o) => o.roleId),
+          allowElevatedRoles: Boolean(allowElevatedRoles),
+        });
+      }
 
       const row = await app.prisma.rolePanel.create({
         data: {
@@ -140,6 +158,16 @@ export default async function rolesRoutes(app: ZodFastifyInstance): Promise<void
       if (!existing) throw new NotFoundError('Role panel not found.');
 
       const { options, ...panelFields } = request.body;
+      await assertGroupInGuild(app, guildId, panelFields.groupId);
+      if (options) {
+        const { allowElevatedRoles } = await getRolesConfig(app, guildId);
+        await assertPanelRolesAssignable({
+          guildId,
+          actorId: session.userId,
+          roleIds: options.map((o) => o.roleId),
+          allowElevatedRoles: Boolean(allowElevatedRoles),
+        });
+      }
       if (options) {
         await app.prisma.rolePanelOption.deleteMany({ where: { panelId } });
       }

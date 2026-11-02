@@ -58,7 +58,9 @@ const webhookCreateSchema = z.object({
   provider: z.string().trim().max(50).default('generic'),
   events: z.array(z.string()).default([]),
   channelId: z.string().nullable().optional(),
+  requireTimestamp: z.boolean().default(false),
 });
+const webhookSettingsSchema = z.object({ requireTimestamp: z.boolean() });
 
 // `generic_webhook` is the only remaining `WebhookProviderId` (github/stripe were removed as connectable
 // providers 2026-09-02) — this always resolves to the generic inbound path, but stays a named function/callsite
@@ -374,6 +376,7 @@ export default async function integrationsRoutes(app: ZodFastifyInstance): Promi
           name: request.body.name,
           events: request.body.events,
           channelId: request.body.channelId,
+          requireTimestamp: request.body.requireTimestamp,
           secretEnc: encryptSecret(secret),
         },
       });
@@ -384,7 +387,7 @@ export default async function integrationsRoutes(app: ZodFastifyInstance): Promi
         action: AuditAction.IntegrationWebhookCreate,
         targetType: 'webhook_endpoint',
         targetId: row.id,
-        after: { name: row.name, provider: row.provider },
+        after: { name: row.name, provider: row.provider, requireTimestamp: row.requireTimestamp },
       });
 
       reply.status(201);
@@ -393,6 +396,35 @@ export default async function integrationsRoutes(app: ZodFastifyInstance): Promi
         secret,
         url: `${env.API_BASE_URL ?? ''}/webhooks/generic/${row.id}`,
       };
+    },
+  );
+
+  app.patch(
+    '/:guildId/integrations/webhooks/:endpointId',
+    { schema: { params: endpointParamSchema, body: webhookSettingsSchema }, preHandler: requireGuildAccess() },
+    async (request): Promise<WebhookEndpointDetailDto> => {
+      const guildId = request.guildId!;
+      const session = request.session!;
+      const { endpointId } = request.params as { endpointId: string };
+      const existing = await app.prisma.webhookEndpoint.findFirst({
+        where: { id: endpointId, guildId, direction: 'INBOUND', deletedAt: null },
+      });
+      if (!existing) throw new NotFoundError('Webhook endpoint not found.');
+
+      const updated = await app.prisma.webhookEndpoint.update({
+        where: { id: endpointId },
+        data: { requireTimestamp: request.body.requireTimestamp },
+      });
+      await writeDashboardAudit(app.prisma, {
+        guildId,
+        actorId: session.userId,
+        action: AuditAction.IntegrationWebhookUpdate,
+        targetType: 'webhook_endpoint',
+        targetId: endpointId,
+        before: { requireTimestamp: existing.requireTimestamp },
+        after: { requireTimestamp: updated.requireTimestamp },
+      });
+      return toWebhookEndpointDetailDto(updated);
     },
   );
 

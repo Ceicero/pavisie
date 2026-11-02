@@ -46,6 +46,9 @@ async function claimEventOnce(app: ZodFastifyInstance, provider: string, eventId
   }
 }
 
+/** Max clock skew / age accepted for a timestamped generic webhook delivery (5 minutes). */
+export const GENERIC_WEBHOOK_TOLERANCE_SEC = 300;
+
 function invalidSignature(): AppError {
   return new AppError('invalid_signature', 'Webhook signature verification failed.', {
     status: 401,
@@ -82,10 +85,9 @@ export default async function webhooksRoutes(app: ZodFastifyInstance): Promise<v
 
     const secret = decryptSecret(endpoint.secretEnc);
     if (!verifyGithubSignature(raw, secret, signatureHeader)) {
-      await app.prisma.webhookEndpoint.update({
-        where: { id: endpointId },
-        data: { failureCount: { increment: 1 } },
-      });
+      // Don't write to the DB on an unauthenticated request: anyone who knows/guesses an endpoint id could
+      // otherwise inflate `failureCount` (misleading admins) and force a DB write per request. Log instead.
+      request.log.warn({ endpointId }, 'webhook signature verification failed');
       throw invalidSignature();
     }
 
@@ -201,6 +203,7 @@ export default async function webhooksRoutes(app: ZodFastifyInstance): Promise<v
     const signatureHeader = request.headers['x-pavisie-signature'];
     const eventIdHeader = request.headers['x-pavisie-event-id'];
     const eventTypeHeader = request.headers['x-pavisie-event-type'];
+    const timestampHeader = request.headers['x-pavisie-timestamp'];
 
     if (typeof signatureHeader !== 'string') {
       throw new ValidationError('Missing X-Pavisie-Signature header.');
@@ -212,11 +215,29 @@ export default async function webhooksRoutes(app: ZodFastifyInstance): Promise<v
     if (!endpoint) throw new NotFoundError('Unknown webhook endpoint.');
 
     const secret = decryptSecret(endpoint.secretEnc);
-    if (!verifyHmacSha256(raw, secret, signatureHeader)) {
-      await app.prisma.webhookEndpoint.update({
-        where: { id: endpointId },
-        data: { failureCount: { increment: 1 } },
-      });
+    // Optional replay protection: when the sender includes `X-Pavisie-Timestamp` (unix seconds), the signature must
+    // cover `${timestamp}.${body}` and the timestamp must be within GENERIC_WEBHOOK_TOLERANCE_SEC of now. Because the
+    // timestamp is bound into the HMAC, an attacker can't strip the header to replay a timestamped delivery.
+    // Senders that omit the header keep the legacy body-only signature (backward compatible).
+    let signedPayload: string = raw;
+    if (endpoint.requireTimestamp && typeof timestampHeader !== 'string') {
+      request.log.warn({ endpointId }, 'webhook rejected: endpoint requires X-Pavisie-Timestamp');
+      throw invalidSignature();
+    }
+    if (typeof timestampHeader === 'string') {
+      const ts = Number(timestampHeader);
+      if (!/^\d{1,12}$/.test(timestampHeader) || !Number.isFinite(ts)) {
+        throw new ValidationError('Invalid X-Pavisie-Timestamp header.');
+      }
+      if (Math.abs(Date.now() / 1000 - ts) > GENERIC_WEBHOOK_TOLERANCE_SEC) {
+        throw invalidSignature();
+      }
+      signedPayload = `${timestampHeader}.${raw}`;
+    }
+    if (!verifyHmacSha256(signedPayload, secret, signatureHeader)) {
+      // Don't write to the DB on an unauthenticated request: anyone who knows/guesses an endpoint id could
+      // otherwise inflate `failureCount` (misleading admins) and force a DB write per request. Log instead.
+      request.log.warn({ endpointId }, 'webhook signature verification failed');
       throw invalidSignature();
     }
 

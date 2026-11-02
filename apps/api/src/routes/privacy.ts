@@ -189,6 +189,15 @@ export default async function privacyRoutes(app: ZodFastifyInstance): Promise<vo
       const blob = await app.prisma.dataExportBlob.findUnique({ where: { requestId } });
       if (!blob) throw new NotFoundError('That export could not be found.');
 
+      // Exports contain member data for the whole server — record who pulled one so other admins can see it.
+      await writeDashboardAudit(app.prisma, {
+        guildId,
+        actorId: request.session!.userId,
+        action: AuditAction.DataExportDownload,
+        targetType: 'data_request',
+        targetId: requestId,
+      });
+
       reply.header('Content-Type', 'application/json; charset=utf-8');
       reply.header('Content-Disposition', `attachment; filename="pavisie-export-${guildId}.json"`);
       return blob.content;
