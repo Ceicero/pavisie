@@ -1,3 +1,4 @@
+import { PermissionFlagsBits } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 import { allPlugins } from '../../index';
 
@@ -26,5 +27,14 @@ describe('privileged command guards', () => {
       req && (req.staffLevel !== undefined || (req.discordPermissions?.length ?? 0) > 0 || req.botOwnerOnly),
     );
     expect(guarded).toBe(true);
+  });
+});
+
+describe('config commands require Manage Server at runtime', () => {
+  it.each(['welcome', 'goodbye'])('roles/%s', (name) => {
+    const roles = allPlugins.find((p) => p.manifest.id === 'roles')!;
+    const cmd = roles.commands.find((c) => c.data.toJSON().name === name)!;
+    expect(cmd.requirement?.staffLevel).toBeUndefined();
+    expect(cmd.requirement?.discordPermissions?.map(String)).toEqual([String(PermissionFlagsBits.ManageGuild)]);
   });
 });
