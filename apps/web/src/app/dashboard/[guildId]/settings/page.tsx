@@ -23,7 +23,13 @@ import {
   Switch,
   useToast,
 } from '@pavisie/ui';
-import { useGuildConfig, useUpdateGuildConfig, type GuildConfigPatch } from '@/lib/dashboard/queries';
+import {
+  useGuildConfig,
+  usePluginConfig,
+  useUpdateGuildConfig,
+  useUpdatePluginConfig,
+  type GuildConfigPatch,
+} from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
 import { MultiRolePicker } from '@/components/dashboard/multi-role-picker';
 import { DiscordChannelSelect } from '@/components/dashboard/discord-selects';
@@ -52,6 +58,55 @@ const TIMEZONES = [
   'Asia/Singapore',
   'Australia/Sydney',
 ];
+
+/** The `admin` plugin config this page edits besides the guild config: just the public-footer switch. */
+interface AdminSettings {
+  poweredByFooter?: boolean;
+}
+
+/** "Powered by Pavisie" switch. Saves as soon as it is flipped (it is a plugin-config key, not part of the page's Save button). */
+function PoweredByFooterSetting({ guildId }: { guildId: string }) {
+  const { data, isLoading } = usePluginConfig<AdminSettings>(guildId, 'admin');
+  const update = useUpdatePluginConfig<AdminSettings>(guildId, 'admin');
+  const { toast } = useToast();
+  // On unless an admin turned it off; also on while the setting is still loading, matching what the bot does.
+  const checked = data?.config.poweredByFooter !== false;
+
+  function handleChange(next: boolean) {
+    update.mutate(
+      { poweredByFooter: next },
+      {
+        onSuccess: () =>
+          toast({ title: next ? 'Footer turned on' : 'Footer turned off', variant: 'success' }),
+        onError: (err) =>
+          toast({
+            title: 'Could not save the footer setting',
+            description: err instanceof ApiClientError ? err.message : 'Please try again.',
+            variant: 'destructive',
+          }),
+      },
+    );
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+      <div>
+        <p className="text-sm font-medium">Show &ldquo;Powered by Pavisie&rdquo; on public messages</p>
+        <p className="text-xs text-muted-foreground">
+          Adds a small footer to the messages Pavisie posts for everyone: go-live alerts, giveaways, polls and
+          starboard posts. Replies only you can see and staff log messages never carry it. Turning it off
+          leaves every other footer exactly as it is.
+        </p>
+      </div>
+      <Switch
+        checked={checked}
+        onCheckedChange={handleChange}
+        disabled={isLoading || update.isPending}
+        aria-label="Show Powered by Pavisie on public messages"
+      />
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { guildId } = useParams<{ guildId: string }>();
@@ -252,6 +307,15 @@ export default function SettingsPage() {
               disabled={update.isPending}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Branding</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PoweredByFooterSetting guildId={guildId} />
         </CardContent>
       </Card>
 
