@@ -1,12 +1,11 @@
-# CareerCrumbs — cloud edition
+# CareerCrumbs
 
 A no-AI job search companion with one goal: **make getting a job easier.** You write your own interview answers, practise them out loud, and keep every application moving. Ruhv, the CareerCrumbs mouse, is the logo.
 
-One codebase, three ways to run it:
+One codebase, two ways to run it:
 
 - **Website** — `site/` is a standalone static site (no server code): app, offline cache, manifest, icons, self-hosted fonts, privacy page. Host the folder anywhere.
 - **Android** — `android/` wraps the site build in a WebView for test APKs (built by `.github/workflows/careercrumbs-apk.yml`).
-- **claude.ai** — `careercrumbs.html` runs as an artifact, where each person gets a private account-backed workspace.
 
 ## What's in it
 
@@ -28,12 +27,11 @@ Reconnecting at the right time is what keeps an application alive, so every job 
 - **Salaried jobs:** 1 week and 1 month (3 days is too soon for salaried hiring).
 - Once a job has an interview, the interview's schedule takes over from the application's.
 
-Due check-ins show on Home and in the job's Messages, with the right message ready to copy and an **I checked in** button. Phone alerts are opt-in: after you add or update a job, CareerCrumbs offers a calendar file with 9:00 am alerts, and **Me → Check-in reminders** adds every upcoming one at once. Pages on claude.ai can't send push notifications, so your calendar app does the alerting. Each reminder has a stable id, so adding the file again updates reminders instead of duplicating them.
+Due check-ins show on Home and in the job's Messages, with the right message ready to copy and an **I checked in** button. Phone alerts are opt-in: after you add or update a job, CareerCrumbs offers a calendar file with 9:00 am alerts, and **Me → Check-in reminders** adds every upcoming one at once. There's no server to send push notifications, so your calendar app does the alerting. Each reminder has a stable id, so adding the file again updates reminders instead of duplicating them.
 
 ## Where data lives
 
-- **Website and Android app:** `localStorage` on the device (`careercrumbs:v2`). The app asks the browser to keep it (`navigator.storage.persist`), saves pending edits when it goes to the background, keeps any unreadable copy aside instead of overwriting it, and reminds people to export a backup.
-- **claude.ai:** the artifact's database, in each viewer's own private space (`data/users/<id>/…`). Nobody else, the owner included, can read it.
+Everything is in `localStorage` on the device (`careercrumbs:v2`); there's no account and no server. The app asks the browser to keep it (`navigator.storage.persist`), saves pending edits when it goes to the background, keeps any unreadable copy aside instead of overwriting it, and reminds people to export a backup.
 
 Backups are checked before import (must be a CareerCrumbs backup with something in it), cleaned field by field, and can be undone. Ids from a file are replaced if they aren't plain ids, so an imported file can't inject HTML.
 
@@ -50,7 +48,7 @@ There's no sign-up, setup form or example data to clear. The first screen offers
 
 ```
 npm test        # pure logic tests (node:test)
-npm run build   # careercrumbs.html + site/
+npm run build   # site/
 SITE_URL=https://example.org/ CONTACT_EMAIL=you@example.org npm run build   # for launch: canonical/og:url and the privacy contact
 ```
 
@@ -60,6 +58,5 @@ Before launch: set `SITE_URL` and `CONTACT_EMAIL`, host `site/`, then add `/.wel
 - `src/app.js` — UI, saving, practice mode
 - `test/fixture.cjs` — example workspace used by the tests
 - `src/styles.css` — design tokens (light and dark)
-- `src/shell.html` — claude.ai page skeleton
 - `site-src/` — standalone site shell, manifest, service worker, privacy page, icons, self-hosted fonts (OFL)
 - `android/` — WebView wrapper and `build.sh`
