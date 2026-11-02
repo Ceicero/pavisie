@@ -1,7 +1,15 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { discordTimestamp } from '@pavisie/core';
 import type { PluginId } from '@pavisie/types';
-import { assertStaffLevel, errorEmbed, listEmbed, type CommandContext, type PluginCommand } from '../../sdk';
+import {
+  assertStaffLevel,
+  errorEmbed,
+  listEmbed,
+  successEmbed,
+  type CommandContext,
+  type PluginCommand,
+} from '../../sdk';
+import type { AdminConfig } from '../manifest';
 import { createWizardSession, renderWizardStep, WizardSessionStore } from '../wizard';
 import { StarterAlreadyRunningError, runStreamerStarter } from '../starter-pack-runtime';
 import { starterReportEmbed } from '../starter-pack-embed';
@@ -49,6 +57,14 @@ const data = new SlashCommandBuilder()
           .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
           .setRequired(false),
       ),
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('footer')
+      .setDescription('Show or hide "Powered by Pavisie" in the footer of public embeds.')
+      .addBooleanOption((opt) =>
+        opt.setName('enabled').setDescription('On shows the footer (default), off hides it.').setRequired(true),
+      ),
   );
 
 /** Applies the streamer starter pack and replies with what was turned on, what was left alone and why. */
@@ -93,6 +109,21 @@ export const command: PluginCommand = {
     }
 
     const host = c.ctx.services.require('host');
+
+    if (sub === 'footer') {
+      const enabled = c.interaction.options.getBoolean('enabled', true);
+      await host.setPluginConfig<AdminConfig>(
+        c.guildId,
+        'admin',
+        { poweredByFooter: enabled },
+        { id: c.interaction.user.id, source: 'bot' },
+      );
+      await c.interaction.reply({
+        embeds: [successEmbed(c.t(enabled ? 'setup.footer.on' : 'setup.footer.off'))],
+        ephemeral: true,
+      });
+      return;
+    }
 
     if (sub === 'wizard') {
       const current = await host.getGuildConfig(c.guildId);

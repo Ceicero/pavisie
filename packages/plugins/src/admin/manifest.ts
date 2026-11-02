@@ -8,6 +8,12 @@ export const configSchema = z.object({
   setupCompleted: z.boolean().default(false),
   /** Mirrors `GuildConfig.staffChannelId` (core, authoritative). */
   staffChannelId: z.string().nullable().default(null),
+  /**
+   * Show "Powered by Pavisie" in the footer of public embeds the bot posts (go-live alerts, giveaways, polls,
+   * starboard). On by default; `/setup footer` and Dashboard -> Settings turn it off. Read through
+   * `publicEmbed` / `isPoweredByFooterEnabled` in the SDK, which uses the same key (`POWERED_BY_CONFIG_KEY`).
+   */
+  poweredByFooter: z.boolean().default(true),
 });
 
 export type AdminConfig = z.infer<typeof configSchema>;
@@ -31,6 +37,8 @@ export const manifest = defineManifest({
   dashboard: { path: '/dashboard/[guildId]/settings', label: 'Settings', icon: 'settings' },
   privacyNotes: [
     'Every configuration change (setup wizard, /config set, plugin enable/disable) is written to the audit log with the actor, timestamp, and a redacted before/after diff.',
+    "The streamer starter pack (/setup streamer, or the dashboard's Streamer starter pack button) only adds what is still missing and writes one audit entry for the run, on top of the entries for the individual changes it makes. The only thing it sends off-server is the Twitch username you give it, looked up on Twitch the same way /integration alerts add does.",
+    'Public embeds Pavisie posts (go-live alerts, giveaways, polls, starboard) carry a small "Powered by Pavisie" footer. Admins can turn it off per server with /setup footer or under Dashboard -> Settings.',
     "/pavisie report sends a message to the Pavisie developer, shown before submission: only the kind/subject/body you type in that command, plus this server's id and name, your user id and tag, a timestamp, and the bot version leave this server. Nothing else is captured (no surrounding messages, channel history, or member lists). A record is written to this server's own audit log so other admins can see a report was sent. Hard per-user/per-guild rate limits apply.",
   ],
 });

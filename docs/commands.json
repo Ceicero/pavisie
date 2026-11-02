@@ -46,6 +46,19 @@
                   "type": "Channel"
                 }
               ]
+            },
+            {
+              "name": "footer",
+              "fullName": "/setup footer",
+              "description": "Show or hide \"Powered by Pavisie\" in the footer of public embeds.",
+              "options": [
+                {
+                  "name": "enabled",
+                  "description": "On shows the footer (default), off hides it.",
+                  "required": true,
+                  "type": "Boolean"
+                }
+              ]
             }
           ]
         },
