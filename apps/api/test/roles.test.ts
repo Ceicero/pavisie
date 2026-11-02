@@ -452,3 +452,25 @@ describe('roles: auto-roles', () => {
     await app.close();
   });
 });
+
+describe('roles: panel group ownership', () => {
+  it('404s creating a panel linked to a role group from another guild', async () => {
+    const { app, mutHeaders } = await authedContext({
+      roleGroup: { findFirst: async () => null },
+      guild: { findUnique: async () => ({ id: GUILD_ID, botPresent: true }) },
+    } as PrismaStubOverrides);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/roles/panels`,
+      headers: mutHeaders,
+      payload: {
+        channelId: '1',
+        title: 'x',
+        style: 'BUTTONS',
+        groupId: 'foreign-group',
+        options: [{ roleId: '2', label: 'a' }],
+      },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
