@@ -127,7 +127,6 @@ const envSchema = z.object({
   REDDIT_CLIENT_ID: z.string().optional(),
   REDDIT_CLIENT_SECRET: z.string().optional(),
   REDDIT_USER_AGENT: z.string().optional(),
-  STEAM_API_KEY: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   MICROSOFT_CLIENT_ID: z.string().optional(),

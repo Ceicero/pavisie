@@ -108,8 +108,6 @@ services:
         sync: false
       - key: REDDIT_USER_AGENT
         sync: false
-      - key: STEAM_API_KEY
-        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
@@ -249,8 +247,6 @@ services:
       - key: TWITCH_CLIENT_SECRET
         sync: false
       - key: YOUTUBE_API_KEY
-        sync: false
-      - key: STEAM_API_KEY
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
