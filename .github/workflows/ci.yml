@@ -83,6 +83,11 @@ jobs:
           pnpm docs:permissions
           git diff --exit-code -- docs/PERMISSIONS.md
 
+      - name: Export OpenAPI spec (fails if docs/openapi.json is stale)
+        run: |
+          pnpm --filter @pavisie/api openapi:export
+          git diff --exit-code -- docs/openapi.json
+
       - name: Run migrations against service database
         env:
           DATABASE_URL: postgresql://pavisie:pavisie@localhost:5432/pavisie
