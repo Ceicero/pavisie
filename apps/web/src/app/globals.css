@@ -167,3 +167,159 @@ html.light .glass {
   position: relative;
   z-index: 2;
 }
+
+/* Intro splash (components/intro/IntroSplash.tsx): the animated logo shown on the first page load of a session.
+   Always dark in both themes, because it is the logo's own stage rather than a page surface, so it uses
+   literal colours rather than the ink/grey tokens (which flip in light mode). */
+.intro-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2.2vmin, 20px);
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px))
+    max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: radial-gradient(ellipse at 50% 42%, #140d05 0%, #050505 62%);
+  color: #e5e5e5;
+  opacity: 1;
+  transition: opacity 600ms ease;
+  /* Failsafe: if JavaScript never takes over, get out of the way on our own. */
+  animation: intro-splash-failsafe 400ms ease 12s forwards;
+}
+.intro-splash[data-state='playing'],
+.intro-splash[data-state='leaving'] {
+  animation: none;
+}
+.intro-splash[data-state='leaving'] {
+  opacity: 0;
+  pointer-events: none;
+}
+html[data-intro='skip'] .intro-splash {
+  display: none;
+}
+@keyframes intro-splash-failsafe {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.intro-splash__stage {
+  position: relative;
+  width: min(72vmin, 560px);
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+}
+.intro-splash__canvas,
+.intro-splash__static {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.intro-splash__static {
+  padding: 11%;
+  object-fit: contain;
+}
+
+.intro-splash__wordmark {
+  margin: 0;
+  margin-top: calc(-1 * clamp(8px, 3vmin, 28px));
+  padding-left: 0.34em; /* balances the trailing letter-spacing so the word sits centred */
+  font-family: 'Trajan Pro', 'Cinzel', Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  font-size: clamp(26px, 5.4vmin, 46px);
+  letter-spacing: 0.34em;
+  line-height: 1;
+  text-transform: uppercase;
+  background: linear-gradient(100deg, #6b4510 0%, #d9a63a 32%, #fff1c9 50%, #d9a63a 68%, #6b4510 100%);
+  background-size: 260% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  opacity: 0;
+  animation:
+    intro-splash-rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) 1.5s both,
+    intro-splash-shine 6s ease-in-out 2.4s infinite;
+}
+@keyframes intro-splash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    letter-spacing: 0.6em;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    letter-spacing: 0.34em;
+  }
+}
+@keyframes intro-splash-shine {
+  0%,
+  40% {
+    background-position: 100% 0;
+  }
+  70%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+.intro-splash__progress {
+  width: min(220px, 50vw);
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(217, 166, 58, 0.16);
+  overflow: hidden;
+}
+.intro-splash__progress > span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, #8a5d14, #f0c55a);
+  box-shadow: 0 0 8px rgba(240, 197, 90, 0.7);
+}
+.intro-splash[data-state='playing'] .intro-splash__progress > span,
+.intro-splash[data-state='leaving'] .intro-splash__progress > span {
+  animation: intro-splash-progress var(--intro-duration, 8000ms) linear forwards;
+}
+@keyframes intro-splash-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.intro-splash__skip {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  padding: 8px 16px;
+  border: 1px solid rgba(217, 166, 58, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: #bdbdbd;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+.intro-splash__skip:hover {
+  color: #fff3d6;
+  border-color: #d9a63a;
+  background: rgba(217, 166, 58, 0.08);
+}
+.intro-splash__skip:focus-visible {
+  outline: 2px solid #d9a63a;
+  outline-offset: 3px;
+}
