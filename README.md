@@ -61,7 +61,7 @@ Every Pavisie command works two ways: type it in chat with a `+` prefix (e.g. `+
 
 ## Feature overview
 
-15 plugins, each independently enabled or disabled per Discord server. "Privileged intents" are
+14 plugins, each independently enabled or disabled per Discord server. "Privileged intents" are
 Discord features that must be explicitly turned on for the bot (see
 [Discord Developer Portal setup](#discord-developer-portal-setup)); plugins that need one and don't
 have it degrade gracefully instead of breaking — see `docs/PERMISSIONS.md` for exactly what changes.
@@ -77,11 +77,10 @@ have it degrade gracefully instead of breaking — see `docs/PERMISSIONS.md` for
 | **Roles & Onboarding** | Self-assignable role panels, welcome/goodbye, onboarding checklist, member verification.                                 | Disabled             | Server Members                  |
 | **Engagement**         | Leveling/XP with anti-farming controls, leaderboards, reputation, starboard, temp voice channels.                        | Enabled              | Message Content                 |
 | **Community**          | Polls, giveaways, suggestions, scheduled announcements, reminders, event RSVPs.                                          | Enabled              | —                               |
-| **Game Stats**         | Steam-linked leaderboards for a shared game (Dead by Daylight first) — opt-in linking, self-service. Unavailable until a Steam Web API key is configured. | Disabled             | —                               |
 | **Economy**            | Optional virtual-currency balance/daily/give/leaderboard — no real money, ever.                                          | Disabled             | —                               |
 | **Utility**            | `/help`, user/server info, timestamps, embed builder, AFK, translation, weather, bot health.                             | Enabled              | —                               |
 | **Music & Media**      | Playlist/queue management for a legal, user-authorized audio provider only. Unavailable until one is configured.         | Disabled             | —                               |
-| **Integrations**       | Secure connector framework for notifications and alerts: Twitch stream-live alerts, YouTube, Instagram, Reddit, Steam, Google/Microsoft Calendar, webhooks. | Disabled             | —                               |
+| **Integrations**       | Secure connector framework for notifications and alerts: Twitch stream-live alerts, YouTube, Instagram, Reddit, Google/Microsoft Calendar, webhooks. | Disabled             | —                               |
 | **AI Assistant**       | Optional `/ask`, `/summarize`, `/draft`, `/mod-assist` — per-server opt-in, cooldowns, token budgets.                    | Disabled             | —                               |
 
 Full command list per plugin: `docs/commands.json` (generated, always current) or the website's
