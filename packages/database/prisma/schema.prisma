@@ -148,6 +148,8 @@ enum TagTriggerMode {
 // providers on 2026-09-02 (Brandon's decision) — kept here, unused, only so historical `IntegrationConnection`
 // rows with these values keep reading correctly. Never re-add a provider file/registry entry for them without
 // also deciding whether these enum values should come back into use. See docs/ARCHITECTURE.md §18a.
+// STEAM was removed the same way on 2026-11-03 together with the `gamestats` plugin — its rows were deleted by
+// migration 0019_remove_gamestats, and the value stays only so this shared enum isn't rebuilt.
 enum IntegrationProvider {
   TWITCH
   YOUTUBE
@@ -255,11 +257,6 @@ enum EnforcerDecision {
   DISMISS
 }
 
-/// Steam-only in v1 (no public API exists for console platforms) — see the `gamestats` plugin.
-enum GameAccountProvider {
-  STEAM
-}
-
 /// Economy wallet platform: DISCORD for user-keyed wallets, TWITCH for Twitch viewer-keyed wallets.
 /// Wallets are never merged or transferred between platforms. Every existing row is DISCORD (historical).
 enum EconomyPlatform {
@@ -341,8 +338,6 @@ model Guild {
   enforcerPolicies       EnforcerPolicy[]
   enforcerRecords        EnforcerRecord[]
   developerReports       DeveloperReport[]
-  gameAccountLinks       GameAccountLink[]
-  gameStatSnapshots      GameStatSnapshot[]
 }
 
 model GuildConfig {
@@ -1769,51 +1764,4 @@ model EnforcerRecord {
   @@index([guildId, kind, createdAt])
   @@index([guildId, status])
   @@index([guildId, policyId])
-}
-
-// ---------------------------------------------------------------------------
-// Game stats — opt-in Steam leaderboards (`gamestats` plugin). Steam-only (no public API exists for
-// console platforms). Data minimization mirrors Birthday: only what's needed to render a leaderboard/stat
-// card is stored, latest snapshot only (no history), and linking/unlinking is member self-service and
-// deliberately NOT audited (same reasoning as birthdays).
-// ---------------------------------------------------------------------------
-
-/// One linked external game account per member per guild per provider (opt-in, self-service via `/dbd link`
-/// and `/dbd unlink`). Stores only the external account id and a cached display name — never anything else
-/// from the provider's profile.
-model GameAccountLink {
-  id           String              @id @default(cuid())
-  guildId      String
-  guild        Guild               @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  userId       String
-  provider     GameAccountProvider
-  externalId   String // SteamID64 for provider = STEAM
-  externalName String? // cached persona name, refreshed alongside stats
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-
-  @@unique([guildId, userId, provider])
-  // Cross-member duplicate guard: the same external account (e.g. one Steam profile) can only be linked once
-  // per guild, full stop — not once per member. `/dbd link` checks this proactively (friendly reply) and this
-  // constraint is the actual race-safe guarantee (see `commands/dbd.ts`'s `handleLink` P2002 catch).
-  @@unique([guildId, provider, externalId])
-  @@index([guildId])
-}
-
-/// Latest curated stat snapshot per member per game per guild — only the stat keys the game descriptor
-/// displays, never the provider's full stats payload. No history: each refresh overwrites the row.
-model GameStatSnapshot {
-  id        String   @id @default(cuid())
-  guildId   String
-  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  userId    String
-  game      String // game descriptor key, e.g. 'dbd'
-  stats     Json // { statId: number } — curated keys only, per the game descriptor
-  fetchedAt DateTime
-  lastError String? // e.g. 'private', surfaced back to the member
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([guildId, userId, game])
-  @@index([guildId, game])
 }
