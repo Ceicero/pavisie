@@ -67,7 +67,10 @@ Re-export these whenever `pavisie-skull.png` or the animation changes.
 Static banners (no animation): the logo beside the gold `PAVISIE` wordmark and the line "Modular Discord bot
 platform", on the same dark background, light rays and embers as the animated logo.
 
-| File                                 | Use                                                                 |
-| ------------------------------------ | ------------------------------------------------------------------- |
-| `banner/pavisie-banner-1500x500.png` | Wide header: X/Twitter header, website hero, GitHub README.         |
-| `banner/pavisie-banner-960x540.png`  | Discord server banner (Server Settings → Overview → Server Banner). |
+| File                                                  | Use                                                                   |
+| ----------------------------------------------------- | --------------------------------------------------------------------- |
+| `banner/pavisie-banner-1500x500.png`                  | Wide header: X/Twitter header, website hero, GitHub README.           |
+| `banner/pavisie-banner-960x540.png`                   | Discord server banner (Server Settings → Overview → Server Banner).   |
+| `banner/pavisie-banner-nologo-1500x500.png`           | Same wide header with the logo removed: wordmark and tagline centred. |
+| `banner/pavisie-banner-linkedin-page-2256x382.png`    | LinkedIn company page cover (2× of LinkedIn's 1128×191).              |
+| `banner/pavisie-banner-linkedin-profile-1584x396.png` | LinkedIn personal profile background.                                 |
