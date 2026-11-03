@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from '../components/Providers';
 import { SiteChrome } from '../components/SiteChrome';
+import { IntroSplash } from '../components/intro/IntroSplash';
+import { INTRO_BOOT_SCRIPT } from '../components/intro/intro-config';
 import { SITE_URL } from '../lib/site';
 
 export const metadata: Metadata = {
@@ -29,6 +31,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-dvh bg-ink-0 text-grey-7 antialiased">
+        {/* Runs before first paint so a repeat visit in the same session never flashes the intro splash. */}
+        <script dangerouslySetInnerHTML={{ __html: INTRO_BOOT_SCRIPT }} />
+        <IntroSplash />
         <Providers>
           <SiteChrome>{children}</SiteChrome>
         </Providers>
