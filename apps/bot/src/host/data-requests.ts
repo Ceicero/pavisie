@@ -45,7 +45,7 @@ export function redactSecrets(value: unknown): unknown {
 /**
  * Gathers the guild-scoped rows a "download my data" export should contain: configuration, the moderation and
  * enforcer compliance ledgers, automod rules/events, tickets, level profiles, member-shared birthdays
- * (month/day only), linked game accounts + stat snapshots (gamestats plugin), and the audit log. Not every
+ * (month/day only), and the audit log. Not every
  * guild-scoped table in the schema (giveaways/polls/economy/etc. are lower-priority, less personal-data-bearing
  * tables) — this covers the categories called out in docs/PRIVACY_POLICY_TEMPLATE.md and the compliance-relevant
  * ones. Every value passes through `redactSecrets` before being returned.
@@ -72,8 +72,6 @@ export async function collectGuildExport(
     enforcerRecords,
     auditLogs,
     birthdays,
-    gameAccountLinks,
-    gameStatSnapshots,
   ] = await Promise.all([
     prisma.guild.findUnique({ where: { id: guildId } }),
     prisma.guildConfig.findUnique({ where: { guildId } }),
@@ -92,8 +90,6 @@ export async function collectGuildExport(
     prisma.enforcerRecord.findMany({ where: { guildId } }),
     prisma.auditLog.findMany({ where: { guildId } }),
     prisma.birthday.findMany({ where: { guildId }, select: { userId: true, month: true, day: true } }),
-    prisma.gameAccountLink.findMany({ where: { guildId } }),
-    prisma.gameStatSnapshot.findMany({ where: { guildId } }),
   ]);
 
   return redactSecrets({
@@ -114,7 +110,6 @@ export async function collectGuildExport(
     levelProfiles,
     enforcer: { policies: enforcerPolicies, records: enforcerRecords },
     birthdays,
-    gamestats: { accountLinks: gameAccountLinks, statSnapshots: gameStatSnapshots },
     auditLogs,
   }) as Record<string, unknown>;
 }
