@@ -87,7 +87,7 @@ export const siteCopy = {
         label: 'Everyone (no role needed)',
         description: 'The default tier. A member can run commands that affect themselves or that they own.',
         commands: [
-          '+help, +ask, +summarize, +appeal, +verify, +suggest, +remind, +dbd',
+          '+help, +ask, +summarize, +appeal, +verify, +suggest, +remind',
           '+utility (server/user info, their own timezone)',
           '+level rank, +level leaderboard',
           '+rep give, +rep check, +rep leaderboard',
