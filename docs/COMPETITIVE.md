@@ -143,7 +143,7 @@ from general knowledge and should be re-verified before quoting externally (mark
 | -------------------------------------- | --------------------------------------------------------- | ------------ | ----- | -------- | ---- | ------- | --------- | ------- |
 | Twitch / YouTube alerts                | ✅ official APIs (EventSub / Data API)                    | ✅ 💰 10 nets| 💰    | ✅ 2/5   | ❌   | ⚠️      | ✅        | ❌      |
 | GitHub / generic webhooks (in+out)     | ✅ signed, SSRF-guarded                                   | ❌           | ❌    | ❌       | ❌   | ❌      | ⚠️        | ❌      |
-| Reddit / Steam / calendars / Notion    | ⚠️ connector framework; providers vary                    | ✅ 💰        | ✅    | ❌       | ❌   | ❌      | ⚠️        | ❌      |
+| Reddit / calendars / Notion            | ⚠️ connector framework; providers vary                    | ✅ 💰        | ✅    | ❌       | ❌   | ❌      | ⚠️        | ❌      |
 | Stripe role rewards                    | ⚠️ webhook plumbing; donations only shipped               | ✅ takes cut | ❌    | ❌       | ❌   | ❌      | ❌        | ❌      |
 | Music                                  | ❌ by policy (adapter only, no scraping)                  | ❌ removed   | ❌    | ❌       | ❌   | ✅      | ❌        | ❌      |
 | AI (ask/summarize/draft/mod-assist)    | ✅ opt-in, BYO key, assistive only, redaction             | ✅ 💰 sep.   | ❌    | ❌       | ❌   | ❌      | ⚠️        | ❌      |

@@ -97,6 +97,12 @@ contact **[Contact]** — most of what's stored is server-scoped moderation/comm
 that server's administrators can act on directly, but requests about dashboard account data (session,
 cached guild list) can be handled centrally.
 
+**Removed features.** The Game Stats plugin and the Steam integration connector were removed on
+2026-11-03. Database migration `0019_remove_gamestats` permanently deleted every stored Steam link
+(SteamID64 and cached display name), game stat snapshot, and Steam alert watch. Copies can remain
+only in the operator's database backups, until those expire on their normal schedule, and in server
+data exports generated before the migration ran.
+
 ## 7. Third parties
 
 Data is shared only with the services required to operate the features actually in use:
@@ -106,7 +112,7 @@ Data is shared only with the services required to operate the features actually 
 - **Ko-fi** — donations only (see §4); the operator's Ko-fi page is where donations are processed and
   the visitor's data (if any is collected) goes directly to Ko-fi, not to [Operator]'s servers.
 - **Optional integrations a server administrator explicitly connects**: Twitch, YouTube, Instagram,
-  Reddit, Steam, Google, or Microsoft (via the `integrations` plugin — only the specific
+  Reddit, Google, or Microsoft (via the `integrations` plugin — only the specific
   provider(s) a server connects, and only the scopes that connection grants); an AI provider (OpenAI
   or Anthropic) if the `ai` plugin is enabled and configured with a key; a translation provider
   (DeepL or LibreTranslate) or weather provider (OpenWeatherMap, or Open-Meteo which needs no key at

@@ -102,10 +102,10 @@ as non-existent until someone finds a working link — don't spend time on it ba
 
 ## PART 2 — Listing copy, ready to paste
 
-Facts used below (all verified against the repo on 2026-09-06, nothing invented): tagline
-**"Discord moderation you can trust,"** **command prefix `+`, entry point `+help`**, **15 modular
-plugins,** **297 invocable commands** (51 top-level, of which 47 are slash commands and 4 are
-right-click context-menu commands; 284 of the 297 are subcommands), invite never requests
+Facts used below (all verified against the repo on 2026-11-03, nothing invented): tagline
+**"Discord moderation you can trust,"** **command prefix `+`, entry point `+help`**, **14 modular
+plugins,** **276 invocable commands** (49 top-level, of which 45 are slash commands and 4 are
+right-click context-menu commands; 263 of the 276 are subcommands), invite never requests
 Administrator, support server `https://discord.gg/5fpRPFMUKu`, site `https://pavisie.com`,
 dashboard `https://pavisie.com/dashboard`. Counts are read from `docs/commands.json` — recount
 there before reusing them, never estimate. Invite link uses the production client ID from the repo's own
@@ -165,9 +165,9 @@ Pavisie is a modular, compliance-first Discord bot for community and gaming serv
 
 Most moderation bots ask you to trust that whoever's on duty made the right call. Pavisie's **Enforcer** plugin instead turns policy violations into a paper trail: an admin writes plain-language policies, the bot flags matches (or staff flag something by hand) into a private review queue, a moderator picks an action, and the bot carries it out and messages the user directly — no DMs, no confrontations. Every flag and every decision gets written to a read-only, append-only ledger channel in your own server, and members can appeal. It's moderation that stays consistent no matter who's on shift, with a record nobody has to take on faith.
 
-### 15 plugins, 297 commands, all opt-in per server
+### 14 plugins, 276 commands, all opt-in per server
 
-Admin · Moderation · Automod · Enforcer · Logging · Tickets · Roles & Onboarding · Engagement (XP, leveling, temp voice, starboard) · Community (polls, giveaways, suggestions, scheduled announcements) · Gamestats (Steam leaderboards) · Economy (virtual-only, no real money) · Utility · Media · Integrations (Twitch/YouTube go-live, Reddit, Steam, Instagram, Google/Microsoft calendars, webhooks) · AI Assistant (mention-based chat, configurable persona). Every plugin can be switched on or off per server.
+Admin · Moderation · Automod · Enforcer · Logging · Tickets · Roles & Onboarding · Engagement (XP, leveling, temp voice, starboard) · Community (polls, giveaways, suggestions, scheduled announcements) · Economy (virtual-only, no real money) · Utility · Media · Integrations (Twitch/YouTube go-live, Reddit, Instagram, Google/Microsoft calendars, webhooks) · AI Assistant (mention-based chat, configurable persona). Every plugin can be switched on or off per server.
 
 ### Least-privilege by default
 
@@ -225,7 +225,7 @@ Type +help to start. Modular bot: moderation, automod, Enforcer (audit ledger), 
 **Long description**: reuse the top.gg long description (Part 2.1); botlist.me's add form explicitly
 supports Markdown and HTML, so no reformatting needed.
 
-**Before submitting, confirm live**: Pavisie has far more than the required 5 non-generic commands exposed (297 total), and `+help` and `/help` both work as the obvious entry point, per their published rule.
+**Before submitting, confirm live**: Pavisie has far more than the required 5 non-generic commands exposed (276 total), and `+help` and `/help` both work as the obvious entry point, per their published rule.
 
 ---
 
@@ -475,7 +475,7 @@ carries it out and messages the user itself — no DMs, no back-and-forth. Every
 gets written to a read-only ledger channel in the server itself, and there's a built-in appeal command.
 Nothing is hidden from the members after the fact.
 
-Beyond that it's a fairly standard modular "all-in-one" bot — 15 independently-toggleable plugins
+Beyond that it's a fairly standard modular "all-in-one" bot — 14 independently-toggleable plugins
 covering moderation, automod, logging, tickets, roles/onboarding, leveling, community tools, integrations, 
 an optional AI assistant, and more — but I wanted the headline feature to be the trust mechanism, not 
 another feature checklist, since that's the most saturated category on Discord.
@@ -534,7 +534,7 @@ just flagging what's worth checking for regardless of which bot you land on.)
 Hi all — introducing my project, Pavisie. Online-only (no physical location — it's a Discord bot with
 a web dashboard, not a local business).
 
-What it is: a modular Discord bot for community/gaming servers — 15 independently-toggleable plugins
+What it is: a modular Discord bot for community/gaming servers — 14 independently-toggleable plugins
 covering moderation, automod, logging, tickets, roles/onboarding, leveling, community tools, virtual-only
 economy, utility, integrations, an optional AI assistant, and more.
 
@@ -562,7 +562,7 @@ Dashboard: https://pavisie.com/dashboard
 
 **Body:**
 ```
-Product: Pavisie, a modular Discord bot — invite it and toggle on whichever of its 15 plugins your
+Product: Pavisie, a modular Discord bot — invite it and toggle on whichever of its 14 plugins your
 server needs (moderation, automod, logging, tickets, roles, leveling, community tools, utility,
 integrations, optional AI assistant, and more). Every command works as both a slash command and a 
 message command with the `+` prefix — try `+help` to explore.
@@ -591,7 +591,7 @@ follow it exactly:
 feature, the Enforcer, writes every flagged message and moderator decision to a read-only, append-only
 ledger channel in the server itself, with a built-in appeal command, instead of leaving moderation as
 something members just have to trust. Entry point: type `+help` in Discord to see all commands (or 
-`/help` if you prefer slash commands — both work). 15 total plugins, all opt-in per server. Never 
+`/help` if you prefer slash commands — both work). 14 total plugins, all opt-in per server. Never 
 requests Administrator.
 
 **The market**: Discord has an enormous, crowded field of general-purpose "all-in-one" bots
@@ -622,7 +622,7 @@ it — that's what I'm here for.
 Pavisie — a modular Discord moderation bot. Most interested in feedback on one thing: instead of
 logging admin actions to a private mod channel, it writes every flagged message and mod decision to a
 read-only, append-only ledger channel that regular members can read, plus a built-in appeal command.
-15 opt-in plugins total (moderation, automod, tickets, roles, leveling, integrations, AI, etc.), 
+14 opt-in plugins total (moderation, automod, tickets, roles, leveling, integrations, AI, etc.), 
 never requests Administrator. Type +help in Discord to explore all commands (also works as slash commands).
 
 Brand new, no real user base yet — genuinely trying to find out if the audit-log idea is actually

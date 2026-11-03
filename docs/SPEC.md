@@ -207,7 +207,6 @@ Secure connector framework for optional integrations:
   own new media into a channel — never an arbitrary username lookup, which Meta's API no longer supports
   (Basic Display API shut down Dec 2024)
 - Reddit: approved API integration
-- Steam: publicly available game/server status where permitted
 - Google Calendar or Microsoft 365 Calendar: OAuth-based event notifications
 - OpenAI/Anthropic-style AI provider interface for opt-in assistance features
 - Generic webhook receiver and outbound webhook notifications
@@ -323,26 +322,6 @@ remaining stops are decorative/emphasis only, never used as text at the wrong en
 uses the same tokens for surfaces and primary actions; semantic status colours (success/warning/destructive)
 remain for usability in the admin dashboard only. Discord embeds use the gold-5 brand colour bar; success/error
 embeds keep green/red.
-
-### P. GAME STATS PLUGIN (STEAM LEADERBOARDS)
-
-Per-guild leaderboards comparing members' stats in a shared game, built on **publicly available Steam data only** —
-the same scoping already stated for the Steam connector in §J ("publicly available game/server status where
-permitted"). First (and, for now, only) supported game: Dead by Daylight.
-
-- **Member opt-in only, self-reported and unverified.** A member links a Steam account by pasting a SteamID64,
-  profile URL, or vanity name (`/dbd link`) — there is no Steam sign-in, so the bot cannot confirm the account
-  actually belongs to that member. The bot never enumerates, scrapes, or auto-discovers a guild's members' game
-  libraries or Steam friends. The only enforcement against one account being claimed by multiple members is a
-  same-guild duplicate guard: a Steam account already linked by another member in the guild is rejected.
-- **Self-removal.** `/dbd unlink` deletes the member's link and their stored stat snapshot immediately — no staff
-  approval, no delay.
-- **Data minimization.** Store only the linked SteamID64, a cached persona display name, and the curated stat keys
-  the supported game defines for display — never the account's full public profile, friends list, inventory, or
-  game library. Only the latest stat snapshot is kept; no history.
-- **No console support.** There is no public stats API for console platforms, so this plugin never claims to
-  support them; command replies and the plugin README say so plainly instead of guessing.
-- Disabled by default; unavailable (`/plugin status`) until the operator configures a Steam Web API key.
 
 ## DATABASE DESIGN
 

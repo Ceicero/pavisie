@@ -8,10 +8,10 @@ haven't been started.
 
 ## MVP — what exists now
 
-Everything in `docs/ARCHITECTURE.md` §7.1's plugin table is implemented and tested: 15 plugins
+Everything in `docs/ARCHITECTURE.md` §7.1's plugin table is implemented and tested: 14 plugins
 covering moderation, automod, the Enforcer dispute/ledger workflow, logging, tickets, roles/
 onboarding/verification, engagement (leveling/reputation/starboard/temp-voice), community (polls/
-giveaways/suggestions/announcements/reminders/events), Steam-linked game-stats leaderboards, a
+giveaways/suggestions/announcements/reminders/events), a
 virtual-currency economy, utility commands, integrations (OAuth connections + inbound/outbound
 webhooks + alert connectors; the Twitch chat bot, channel points and currency run for streamers and are managed on the creator dashboard), and an optional AI
 assistant. The dashboard covers every plugin with a settings page, the marketplace enable/disable
@@ -77,15 +77,6 @@ set` (and the equivalent dashboard action) changes a member's stored XP/level im
   embedded browser has no voices), and sound URLs are validated by the existing SSRF guard at write time. Viewer
   reward-input text is never persisted or logged. The overlay is an HTML page served at a capability-token URL
   (treat the URL like a password) and can be regenerated without re-linking.
-- **Game-stats leaderboards need a Steam Web API key.** The `gamestats` plugin (`/dbd link|unlink|
-  stats|leaderboard|refresh`) lets members opt in with their own Steam account and compares curated
-  stats on a per-guild leaderboard — Dead by Daylight is the first (and, for now, only) supported
-  game. It is **Steam-only, on purpose**: there is no public stats API for console platforms, so this
-  never pretends to support them, and a member's Steam profile/game details must be Public for stats
-  to be fetchable. The plugin declares `STEAM_API_KEY` as required and reports itself `unavailable`
-  (every `/dbd` command replies accordingly, the 30-minute refresh job no-ops) until the operator sets
-  that key — a free key from `steamcommunity.com/dev/apikey`, same manual-step shape as the Twitch bot
-  identity above.
 
 ## v1 — hardening
 
@@ -126,7 +117,7 @@ Not started; real ideas for after v1, not commitments with a date attached:
   audio in a voice channel, once a specific compliant provider is chosen and its licensing terms
   reviewed.
 - **More integrations** — additional providers beyond the current Twitch/YouTube/Instagram/
-  Reddit/Steam/Google/Microsoft set, as real demand shows up for specific ones.
+  Reddit/Google/Microsoft set, as real demand shows up for specific ones.
 - **Per-guild custom commands** — letting server admins define their own simple slash or text
   commands (canned responses, small automations) without needing a new plugin shipped for every
   request.
