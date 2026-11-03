@@ -20,6 +20,7 @@ import {
 } from '@pavisie/plugins';
 import { buildPluginContext } from './context';
 import { createHostService } from './host-service';
+import { removeRetiredJobSchedulers } from './retired-jobs';
 
 export interface LoadPluginsDeps {
   plugins: Plugin[];
@@ -207,6 +208,8 @@ export async function loadPlugins(deps: LoadPluginsDeps): Promise<LoadedHost> {
       }
     }
   }
+
+  await removeRetiredJobSchedulers(bullConnectionOptions, logger);
 
   return {
     registry,
