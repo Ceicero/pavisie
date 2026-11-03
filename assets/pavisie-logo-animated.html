@@ -1,0 +1,435 @@
+<title>Pavisie Animated Logo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Animated Pavisie skull-and-laurel logo with glowing eyes, gold shimmer, light rays and rising embers.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one centered stage. The canvas is the hero; wordmark and controls sit quietly beneath it. */
+  :root {
+    --void: #070608;        /* stage black, a hair warm */
+    --ash: #8d8780;         /* skull grey, used for secondary text */
+    --bone: #ece6dc;        /* primary text */
+    --gold: #d9a63a;        /* laurel gold */
+    --gold-deep: #8a5d14;   /* shadowed gold for borders */
+    --ember: #ff8a2a;       /* eye / ember orange */
+    --font-display: "Cinzel", "Trajan Pro", "Times New Roman", serif;
+    --font-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--void);
+    color: var(--bone);
+    font-family: var(--font-body);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding-block: 24px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+  .stage {
+    width: min(100%, 640px, 72vh);
+    aspect-ratio: 1 / 1;
+    max-width: 100%;
+    position: relative;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+  }
+  .wordmark {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 6vw, 44px);
+    letter-spacing: 0.32em;
+    padding-left: 0.32em; /* balance the trailing letter-spacing */
+    line-height: 1;
+    background: linear-gradient(100deg, var(--gold-deep) 0%, var(--gold) 30%, #fff1c9 50%, var(--gold) 70%, var(--gold-deep) 100%);
+    background-size: 250% 100%;
+    background-position: 100% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: wm-shine 6s ease-in-out infinite;
+  }
+  @keyframes wm-shine {
+    0%, 45% { background-position: 100% 0; }
+    75%, 100% { background-position: 0% 0; }
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+  }
+  button {
+    font: 500 14px/1 var(--font-body);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--bone);
+    background: transparent;
+    border: 1px solid var(--gold-deep);
+    border-radius: 999px;
+    padding: 10px 18px;
+    cursor: pointer;
+    transition: border-color .2s, color .2s, background-color .2s;
+  }
+  button:hover { border-color: var(--gold); color: #fff3d6; background: rgba(217,166,58,.08); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+  button[aria-pressed="true"] { background: rgba(217,166,58,.16); border-color: var(--gold); }
+  .note {
+    margin: 0;
+    color: var(--ash);
+    font-size: 13px;
+    max-width: 52ch;
+    text-align: center;
+    line-height: 1.5;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wordmark { animation: none; background-position: 50% 0; }
+  }
+</style>
+
+<div class="stage">
+  <canvas id="logo" aria-label="Animated Pavisie logo: a grey skull crowned with a gold laurel wreath, eyes glowing amber, with gold light rays and rising embers." role="img"></canvas>
+</div>
+<h1 class="wordmark">PAVISIE</h1>
+<div class="controls">
+  <button id="replay" type="button">Replay intro</button>
+  <button id="pause" type="button" aria-pressed="false">Pause</button>
+</div>
+<p class="note">Intro plays once, then a seamless 6-second loop: eye flare, laurel shimmer, light rays and embers.</p>
+
+<script>
+(() => {
+  // ---- timing (seconds) ----
+  const INTRO = 3.2;          // intro sequence length
+  const LOOP = 6;             // idle loop length; every idle motion repeats exactly on this period
+  const LOGO_SRC = "brand/pavisie-skull.png";
+  // eye centres in logo space (0..1), measured from the 1024px source art
+  const EYES = [[0.3663, 0.5612], [0.6341, 0.5617]];
+  const TAU = Math.PI * 2;
+
+  const canvas = document.getElementById("logo");
+  const ctx = canvas.getContext("2d");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- helpers ----
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+  const easeOut = (t) => 1 - Math.pow(1 - clamp(t), 3);
+  const bump = (x, c, w) => Math.exp(-Math.pow((x - c) / w, 2));
+  const mod = (a, n) => ((a % n) + n) % n;
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+  // ---- embers: deterministic so the loop is seamless and frames are reproducible ----
+  const R = rng(1337);
+  const embers = Array.from({ length: 64 }, () => ({
+    x: 0.08 + R() * 0.84,
+    y0: 0.62 + R() * 0.45,
+    rise: 0.45 + R() * 0.55,
+    k: R() < 0.55 ? 1 : 2,           // whole cycles per loop
+    ph: R(),
+    m: 1 + Math.floor(R() * 3),       // whole sway cycles per loop
+    sway: 0.008 + R() * 0.025,
+    sph: R() * TAU,
+    r: 0.6 + R() * 1.8,
+    hot: R(),
+  }));
+  const smoke = Array.from({ length: 6 }, (_, i) => ({
+    a: R() * TAU, rad: 0.12 + R() * 0.2, size: 0.28 + R() * 0.25, dir: i % 2 ? 1 : -1, y: 0.35 + R() * 0.45,
+  }));
+
+  // ---- layers built once from the logo ----
+  let logo, glowLayer, maskLayer, shimmerLayer, sprite, ready = false;
+
+  function makeCanvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
+
+  function buildLayers(img) {
+    const N = img.naturalWidth;
+    logo = img;
+
+    // laurel mask: saturated gold pixels outside the eye band
+    const src = makeCanvas(N, N), sctx = src.getContext("2d");
+    sctx.drawImage(img, 0, 0);
+    const data = sctx.getImageData(0, 0, N, N);
+    const d = data.data;
+    const y0 = Math.floor(N * 0.49), y1 = Math.floor(N * 0.625), x0 = Math.floor(N * 0.27), x1 = Math.floor(N * 0.73);
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i + 1], b = d[i + 2], a = d[i + 3];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      const sat = (mx - mn) / (mx + 1e-6);
+      const p = i / 4, px = p % N, py = (p / N) | 0;
+      const inEyes = py > y0 && py < y1 && px > x0 && px < x1;
+      const isGold = r > g && g > b && mx > 70 && !inEyes;
+      const m = isGold ? clamp((sat - 0.3) / 0.15) : 0;
+      d[i] = 255; d[i + 1] = 245; d[i + 2] = 215; d[i + 3] = a * m;
+    }
+    maskLayer = makeCanvas(N, N);
+    maskLayer.getContext("2d").putImageData(data, 0, 0);
+    shimmerLayer = makeCanvas(N, N);
+
+    // soft gold glow silhouette (shadow-only trick works without ctx.filter)
+    const pad = Math.round(N * 0.12);
+    glowLayer = makeCanvas(N + pad * 2, N + pad * 2);
+    const g = glowLayer.getContext("2d");
+    g.shadowColor = "rgba(230,160,50,1)";
+    g.shadowBlur = N * 0.045;
+    g.shadowOffsetX = N * 4;
+    g.drawImage(maskLayer, pad - N * 4, pad);
+    g.drawImage(maskLayer, pad - N * 4, pad);
+
+    // ember sprite
+    sprite = makeCanvas(64, 64);
+    const s = sprite.getContext("2d");
+    const sg = s.createRadialGradient(32, 32, 0, 32, 32, 32);
+    sg.addColorStop(0, "rgba(255,245,210,1)");
+    sg.addColorStop(0.18, "rgba(255,190,80,0.9)");
+    sg.addColorStop(0.45, "rgba(255,120,30,0.28)");
+    sg.addColorStop(1, "rgba(255,90,0,0)");
+    s.fillStyle = sg; s.fillRect(0, 0, 64, 64);
+
+    ready = true;
+  }
+
+  // ---- one frame at absolute time t (seconds since intro start) ----
+  function render(t) {
+    const S = canvas.width;
+    const cx = S / 2, cy = S * 0.5;
+    const tau = t - INTRO;                     // idle clock, negative during intro
+    const ph = mod(tau, LOOP) / LOOP;          // loop phase 0..1
+    const w = (n) => Math.sin(TAU * n * tau / LOOP);
+
+    // intro envelopes (all reach 1 by the end of the intro)
+    const eyeOn = smooth(0.15, 0.7, t);
+    const eyeFlash = bump(t, 0.75, 0.16) * 1.4;
+    const logoIn = smooth(0.75, 1.9, t);
+    const scaleIn = 0.86 + 0.14 * easeOut((t - 0.75) / 1.4);
+    const ambient = smooth(1.0, 2.8, t);
+    const boom = t < INTRO ? bump(t, 1.12, 0.09) : 0;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#070608";
+    ctx.fillRect(0, 0, S, S);
+
+    // warm under-glow
+    let gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, S * 0.62);
+    const breathe = 0.5 + 0.5 * w(1);
+    gr.addColorStop(0, `rgba(120,76,18,${(0.28 + 0.1 * breathe) * ambient})`);
+    gr.addColorStop(0.5, `rgba(60,34,8,${0.18 * ambient})`);
+    gr.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, S, S);
+
+    // drifting smoke
+    ctx.globalCompositeOperation = "lighter";
+    for (const s of smoke) {
+      const a = s.a + s.dir * TAU * tau / LOOP;
+      const x = cx + Math.cos(a) * s.rad * S, y = s.y * S + Math.sin(a) * s.rad * S * 0.4;
+      const r = s.size * S;
+      const sg = ctx.createRadialGradient(x, y, 0, x, y, r);
+      sg.addColorStop(0, `rgba(70,58,46,${0.09 * ambient})`);
+      sg.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = sg; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+
+    // light rays (rotate one ray-gap per loop, so the loop is seamless)
+    const RAYS = 16;
+    const rot = (TAU / RAYS) * (tau / LOOP) + 0.2;
+    ctx.save();
+    ctx.translate(cx, cy * 0.98);
+    ctx.rotate(rot);
+    const rr = S * 0.75;
+    const rg = ctx.createRadialGradient(0, 0, S * 0.08, 0, 0, rr);
+    const rayA = (0.11 + 0.05 * w(2)) * ambient + boom * 0.2;
+    rg.addColorStop(0, `rgba(255,200,90,${rayA})`);
+    rg.addColorStop(0.55, `rgba(220,140,40,${rayA * 0.35})`);
+    rg.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    for (let i = 0; i < RAYS; i++) {
+      const a = (i / RAYS) * TAU, half = (TAU / RAYS) * (i % 2 ? 0.16 : 0.26);
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, rr, a - half, a + half);
+      ctx.closePath();
+    }
+    ctx.fill();
+    ctx.restore();
+
+    if (!ready) return;
+
+    // logo placement
+    const D = S * 0.78;
+    const scale = scaleIn * (1 + 0.012 * w(1));
+    const lift = -S * 0.006 * w(1);
+    const LX = (u) => cx + (u - 0.5) * D * scale;
+    const LY = (v) => cy + lift + (v - 0.5) * D * scale;
+    const box = (img, k = 1) => {
+      const sz = D * scale * k;
+      ctx.drawImage(img, cx - sz / 2, cy + lift - sz / 2, sz, sz);
+    };
+
+    // gold aura behind the wreath
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = clamp((0.5 + 0.25 * breathe) * logoIn + boom * 0.8);
+    box(glowLayer, glowLayer.width / maskLayer.width);
+
+    // the logo itself
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = logoIn;
+    box(logo);
+
+    // laurel shimmer: a bright diagonal band swept across the gold only
+    const sweepIntro = t < INTRO ? clamp((t - 1.5) / 1.2) : -1;
+    const sweepIdle = clamp((ph * LOOP - 2.6) / 1.6);
+    const sweep = sweepIntro >= 0 && sweepIntro < 1 ? sweepIntro : (t >= INTRO && sweepIdle > 0 && sweepIdle < 1 ? sweepIdle : -1);
+    if (sweep >= 0) {
+      const N = maskLayer.width;
+      const sc = shimmerLayer.getContext("2d");
+      sc.globalCompositeOperation = "source-over";
+      sc.clearRect(0, 0, N, N);
+      sc.drawImage(maskLayer, 0, 0);
+      sc.globalCompositeOperation = "source-in";
+      const p = -0.4 + sweep * 1.8;
+      const lg = sc.createLinearGradient(N * (p - 0.3), 0, N * (p + 0.3), N * 0.6);
+      lg.addColorStop(0, "rgba(255,240,200,0)");
+      lg.addColorStop(0.42, "rgba(255,230,170,0.15)");
+      lg.addColorStop(0.5, "rgba(255,252,235,0.95)");
+      lg.addColorStop(0.58, "rgba(255,230,170,0.15)");
+      lg.addColorStop(1, "rgba(255,240,200,0)");
+      sc.fillStyle = lg; sc.fillRect(0, 0, N, N);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = 0.85 * Math.sin(Math.PI * sweep) * Math.max(logoIn, 0.6);
+      box(shimmerLayer);
+    }
+
+    // eyes: core glow, flicker and a once-per-loop flare with a horizontal streak
+    const flare = t >= INTRO - 0.4 ? bump(ph * LOOP, 5.0, 0.35) : 0;
+    const flick = 0.9 + 0.06 * w(5) + 0.04 * Math.sin(TAU * 11 * tau / LOOP + 1.3);
+    const eye = clamp(eyeOn * flick + eyeFlash + flare * 0.7, 0, 2.6);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 1;
+    for (const [u, v] of EYES) {
+      const x = LX(u), y = LY(v);
+      const r = S * 0.055 * (0.7 + 0.3 * eye);
+      let eg = ctx.createRadialGradient(x, y, 0, x, y, r);
+      eg.addColorStop(0, `rgba(255,248,220,${0.85 * clamp(eye)})`);
+      eg.addColorStop(0.2, `rgba(255,190,70,${0.6 * clamp(eye)})`);
+      eg.addColorStop(0.55, `rgba(255,110,20,${0.22 * clamp(eye)})`);
+      eg.addColorStop(1, "rgba(255,80,0,0)");
+      ctx.fillStyle = eg; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+
+      // streak
+      const streak = 0.18 * eyeOn + eyeFlash * 0.8 + flare;
+      if (streak > 0.01) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(1, 0.07);
+        const sr = S * (0.16 + 0.14 * clamp(eyeFlash + flare));
+        const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, sr);
+        sg.addColorStop(0, `rgba(255,236,190,${clamp(streak) * 0.9})`);
+        sg.addColorStop(0.4, `rgba(255,160,50,${clamp(streak) * 0.3})`);
+        sg.addColorStop(1, "rgba(255,120,0,0)");
+        ctx.fillStyle = sg; ctx.fillRect(-sr, -sr, sr * 2, sr * 2);
+        ctx.restore();
+      }
+    }
+
+    // intro shockwave ring
+    if (t < INTRO) {
+      const k = clamp((t - 1.05) / 1.1);
+      if (k > 0 && k < 1) {
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = (1 - k) * 0.9;
+        ctx.strokeStyle = "rgba(255,200,100,1)";
+        ctx.lineWidth = S * 0.012 * (1 - k) + 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, S * (0.12 + 0.62 * easeOut(k)), 0, TAU);
+        ctx.stroke();
+      }
+      // flash
+      const fl = boom * 0.16;
+      if (fl > 0.003) {
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = fl;
+        ctx.fillStyle = "rgb(255,210,140)";
+        ctx.fillRect(0, 0, S, S);
+      }
+    }
+
+    // embers
+    ctx.globalCompositeOperation = "lighter";
+    for (const e of embers) {
+      const u = mod(e.k * tau / LOOP + e.ph, 1);
+      const env = Math.sin(Math.PI * u);
+      const a = env * ambient * (0.45 + 0.55 * e.hot);
+      if (a < 0.02) continue;
+      const x = (e.x + e.sway * Math.sin(TAU * e.m * tau / LOOP + e.sph)) * S;
+      const y = (e.y0 - u * e.rise) * S;
+      const r = e.r * S * 0.012 * (0.6 + 0.4 * env);
+      ctx.globalAlpha = a;
+      ctx.drawImage(sprite, x - r, y - r, r * 2, r * 2);
+    }
+
+    // vignette
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    const vg = ctx.createRadialGradient(cx, cy, S * 0.38, cx, cy, S * 0.75);
+    vg.addColorStop(0, "rgba(7,6,8,0)");
+    vg.addColorStop(1, "rgba(7,6,8,0.85)");
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, S, S);
+  }
+
+  // ---- sizing ----
+  function fit() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const px = Math.round(canvas.clientWidth * dpr);
+    if (px > 0 && canvas.width !== px) { canvas.width = px; canvas.height = px; }
+  }
+
+  // ---- playback ----
+  let start = performance.now(), paused = reduceMotion, pausedAt = reduceMotion ? INTRO : 0, raf = 0;
+  const btnPause = document.getElementById("pause");
+  const btnReplay = document.getElementById("replay");
+  const now = () => (paused ? pausedAt : (performance.now() - start) / 1000);
+
+  function frame() { fit(); render(now()); if (!paused) raf = requestAnimationFrame(frame); }
+  function setPaused(p) {
+    if (p === paused) return;
+    if (p) { pausedAt = now(); paused = true; cancelAnimationFrame(raf); frame(); }
+    else { start = performance.now() - pausedAt * 1000; paused = false; raf = requestAnimationFrame(frame); }
+    btnPause.textContent = paused ? "Play" : "Pause";
+    btnPause.setAttribute("aria-pressed", String(paused));
+  }
+  btnPause.addEventListener("click", () => setPaused(!paused));
+  btnReplay.addEventListener("click", () => {
+    pausedAt = 0; start = performance.now();
+    if (paused) setPaused(false);
+  });
+  btnPause.textContent = paused ? "Play" : "Pause";
+  btnPause.setAttribute("aria-pressed", String(paused));
+  window.addEventListener("resize", () => { if (paused) frame(); });
+
+  const img = new Image();
+  img.onload = () => { buildLayers(img); start = performance.now(); frame(); };
+  img.src = LOGO_SRC;
+  frame();
+
+  // Hook for offline video export: render a single frame at time t into a size x size canvas.
+  window.pavisieLogo = {
+    INTRO, LOOP,
+    get ready() { return ready; },
+    renderAt(t, size) { setPaused(true); canvas.style.width = canvas.style.height = size + "px"; canvas.width = canvas.height = size; render(t); return canvas; },
+  };
+})();
+</script>
