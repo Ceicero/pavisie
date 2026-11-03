@@ -342,7 +342,7 @@ export async function revokeTwitchToken(accessToken: string): Promise<void> {
 // returns availability per provider"). This uses the canonical provider-id set from `@pavisie/types/integrations`
 // (matching what `/integration connect`/`alerts add` accept and the `IntegrationProvider` Prisma enum, lowercased)
 // rather than this file's own `IntegrationProviderId` (which only covers the oauth/webhook connect flow above and
-// predates youtube/steam being addressable at all — they connect only via `POST .../integrations/alerts`).
+// predates youtube being addressable at all — they connect only via `POST .../integrations/alerts`).
 // -----------------------------------------------------------------------------
 
 interface ProviderMeta {
@@ -376,7 +376,6 @@ const PROVIDER_META: Record<CanonicalProviderId, ProviderMeta> = {
     kind: 'apikey',
     requiredEnv: ['REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET', 'REDDIT_USER_AGENT'],
   },
-  steam: { id: 'steam', name: 'Steam', kind: 'public', requiredEnv: ['STEAM_API_KEY'] },
   google_calendar: {
     id: 'google_calendar',
     name: 'Google Calendar',
@@ -392,9 +391,9 @@ const PROVIDER_META: Record<CanonicalProviderId, ProviderMeta> = {
   generic_webhook: { id: 'generic_webhook', name: 'Generic webhook', kind: 'webhook', requiredEnv: [] },
 };
 
-const ALERT_CAPABLE: ReadonlySet<CanonicalProviderId> = new Set(['twitch', 'youtube', 'reddit', 'steam']);
-export type AlertProviderId = 'twitch' | 'youtube' | 'reddit' | 'steam';
-export const ALERT_PROVIDER_IDS: readonly AlertProviderId[] = ['twitch', 'youtube', 'reddit', 'steam'];
+const ALERT_CAPABLE: ReadonlySet<CanonicalProviderId> = new Set(['twitch', 'youtube', 'reddit']);
+export type AlertProviderId = 'twitch' | 'youtube' | 'reddit';
+export const ALERT_PROVIDER_IDS: readonly AlertProviderId[] = ['twitch', 'youtube', 'reddit'];
 
 /** Canonical-id (`@pavisie/types/integrations`) -> Prisma `IntegrationProvider` enum, covering every provider
  * (unlike `PROVIDER_ENUM_MAP` above, which only covers the ids the oauth/webhook connect flow uses). */
@@ -403,7 +402,6 @@ export const CANONICAL_PROVIDER_ENUM_MAP: Record<CanonicalProviderId, Integratio
   youtube: 'YOUTUBE',
   instagram: 'INSTAGRAM',
   reddit: 'REDDIT',
-  steam: 'STEAM',
   google_calendar: 'GOOGLE_CALENDAR',
   microsoft_calendar: 'MICROSOFT_CALENDAR',
   generic_webhook: 'GENERIC_WEBHOOK',

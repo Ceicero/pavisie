@@ -11,7 +11,7 @@ export const manifest = defineManifest({
   id: 'integrations',
   name: 'Integrations',
   description:
-    'Secure connector framework for optional external services: Twitch, YouTube, Instagram, Reddit, Steam, Google/Microsoft Calendar, and generic webhooks.',
+    'Secure connector framework for optional external services: Twitch, YouTube, Instagram, Reddit, Google/Microsoft Calendar, and generic webhooks.',
   category: 'integrations',
   version: '0.1.0',
   defaultEnabled: false,
@@ -30,7 +30,7 @@ export const manifest = defineManifest({
     },
     {
       permission: PermissionFlagsBits.EmbedLinks,
-      feature: 'alert embeds (Twitch/YouTube/Instagram/Reddit/Steam/Calendar)',
+      feature: 'alert embeds (Twitch/YouTube/Instagram/Reddit/Calendar)',
       optional: true,
       fallback: 'Alerts post as plain text instead of a rich embed.',
     },
@@ -47,7 +47,6 @@ export const manifest = defineManifest({
     'REDDIT_CLIENT_ID',
     'REDDIT_CLIENT_SECRET',
     'REDDIT_USER_AGENT',
-    'STEAM_API_KEY',
     'GOOGLE_CLIENT_ID',
     'GOOGLE_CLIENT_SECRET',
     'MICROSOFT_CLIENT_ID',
@@ -61,7 +60,7 @@ export const manifest = defineManifest({
   privacyNotes: [
     'OAuth access/refresh tokens are encrypted at rest (AES-256-GCM) and only decrypted in-process to make an API call.',
     'Inbound/outbound webhook secrets are encrypted at rest and shown in plaintext exactly once, at creation time.',
-    'Alert connectors (Twitch/YouTube/Reddit/Steam) only read publicly available data about the watched target — no message content or member data is sent to any provider.',
+    'Alert connectors (Twitch/YouTube/Reddit) only read publicly available data about the watched target — no message content or member data is sent to any provider.',
     "Instagram reads only the connected account's own media via the official Instagram API with Instagram Login (own-account OAuth connect, not the watched-target model above) — it cannot look up or read any other account's posts.",
     'Outbound webhook payloads are whatever the triggering platform event carries (case numbers, user ids, reasons) — never raw message content.',
     'Twitch chat bot (run for the streamer and managed on the creator dashboard, not in this server): chat messages are parsed in memory only, to match a command — never persisted, logged, or sent to Discord.',

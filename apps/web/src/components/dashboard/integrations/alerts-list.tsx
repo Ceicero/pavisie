@@ -46,7 +46,7 @@ export function AlertsList({ guildId }: { guildId: string }) {
     return (
       <EmptyState
         title="No alert watches yet"
-        description="Add a Twitch, YouTube, Reddit, or Steam watch from one of the provider cards above."
+        description="Add a Twitch, YouTube, or Reddit watch from one of the provider cards above."
       />
     );
   }

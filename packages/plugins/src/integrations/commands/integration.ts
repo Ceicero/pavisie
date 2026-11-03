@@ -234,7 +234,7 @@ async function handleConnect(c: Parameters<PluginCommand['execute']>[0]): Promis
 
   // Only providers that genuinely need the server admin to sign in elsewhere (Instagram, Google/Microsoft
   // Calendar) are sent to the dashboard. Twitch is `apikey`: alerts use the bot's own app credentials, so it is
-  // connected right here like YouTube/Reddit/Steam, with just a login + channel.
+  // connected right here like YouTube/Reddit, with just a login + channel.
   if (providerDef.kind === 'oauth') {
     const dashboardUrl = c.ctx.env.DASHBOARD_URL ?? 'the dashboard';
     const url = `${dashboardUrl}/dashboard/${c.guildId}/integrations`;
@@ -253,7 +253,7 @@ async function handleConnect(c: Parameters<PluginCommand['execute']>[0]): Promis
     return;
   }
 
-  // apikey/public providers (youtube, steam, reddit): connect with inline options, or point at `alerts add`.
+  // apikey providers (youtube, reddit): connect with inline options, or point at `alerts add`.
   const target = c.interaction.options.getString('target');
   const channel = c.interaction.options.getChannel('channel');
   if (!target || !channel) {

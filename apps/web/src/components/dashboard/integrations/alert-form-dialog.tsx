@@ -29,7 +29,6 @@ const PROVIDER_LABELS: Record<
   twitch: { label: 'Twitch', targetLabel: 'Twitch login', targetPlaceholder: 'shroud' },
   youtube: { label: 'YouTube', targetLabel: 'Channel ID', targetPlaceholder: 'UCxxxxxxxxxxxxxxxxxxxxxx' },
   reddit: { label: 'Reddit', targetLabel: 'Subreddit', targetPlaceholder: 'gaming' },
-  steam: { label: 'Steam', targetLabel: 'App ID', targetPlaceholder: '730' },
 };
 
 export interface AlertFormDialogProps {

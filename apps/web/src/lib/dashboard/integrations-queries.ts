@@ -124,7 +124,7 @@ export function useDisconnectConnection(guildId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Alert watches (twitch/youtube/reddit/steam)
+// Alert watches (twitch/youtube/reddit)
 // ---------------------------------------------------------------------------
 
 export function useAlertConnections(guildId: string | undefined, provider?: string) {

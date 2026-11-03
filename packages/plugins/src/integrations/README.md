@@ -12,7 +12,6 @@ degrades independently when its env vars are unset — the plugin itself never b
     orphaned ones cleaned up by the `twitch-eventsub-cleanup` job (docs/ARCHITECTURE.md §19a-i).
   - **YouTube** — new upload alerts, polling the channel's uploads playlist every 10 minutes.
   - **Reddit** — new post alerts for a subreddit's `/new` feed every 5 minutes, with an NSFW filter.
-  - **Steam** — app news alerts every 30 minutes.
 - **Calendar reminders** — Google Calendar / Microsoft 365 Calendar, OAuth-authorized from the dashboard, polling
   upcoming events every 15 minutes.
 - **Instagram** — new-post alerts for the OAuth-authorized account's own media only (Meta removed
@@ -60,9 +59,9 @@ What still lives in this package is the **runtime**: `twitch-chat/` (`helix.ts`,
 
 `/integration connect <provider> [target] [channel] [role] [template]` — OAuth providers (Instagram, Google/Microsoft
 Calendar) reply with a dashboard link (OAuth must start from a signed-in dashboard session); apikey/public providers
-(Twitch, YouTube, Reddit, Steam) create the connection immediately if `target`+`channel` are given.
+(Twitch, YouTube, Reddit) create the connection immediately if `target`+`channel` are given.
 `/integration disconnect <connection>` · `/integration status [connection]` · `/integration list`
-`/integration alerts add|remove|list` — Twitch/YouTube/Reddit/Steam watch targets (one `IntegrationConnection` row
+`/integration alerts add|remove|list` — Twitch/YouTube/Reddit watch targets (one `IntegrationConnection` row
 per target).
 `/integration webhook create|list|delete` — inbound endpoints; the secret is shown exactly once, at creation.
 `/integration outbound create|list|delete|test` — outbound endpoints.

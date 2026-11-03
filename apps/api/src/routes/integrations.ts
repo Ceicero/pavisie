@@ -469,7 +469,7 @@ export default async function integrationsRoutes(app: ZodFastifyInstance): Promi
   );
 
   // ---------------------------------------------------------------------------------------------------------
-  // Alert watches (Twitch/YouTube/Reddit/Steam) — one `IntegrationConnection` row per watched target.
+  // Alert watches (Twitch/YouTube/Reddit) — one `IntegrationConnection` row per watched target.
   // ---------------------------------------------------------------------------------------------------------
 
   app.get(

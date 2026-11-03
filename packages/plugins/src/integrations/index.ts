@@ -9,7 +9,6 @@ import {
   pollInstagramJob,
   pollMicrosoftCalendarJob,
   pollRedditJob,
-  pollSteamJob,
   pollTwitchJob,
   pollYoutubeJob,
 } from './jobs/poll';
@@ -40,7 +39,6 @@ export const plugin = definePlugin({
     pollTwitchJob,
     pollYoutubeJob,
     pollRedditJob,
-    pollSteamJob,
     pollGoogleCalendarJob,
     pollMicrosoftCalendarJob,
     pollInstagramJob,

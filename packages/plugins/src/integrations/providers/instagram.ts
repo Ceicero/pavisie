@@ -19,7 +19,7 @@ export const instagramConfigSchema = z.object({
   /** ISO 8601 timestamp of the newest media item already alerted on — the "don't flood on first poll" watermark
    * (see `poll` below). Read/written only by the poller itself, never by the dashboard or a command. */
   lastSeenTimestamp: z.string().nullable().optional(),
-  // Deliberately no `target`: unlike the alert-style providers (twitch/youtube/reddit/steam) and
+  // Deliberately no `target`: unlike the alert-style providers (twitch/youtube/reddit) and
   // google-calendar.ts's parity placeholder field, there is nothing to enter here at all — Instagram only
   // supports connecting and reading the authorized account's own media (Meta shut down arbitrary-username
   // lookups with the Basic Display API in Dec 2024). `readAlertConfig` (util.ts) already defaults a missing
