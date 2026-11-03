@@ -144,16 +144,6 @@ _Polls, giveaways, suggestions, scheduled announcements, reminders, event RSVPs,
 | Manage Roles | birthday role (optional) | Optional | No role is added; the announcement still posts. |
 
 
-### Game Stats (`gamestats`)
-
-_Per-guild leaderboards comparing members' game stats. Members opt in by linking their Steam account; stats are fetched from the public Steam Web API. Steam-only (no public API exists for console platforms) — first game: Dead by Daylight._ (disabled by default, community)
-
-| Permission | Feature | Required? | Fallback if missing |
-|---|---|---|---|
-| Send Messages | stat card / leaderboard replies | Required | The command replies with an error instead of the stat card/leaderboard. |
-| Embed Links | stat card / leaderboard embeds | Required | Falls back to plain text where possible. |
-
-
 ### Economy (`economy`)
 
 _Optional virtual currency: balance, daily rewards with a streak bonus, giving between members, and a leaderboard. Virtual points only — no purchase, no cash-out, no gambling. Disabled by default._ (disabled by default, community)
@@ -181,13 +171,13 @@ _No Discord permissions declared — every command replies over the interaction 
 
 ### Integrations (`integrations`)
 
-_Secure connector framework for optional external services: Twitch, YouTube, Instagram, Reddit, Steam, Google/Microsoft Calendar, and generic webhooks._ (disabled by default, integrations)
+_Secure connector framework for optional external services: Twitch, YouTube, Instagram, Reddit, Google/Microsoft Calendar, and generic webhooks._ (disabled by default, integrations)
 
 | Permission | Feature | Required? | Fallback if missing |
 |---|---|---|---|
 | View Channel | posting alerts / inbound webhook events | Required | Alerts silently fail to post in that channel; connection health shows an error. |
 | Send Messages | posting alerts / inbound webhook events | Required | Alerts silently fail to post in that channel; connection health shows an error. |
-| Embed Links | alert embeds (Twitch/YouTube/Instagram/Reddit/Steam/Calendar) | Optional | Alerts post as plain text instead of a rich embed. |
+| Embed Links | alert embeds (Twitch/YouTube/Instagram/Reddit/Calendar) | Optional | Alerts post as plain text instead of a rich embed. |
 
 
 ### AI Assistant (`ai`)
