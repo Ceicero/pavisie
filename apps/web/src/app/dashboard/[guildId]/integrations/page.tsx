@@ -138,7 +138,7 @@ export default function IntegrationsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Integrations"
-        description="Get Twitch, YouTube, Instagram, Reddit and Steam alerts, calendar reminders, and your own webhooks in Discord. Every connector is optional and off until you set it up."
+        description="Get Twitch, YouTube, Instagram and Reddit alerts, calendar reminders, and your own webhooks in Discord. Every connector is optional and off until you set it up."
       />
 
       <Card>

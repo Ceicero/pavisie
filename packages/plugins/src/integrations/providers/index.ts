@@ -9,7 +9,6 @@ import { googleCalendarProvider } from './google-calendar';
 import { instagramProvider } from './instagram';
 import { microsoftCalendarProvider } from './microsoft-calendar';
 import { redditProvider } from './reddit';
-import { steamProvider } from './steam';
 import { twitchProvider } from './twitch';
 import { youtubeProvider } from './youtube';
 import { isProviderEnvSatisfied, type IntegrationProviderDef } from './types';
@@ -19,7 +18,6 @@ const REGISTRY: Record<IntegrationProviderId, IntegrationProviderDef> = {
   youtube: youtubeProvider,
   instagram: instagramProvider,
   reddit: redditProvider,
-  steam: steamProvider,
   google_calendar: googleCalendarProvider,
   microsoft_calendar: microsoftCalendarProvider,
   generic_webhook: genericWebhookProvider,
@@ -31,22 +29,20 @@ export const PROVIDER_ENUM_MAP: Record<IntegrationProviderId, PrismaIntegrationP
   youtube: 'YOUTUBE',
   instagram: 'INSTAGRAM',
   reddit: 'REDDIT',
-  steam: 'STEAM',
   google_calendar: 'GOOGLE_CALENDAR',
   microsoft_calendar: 'MICROSOFT_CALENDAR',
   generic_webhook: 'GENERIC_WEBHOOK',
 };
 
-// OPENAI/ANTHROPIC are the `ai` plugin's own connector kinds (SPEC.md §K); GITHUB/NOTION/STRIPE are retained
+// OPENAI/ANTHROPIC are the `ai` plugin's own connector kinds (SPEC.md §K); GITHUB/NOTION/STRIPE/STEAM are retained
 // Prisma enum values for historical rows only, no longer offered as connectable providers (schema.prisma) — the
 // `IntegrationProvider` Prisma enum is shared, but this plugin never creates or reads connections of any of
-// those five values, hence `Partial`.
+// those six values, hence `Partial`.
 const ENUM_TO_PROVIDER_ID: Partial<Record<PrismaIntegrationProvider, IntegrationProviderId>> = {
   TWITCH: 'twitch',
   YOUTUBE: 'youtube',
   INSTAGRAM: 'instagram',
   REDDIT: 'reddit',
-  STEAM: 'steam',
   GOOGLE_CALENDAR: 'google_calendar',
   MICROSOFT_CALENDAR: 'microsoft_calendar',
   GENERIC_WEBHOOK: 'generic_webhook',

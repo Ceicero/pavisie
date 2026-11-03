@@ -25,7 +25,7 @@ export async function claimAlertOnce(
   return added === 1;
 }
 
-/** Per-connection alert config shared by every alert-style provider (twitch/youtube/reddit/steam). */
+/** Per-connection alert config shared by every alert-style provider (twitch/youtube/reddit). */
 export interface AlertConnectionConfig {
   target: string;
   channelId: string;

@@ -42,7 +42,6 @@ function makePollJob(name: string, providerId: IntegrationProviderId, cronPatter
 export const pollTwitchJob = makePollJob('poll-twitch', 'twitch', '*/2 * * * *');
 export const pollYoutubeJob = makePollJob('poll-youtube', 'youtube', '*/10 * * * *');
 export const pollRedditJob = makePollJob('poll-reddit', 'reddit', '*/5 * * * *');
-export const pollSteamJob = makePollJob('poll-steam', 'steam', '*/30 * * * *');
 export const pollGoogleCalendarJob = makePollJob('poll-google-calendar', 'google_calendar', '*/15 * * * *');
 export const pollMicrosoftCalendarJob = makePollJob(
   'poll-microsoft-calendar',

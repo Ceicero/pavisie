@@ -94,7 +94,7 @@ export function ProviderCard({
         ) : null}
 
         {/* "Connect" (an OAuth sign-in) exists only for providers that really need one — `kind: 'oauth'`.
-            Alert providers (Twitch, YouTube, Reddit, Steam) are set up with "Add watch" below instead. Any
+            Alert providers (Twitch, YouTube, Reddit) are set up with "Add watch" below instead. Any
             account-style connection a non-OAuth provider already has (an older Twitch one) is still listed here
             so it can be disconnected. */}
         {onDisconnect && ((provider.kind === 'oauth' && onConnect) || connections.length > 0) ? (

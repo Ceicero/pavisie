@@ -148,22 +148,21 @@ describe('GET /guilds/:guildId/integrations/providers', () => {
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { id: string; available: boolean }[];
-    expect(body).toHaveLength(8);
+    expect(body).toHaveLength(7);
     expect(body.map((p) => p.id)).toEqual(
       expect.arrayContaining([
         'twitch',
         'youtube',
         'instagram',
         'reddit',
-        'steam',
         'google_calendar',
         'microsoft_calendar',
         'generic_webhook',
       ]),
     );
-    // GitHub, Notion and Stripe were removed as offered providers 2026-09-02 — pin their absence, not just the
+    // GitHub, Notion and Stripe were removed as offered providers 2026-09-02, and Steam 2026-11-03 — pin their absence, not just the
     // count, so a future addition can't silently restore one of them under this same total.
-    expect(body.map((p) => p.id)).not.toEqual(expect.arrayContaining(['github', 'notion', 'stripe']));
+    expect(body.map((p) => p.id)).not.toEqual(expect.arrayContaining(['github', 'notion', 'stripe', 'steam']));
     await app.close();
   });
 });

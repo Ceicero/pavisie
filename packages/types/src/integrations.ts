@@ -5,14 +5,13 @@ import type { IntegrationConnectionDto, WebhookEndpointDto } from './api';
 
 /** Every connector the `integrations` plugin knows about, matching (lowercased) `IntegrationProvider` Prisma enum
  * values. GitHub, Notion and Stripe (the guild-facing connector) were removed as offered providers on
- * 2026-09-02 — their Prisma enum values are retained for historical rows only (see schema.prisma), but they are
+ * 2026-09-02, and Steam on 2026-11-03 — their Prisma enum values are retained for historical rows only (see schema.prisma), but they are
  * deliberately absent here, so no code can newly connect one. */
 export const INTEGRATION_PROVIDER_IDS = [
   'twitch',
   'youtube',
   'instagram',
   'reddit',
-  'steam',
   'google_calendar',
   'microsoft_calendar',
   'generic_webhook',
@@ -24,7 +23,7 @@ export type IntegrationProviderId = (typeof INTEGRATION_PROVIDER_IDS)[number];
 export type IntegrationProviderKind = 'oauth' | 'apikey' | 'webhook' | 'public';
 
 /** Providers that support `/integration alerts add|remove|list` watch-target connections. */
-export const ALERT_PROVIDER_IDS = ['twitch', 'youtube', 'reddit', 'steam'] as const;
+export const ALERT_PROVIDER_IDS = ['twitch', 'youtube', 'reddit'] as const;
 export type AlertProviderId = (typeof ALERT_PROVIDER_IDS)[number];
 
 /** `GET /guilds/:guildId/integrations/providers` — per-provider availability, for the dashboard's setup hints. */

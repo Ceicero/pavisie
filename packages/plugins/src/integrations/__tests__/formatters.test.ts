@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { formatTwitchStreamEmbed } from '../formatters/twitch';
 import { formatYoutubeUploadEmbed } from '../formatters/youtube';
 import { formatRedditPostEmbed, isRedditPostNsfw } from '../formatters/reddit';
-import { formatSteamNewsEmbed } from '../formatters/steam';
 
 describe('formatTwitchStreamEmbed', () => {
   it('builds a live alert with the default template', () => {
@@ -64,21 +63,5 @@ describe('formatRedditPostEmbed / isRedditPostNsfw', () => {
   it('flags NSFW posts', () => {
     expect(isRedditPostNsfw(post)).toBe(false);
     expect(isRedditPostNsfw({ ...post, over18: true })).toBe(true);
-  });
-});
-
-describe('formatSteamNewsEmbed', () => {
-  it('strips markup from the news contents', () => {
-    const embed = formatSteamNewsEmbed({
-      gid: '1',
-      title: 'Patch notes',
-      url: 'https://store.steampowered.com/news/1',
-      appid: 730,
-      contents: '<b>Fixed</b> [b]a bug[/b] in the game.',
-    });
-    expect(embed.title).toBe('Patch notes');
-    expect(embed.description).not.toContain('<b>');
-    expect(embed.description).not.toContain('[b]');
-    expect(embed.description).toContain('Fixed');
   });
 });
