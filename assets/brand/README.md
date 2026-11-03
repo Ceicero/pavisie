@@ -61,3 +61,13 @@ The rendered copies in `brand/motion/` were exported frame by frame from that pa
 | `motion/pavisie-logo-loop.gif`  | 400×400, 15 fps, 6 s seamless loop for places that only take GIFs. |
 
 Re-export these whenever `pavisie-skull.png` or the animation changes.
+
+## Banners
+
+Static banners (no animation): the logo beside the gold `PAVISIE` wordmark and the line "Modular Discord bot
+platform", on the same dark background, light rays and embers as the animated logo.
+
+| File                                 | Use                                                                 |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| `banner/pavisie-banner-1500x500.png` | Wide header: X/Twitter header, website hero, GitHub README.         |
+| `banner/pavisie-banner-960x540.png`  | Discord server banner (Server Settings → Overview → Server Banner). |
