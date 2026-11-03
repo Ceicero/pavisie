@@ -246,7 +246,6 @@
                 "roles",
                 "engagement",
                 "community",
-                "gamestats",
                 "economy",
                 "utility",
                 "media",
@@ -291,7 +290,6 @@
                 "roles",
                 "engagement",
                 "community",
-                "gamestats",
                 "economy",
                 "utility",
                 "media",
@@ -336,7 +334,6 @@
                 "roles",
                 "engagement",
                 "community",
-                "gamestats",
                 "economy",
                 "utility",
                 "media",
@@ -390,7 +387,6 @@
                 "roles",
                 "engagement",
                 "community",
-                "gamestats",
                 "economy",
                 "utility",
                 "media",
@@ -435,7 +431,6 @@
                 "roles",
                 "engagement",
                 "community",
-                "gamestats",
                 "economy",
                 "utility",
                 "media",
@@ -5836,8 +5831,7 @@
               "enum": [
                 "twitch",
                 "youtube",
-                "reddit",
-                "steam"
+                "reddit"
               ]
             },
             "in": "query",
@@ -5873,8 +5867,7 @@
                     "enum": [
                       "twitch",
                       "youtube",
-                      "reddit",
-                      "steam"
+                      "reddit"
                     ]
                   },
                   "target": {
