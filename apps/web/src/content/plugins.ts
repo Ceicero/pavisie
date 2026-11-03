@@ -104,16 +104,6 @@ export const pluginCopy: Record<PluginId, PluginCopy> = {
     ],
     highlights: ['Polls & giveaways', 'Suggestions board', 'Scheduled announcements', 'Event RSVPs'],
   },
-  gamestats: {
-    headline: 'Steam-linked leaderboards that turn a shared game into server bragging rights.',
-    whyGaming: [
-      'Members opt in by linking their public Steam profile, then the bot pulls real in-game stats — starting with Dead by Daylight — for a server leaderboard.',
-      'Steam-only and said plainly: there is no public stats API for console platforms, so this never pretends to support them.',
-      'Linking and unlinking is entirely self-service; a member controls their own data with no staff involvement or audit trail.',
-      'Disabled by default and unavailable until the server owner configures a Steam Web API key — no guessing, no scraping.',
-    ],
-    highlights: ['Disabled by default', 'Steam-only, honestly', 'Self-service linking', 'Dead by Daylight leaderboard'],
-  },
   economy: {
     headline: 'A virtual currency mini-game for engagement — never real money.',
     whyGaming: [

@@ -7,7 +7,6 @@ import tickets from './tickets';
 import roles from './roles';
 import engagement from './engagement';
 import community from './community';
-import gamestats from './gamestats';
 import economy from './economy';
 import utility from './utility';
 import media from './media';
@@ -26,7 +25,6 @@ export const allPlugins: Plugin[] = [
   roles,
   engagement,
   community,
-  gamestats,
   economy,
   utility,
   media,

@@ -9,7 +9,6 @@ import { manifest as tickets } from './tickets/manifest';
 import { manifest as roles } from './roles/manifest';
 import { manifest as engagement } from './engagement/manifest';
 import { manifest as community } from './community/manifest';
-import { manifest as gamestats } from './gamestats/manifest';
 import { manifest as economy } from './economy/manifest';
 import { manifest as utility } from './utility/manifest';
 import { manifest as media } from './media/manifest';
@@ -28,7 +27,6 @@ export const allManifests: PluginManifest[] = [
   roles,
   engagement,
   community,
-  gamestats,
   economy,
   utility,
   media,

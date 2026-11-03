@@ -53,8 +53,6 @@ function fakePrismaForExport(overrides: Record<string, unknown> = {}): PrismaCli
     enforcerRecord: empty,
     auditLog: empty,
     birthday: empty,
-    gameAccountLink: empty,
-    gameStatSnapshot: empty,
     dataRequest: { update: vi.fn(async () => ({})) },
     dataExportBlob: { upsert: vi.fn(async () => ({})) },
     ...overrides,
@@ -83,27 +81,6 @@ describe('collectGuildExport', () => {
     const data = await collectGuildExport(prisma, 'g1');
     expect(data.birthdays).toEqual([{ userId: 'u1', month: 3, day: 4 }]);
     expect(JSON.stringify(data.birthdays)).not.toContain('year');
-  });
-
-  it('includes linked game accounts and stat snapshots (gamestats plugin)', async () => {
-    const prisma = fakePrismaForExport({
-      gameAccountLink: {
-        findMany: async () => [
-          { userId: 'u1', provider: 'STEAM', externalId: '76561198000000000', externalName: 'Player' },
-        ],
-      },
-      gameStatSnapshot: {
-        findMany: async () => [
-          { userId: 'u1', game: 'dbd', stats: { escapes: 3 }, fetchedAt: new Date(0), lastError: null },
-        ],
-      },
-    });
-
-    const data = await collectGuildExport(prisma, 'g1');
-    expect(data.gamestats).toMatchObject({
-      accountLinks: [{ userId: 'u1', provider: 'STEAM', externalId: '76561198000000000' }],
-      statSnapshots: [{ userId: 'u1', game: 'dbd', stats: { escapes: 3 } }],
-    });
   });
 });
 

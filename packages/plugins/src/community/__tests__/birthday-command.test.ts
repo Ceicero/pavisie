@@ -8,7 +8,7 @@ import { configSchema, type CommunityConfig } from '../manifest';
 import en from '../locales/en.json';
 
 /** Looks a dotted key up in the plugin's real `en.json` with `{var}` interpolation (same stand-in used by
- * gamestats/__tests__/dbd-command.test.ts and integrations/__tests__/twitch-command.test.ts). */
+ * integrations/__tests__/twitch-command.test.ts). */
 function realT(key: string, vars?: Record<string, string | number>): string {
   const parts = key.split('.');
   let node: unknown = en;
