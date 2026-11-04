@@ -168,9 +168,6 @@ export default async function rolesRoutes(app: ZodFastifyInstance): Promise<void
           allowElevatedRoles: Boolean(allowElevatedRoles),
         });
       }
-      if (options) {
-        await app.prisma.rolePanelOption.deleteMany({ where: { panelId } });
-      }
 
       const updated = await app.prisma.rolePanel.update({
         where: { id: panelId },
@@ -178,7 +175,10 @@ export default async function rolesRoutes(app: ZodFastifyInstance): Promise<void
           ...panelFields,
           ...(options
             ? {
+                // Delete + create in one nested write so Prisma runs them atomically: if the update fails (e.g. a
+                // bad groupId), the panel keeps its existing options instead of being left with none.
                 options: {
+                  deleteMany: {},
                   create: options.map((opt, index) => ({ ...opt, position: opt.position ?? index })),
                 },
               }
