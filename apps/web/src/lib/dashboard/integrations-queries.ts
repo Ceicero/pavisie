@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Paginated } from '@pavisie/types';
 import type {
   CreateAlertConnectionInput,
@@ -13,6 +13,12 @@ import type {
   WebhookEndpointDetailDto,
 } from '@pavisie/types/integrations';
 import { apiFetch, toQueryString } from './api';
+import {
+  applyRequireTimestamp,
+  patchInboundWebhookRequireTimestamp,
+  readRequireTimestamp,
+  type WithRequireTimestamp,
+} from './webhook-require-timestamp';
 
 export const integrationsQueryKeys = {
   connections: (guildId: string) => ['guilds', guildId, 'integrations', 'connections'] as const,
@@ -170,7 +176,7 @@ export function useDeleteAlertConnection(guildId: string) {
 export function useInboundWebhooks(guildId: string | undefined) {
   return useQuery({
     queryKey: integrationsQueryKeys.inboundWebhooks(guildId ?? ''),
-    queryFn: () => apiFetch<WebhookEndpointDetailDto[]>(`/guilds/${guildId}/integrations/webhooks`),
+    queryFn: () => apiFetch<WithRequireTimestamp[]>(`/guilds/${guildId}/integrations/webhooks`),
     enabled: Boolean(guildId),
   });
 }
@@ -185,6 +191,11 @@ export interface CreateInboundWebhookInput {
   provider?: string;
   channelId?: string | null;
   events?: string[];
+  /**
+   * Optional. The API defaults this to false. The 201 body omits it, so the list must reload
+   * (or keep the submitted value) instead of reading the flag off the create response.
+   */
+  requireTimestamp?: boolean;
 }
 
 export function useCreateInboundWebhook(guildId: string) {
@@ -210,6 +221,70 @@ export function useDeleteInboundWebhook(guildId: string) {
       void queryClient.invalidateQueries({ queryKey: integrationsQueryKeys.inboundWebhooks(guildId) });
     },
   });
+}
+
+export interface SetInboundWebhookRequireTimestampInput {
+  endpointId: string;
+  requireTimestamp: boolean;
+}
+
+/** Replaces one row with the PATCH body. A missing `requireTimestamp` on that body is off. */
+export function mergeRequireTimestampDetail<T extends { id: string }>(
+  items: readonly T[] | undefined,
+  endpointId: string,
+  detail: Partial<T> & { requireTimestamp?: boolean },
+): T[] | undefined {
+  if (!items) return undefined;
+  return items.map((item) =>
+    item.id === endpointId ? { ...item, ...detail, requireTimestamp: readRequireTimestamp(detail) } : item,
+  );
+}
+
+/**
+ * Cache + request behavior for the incoming require-timestamp toggle.
+ * The row flips immediately, reverts on failure, and takes the 200 body on success.
+ * The list is not refetched here: a refetch of every endpoint would race a second row's save.
+ */
+export function inboundRequireTimestampMutationOptions(guildId: string, queryClient: QueryClient) {
+  const queryKey = integrationsQueryKeys.inboundWebhooks(guildId);
+  return {
+    mutationFn: ({ endpointId, requireTimestamp }: SetInboundWebhookRequireTimestampInput) =>
+      patchInboundWebhookRequireTimestamp(guildId, endpointId, requireTimestamp),
+    onMutate: async ({ endpointId, requireTimestamp }: SetInboundWebhookRequireTimestampInput) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<WithRequireTimestamp[]>(queryKey);
+      const previousValue = readRequireTimestamp(previous?.find((hook) => hook.id === endpointId));
+      queryClient.setQueryData<WithRequireTimestamp[] | undefined>(queryKey, (current) =>
+        applyRequireTimestamp(current, endpointId, requireTimestamp),
+      );
+      return { endpointId, previousValue };
+    },
+    onError: (
+      _err: unknown,
+      _vars: SetInboundWebhookRequireTimestampInput,
+      context: { endpointId: string; previousValue: boolean } | undefined,
+    ) => {
+      if (!context) return;
+      queryClient.setQueryData<WithRequireTimestamp[] | undefined>(queryKey, (current) =>
+        applyRequireTimestamp(current, context.endpointId, context.previousValue),
+      );
+    },
+    onSuccess: (
+      data: WithRequireTimestamp,
+      { endpointId }: SetInboundWebhookRequireTimestampInput,
+      _context?: { endpointId: string; previousValue: boolean },
+    ) => {
+      queryClient.setQueryData<WithRequireTimestamp[] | undefined>(queryKey, (current) =>
+        mergeRequireTimestampDetail(current, endpointId, data),
+      );
+    },
+  };
+}
+
+/** Turns timestamp verification on or off for one incoming endpoint. The request body is only `{ requireTimestamp }`. */
+export function useSetInboundWebhookRequireTimestamp(guildId: string) {
+  const queryClient = useQueryClient();
+  return useMutation(inboundRequireTimestampMutationOptions(guildId, queryClient));
 }
 
 // ---------------------------------------------------------------------------
@@ -292,7 +367,9 @@ export function useUnlinkTwitchChatChannel(guildId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (channelId: string) =>
-      apiFetch<void>(`/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}`, { method: 'DELETE' }),
+      apiFetch<void>(`/guilds/${guildId}/integrations/twitch-chat/channels/${channelId}`, {
+        method: 'DELETE',
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: integrationsQueryKeys.twitchChatLinks(guildId) });
     },
