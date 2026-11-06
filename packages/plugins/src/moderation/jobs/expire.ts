@@ -55,9 +55,17 @@ export const expireJob: PluginJob<ExpireJobData> = {
           const guild = await ctx.client.guilds.fetch(row.guildId).catch(() => null);
           const member = guild ? await guild.members.fetch(row.targetId).catch(() => null) : null;
           if (member?.roles.cache.has(roleId)) {
-            await member.roles
-              .remove(roleId, `Mute expired (case #${row.caseNumber})`)
-              .catch(() => undefined);
+            try {
+              await member.roles.remove(roleId, `Mute expired (case #${row.caseNumber})`);
+            } catch (err) {
+              // 10011 = Unknown Role: the mute role was deleted, so there is nothing left to remove.
+              // Anything else (rate limit, outage, missing permission) must leave the case active so the
+              // job retry can lift the mute instead of leaving the member muted indefinitely.
+              if ((err as { code?: unknown })?.code !== 10011) {
+                markExpired = false;
+                throw err;
+              }
+            }
           }
         }
       }
