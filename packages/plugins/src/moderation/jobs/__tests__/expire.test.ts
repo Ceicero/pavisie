@@ -151,3 +151,44 @@ describe('expireJob — temporary BAN expiry', () => {
     expect(update).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('expireJob — enforcer mute removal failures', () => {
+  function build(removeRole: ReturnType<typeof vi.fn>) {
+    const updateCalls: unknown[] = [];
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findUnique: async () => enforcerMuteCase(),
+          update: async (args: any) => {
+            updateCalls.push(args);
+            return {};
+          },
+        },
+      },
+      overrides: {
+        client: {
+          guilds: {
+            fetch: async () => ({
+              members: {
+                fetch: async () => ({ roles: { cache: new Map([[ROLE_ID, true]]), remove: removeRole } }),
+              },
+            }),
+          },
+        } as any,
+      },
+    });
+    return { ctx, updateCalls };
+  }
+
+  it('keeps the case active and rethrows so the job retries when role removal fails', async () => {
+    const { ctx, updateCalls } = build(vi.fn().mockRejectedValue(Object.assign(new Error('outage'), { code: 500 })));
+    await expect(expireJob.processor(ctx, fakeJob(CASE_ID))).rejects.toThrow('outage');
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it('treats an already-deleted mute role (10011) as lifted and marks the case expired', async () => {
+    const { ctx, updateCalls } = build(vi.fn().mockRejectedValue(Object.assign(new Error('Unknown Role'), { code: 10011 })));
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(updateCalls).toHaveLength(1);
+  });
+});
