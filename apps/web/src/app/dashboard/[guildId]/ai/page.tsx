@@ -155,7 +155,7 @@ export default function AiPage() {
         <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
           <CardTitle>Usage</CardTitle>
           <Select value={String(rangeDays)} onValueChange={(v) => setRangeDays(Number(v))}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger aria-label="Usage time range" className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

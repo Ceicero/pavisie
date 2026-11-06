@@ -102,8 +102,9 @@ export function CasesTab({ guildId }: { guildId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <Input
+          aria-label="Filter by target user id"
           placeholder="Filter by target user id"
-          className="max-w-xs"
+          className="w-full sm:max-w-xs"
           value={filters.targetId ?? ''}
           onChange={(e) => updateFilter({ targetId: e.target.value || undefined })}
         />
@@ -111,7 +112,7 @@ export function CasesTab({ guildId }: { guildId: string }) {
           value={filters.type ?? 'all'}
           onValueChange={(v) => updateFilter({ type: v === 'all' ? undefined : v })}
         >
-          <SelectTrigger className="w-44">
+          <SelectTrigger aria-label="Case type" className="w-full sm:w-44">
             <SelectValue placeholder="All types" />
           </SelectTrigger>
           <SelectContent>

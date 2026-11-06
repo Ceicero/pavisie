@@ -6,6 +6,7 @@ import { Button, Card, CardContent, EmptyState, PageHeader, Skeleton } from '@pa
 import { useGuilds } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
 import { API_BASE_URL } from '@/lib/dashboard/api';
+import { inviteUrl } from '@/lib/site';
 
 function GuildIcon({ name, iconUrl }: { name: string; iconUrl: string | null }) {
   if (iconUrl) {
@@ -21,9 +22,10 @@ function GuildIcon({ name, iconUrl }: { name: string; iconUrl: string | null }) 
 /** Guild selector: every server the user can manage, with an "Add to server" path for guilds without the bot. */
 export default function GuildSelectorPage() {
   const { data: guilds, isLoading, error, refetch } = useGuilds();
+  const invite = inviteUrl();
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader title="Your servers" description="Pick a server to configure Pavisie for it." />
 
       {error ? <ErrorState error={error} onRetry={() => refetch()} /> : null}
@@ -40,6 +42,13 @@ export default function GuildSelectorPage() {
         <EmptyState
           title="No servers found"
           description="You need Manage Server permission on a Discord server for it to show up here."
+          action={
+            invite ? (
+              <Button asChild>
+                <a href={invite}>Add Pavisie to a server</a>
+              </Button>
+            ) : undefined
+          }
         />
       ) : null}
 
@@ -56,11 +65,11 @@ export default function GuildSelectorPage() {
                   </div>
                 </div>
                 {guild.botPresent ? (
-                  <Button asChild>
+                  <Button asChild className="w-full">
                     <Link href={`/dashboard/${guild.id}`}>Manage</Link>
                   </Button>
                 ) : (
-                  <Button variant="outline" asChild>
+                  <Button variant="outline" asChild className="w-full">
                     <a href={`${API_BASE_URL}/auth/invite?guild_id=${guild.id}`}>
                       <Plus className="h-4 w-4" />
                       Add Pavisie

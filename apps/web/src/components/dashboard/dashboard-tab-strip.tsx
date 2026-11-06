@@ -42,7 +42,7 @@ export function DashboardTabStrip({ guildId }: DashboardTabStripProps) {
   return (
     <nav
       aria-label="Dashboard sections"
-      className="sticky top-14 z-20 border-b border-border bg-card lg:hidden"
+      className="sticky top-14 z-20 min-w-0 overflow-hidden border-b border-border bg-card lg:hidden"
     >
       <div className="flex gap-1 overflow-x-auto px-3 py-2">
         {NAV.map((item) => {
@@ -62,7 +62,7 @@ export function DashboardTabStrip({ guildId }: DashboardTabStripProps) {
                   : 'border border-transparent text-muted-foreground hover:border-gold-5/40 hover:text-foreground'
               }`}
             >
-              <item.icon />
+              <item.icon aria-hidden="true" />
               {item.label}
               {disabled ? (
                 <Badge variant="outline" className="text-[10px]">

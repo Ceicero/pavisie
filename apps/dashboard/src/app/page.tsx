@@ -6,18 +6,11 @@ import { ThemeToggle } from '../components/theme-toggle';
 import { useSession } from '../lib/session';
 
 /**
- * Placeholder root page for this service (`app.pavisie.com`). The per-guild config dashboard
- * that used to live here moved to `apps/web` (`pavisie.com/dashboard/**`, see
- * `next.config.ts`'s `redirects()` for the compatibility redirect that sends old links there).
- * This service's job now is to host Brandon's upcoming owner-only ops console
- * (`dev.pavisie.com`: cross-server support tickets, fleet metrics, error monitoring, bot
- * health) — real routes replace this page once that work starts.
- *
- * Kept intentionally honest/empty rather than faking ops content in the meantime. Session, theme,
- * and `@pavisie/ui` are exercised here on purpose (not just left wired but unused) so this stays
- * a verified, working baseline for that work instead of dead scaffolding.
+ * Root page for this service (`app.pavisie.com`). `/` and `/dashboard/**` redirect to the
+ * website (see `next.config.ts`); this renders only for requests that are not redirected.
+ * It shows real session state and the theme control. It does not invent ops content.
  */
-export default function RootPlaceholderPage() {
+export default function RootPage() {
   const { status, user } = useSession();
 
   const sessionLabel =
@@ -28,16 +21,21 @@ export default function RootPlaceholderPage() {
         : 'Not signed in';
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-2xl flex-col items-center justify-center gap-6 p-6 text-center">
-      <BrandWordmark />
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-6 px-6 py-16">
+      <div className="flex items-center justify-between gap-4">
+        <BrandWordmark />
+        <ThemeToggle />
+      </div>
       <PageHeader
-        title="Pavisie ops console"
-        description="Nothing here yet. This service will host the owner-only ops console: cross-server support tickets, fleet metrics, error monitoring, and bot health."
+        className="pb-0"
+        title="Pavisie"
+        description="This page confirms your sign-in. Server configuration lives on the main site."
       />
-      <Card className="w-full">
-        <CardContent className="flex items-center justify-between gap-3 p-4 text-sm text-muted-foreground">
-          <span>{sessionLabel}</span>
-          <ThemeToggle />
+      <Card>
+        <CardContent className="p-4">
+          <p role="status" className="text-sm text-muted-foreground">
+            {sessionLabel}
+          </p>
         </CardContent>
       </Card>
     </div>
