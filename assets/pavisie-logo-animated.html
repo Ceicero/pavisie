@@ -1,6 +1,6 @@
 <title>Pavisie Animated Logo</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Animated Pavisie skull-and-laurel logo with glowing eyes, gold shimmer, light rays and rising embers.">
+<meta name="description" content="Animated Pavisie shield logo with a glinting star gem, gold shine, light rays and rising embers.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Barlow:wght@400;500;600&display=swap">
@@ -8,11 +8,11 @@
   /* Layout: one centered stage. The canvas is the hero; wordmark and controls sit quietly beneath it. */
   :root {
     --void: #070608;        /* stage black, a hair warm */
-    --ash: #8d8780;         /* skull grey, used for secondary text */
+    --ash: #8d8780;         /* warm grey, used for secondary text */
     --bone: #ece6dc;        /* primary text */
-    --gold: #d9a63a;        /* laurel gold */
+    --gold: #d9a63a;        /* shield gold */
     --gold-deep: #8a5d14;   /* shadowed gold for borders */
-    --ember: #ff8a2a;       /* eye / ember orange */
+    --ember: #ff8a2a;       /* star / ember orange */
     --font-display: "Cinzel", "Trajan Pro", "Times New Roman", serif;
     --font-body: "Barlow", "Segoe UI", system-ui, sans-serif;
     color-scheme: dark;
@@ -100,14 +100,14 @@
 </style>
 
 <div class="stage">
-  <canvas id="logo" aria-label="Animated Pavisie logo: a grey skull crowned with a gold laurel wreath, eyes glowing amber, with gold light rays and rising embers." role="img"></canvas>
+  <canvas id="logo" aria-label="Animated Pavisie logo: a black shield with gold trim and a gold star gem that glints, with gold light rays and rising embers." role="img"></canvas>
 </div>
 <h1 class="wordmark">PAVISIE</h1>
 <div class="controls">
   <button id="replay" type="button">Replay intro</button>
   <button id="pause" type="button" aria-pressed="false">Pause</button>
 </div>
-<p class="note">Intro plays once, then a seamless 6-second loop: eye flare, laurel shimmer, light rays and embers.</p>
+<p class="note">Intro plays once, then a seamless 6-second loop: star glint, gold shine, light rays and embers.</p>
 
 <script>
 (() => {
@@ -115,8 +115,8 @@
   const INTRO = 3.2;          // intro sequence length
   const LOOP = 6;             // idle loop length; every idle motion repeats exactly on this period
   const LOGO_SRC = "brand/pavisie-skull.png";
-  // eye centres in logo space (0..1), measured from the 1024px source art
-  const EYES = [[0.3663, 0.5612], [0.6341, 0.5617]];
+  // centre of the shield's star gem in logo space (0..1), measured from the 1024px source art
+  const STAR = [0.5, 0.2773];
   const TAU = Math.PI * 2;
 
   const canvas = document.getElementById("logo");
@@ -158,19 +158,17 @@
     const N = img.naturalWidth;
     logo = img;
 
-    // laurel mask: saturated gold pixels outside the eye band
+    // gold mask: the saturated gold pixels (trim, emblem and star)
     const src = makeCanvas(N, N), sctx = src.getContext("2d");
     sctx.drawImage(img, 0, 0);
     const data = sctx.getImageData(0, 0, N, N);
     const d = data.data;
-    const y0 = Math.floor(N * 0.49), y1 = Math.floor(N * 0.625), x0 = Math.floor(N * 0.27), x1 = Math.floor(N * 0.73);
     for (let i = 0; i < d.length; i += 4) {
       const r = d[i], g = d[i + 1], b = d[i + 2], a = d[i + 3];
       const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
       const sat = (mx - mn) / (mx + 1e-6);
       const p = i / 4, px = p % N, py = (p / N) | 0;
-      const inEyes = py > y0 && py < y1 && px > x0 && px < x1;
-      const isGold = r > g && g > b && mx > 70 && !inEyes;
+      const isGold = r > g && g > b && mx > 70;
       const m = isGold ? clamp((sat - 0.3) / 0.15) : 0;
       d[i] = 255; d[i + 1] = 245; d[i + 2] = 215; d[i + 3] = a * m;
     }
@@ -210,8 +208,8 @@
     const w = (n) => Math.sin(TAU * n * tau / LOOP);
 
     // intro envelopes (all reach 1 by the end of the intro)
-    const eyeOn = smooth(0.15, 0.7, t);
-    const eyeFlash = bump(t, 0.75, 0.16) * 1.4;
+    const starOn = smooth(0.15, 0.7, t);
+    const starFlash = bump(t, 0.75, 0.16) * 1.4;
     const logoIn = smooth(0.75, 1.9, t);
     const scaleIn = 0.86 + 0.14 * easeOut((t - 0.75) / 1.4);
     const ambient = smooth(1.0, 2.8, t);
@@ -281,7 +279,7 @@
 
     // gold aura behind the wreath
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = clamp((0.5 + 0.25 * breathe) * logoIn + boom * 0.8);
+    ctx.globalAlpha = clamp((0.32 + 0.14 * breathe) * logoIn + boom * 0.6);
     box(glowLayer, glowLayer.width / maskLayer.width);
 
     // the logo itself
@@ -289,7 +287,7 @@
     ctx.globalAlpha = logoIn;
     box(logo);
 
-    // laurel shimmer: a bright diagonal band swept across the gold only
+    // gold shine: a bright diagonal band swept across the gold only
     const sweepIntro = t < INTRO ? clamp((t - 1.5) / 1.2) : -1;
     const sweepIdle = clamp((ph * LOOP - 2.6) / 1.6);
     const sweep = sweepIntro >= 0 && sweepIntro < 1 ? sweepIntro : (t >= INTRO && sweepIdle > 0 && sweepIdle < 1 ? sweepIdle : -1);
@@ -313,35 +311,37 @@
       box(shimmerLayer);
     }
 
-    // eyes: core glow, flicker and a once-per-loop flare with a horizontal streak
+    // star gem: core glow that twinkles, and a four-point glint that flares once per loop
     const flare = t >= INTRO - 0.4 ? bump(ph * LOOP, 5.0, 0.35) : 0;
     const flick = 0.9 + 0.06 * w(5) + 0.04 * Math.sin(TAU * 11 * tau / LOOP + 1.3);
-    const eye = clamp(eyeOn * flick + eyeFlash + flare * 0.7, 0, 2.6);
+    const starGlow = clamp(starOn * flick + starFlash + flare * 0.7, 0, 2.6);
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = 1;
-    for (const [u, v] of EYES) {
-      const x = LX(u), y = LY(v);
-      const r = S * 0.055 * (0.7 + 0.3 * eye);
-      let eg = ctx.createRadialGradient(x, y, 0, x, y, r);
-      eg.addColorStop(0, `rgba(255,248,220,${0.85 * clamp(eye)})`);
-      eg.addColorStop(0.2, `rgba(255,190,70,${0.6 * clamp(eye)})`);
-      eg.addColorStop(0.55, `rgba(255,110,20,${0.22 * clamp(eye)})`);
-      eg.addColorStop(1, "rgba(255,80,0,0)");
+    {
+      const x = LX(STAR[0]), y = LY(STAR[1]);
+      const r = S * 0.07 * (0.7 + 0.3 * starGlow);
+      const eg = ctx.createRadialGradient(x, y, 0, x, y, r);
+      eg.addColorStop(0, `rgba(255,248,220,${0.8 * clamp(starGlow)})`);
+      eg.addColorStop(0.2, `rgba(255,200,90,${0.5 * clamp(starGlow)})`);
+      eg.addColorStop(0.55, `rgba(255,140,30,${0.18 * clamp(starGlow)})`);
+      eg.addColorStop(1, "rgba(255,110,0,0)");
       ctx.fillStyle = eg; ctx.fillRect(x - r, y - r, r * 2, r * 2);
 
-      // streak
-      const streak = 0.18 * eyeOn + eyeFlash * 0.8 + flare;
+      const streak = 0.22 * starOn + starFlash * 0.8 + flare;
       if (streak > 0.01) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.scale(1, 0.07);
-        const sr = S * (0.16 + 0.14 * clamp(eyeFlash + flare));
-        const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, sr);
-        sg.addColorStop(0, `rgba(255,236,190,${clamp(streak) * 0.9})`);
-        sg.addColorStop(0.4, `rgba(255,160,50,${clamp(streak) * 0.3})`);
-        sg.addColorStop(1, "rgba(255,120,0,0)");
-        ctx.fillStyle = sg; ctx.fillRect(-sr, -sr, sr * 2, sr * 2);
-        ctx.restore();
+        const len = S * (0.14 + 0.16 * clamp(starFlash + flare));
+        for (const [sx, sy, k] of [[1, 0.06, 1], [0.06, 1, 0.75]]) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.scale(sx, sy);
+          const sr = len * k;
+          const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, sr);
+          sg.addColorStop(0, `rgba(255,240,200,${clamp(streak) * 0.9})`);
+          sg.addColorStop(0.4, `rgba(255,170,60,${clamp(streak) * 0.3})`);
+          sg.addColorStop(1, "rgba(255,120,0,0)");
+          ctx.fillStyle = sg; ctx.fillRect(-sr, -sr, sr * 2, sr * 2);
+          ctx.restore();
+        }
       }
     }
 

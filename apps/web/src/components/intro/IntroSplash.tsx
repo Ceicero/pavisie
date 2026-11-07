@@ -13,7 +13,7 @@ import {
 import { INTRO_SECONDS, createLogoRenderer } from './logo-renderer';
 
 /**
- * Full-screen branded intro: the animated skull-and-laurel logo, the gold wordmark and a progress
+ * Full-screen branded intro: the animated shield logo, the gold wordmark and a progress
  * line, shown on the first page load of a browser session for `INTRO_DURATION_MS`, then faded out.
  *
  * It is server-rendered as part of the root layout, so it covers the page from first paint rather

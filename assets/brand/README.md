@@ -1,9 +1,9 @@
 # Pavisie brand assets
 
-| File                | What it is                                                                                                                                                                                                                      | Used by                                                                                                                                                                                                                               |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pavisie-skull.png` | Canonical Pavisie logo, used everywhere: a grey skull under a gold laurel wreath, on a transparent background, square (1024×1024). PNG; takes precedence over the `.jpg` when both exist.                                       | Website, dashboard sidebar, bot avatar (`pnpm --filter @pavisie/bot set-avatar`), embed icons via `WEB_URL/brand/pavisie-skull.<ext>` (served from the web app's `public/brand/`), Discord Developer Portal app icon (manual upload). |
-| `pavisie-skull.jpg` | The same art re-encoded as JPEG on a black background, because JPEG has no transparency. Kept only for backwards-compatible URLs/cached references that still name the `.jpg` file — not used as the preferred source anywhere. | Served alongside the `.png` from every app's `public/brand/` so old `.jpg` links keep working; never referenced as the preferred `logo` in a manifest.                                                                                |
+| File                | What it is                                                                                                                                                                                                                                                                                                                                               | Used by                                                                                                                                                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pavisie-skull.png` | Canonical Pavisie logo, used everywhere: a black shield with gold trim, a gold emblem and a four-point star gem, on a transparent background, square (1024×1024). The filename predates this art (it was a skull before) and is kept so existing links, cached embed icons and code keep working. PNG; takes precedence over the `.jpg` when both exist. | Website, dashboard sidebar, bot avatar (`pnpm --filter @pavisie/bot set-avatar`), embed icons via `WEB_URL/brand/pavisie-skull.<ext>` (served from the web app's `public/brand/`), Discord Developer Portal app icon (manual upload). |
+| `pavisie-skull.jpg` | The same art re-encoded as JPEG on a black background, because JPEG has no transparency. Kept only for backwards-compatible URLs/cached references that still name the `.jpg` file — not used as the preferred source anywhere.                                                                                                                          | Served alongside the `.png` from every app's `public/brand/` so old `.jpg` links keep working; never referenced as the preferred `logo` in a manifest.                                                                                |
 
 `pnpm brand:sync` (run automatically before `dev`/`build` of the web and dashboard apps) copies every shared logo
 file that exists (`pavisie-skull.png` and `pavisie-skull.jpg`) into each app's `public/brand/` folder unchanged,
@@ -46,10 +46,11 @@ for t in ['apps/web/src/app/icon.png', 'apps/dashboard/src/app/icon.png']:
 ## Animated logo
 
 `assets/pavisie-logo-animated.html` is the source of the animated logo: a canvas animation built at runtime from
-`brand/pavisie-skull.png` (no extra layer files). It plays a ~3 s intro (eyes ignite, flash and shockwave, laurel
-shimmer) and then a seamless 6 s loop (eye flare, laurel shimmer, rotating light rays, drifting smoke, rising embers).
+`brand/pavisie-skull.png` (no extra layer files). It plays a ~3 s intro (the star gem ignites, flash and shockwave, a
+shine along the gold) and then a seamless 6 s loop (star glint, gold shine, rotating light rays, drifting smoke, rising
+embers). The website's intro splash (`apps/web/src/components/intro/`) uses the same animation.
 Open it through any local static server rooted at `assets/` (e.g. `python3 -m http.server -d assets`), because the
-laurel layer reads the logo's pixels and browsers block that over `file://`.
+gold layer reads the logo's pixels and browsers block that over `file://`.
 
 The rendered copies in `brand/motion/` were exported frame by frame from that page (it exposes
 `window.pavisieLogo.renderAt(t, size)`) and encoded with ffmpeg:
@@ -64,8 +65,9 @@ Re-export these whenever `pavisie-skull.png` or the animation changes.
 
 ## Banners
 
-Static banners (no animation): the logo beside the gold `PAVISIE` wordmark and the line "Modular Discord bot
-platform", on the same dark background, light rays and embers as the animated logo.
+Static banners (no animation): the gold `PAVISIE` wordmark and the line "Modular Discord bot platform" on the same
+dark background, light rays and embers as the animated logo. The two banners with a logo (`1500x500` and `960x540`)
+still show the previous skull art and need re-rendering for the shield; the wordmark-only ones are unaffected.
 
 | File                                                  | Use                                                                   |
 | ----------------------------------------------------- | --------------------------------------------------------------------- |

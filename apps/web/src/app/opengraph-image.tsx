@@ -1,4 +1,4 @@
-// Default Open Graph image for the whole site (ARCHITECTURE.md §17, §22). Embeds the real canonical skull logo
+// Default Open Graph image for the whole site (ARCHITECTURE.md §17, §22). Embeds the real canonical logo
 // (`assets/brand/pavisie-skull.png`, 1024x1024, PNG — the JPEG-decoder issue that used to block this route was
 // specific to next/og's decoder choking on that stale JPEG source; the canonical logo is a lossless PNG now and
 // decodes fine) as a base64 `data:` URI, read once at module load time with `node:fs` so the build stays 100%
