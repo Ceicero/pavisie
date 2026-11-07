@@ -1,11 +1,11 @@
 /**
- * Canvas renderer for the animated Pavisie logo used by the intro splash (`IntroSplash.tsx`).
- * Ported from `assets/pavisie-logo-animated.html` (the source of the rendered brand videos in
- * `assets/brand/motion/`), minus that page's own background and controls: this one draws on a
- * transparent canvas and fades its edges out, so it sits on whatever surface the splash uses.
+ * Canvas renderer for the animated Pavisie shield logo used by the intro splash (`IntroSplash.tsx`).
+ * It draws on a transparent canvas and fades its edges out, so it sits on whatever surface the
+ * splash uses.
  *
- * Timeline: `INTRO_SECONDS` of intro (eyes ignite, flash and shockwave, laurel shimmer), then a
- * seamless `LOOP_SECONDS` loop (eye flare, laurel shimmer, rotating rays, smoke, rising embers).
+ * Timeline: `INTRO_SECONDS` of intro (the star gem ignites, flash and shockwave, a shine runs along
+ * the gold trim), then a seamless `LOOP_SECONDS` loop (star glint, trim shine, rotating rays,
+ * smoke, rising embers).
  * Every idle motion repeats exactly on the loop period, and particles are seeded, so a given `t`
  * always draws the same frame.
  */
@@ -13,11 +13,8 @@
 export const INTRO_SECONDS = 3.2;
 export const LOOP_SECONDS = 6;
 
-/** Eye centres in logo space (0..1), measured from the 1024px `pavisie-skull.png`. */
-const EYES: ReadonlyArray<readonly [number, number]> = [
-  [0.3663, 0.5612],
-  [0.6341, 0.5617],
-];
+/** Centre of the shield's four-point star gem in logo space (0..1), measured from the 1024px logo. */
+const STAR: readonly [number, number] = [0.5, 0.2773];
 const TAU = Math.PI * 2;
 
 const clamp = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x));
@@ -86,7 +83,7 @@ export interface LogoRenderer {
 }
 
 /**
- * Builds the derived layers (laurel mask, gold glow, ember sprite) from the loaded logo once and
+ * Builds the derived layers (gold-trim mask, gold glow, ember sprite) from the loaded logo once and
  * returns a renderer. Throws if the image can't be read back (e.g. served cross-origin without
  * CORS); the caller falls back to a static logo in that case.
  */
@@ -95,16 +92,12 @@ export function createLogoRenderer(canvas: HTMLCanvasElement, img: HTMLImageElem
   if (!ctx) throw new Error('2D canvas unavailable');
   const N = img.naturalWidth || 1024;
 
-  // Laurel mask: saturated gold pixels outside the eye band.
+  // Gold mask: the saturated gold pixels (trim, emblem and star), used for the shine and the glow.
   const src = makeCanvas(N, N);
   const sctx = src.getContext('2d')!;
   sctx.drawImage(img, 0, 0, N, N);
   const data = sctx.getImageData(0, 0, N, N);
   const d = data.data;
-  const y0 = N * 0.49,
-    y1 = N * 0.625,
-    x0 = N * 0.27,
-    x1 = N * 0.73;
   for (let i = 0; i < d.length; i += 4) {
     const r = d[i]!,
       g = d[i + 1]!,
@@ -113,11 +106,7 @@ export function createLogoRenderer(canvas: HTMLCanvasElement, img: HTMLImageElem
     const mx = Math.max(r, g, b),
       mn = Math.min(r, g, b);
     const sat = (mx - mn) / (mx + 1e-6);
-    const p = i / 4,
-      px = p % N,
-      py = (p / N) | 0;
-    const inEyes = py > y0 && py < y1 && px > x0 && px < x1;
-    const m = r > g && g > b && mx > 70 && !inEyes ? clamp((sat - 0.3) / 0.15) : 0;
+    const m = r > g && g > b && mx > 70 ? clamp((sat - 0.3) / 0.15) : 0;
     d[i] = 255;
     d[i + 1] = 245;
     d[i + 2] = 215;
@@ -157,8 +146,8 @@ export function createLogoRenderer(canvas: HTMLCanvasElement, img: HTMLImageElem
     const w = (n: number) => Math.sin((TAU * n * tau) / LOOP_SECONDS);
     const c = ctx!;
 
-    const eyeOn = smooth(0.15, 0.7, t);
-    const eyeFlash = bump(t, 0.75, 0.16) * 1.4;
+    const starOn = smooth(0.15, 0.7, t);
+    const starFlash = bump(t, 0.75, 0.16) * 1.4;
     const logoIn = smooth(0.75, 1.9, t);
     const scaleIn = 0.86 + 0.14 * easeOut((t - 0.75) / 1.4);
     const ambient = smooth(1.0, 2.8, t);
@@ -227,14 +216,14 @@ export function createLogoRenderer(canvas: HTMLCanvasElement, img: HTMLImageElem
     };
 
     c.globalCompositeOperation = 'lighter';
-    c.globalAlpha = clamp((0.5 + 0.25 * breathe) * logoIn + boom * 0.8);
+    c.globalAlpha = clamp((0.32 + 0.14 * breathe) * logoIn + boom * 0.6);
     box(glow, glow.width / mask.width);
 
     c.globalCompositeOperation = 'source-over';
     c.globalAlpha = logoIn;
     box(img);
 
-    // laurel shimmer
+    // shine along the gold trim
     const sweepIntro = t < INTRO_SECONDS ? clamp((t - 1.5) / 1.2) : -1;
     const sweepIdle = clamp((ph * LOOP_SECONDS - 2.6) / 1.6);
     const sweep =
@@ -262,37 +251,44 @@ export function createLogoRenderer(canvas: HTMLCanvasElement, img: HTMLImageElem
       box(shimmer);
     }
 
-    // eyes
+    // star gem: core glow that twinkles, and a four-point glint that flares once per loop
     const flare = t >= INTRO_SECONDS - 0.4 ? bump(ph * LOOP_SECONDS, 5.0, 0.35) : 0;
     const flick = 0.9 + 0.06 * w(5) + 0.04 * Math.sin((TAU * 11 * tau) / LOOP_SECONDS + 1.3);
-    const eye = clamp(eyeOn * flick + eyeFlash + flare * 0.7, 0, 2.6);
+    const starGlow = clamp(starOn * flick + starFlash + flare * 0.7, 0, 2.6);
     c.globalCompositeOperation = 'lighter';
     c.globalAlpha = 1;
-    for (const [u, v] of EYES) {
-      const x = LX(u),
-        y = LY(v);
-      const r = S * 0.055 * (0.7 + 0.3 * eye);
-      const eg = c.createRadialGradient(x, y, 0, x, y, r);
-      eg.addColorStop(0, `rgba(255,248,220,${0.85 * clamp(eye)})`);
-      eg.addColorStop(0.2, `rgba(255,190,70,${0.6 * clamp(eye)})`);
-      eg.addColorStop(0.55, `rgba(255,110,20,${0.22 * clamp(eye)})`);
-      eg.addColorStop(1, 'rgba(255,80,0,0)');
-      c.fillStyle = eg;
+    {
+      const x = LX(STAR[0]),
+        y = LY(STAR[1]);
+      const r = S * 0.07 * (0.7 + 0.3 * starGlow);
+      const sg2 = c.createRadialGradient(x, y, 0, x, y, r);
+      sg2.addColorStop(0, `rgba(255,248,220,${0.8 * clamp(starGlow)})`);
+      sg2.addColorStop(0.2, `rgba(255,200,90,${0.5 * clamp(starGlow)})`);
+      sg2.addColorStop(0.55, `rgba(255,140,30,${0.18 * clamp(starGlow)})`);
+      sg2.addColorStop(1, 'rgba(255,110,0,0)');
+      c.fillStyle = sg2;
       c.fillRect(x - r, y - r, r * 2, r * 2);
 
-      const streak = 0.18 * eyeOn + eyeFlash * 0.8 + flare;
+      const streak = 0.22 * starOn + starFlash * 0.8 + flare;
       if (streak > 0.01) {
-        c.save();
-        c.translate(x, y);
-        c.scale(1, 0.07);
-        const sr = S * (0.16 + 0.14 * clamp(eyeFlash + flare));
-        const stg = c.createRadialGradient(0, 0, 0, 0, 0, sr);
-        stg.addColorStop(0, `rgba(255,236,190,${clamp(streak) * 0.9})`);
-        stg.addColorStop(0.4, `rgba(255,160,50,${clamp(streak) * 0.3})`);
-        stg.addColorStop(1, 'rgba(255,120,0,0)');
-        c.fillStyle = stg;
-        c.fillRect(-sr, -sr, sr * 2, sr * 2);
-        c.restore();
+        const len = S * (0.14 + 0.16 * clamp(starFlash + flare));
+        // horizontal and vertical arms, the vertical one a little shorter
+        for (const [sx, sy, k] of [
+          [1, 0.06, 1],
+          [0.06, 1, 0.75],
+        ] as const) {
+          c.save();
+          c.translate(x, y);
+          c.scale(sx, sy);
+          const sr = len * k;
+          const stg = c.createRadialGradient(0, 0, 0, 0, 0, sr);
+          stg.addColorStop(0, `rgba(255,240,200,${clamp(streak) * 0.9})`);
+          stg.addColorStop(0.4, `rgba(255,170,60,${clamp(streak) * 0.3})`);
+          stg.addColorStop(1, 'rgba(255,120,0,0)');
+          c.fillStyle = stg;
+          c.fillRect(-sr, -sr, sr * 2, sr * 2);
+          c.restore();
+        }
       }
     }
 
