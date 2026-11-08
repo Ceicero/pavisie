@@ -1,0 +1,72 @@
+{
+  "_comment": "XAC model catalog. Sizes are the Ollama default (Q4_K_M) download sizes in GB. Architecture numbers drive the KV-cache (context memory) math. Add your own entries - any Ollama tag works.",
+  "models": [
+    {
+      "tag": "qwen3:1.7b",
+      "label": "Qwen3 1.7B",
+      "params_b": 1.7,
+      "weights_gb": 1.4,
+      "layers": 28,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "max_ctx": 40960,
+      "thinking": true
+    },
+    {
+      "tag": "qwen3:4b",
+      "label": "Qwen3 4B",
+      "params_b": 4.0,
+      "weights_gb": 2.6,
+      "layers": 36,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "max_ctx": 40960,
+      "thinking": true
+    },
+    {
+      "tag": "qwen3:8b",
+      "label": "Qwen3 8B",
+      "params_b": 8.2,
+      "weights_gb": 5.2,
+      "layers": 36,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "max_ctx": 40960,
+      "thinking": true
+    },
+    {
+      "tag": "qwen3:14b",
+      "label": "Qwen3 14B",
+      "params_b": 14.8,
+      "weights_gb": 9.3,
+      "layers": 40,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "max_ctx": 40960,
+      "thinking": true
+    },
+    {
+      "tag": "qwen3:30b",
+      "label": "Qwen3 30B-A3B (MoE)",
+      "params_b": 30.5,
+      "weights_gb": 19.0,
+      "layers": 48,
+      "kv_heads": 4,
+      "head_dim": 128,
+      "max_ctx": 40960,
+      "thinking": true,
+      "moe": true
+    },
+    {
+      "tag": "qwen3:32b",
+      "label": "Qwen3 32B",
+      "params_b": 32.8,
+      "weights_gb": 20.0,
+      "layers": 64,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "max_ctx": 40960,
+      "thinking": true
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+# chats and settings live in ~/.xac (or $XAC_HOME), never in the repo
+*.db
+*.db-wal
+*.db-shm
