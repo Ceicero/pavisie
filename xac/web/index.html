@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>XAC</title>
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="xac.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img src="logo.svg" alt="" width="38" height="38" class="rim">
+      <div>
+        <div class="brand-name">XAC</div>
+        <div class="brand-sub">local cyber intelligence</div>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" id="newChat">+ New chat</button>
+    <div class="section-label">Conversations</div>
+    <nav class="conv-list" id="convList" aria-label="Conversations"></nav>
+    <div class="sidebar-foot">
+      <button class="btn btn-ghost btn-block" id="openNotes">Saved notes</button>
+      <button class="btn btn-ghost btn-block" id="openSettings">Memory &amp; model</button>
+      <div class="privacy">● Runs 100% on this computer</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="toggleSidebar" aria-label="Show conversations">☰</button>
+      <div class="model-chip" id="modelChip">Loading…</div>
+      <div class="meter" id="ctxMeter" title="How full this conversation's memory is">
+        <div class="meter-label"><span>Chat memory</span><span id="ctxText">—</span></div>
+        <div class="meter-bar"><div class="meter-fill" id="ctxFill"></div></div>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-ghost btn-sm" id="condenseBtn" title="Condense older messages into a summary now">Condense</button>
+        <button class="btn btn-ghost btn-sm" id="parkBtn" title="Save this chat and free the model's memory">Put away</button>
+      </div>
+    </header>
+
+    <section class="messages" id="messages" aria-live="polite">
+      <div class="empty" id="empty">
+        <img src="logo.svg" alt="" width="120" height="120" class="empty-logo rim">
+        <h1>XAC</h1>
+        <p>Your private cybersecurity expert. Ask about defense, offense, forensics, cloud, code, compliance — anything.</p>
+        <div class="starters" id="starters"></div>
+      </div>
+    </section>
+
+    <form class="composer" id="composer">
+      <textarea id="input" rows="1" placeholder="Message XAC…  (Enter to send, Shift+Enter for a new line, /remember to save a note)" aria-label="Message XAC"></textarea>
+      <div class="composer-row">
+        <label class="toggle" title="Let XAC reason step by step before answering">
+          <input type="checkbox" id="thinkToggle" checked>
+          <span class="toggle-track"></span><span>Deep reasoning</span>
+        </label>
+        <span class="hint" id="statusHint"></span>
+        <button type="button" class="btn btn-ghost btn-sm hidden" id="stopBtn">Stop</button>
+        <button type="submit" class="btn btn-primary" id="sendBtn">Send</button>
+      </div>
+    </form>
+  </main>
+</div>
+
+<dialog class="panel" id="settingsPanel">
+  <form method="dialog" class="panel-inner" id="settingsForm">
+    <div class="panel-head"><h2>Memory &amp; model</h2><button class="icon-btn" value="cancel" aria-label="Close">✕</button></div>
+    <div id="budgetView"></div>
+    <div class="grid2">
+      <label>Profile
+        <select id="sProfile">
+          <option value="fast">Fast — keep it all on the GPU</option>
+          <option value="balanced">Balanced — recommended</option>
+          <option value="deep">Deep — biggest model VRAM + RAM can share</option>
+        </select>
+      </label>
+      <label>Model
+        <select id="sModel"><option value="">Automatic (best fit)</option></select>
+      </label>
+      <label>Parameters floor (GB)
+        <input type="number" id="sMinParams" min="0" step="0.5">
+      </label>
+      <label>Memory per conversation floor (GB)
+        <input type="number" id="sMinCtx" min="0" step="0.25">
+      </label>
+      <label>Put chats away after (idle minutes)
+        <input type="number" id="sPark" min="1" step="1">
+      </label>
+      <label class="check"><input type="checkbox" id="sCondense"> Auto-condense long chats</label>
+    </div>
+    <div class="panel-foot">
+      <span class="hint" id="settingsMsg"></span>
+      <button class="btn btn-primary" id="saveSettings" value="default">Apply</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="panel" id="notesPanel">
+  <form method="dialog" class="panel-inner" id="notesForm">
+    <div class="panel-head"><h2>Saved notes</h2><button class="icon-btn" value="cancel" aria-label="Close">✕</button></div>
+    <p class="muted">Facts XAC remembers in every conversation — your role, your stack, your lab. Tip: type <code>/remember …</code> in any chat.</p>
+    <ul class="notes" id="notesList"></ul>
+    <div class="note-add">
+      <input id="noteInput" placeholder="e.g. I run a Windows AD lab with Splunk and Sysmon" maxlength="500">
+      <button class="btn btn-primary" id="addNote" value="default">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="overlay hidden" id="pullOverlay">
+  <div class="overlay-card">
+    <img src="logo.svg" alt="" width="64" height="64" class="rim">
+    <h2>Downloading XAC's brain</h2>
+    <p id="pullText">Preparing…</p>
+    <div class="meter-bar big"><div class="meter-fill" id="pullFill"></div></div>
+    <p class="muted">One-time download. Everything stays on this computer.</p>
+  </div>
+</div>
+
+<script src="xac.js"></script>
+</body>
+</html>
