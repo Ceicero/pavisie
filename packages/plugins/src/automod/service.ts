@@ -79,13 +79,6 @@ export async function getStaffContext(
   }
 }
 
-async function fetchRules(ctx: PluginContext, guildId: string): Promise<AutomodRule[]> {
-  return ctx.prisma.automodRule.findMany({
-    where: { guildId, enabled: true, deletedAt: null },
-    orderBy: { priority: 'asc' },
-  });
-}
-
 function parseRuleConfig(rule: AutomodRule): AutomodRuleConfig | null {
   const result = automodRuleConfigSchema.safeParse(rule.config);
   return result.success ? result.data : null;
@@ -94,6 +87,84 @@ function parseRuleConfig(rule: AutomodRule): AutomodRuleConfig | null {
 function parseRuleActions(rule: AutomodRule): AutomodAction[] {
   const result = automodActionsSchema.safeParse(rule.actions);
   return result.success ? result.data : [];
+}
+
+/** A stored rule with its `config`/`actions` JSON already validated, so the hot path never re-parses them. */
+interface LoadedRule {
+  rule: AutomodRule;
+  /** `null` when the stored config no longer validates; such a rule is skipped (and, for messages, logged). */
+  config: AutomodRuleConfig | null;
+  actions: AutomodAction[];
+}
+
+/**
+ * How long a guild's loaded rules are reused before the next event re-reads them. Every message and every join
+ * needs the guild's rules, so during a raid this was one Postgres query (plus a zod parse of every rule) per
+ * event — hundreds a second for rows that almost never change. Short on purpose: a rule edited from this bot's
+ * own commands is dropped from the cache at once (`invalidateRuleCache`), but an edit made through the dashboard
+ * happens in the API process, which cannot reach this cache, so it takes effect within this window instead.
+ */
+const RULE_CACHE_TTL_MS = 2_000;
+/** Above this many cached guilds, expired entries are swept on the next load so idle guilds don't pile up. */
+const RULE_CACHE_SWEEP_SIZE = 1_000;
+
+interface RuleCacheEntry {
+  expiresAt: number;
+  rules: Promise<LoadedRule[]>;
+}
+
+// Keyed by the Prisma client rather than held in one module-level map: the bot has exactly one client, so this
+// is one cache in production, while every unit test's own stub client gets a cache nothing else can see.
+const ruleCaches = new WeakMap<object, Map<string, RuleCacheEntry>>();
+
+function ruleCacheFor(ctx: PluginContext): Map<string, RuleCacheEntry> {
+  let cache = ruleCaches.get(ctx.prisma);
+  if (!cache) {
+    cache = new Map();
+    ruleCaches.set(ctx.prisma, cache);
+  }
+  return cache;
+}
+
+/**
+ * Returns the guild's enabled rules in priority order, parsed once and reused for `RULE_CACHE_TTL_MS`. Concurrent
+ * callers share one in-flight query, so a burst of events arriving just as the entry expires costs one read, not
+ * one per event. A failed read is not cached: the next event simply tries again.
+ */
+async function loadRules(ctx: PluginContext, guildId: string): Promise<LoadedRule[]> {
+  const cache = ruleCacheFor(ctx);
+  const now = Date.now();
+  const cached = cache.get(guildId);
+  if (cached && cached.expiresAt > now) return cached.rules;
+
+  if (cache.size >= RULE_CACHE_SWEEP_SIZE) {
+    for (const [key, entry] of cache) {
+      if (entry.expiresAt <= now) cache.delete(key);
+    }
+  }
+
+  const rules = ctx.prisma.automodRule
+    .findMany({
+      where: { guildId, enabled: true, deletedAt: null },
+      orderBy: { priority: 'asc' },
+    })
+    .then((rows) =>
+      rows.map((rule) => ({ rule, config: parseRuleConfig(rule), actions: parseRuleActions(rule) })),
+    );
+  const entry: RuleCacheEntry = { expiresAt: now + RULE_CACHE_TTL_MS, rules };
+  cache.set(guildId, entry);
+  rules.catch(() => {
+    if (cache.get(guildId) === entry) cache.delete(guildId);
+  });
+  return rules;
+}
+
+/**
+ * Drops `guildId`'s cached rules so the next message or join re-reads them. Called by every command that
+ * creates, edits, toggles, exempts or deletes a rule, so a moderator's change applies to the very next event.
+ */
+export function invalidateRuleCache(ctx: PluginContext, guildId: string): void {
+  ruleCaches.get(ctx.prisma)?.delete(guildId);
 }
 
 interface ActionOutcome {
@@ -415,8 +486,8 @@ export async function handleMessage(
   if (message.author?.bot || message.author?.system) return;
   if (message.webhookId) return;
 
-  const allRules = await fetchRules(ctx, guildId);
-  const rules = allRules.filter((r) => isMessageRuleType(r.type));
+  const allRules = await loadRules(ctx, guildId);
+  const rules = allRules.filter((r) => isMessageRuleType(r.rule.type));
   if (rules.length === 0) return;
 
   const guild =
@@ -438,7 +509,7 @@ export async function handleMessage(
   const cooldowns = new Cooldowns(ctx.redis);
   const logContent = await getLogMessageContentEnabled(ctx, guildId);
 
-  for (const rule of rules) {
+  for (const { rule, config: ruleConfig, actions } of rules) {
     if (!isRuleTypeActive(rule.type, ctx.intentsEnabled)) continue;
     // An edit is one message being re-read, not a new one — feeding it back into a frequency/duplicate window
     // would count it twice and fire the rule before the member actually reached the threshold.
@@ -459,7 +530,6 @@ export async function handleMessage(
       continue;
     }
 
-    const ruleConfig = parseRuleConfig(rule);
     if (!ruleConfig) {
       ctx.logger.warn({ guildId, ruleId: rule.id }, 'automod: rule has an invalid stored config; skipping');
       continue;
@@ -504,7 +574,6 @@ export async function handleMessage(
     }
 
     const dryRun = config.dryRun || rule.dryRun;
-    const actions = parseRuleActions(rule);
     const reason = result.reason ?? `Matched automod rule "${rule.name}".`;
 
     const actionOutcomes: ActionOutcome[] = [];
@@ -577,8 +646,8 @@ export async function handleMemberJoin(ctx: PluginContext, member: GuildMember):
     await applyQuarantine(ctx, guildId, member.id, 'Raid lockdown active — new joins are quarantined.');
   }
 
-  const allRules = await fetchRules(ctx, guildId);
-  const rules = allRules.filter((r) => !isMessageRuleType(r.type));
+  const allRules = await loadRules(ctx, guildId);
+  const rules = allRules.filter((r) => !isMessageRuleType(r.rule.type));
   if (rules.length === 0) return;
 
   const staffCtx = await getStaffContext(ctx, member.guild, member);
@@ -586,7 +655,7 @@ export async function handleMemberJoin(ctx: PluginContext, member: GuildMember):
   const windowStoreBase = new RedisWindowStore(ctx.redis);
   const cooldowns = new Cooldowns(ctx.redis);
 
-  for (const rule of rules) {
+  for (const { rule, config: ruleConfig, actions } of rules) {
     if (!isRuleTypeActive(rule.type, ctx.intentsEnabled)) continue;
     if (
       isExempt(
@@ -597,7 +666,6 @@ export async function handleMemberJoin(ctx: PluginContext, member: GuildMember):
     )
       continue;
 
-    const ruleConfig = parseRuleConfig(rule);
     if (!ruleConfig) continue;
 
     const windowStore = scopedWindowStore(windowStoreBase, rule.id);
@@ -610,7 +678,6 @@ export async function handleMemberJoin(ctx: PluginContext, member: GuildMember):
     }
 
     const dryRun = config.dryRun || rule.dryRun;
-    const actions = parseRuleActions(rule);
     const reason = result.reason ?? `Matched automod rule "${rule.name}".`;
 
     const actionOutcomes: ActionOutcome[] = [];

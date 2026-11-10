@@ -281,6 +281,58 @@ describe('REGEX_FILTER', () => {
 });
 
 describe('WORD_FILTER', () => {
+  it('gives the same answers when one rule config is reused across many messages', async () => {
+    // The compiled matchers are kept per config object, so reuse must not leak state between messages.
+    const config: AutomodRuleConfig = {
+      type: 'WORD_FILTER',
+      words: ['spam', 'two words', 'a.b'],
+      wholeWord: true,
+      caseSensitive: false,
+    };
+    const run = async (content: string) =>
+      evaluateMessageRule(config, { message: msg({ content }), windowStore: new MemoryWindowStore() });
+
+    for (let pass = 0; pass < 3; pass += 1) {
+      expect((await run('this is SPAM here')).evidence).toEqual({ matchedWord: 'spam' });
+      expect((await run('spammer central')).matched).toBe(false);
+      expect((await run('Two Words in a row')).evidence).toEqual({ matchedWord: 'two words' });
+      // The dot is literal: "a.b" is listed, "axb" is not.
+      expect((await run('see a.b now')).matched).toBe(true);
+      expect((await run('see axb now')).matched).toBe(false);
+    }
+  });
+
+  it('reports the first listed word that matches', async () => {
+    const config: AutomodRuleConfig = {
+      type: 'WORD_FILTER',
+      words: ['second', 'first'],
+      wholeWord: false,
+      caseSensitive: false,
+    };
+    const result = await evaluateMessageRule(config, {
+      message: msg({ content: 'first and second' }),
+      windowStore: new MemoryWindowStore(),
+    });
+    expect(result.evidence).toEqual({ matchedWord: 'second' });
+  });
+
+  it('treats an edited rule as a new config, never serving the old word list', async () => {
+    const before: AutomodRuleConfig = {
+      type: 'WORD_FILTER',
+      words: ['old'],
+      wholeWord: true,
+      caseSensitive: false,
+    };
+    const after: AutomodRuleConfig = { ...before, words: ['new'] };
+    const run = async (config: AutomodRuleConfig, content: string) =>
+      (await evaluateMessageRule(config, { message: msg({ content }), windowStore: new MemoryWindowStore() }))
+        .matched;
+
+    expect(await run(before, 'an old word')).toBe(true);
+    expect(await run(after, 'an old word')).toBe(false);
+    expect(await run(after, 'a new word')).toBe(true);
+  });
+
   it('matches a whole-word, case-insensitive hit', async () => {
     const config: AutomodRuleConfig = {
       type: 'WORD_FILTER',
