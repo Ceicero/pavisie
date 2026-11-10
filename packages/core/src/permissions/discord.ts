@@ -85,7 +85,6 @@ export const INVITE_PERMISSIONS: bigint[] = [
   PermissionFlagsBits.CreatePublicThreads,
   PermissionFlagsBits.CreatePrivateThreads,
   PermissionFlagsBits.ManageWebhooks,
-  PermissionFlagsBits.ViewAuditLog,
   PermissionFlagsBits.Connect,
   PermissionFlagsBits.Speak,
   PermissionFlagsBits.MoveMembers,

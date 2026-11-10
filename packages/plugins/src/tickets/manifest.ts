@@ -69,6 +69,13 @@ export const manifest = defineManifest({
         'Thread-mode tickets fail with a clear ephemeral error when opened; channel-mode tickets still work.',
     },
     {
+      permission: PermissionFlagsBits.SendMessagesInThreads,
+      feature: 'posting the opening embed and closing summary inside a ticket thread (thread mode)',
+      optional: true,
+      fallback:
+        'The ticket thread is still created, but the opening embed and closing summary are not posted in it (a warning is logged); channel-mode tickets are unaffected.',
+    },
+    {
       permission: PermissionFlagsBits.ManageThreads,
       feature: 'archiving and locking ticket threads on close, and adding participants to a thread',
       optional: true,
