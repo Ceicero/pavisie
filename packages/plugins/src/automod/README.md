@@ -115,3 +115,35 @@ content/member-dependent rule types above; without them, those specific rules sh
 `/dashboard/[guildId]/automod` — rule list with type badges and enabled/dry-run switches, a create/edit form
 driven by the rule's type, an actions builder, an exemptions editor, a guild-wide dry-run banner, a review-queue
 tab, and a settings tab.
+
+## Performance under a raid
+
+Every message and every join runs the guild's rules, so a raid multiplies whatever one evaluation costs. Three
+things keep that cost low:
+
+- **Rules are read once and reused for 2 seconds** (`RULE_CACHE_TTL_MS` in `service.ts`), already parsed. A
+  change made with `/automod rule ...` or `/automod exempt ...` drops the cached copy and applies to the next
+  event. A change made in the dashboard is written by the API process, which cannot reach the bot's cache, so
+  it applies within 2 seconds.
+- **Each sliding-window check is one Redis round trip** (`RedisWindowStore.pushAndCount` runs as a single
+  `MULTI`/`EXEC`), which also makes the count atomic.
+- **A word filter is compiled once per rule**, not once per message.
+
+`scripts/bench-automod-raid.ts` reproduces the load: a 50,000-member server taking 400 messages and 150 joins a
+second, against real Postgres and Redis with Discord faked in-process. It needs `DATABASE_URL` and `REDIS_URL`
+(the same services CI and `docker-compose.yml` start), uses a fixed seed, and removes everything it writes.
+
+```bash
+# Load test: latency, backend calls per event, and where handlers wait
+pnpm --filter @pavisie/plugins exec tsx scripts/bench-automod-raid.ts
+
+# Twice the load
+pnpm --filter @pavisie/plugins exec tsx scripts/bench-automod-raid.ts --msg-rate 800 --join-rate 300
+
+# Behavior check: replays the raid one event at a time and prints a digest of every AutomodEvent written and
+# every Discord call made. A performance change must leave this digest unchanged.
+pnpm --filter @pavisie/plugins exec tsx scripts/bench-automod-raid.ts --mode verify --seconds 10 --discord-ms 0
+```
+
+Discord's rate limits are not simulated, so the latency of deletes and alerts is a best case. The numbers that
+transfer between machines are the backend calls per event; latency and CPU depend on the hardware.
