@@ -52,12 +52,6 @@ export const manifest = defineManifest({
       fallback: 'Discord blocks the send entirely, so the log embed is dropped',
     },
     {
-      permission: PermissionFlagsBits.ReadMessageHistory,
-      feature: 'live message-edit/delete diffing and invite-use context',
-      optional: true,
-      fallback: 'edits/deletes are still logged from cached data only',
-    },
-    {
       permission: PermissionFlagsBits.ManageGuild,
       feature: 'invite-use attribution on member join (`invite.use`)',
       optional: true,

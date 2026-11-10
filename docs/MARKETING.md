@@ -112,7 +112,7 @@ there before reusing them, never estimate. Invite link uses the production clien
 Railway config plus the least-privilege permission integer documented in `docs/PERMISSIONS.md`:
 
 ```
-https://discord.com/oauth2/authorize?client_id=1538665986633506947&scope=bot%20applications.commands&permissions=1504210971862
+https://discord.com/oauth2/authorize?client_id=1538665986633506947&scope=bot%20applications.commands&permissions=1504210971734
 ```
 
 **Before submitting anywhere:** get a Discord support-server invite link that's set to **never expire**

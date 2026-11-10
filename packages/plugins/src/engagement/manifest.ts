@@ -78,6 +78,13 @@ export const manifest = defineManifest({
         'Members can still join a hub channel; the bot cannot create/rename/delete their temp channel.',
     },
     {
+      permission: PermissionFlagsBits.Connect,
+      feature: 'temporary voice channels (granting the owner Connect on their own channel, and managing it)',
+      optional: true,
+      fallback:
+        'Discord rejects the owner overwrite, so no temp channel is created; the member stays in the hub channel.',
+    },
+    {
       permission: PermissionFlagsBits.MoveMembers,
       feature: 'temporary voice channels (moving the creator into their new channel)',
       optional: true,
