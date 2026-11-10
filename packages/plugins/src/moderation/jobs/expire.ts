@@ -1,15 +1,9 @@
 import type { PluginJob } from '../../sdk';
 import { ModerationServiceImpl } from '../service';
+import { liftEnforcerMute } from './enforcer-mute';
 
 export interface ExpireJobData {
   caseId: string;
-}
-
-/** `metadata.roleId` set by the `enforcer` plugin's timed MUTE (`metadata: { enforcerMute: true, roleId }`). */
-function enforcerMuteRoleId(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== 'object') return null;
-  const m = metadata as Record<string, unknown>;
-  return m.enforcerMute === true && typeof m.roleId === 'string' ? m.roleId : null;
 }
 
 /** Fires once when a specific TIMEOUT, (temp) BAN, or timed ROLE_ADD (enforcer mute) case's duration elapses (scheduled with `jobId: case-<id>`). */
@@ -50,23 +44,13 @@ export const expireJob: PluginJob<ExpireJobData> = {
           }
         }
       } else if (row.type === 'ROLE_ADD') {
-        const roleId = enforcerMuteRoleId(row.metadata);
-        if (roleId) {
-          const guild = await ctx.client.guilds.fetch(row.guildId).catch(() => null);
-          const member = guild ? await guild.members.fetch(row.targetId).catch(() => null) : null;
-          if (member?.roles.cache.has(roleId)) {
-            try {
-              await member.roles.remove(roleId, `Mute expired (case #${row.caseNumber})`);
-            } catch (err) {
-              // 10011 = Unknown Role: the mute role was deleted, so there is nothing left to remove.
-              // Anything else (rate limit, outage, missing permission) must leave the case active so the
-              // job retry can lift the mute instead of leaving the member muted indefinitely.
-              if ((err as { code?: unknown })?.code !== 10011) {
-                markExpired = false;
-                throw err;
-              }
-            }
-          }
+        try {
+          await liftEnforcerMute(ctx, row, `Mute expired (case #${row.caseNumber})`);
+        } catch (err) {
+          // The mute role is still on the member. Leave the case active so the job retry (or the sweep) can
+          // lift the mute instead of leaving the member muted indefinitely.
+          markExpired = false;
+          throw err;
         }
       }
     } finally {
