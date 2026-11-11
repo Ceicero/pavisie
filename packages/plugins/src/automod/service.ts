@@ -27,6 +27,7 @@ import {
 import type { EvaluatorResult } from './engine';
 import { isExempt, isTrustedDomain } from './exemptions';
 import { normalizeJoin, normalizeMessage } from './normalize';
+import { recordRaidAlertJoin } from './raid-alert';
 import {
   automodActionsSchema,
   automodRuleConfigSchema,
@@ -209,6 +210,14 @@ async function applyQuarantine(
   }
 }
 
+/** One line per configured action and what became of it — the "Actions" field of every alert embed. */
+function formatActionOutcomes(actionOutcomes: ActionOutcome[], dryRun: boolean): string {
+  if (actionOutcomes.length === 0) return '_None configured_';
+  return actionOutcomes
+    .map((a) => `${a.applied ? '✅' : dryRun ? '⏸️' : '⚠️'} ${a.type}${a.detail ? ` — ${a.detail}` : ''}`)
+    .join('\n');
+}
+
 function alertEmbed(params: {
   rule: AutomodRule;
   userId: string;
@@ -229,18 +238,7 @@ function alertEmbed(params: {
       { name: 'User', value: `<@${userId}>`, inline: true },
       { name: 'Rule type', value: rule.type, inline: true },
       { name: 'Channel', value: channelId ? `<#${channelId}>` : '—', inline: true },
-      {
-        name: 'Actions',
-        value:
-          actionOutcomes.length > 0
-            ? actionOutcomes
-                .map(
-                  (a) =>
-                    `${a.applied ? '✅' : dryRun ? '⏸️' : '⚠️'} ${a.type}${a.detail ? ` — ${a.detail}` : ''}`,
-                )
-                .join('\n')
-            : '_None configured_',
-      },
+      { name: 'Actions', value: formatActionOutcomes(actionOutcomes, dryRun) },
     )
     .setTimestamp();
 
@@ -718,16 +716,35 @@ export async function handleMemberJoin(ctx: PluginContext, member: GuildMember):
     });
 
     if (actions.some((a) => a.type === 'alert_staff')) {
-      await postAlert(ctx, member.guild, config, {
-        rule,
-        userId: member.id,
-        channelId: null,
-        result,
-        excerpt: null,
-        actionOutcomes,
-        dryRun,
-        eventId: event.id,
-      });
+      if (rule.type === 'RAID_DETECTION') {
+        // A raid is one incident, not one per account: the first flagged join posts a single alert and the rest
+        // only add to its running count (see raid-alert.ts). Every join still gets its own AutomodEvent above.
+        // Never allowed to throw — the lockdown below matters more than the alert.
+        await recordRaidAlertJoin(ctx, member.guild, {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          alertChannelId: config.alertChannelId,
+          reason,
+          actionsText: formatActionOutcomes(actionOutcomes, dryRun),
+          dryRun,
+        }).catch((err: unknown) => {
+          ctx.logger.error(
+            { guildId, ruleId: rule.id, err: err instanceof Error ? err.message : String(err) },
+            'automod: failed to record a join on the raid alert',
+          );
+        });
+      } else {
+        await postAlert(ctx, member.guild, config, {
+          rule,
+          userId: member.id,
+          channelId: null,
+          result,
+          excerpt: null,
+          actionOutcomes,
+          dryRun,
+          eventId: event.id,
+        });
+      }
     }
 
     ctx.events.emit('automod.triggered', {

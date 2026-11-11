@@ -18,9 +18,10 @@
 //           the gateway delivers them. Reports latency (scheduled arrival -> handler finished), backend calls
 //           per event, and where handlers spent their time. "Clean-message latency" covers messages that broke
 //           no rule and so made no Discord call — the cost automod adds to every ordinary member's message.
-//   verify  Serial: one event at a time, in order. Prints a digest of every AutomodEvent written and every
-//           Discord call made. The digest must be identical before and after a performance change — it is the
-//           "same behavior" check.
+//   verify  Serial: one event at a time, in order. Prints two digests: one of every AutomodEvent written (what
+//           automod decided) and one of every Discord call made (what it did and told staff). Both must be
+//           identical before and after a pure performance change — they are the "same behavior" check.
+//           Background jobs do not run in this mode, so the result never depends on how fast the replay went.
 //
 // Safety: refuses to run with NODE_ENV=production. It only touches rows of its own guild (`bench-raid-guild`) and
 // Redis keys containing `bench-raid`, and removes both when it finishes.
@@ -379,6 +380,12 @@ function createFakeDiscord(options: Options, recorder: Recorder): FakeDiscord {
     timeout: () => Promise<void>;
   };
 
+  interface AlertPayload {
+    embeds?: { data?: { title?: string } }[];
+  }
+  const alertTitle = (payload: AlertPayload): string => payload.embeds?.[0]?.data?.title ?? '(no title)';
+  let alertsPosted = 0;
+
   const members = new Map<string, FakeMember>();
   const guild = {
     id: GUILD_ID,
@@ -404,7 +411,15 @@ function createFakeDiscord(options: Options, recorder: Recorder): FakeDiscord {
         type: 0,
         isTextBased: () => true,
         permissionsFor: () => ({ has: () => true }),
-        send: async () => rest('alert.send', channelId),
+        // Logged under the alert's title (which names the rule), so the report can count alerts per rule.
+        send: async (payload: AlertPayload) => {
+          await rest('alert.send', alertTitle(payload));
+          alertsPosted += 1;
+          return { id: `bench-raid-alert-${alertsPosted}` };
+        },
+        messages: {
+          edit: async (_messageId: string, payload: AlertPayload) => rest('alert.edit', alertTitle(payload)),
+        },
       }),
     },
     setVerificationLevel: async () => rest('guild.setVerificationLevel', GUILD_ID),
@@ -606,6 +621,64 @@ async function seed(redis: Redis, options: Options): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// Background jobs
+// ---------------------------------------------------------------------------------------------------------
+
+type JobProcessor = (ctx: PluginContext, job: { data: unknown }) => Promise<void>;
+
+/**
+ * Stands in for the bot's queue workers: a job added with a delay runs its real processor after that delay.
+ * `idle()` resolves once no job is waiting or running, which is how the load test waits for a raid alert to be
+ * closed out. With no processor registered for a queue (or in verify mode, where timers would make the outcome
+ * depend on run speed) added jobs are dropped, exactly like the old no-op stub.
+ */
+class JobRunner {
+  private readonly processors = new Map<string, JobProcessor>();
+  private outstanding = 0;
+  private waiters: (() => void)[] = [];
+  private ctx: PluginContext | null = null;
+  failures: string[] = [];
+
+  constructor(private readonly enabled: boolean) {}
+
+  register(name: string, processor: JobProcessor): void {
+    this.processors.set(name, processor);
+  }
+
+  attach(ctx: PluginContext): void {
+    this.ctx = ctx;
+  }
+
+  queue(name: string): { add: (jobName: string, data: unknown, opts?: { delay?: number }) => Promise<void> } {
+    return {
+      add: async (_jobName, data, opts) => {
+        const processor = this.processors.get(name);
+        const ctx = this.ctx;
+        if (!this.enabled || !processor || !ctx) return;
+        this.outstanding += 1;
+        setTimeout(() => {
+          void processor(ctx, { data })
+            .catch((err: unknown) => {
+              this.failures.push(String(err));
+            })
+            .finally(() => {
+              this.outstanding -= 1;
+              if (this.outstanding === 0) {
+                for (const wake of this.waiters.splice(0)) wake();
+              }
+            });
+        }, opts?.delay ?? 0);
+      },
+    };
+  }
+
+  idle(): Promise<void> {
+    if (this.outstanding === 0) return Promise.resolve();
+    return new Promise((resolve) => this.waiters.push(resolve));
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // Running
 // ---------------------------------------------------------------------------------------------------------
 
@@ -657,6 +730,12 @@ async function main(): Promise<void> {
   } as never);
 
   const discord = createFakeDiscord(options, recorder);
+  const jobs = new JobRunner(options.mode === 'load');
+  // Loaded dynamically so this same script still runs against a checkout from before the single raid alert
+  // existed — that is how the "before" alert count is measured.
+  const raidAlert = await import('../src/automod/raid-alert').catch(() => null);
+  if (raidAlert)
+    jobs.register(raidAlert.RAID_ALERT_JOB_NAME, raidAlert.raidAlertJob.processor as JobProcessor);
   const ctx: PluginContext = {
     client: discord.client,
     prisma,
@@ -664,7 +743,7 @@ async function main(): Promise<void> {
     logger: pino({ enabled: false }),
     events: new PlatformEvents(),
     rateLimiter: new MemoryRateLimiter(),
-    queue: () => ({ add: async () => undefined }) as never,
+    queue: (name: string) => jobs.queue(name) as never,
     getConfig: <T>(guildId: string) => configStore.getConfig<T>(guildId, 'automod'),
     setConfig: <T>() => Promise.resolve({} as T),
     isEnabled: (guildId: string) => configStore.isEnabled(guildId, 'automod'),
@@ -675,6 +754,8 @@ async function main(): Promise<void> {
     botOwnerIds: [],
     intentsEnabled: { messageContent: true, guildMembers: true, guildPresences: false },
   };
+
+  jobs.attach(ctx);
 
   const workload = buildWorkload(options);
   // Message/join timestamps feed the sliding windows, so they are anchored to one fixed instant per run.
@@ -745,6 +826,12 @@ async function main(): Promise<void> {
   const cpu = process.cpuUsage(cpuStart);
   const loop = performance.eventLoopUtilization(loopStart);
 
+  // Latency and CPU are measured over the raid itself. Background jobs (the raid alert's running count and its
+  // final "raid ended" edit) carry on afterwards; wait for them so the alert counts below are complete.
+  await jobs.idle();
+  const settledMs = performance.now() - wallStart;
+  failures.push(...jobs.failures);
+
   // Outcome digest: what automod decided and did, independent of timing.
   const events = await basePrisma.automodEvent.findMany({
     where: { guildId: GUILD_ID },
@@ -764,11 +851,18 @@ async function main(): Promise<void> {
     )
     .sort();
   const restLines = options.mode === 'verify' ? discord.restLog : [...discord.restLog].sort();
-  const digest = createHash('sha256')
-    .update(eventLines.join('\n'))
-    .update('\n--\n')
-    .update(restLines.join('\n'))
-    .digest('hex');
+  // Two digests, so a change to what staff are told (Discord calls) can be told apart from a change to what
+  // automod decided (the AutomodEvent rows).
+  const eventsDigest = createHash('sha256').update(eventLines.join('\n')).digest('hex');
+  const discordDigest = createHash('sha256').update(restLines.join('\n')).digest('hex');
+  const countRest = (label: string, titlePart = ''): number =>
+    discord.restLog.filter((line) => line.startsWith(`${label}|`) && line.includes(titlePart)).length;
+  const alerts = {
+    posted: countRest('alert.send'),
+    edits: countRest('alert.edit'),
+    raidPosted: countRest('alert.send', 'RAID_DETECTION'),
+    raidEdits: countRest('alert.edit', 'RAID_DETECTION'),
+  };
   const eventsByRule = new Map<string, number>();
   for (const e of events) eventsByRule.set(e.ruleId, (eventsByRule.get(e.ruleId) ?? 0) + 1);
 
@@ -825,9 +919,16 @@ async function main(): Promise<void> {
   lines.push(`  AutomodEvent rows written: ${events.length}`);
   for (const [ruleId, count] of [...eventsByRule.entries()].sort())
     lines.push(`    ${ruleId.padEnd(48)} ${count}`);
+  lines.push('');
+  lines.push(`  Staff alert messages posted: ${alerts.posted} (${alerts.edits} edits)`);
+  lines.push(`    for the raid-detection rule:  ${alerts.raidPosted} posted, ${alerts.raidEdits} edits`);
+  if (options.mode === 'load') {
+    lines.push(`    alerts settled ${(settledMs / 1000).toFixed(0)} s after the raid began`);
+  }
   lines.push(`  Handler errors: ${failures.length}${failures.length > 0 ? ` (first: ${failures[0]})` : ''}`);
   if (options.mode === 'verify') {
-    lines.push(`  Outcome digest: ${digest}`);
+    lines.push(`  Events digest (what automod decided):  ${eventsDigest}`);
+    lines.push(`  Discord digest (what it did and said): ${discordDigest}`);
     // Rule cooldowns and match claims last 300 s of real time; past that the digest would depend on run speed.
     if (wallMs > 240_000)
       lines.push('  WARNING: run took over 240 s; the digest may not be reproducible. Use fewer --seconds.');
@@ -853,7 +954,10 @@ async function main(): Promise<void> {
       profile: Object.fromEntries(ranked),
       automodEvents: events.length,
       handlerErrors: failures.length,
-      digest: options.mode === 'verify' ? digest : null,
+      alerts,
+      settledMs,
+      eventsDigest: options.mode === 'verify' ? eventsDigest : null,
+      discordDigest: options.mode === 'verify' ? discordDigest : null,
     };
     await writeFile(options.json, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
   }
