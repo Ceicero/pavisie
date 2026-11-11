@@ -146,7 +146,8 @@ things keep that cost low:
 
 `scripts/bench-automod-raid.ts` reproduces the load: a 50,000-member server taking 400 messages and 150 joins a
 second, against real Postgres and Redis with Discord faked in-process. It needs `DATABASE_URL` and `REDIS_URL`
-(the same services CI and `docker-compose.yml` start), uses a fixed seed, and removes everything it writes.
+(the same services CI and `docker-compose.yml` start), uses a fixed seed, and removes everything it writes. It refuses a
+database or Redis that is not on the local machine unless you pass `--allow-remote`.
 
 ```bash
 # Load test: latency, backend calls per event, and where handlers wait

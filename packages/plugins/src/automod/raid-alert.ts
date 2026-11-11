@@ -29,6 +29,8 @@ const RAID_ALERT_STALE_MS = RAID_ALERT_QUIET_MS * 3;
 const RAID_ALERT_STATE_TTL_SECONDS = 60 * 60;
 
 export const RAID_ALERT_JOB_NAME = 'raid-alert';
+/** How many times one update is tried before it is given up on. */
+export const RAID_ALERT_JOB_ATTEMPTS = 5;
 
 export interface RaidAlertJobData {
   guildId: string;
@@ -117,6 +119,11 @@ async function scheduleUpdate(ctx: PluginContext, data: RaidAlertJobData): Promi
     // `-` separators: BullMQ rejects most custom job ids containing `:` (see moderation's expiry job).
     jobId: `raid-${data.guildId}-${data.ruleId}-${data.startedAt}-${data.tick}`,
     delay: RAID_ALERT_UPDATE_INTERVAL_MS,
+    // Each update queues the next one, so an update that fails outright (Redis or the queue briefly
+    // unreachable) would otherwise end the chain: the alert would freeze at its last count and never be marked
+    // as ended, for the rest of the raid. Retried instead; the processor is safe to run twice.
+    attempts: RAID_ALERT_JOB_ATTEMPTS,
+    backoff: { type: 'exponential', delay: 2_000 },
     removeOnComplete: true,
     removeOnFail: 100,
   });
