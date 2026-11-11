@@ -70,10 +70,11 @@ export const manifest = defineManifest({
     },
     {
       permission: PermissionFlagsBits.SendMessagesInThreads,
-      feature: 'posting the opening embed and closing summary inside a ticket thread (thread mode)',
+      feature:
+        'posting the opening embed and the "ticket closed" notice with its Reopen button inside a ticket thread (thread mode)',
       optional: true,
       fallback:
-        'The ticket thread is still created, but the opening embed and closing summary are not posted in it (a warning is logged); channel-mode tickets are unaffected.',
+        'The ticket thread is still created, but the opening embed and the closed notice with its Reopen button are not posted in it; channel-mode tickets are unaffected.',
     },
     {
       permission: PermissionFlagsBits.ManageThreads,
