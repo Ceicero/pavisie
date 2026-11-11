@@ -5,6 +5,7 @@ import type { AutomodRule } from '@pavisie/database';
 import { createTestContext } from '../../sdk/testing';
 import type { AutomodConfig } from '../manifest';
 import {
+  RAID_ALERT_JOB_ATTEMPTS,
   RAID_ALERT_QUIET_MS,
   RAID_ALERT_UPDATE_INTERVAL_MS,
   raidAlertJob,
@@ -25,7 +26,7 @@ interface Embedded {
 function harness(guildId: string, options: { alertChannelId?: string | null; failEdits?: boolean } = {}) {
   const sent: Embedded[] = [];
   const edits: { messageId: string; payload: Embedded }[] = [];
-  const queued: { data: RaidAlertJobData; jobId: string; delay: number }[] = [];
+  const queued: { data: RaidAlertJobData; jobId: string; delay: number; attempts?: number }[] = [];
   const warnings: string[] = [];
 
   const channel = {
@@ -56,8 +57,12 @@ function harness(guildId: string, options: { alertChannelId?: string | null; fai
       client: { guilds: { cache: new Map([[guildId, guild]]) }, user: { id: 'bot' } } as never,
       queue: () =>
         ({
-          add: async (_name: string, data: RaidAlertJobData, opts: { jobId: string; delay: number }) => {
-            queued.push({ data, jobId: opts.jobId, delay: opts.delay });
+          add: async (
+            _name: string,
+            data: RaidAlertJobData,
+            opts: { jobId: string; delay: number; attempts?: number },
+          ) => {
+            queued.push({ data, jobId: opts.jobId, delay: opts.delay, attempts: opts.attempts });
           },
         }) as never,
       logger: {
@@ -234,6 +239,31 @@ describe('raid alert: one message per raid', () => {
     vi.advanceTimersByTime(RAID_ALERT_QUIET_MS + 1_000);
     await h.runUpdate();
     expect(await h.redis.exists(h.stateKey)).toBe(0);
+  });
+
+  it('retries an update that fails outright, so one bad moment cannot freeze the alert', async () => {
+    const h = harness('raid-retry');
+    await h.join();
+    await h.join();
+
+    // Every update is queued with retries...
+    expect(h.queued[0]?.attempts).toBe(RAID_ALERT_JOB_ATTEMPTS);
+
+    // ...and a Redis failure surfaces as a thrown error (which is what makes the queue retry) rather than being
+    // swallowed with the follow-up update never queued.
+    const hgetall = h.redis.hgetall.bind(h.redis);
+    h.redis.hgetall = (async () => {
+      throw new Error('redis unavailable');
+    }) as never;
+    await expect(h.runUpdate()).rejects.toThrow('redis unavailable');
+    expect(h.queued).toHaveLength(1);
+
+    // The retry then does the edit and queues the next update, exactly once.
+    h.redis.hgetall = hgetall;
+    await h.runUpdate();
+    expect(h.edits).toHaveLength(1);
+    expect(h.queued).toHaveLength(2);
+    expect(h.queued[1]?.attempts).toBe(RAID_ALERT_JOB_ATTEMPTS);
   });
 
   it('warns once, not once per join, when no alert channel is set', async () => {

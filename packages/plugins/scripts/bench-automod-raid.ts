@@ -23,8 +23,10 @@
 //           identical before and after a pure performance change — they are the "same behavior" check.
 //           Background jobs do not run in this mode, so the result never depends on how fast the replay went.
 //
-// Safety: refuses to run with NODE_ENV=production. It only touches rows of its own guild (`bench-raid-guild`) and
-// Redis keys containing `bench-raid`, and removes both when it finishes.
+// Safety: refuses to run with NODE_ENV=production, and refuses a DATABASE_URL or REDIS_URL that is not on this
+// machine unless --allow-remote is passed (needed inside docker-compose, where the hosts are `postgres`/`redis`).
+// It only touches rows of its own guild (`bench-raid-guild`) and Redis keys containing `bench-raid`, and removes
+// both when it finishes.
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
@@ -53,6 +55,7 @@ interface Options {
   seed: number;
   label: string;
   json: string | null;
+  allowRemote: boolean;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -67,6 +70,7 @@ function parseOptions(argv: string[]): Options {
     seed: 20261110,
     label: 'run',
     json: null,
+    allowRemote: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -106,6 +110,9 @@ function parseOptions(argv: string[]): Options {
         break;
       case '--seed':
         options.seed = takeNumber();
+        break;
+      case '--allow-remote':
+        options.allowRemote = true;
         break;
       case '--manage-guild':
         options.manageGuild = true;
@@ -682,6 +689,16 @@ class JobRunner {
 // Running
 // ---------------------------------------------------------------------------------------------------------
 
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '(unparseable URL)';
+  }
+}
+
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] as number;
@@ -713,6 +730,20 @@ async function main(): Promise<void> {
     throw new Error(
       'Set DATABASE_URL and REDIS_URL (see .env.example) — the benchmark needs real Postgres and Redis.',
     );
+  }
+
+  // `@pavisie/core` loads the repo's `.env` on import, so these URLs may have come from a file rather than the
+  // shell. A benchmark that writes thousands of rows and drives hundreds of queries a second must not land on a
+  // shared or production database because of what happened to be in `.env`.
+  if (!options.allowRemote) {
+    for (const name of ['DATABASE_URL', 'REDIS_URL'] as const) {
+      const host = hostOf(process.env[name] as string);
+      if (!LOCAL_HOSTS.has(host)) {
+        throw new Error(
+          `${name} points at "${host}", which is not this machine. Point it at a local or disposable instance, or pass --allow-remote if that host really is one.`,
+        );
+      }
+    }
   }
 
   const recorder = new Recorder();
