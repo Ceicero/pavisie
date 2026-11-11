@@ -116,6 +116,21 @@ content/member-dependent rule types above; without them, those specific rules sh
 driven by the rule's type, an actions builder, an exemptions editor, a guild-wide dry-run banner, a review-queue
 tab, and a settings tab.
 
+## Raid alerts
+
+A `RAID_DETECTION` rule with the "alert staff" action posts **one** alert per raid, not one per joining account
+(`raid-alert.ts`):
+
+- The first flagged join posts the alert.
+- Later flagged joins only add to a counter. A background job edits the same message with the running count, at
+  most once every 5 seconds.
+- After 60 seconds with no flagged join, the message gets a final edit marking the raid as ended. A join after
+  that starts a new alert.
+
+Every flagged join still gets its own `AutomodEvent`, so `/automod review` and the dashboard list each one. The
+raid alert has no Confirm / False positive buttons, because it stands for many events. Alerts from every other
+rule are unchanged: one message per match.
+
 ## Performance under a raid
 
 Every message and every join runs the guild's rules, so a raid multiplies whatever one evaluation costs. Three
@@ -145,5 +160,5 @@ pnpm --filter @pavisie/plugins exec tsx scripts/bench-automod-raid.ts --msg-rate
 pnpm --filter @pavisie/plugins exec tsx scripts/bench-automod-raid.ts --mode verify --seconds 10 --discord-ms 0
 ```
 
-Discord's rate limits are not simulated, so the latency of deletes and alerts is a best case. The numbers that
+The report also counts staff alert messages and edits, in total and for the raid rule. Discord's rate limits are not simulated, so the latency of deletes and alerts is a best case. The numbers that
 transfer between machines are the backend calls per event; latency and CPU depend on the hardware.
