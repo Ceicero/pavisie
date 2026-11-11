@@ -39,7 +39,7 @@ export const manifest = defineManifest({
       feature: 'Twitch chat bridge (creating the webhook that relays Twitch chat into a Discord channel)',
       optional: true,
       fallback:
-        'The bridge reports that it needs View Channel, Send Messages, and Manage Webhooks in the bridge channel and relays nothing; alerts and every other integration are unaffected.',
+        'The bridge shows an error saying it needs View Channel, Send Messages, and Manage Webhooks in the bridge channel, and the Twitch-to-Discord relay is not set up; alerts and every other integration are unaffected.',
     },
   ],
   intents: [GatewayIntentBits.Guilds],

@@ -90,7 +90,7 @@ _Button-driven support tickets with categories, staff assignment, tags, and HTML
 | Manage Channels | creating and deleting ticket channels (channel mode) | Optional | Channel-mode tickets fail with a clear ephemeral error when opened; thread-mode tickets still work. |
 | Manage Roles | setting per-user/per-role permission overwrites on a new ticket channel | Optional | Channel-mode tickets fail with a clear ephemeral error when opened; thread-mode tickets still work. |
 | Create Private Threads | creating private ticket threads (thread mode) | Optional | Thread-mode tickets fail with a clear ephemeral error when opened; channel-mode tickets still work. |
-| Send Messages in Threads | posting the opening embed and closing summary inside a ticket thread (thread mode) | Optional | The ticket thread is still created, but the opening embed and closing summary are not posted in it (a warning is logged); channel-mode tickets are unaffected. |
+| Send Messages in Threads | posting the opening embed and the "ticket closed" notice with its Reopen button inside a ticket thread (thread mode) | Optional | The ticket thread is still created, but the opening embed and the closed notice with its Reopen button are not posted in it; channel-mode tickets are unaffected. |
 | Manage Threads | archiving and locking ticket threads on close, and adding participants to a thread | Optional | Thread-mode tickets close but the thread is left unarchived/unlocked for staff to close manually. |
 | Send Messages | posting the panel, opening embed, and closing summary | Required | The plugin cannot function without this permission. |
 | Embed Links | rich panel/ticket embeds | Optional | Falls back to plain-text messages. |
@@ -188,7 +188,7 @@ _Secure connector framework for optional external services: Twitch, YouTube, Ins
 | View Channel | posting alerts / inbound webhook events | Required | Alerts silently fail to post in that channel; connection health shows an error. |
 | Send Messages | posting alerts / inbound webhook events | Required | Alerts silently fail to post in that channel; connection health shows an error. |
 | Embed Links | alert embeds (Twitch/YouTube/Instagram/Reddit/Steam/Calendar) | Optional | Alerts post as plain text instead of a rich embed. |
-| Manage Webhooks | Twitch chat bridge (creating the webhook that relays Twitch chat into a Discord channel) | Optional | The bridge reports that it needs View Channel, Send Messages, and Manage Webhooks in the bridge channel and relays nothing; alerts and every other integration are unaffected. |
+| Manage Webhooks | Twitch chat bridge (creating the webhook that relays Twitch chat into a Discord channel) | Optional | The bridge shows an error saying it needs View Channel, Send Messages, and Manage Webhooks in the bridge channel, and the Twitch-to-Discord relay is not set up; alerts and every other integration are unaffected. |
 
 
 ### AI Assistant (`ai`)
