@@ -115,3 +115,51 @@ content/member-dependent rule types above; without them, those specific rules sh
 `/dashboard/[guildId]/automod` — rule list with type badges and enabled/dry-run switches, a create/edit form
 driven by the rule's type, an actions builder, an exemptions editor, a guild-wide dry-run banner, a review-queue
 tab, and a settings tab.
+
+## Raid alerts
+
+A `RAID_DETECTION` rule with the "alert staff" action posts **one** alert per raid, not one per joining account
+(`raid-alert.ts`):
+
+- The first flagged join posts the alert.
+- Later flagged joins only add to a counter. A background job edits the same message with the running count, at
+  most once every 5 seconds.
+- After 60 seconds with no flagged join, the message gets a final edit marking the raid as ended. A join after
+  that starts a new alert.
+
+Every flagged join still gets its own `AutomodEvent`, so `/automod review` and the dashboard list each one. The
+raid alert has no Confirm / False positive buttons, because it stands for many events. Alerts from every other
+rule are unchanged: one message per match.
+
+## Performance under a raid
+
+Every message and every join runs the guild's rules, so a raid multiplies whatever one evaluation costs. Three
+things keep that cost low:
+
+- **Rules are read once and reused for 2 seconds** (`RULE_CACHE_TTL_MS` in `service.ts`), already parsed. A
+  change made with `/automod rule ...` or `/automod exempt ...` drops the cached copy and applies to the next
+  event. A change made in the dashboard is written by the API process, which cannot reach the bot's cache, so
+  it applies within 2 seconds.
+- **Each sliding-window check is one Redis round trip** (`RedisWindowStore.pushAndCount` runs as a single
+  `MULTI`/`EXEC`), which also makes the count atomic.
+- **A word filter is compiled once per rule**, not once per message.
+
+`scripts/bench-automod-raid.ts` reproduces the load: a 50,000-member server taking 400 messages and 150 joins a
+second, against real Postgres and Redis with Discord faked in-process. It needs `DATABASE_URL` and `REDIS_URL`
+(the same services CI and `docker-compose.yml` start), uses a fixed seed, and removes everything it writes. It refuses a
+database or Redis that is not on the local machine unless you pass `--allow-remote`.
+
+```bash
+# Load test: latency, backend calls per event, and where handlers wait
+pnpm --filter @pavisie/plugins exec tsx scripts/bench-automod-raid.ts
+
+# Twice the load
+pnpm --filter @pavisie/plugins exec tsx scripts/bench-automod-raid.ts --msg-rate 800 --join-rate 300
+
+# Behavior check: replays the raid one event at a time and prints a digest of every AutomodEvent written and
+# every Discord call made. A performance change must leave this digest unchanged.
+pnpm --filter @pavisie/plugins exec tsx scripts/bench-automod-raid.ts --mode verify --seconds 10 --discord-ms 0
+```
+
+The report also counts staff alert messages and edits, in total and for the raid rule. Discord's rate limits are not simulated, so the latency of deletes and alerts is a best case. The numbers that
+transfer between machines are the backend calls per event; latency and CPU depend on the hardware.
