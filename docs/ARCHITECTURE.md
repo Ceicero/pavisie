@@ -752,7 +752,14 @@ provider file/registry entry for one without deciding whether its enum value sho
 ## 18b. `economy` plugin (guild wallets) and the channel-owned Twitch currency
 
 Virtual currency feature: `/economy balance|daily|give|leaderboard|config` and `/economy admin add|remove`.
-**No real-money functionality** — currency is virtual-only, cannot be purchased, cashed out, or used for wagering.
+**No real-money functionality** — currency is virtual-only and can never be purchased or cashed out. The Discord
+server's currency cannot be used for wagering at all.
+
+**One exception, for the Twitch channel currency only (decided Nov 12 2026):** a streamer may turn on table games
+that let viewers bet their channel's currency (Agis by default) against the house. It is off by default
+(`ChannelEconomy.blackjackEnabled`), each streamer turns it on for their own channel, and it is virtual in both
+directions: what is bet and what is won is the same currency that still cannot be bought or cashed out. Phase 1
+is chat blackjack (`packages/plugins/src/channel-games/`, see "Table games" at the end of this section).
 
 There are now **two separate currencies**, and they are never merged, linked or transferred between:
 
@@ -888,6 +895,34 @@ with them.
   linked chat-bot row needed); summary reads never create a wallet.
 - **Creator dashboard** (§19e): `GET/PATCH /creator/twitch/economy`, `GET …/leaderboard`, `POST …/adjust`; UI section
   "Currency".
+
+
+### Table games (channel currency only)
+
+`packages/plugins/src/channel-games/` runs chat table games on a Twitch channel's own currency. Phase 1 is
+blackjack; Texas hold'em and an idle game are planned on the same core (`ChannelGameType` already reserves
+`POKER` and `IDLE`).
+
+- **Where it sits.** `TwitchChatManager.tryGameCommand` runs after the economy commands and before the
+  custom-command engine. `!blackjack` / `!bj` are reserved names (`TWITCH_CHAT_RESERVED_COMMAND_NAMES`); an
+  existing custom command with either name still wins. The short forms (`!hit`, `!stand`, `!double`, `!split`,
+  `!bet`, `!join`, `!leave`) are not reserved: they only apply while a lobby is open or that chatter is seated,
+  and otherwise fall through to custom commands untouched.
+- **Pure core, one host.** `deck.ts`, `rng.ts`, `blackjack/shoe.ts`, `hand.ts`, `table.ts`, `commands.ts` and
+  `messages.ts` are pure. `host.ts` is the only part that touches Redis, the ledger, the clock and chat.
+- **Currency.** Only `channel-economy/ledger.ts` writes a balance. Games use `debitChannel` (a conditional
+  update, so simultaneous bets cannot overdraw a wallet) and `settleChannelGameHand` (the hand record and every
+  payout in one transaction, idempotent on the hand id). Transaction types `blackjack_bet`, `blackjack_payout`
+  and `blackjack_push` are never counted as "earned".
+- **Restart-safe.** The table lives in Redis. Before moving currency the host records what it is about to do,
+  with a note unique to that movement, and after a restart asks the ledger whether it happened. A table that
+  was mid-hand resumes with the same cards and the same turn.
+- **Chat limits.** Game output goes through `outbound.ts`, a per-channel coalescing queue: at most one message
+  a second, 500 characters, table updates batched, and the final result never dropped.
+- **Privacy.** Chat text is read once by the command parser and goes no further: it is never logged, stored or
+  repeated. Tables show sanitised display names and formatted numbers only. `ChannelGameHand.result` holds the
+  public outcome (cards, totals, stakes, payouts), never chat text.
+- **No new Twitch scopes** and no AI.
 
 ## 19. `enforcer` plugin
 

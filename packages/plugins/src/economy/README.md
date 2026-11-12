@@ -3,8 +3,13 @@
 Optional virtual currency: balance, a daily reward with a streak bonus, giving between members, a leaderboard,
 and admin balance adjustments. **Disabled by default.**
 
-**Virtual points only. No purchase, no cash-out, no real-money value, no gambling.** This plugin never touches
-Stripe or any payment processor, and no feature converts the currency to or from real money.
+**Virtual points only. No purchase, no cash-out, no real-money value.** This plugin never touches Stripe or any
+payment processor, and no feature converts the currency to or from real money. The Discord server's currency
+cannot be wagered.
+
+One exception, for a Twitch channel's own currency only: a streamer may turn on table games (chat blackjack,
+off by default) that let viewers bet that channel currency. It stays virtual in both directions; nothing can
+be bought or cashed out. See `packages/plugins/src/channel-games/` and ARCHITECTURE.md §18b.
 
 ## Commands
 
