@@ -65,6 +65,14 @@ export function addSetupSubcommand(builder: SlashCommandBuilder): SlashCommandBu
 }
 
 /**
+ * What to check when the mute role could not be applied to a channel. Manage Roles / Manage Channels are the
+ * usual cause, but not the only one: Discord also rejects an overwrite that denies a permission the bot does not
+ * hold itself, so a bot missing Speak (or any other permission the mute role denies) fails the same way.
+ */
+const MUTE_APPLY_HINT =
+  'check that I have Manage Roles and Manage Channels there, plus every permission the mute role denies: Send Messages, Send Messages in Threads, Speak, Add Reactions';
+
+/**
  * One sentence describing a bulk mute-role apply. Channels that failed and channels the bot cannot manage at all
  * are both named: a mute that silently doesn't reach part of the server is the failure mode this command has to
  * make visible, not summarise away.
@@ -73,10 +81,7 @@ function describeMuteApply(result: { applied: number; failed: number; skipped: n
   const problems: string[] = [];
   if (result.failed > 0) problems.push(`${result.failed} failed`);
   if (result.skipped > 0) problems.push(`${result.skipped} skipped — I can't manage them`);
-  const suffix =
-    problems.length > 0
-      ? ` (${problems.join(', ')}; check my Manage Roles/Manage Channels permission there)`
-      : '';
+  const suffix = problems.length > 0 ? ` (${problems.join(', ')}; ${MUTE_APPLY_HINT})` : '';
   return `applied deny-overwrites to ${result.applied} channel(s)${suffix}`;
 }
 
@@ -105,7 +110,7 @@ export async function executeSetup(c: CommandContext): Promise<void> {
       : { muteApplied: 0, muteFailed: 0 };
     const muteSuffix =
       muteApplied > 0 || muteFailed > 0
-        ? `, mute role on ${muteApplied} channel(s)${muteFailed > 0 ? ` (${muteFailed} failed — check my Manage Roles/Manage Channels permission there)` : ''}`
+        ? `, mute role on ${muteApplied} channel(s)${muteFailed > 0 ? ` (${muteFailed} failed — ${MUTE_APPLY_HINT})` : ''}`
         : '';
     await c.interaction.editReply({
       embeds: [successEmbed(`Channel permission overwrites re-applied (ledger, flag queue${muteSuffix}).`)],

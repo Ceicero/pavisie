@@ -132,12 +132,6 @@ export const manifest = defineManifest({
       fallback: 'Falls back to plain text where possible.',
     },
     {
-      permission: PermissionFlagsBits.ManageThreads,
-      feature: 'auto-threading suggestions, auto-threads',
-      optional: true,
-      fallback: 'The suggestion/message is still posted; no thread is created.',
-    },
-    {
       permission: PermissionFlagsBits.CreatePublicThreads,
       feature: 'auto-threading suggestions, auto-threads',
       optional: true,
@@ -155,12 +149,6 @@ export const manifest = defineManifest({
       feature: 'creating a native Discord scheduled event for /event create',
       optional: true,
       fallback: 'The event is still tracked and announced in-channel; no Discord Events entry is created.',
-    },
-    {
-      permission: PermissionFlagsBits.ManageMessages,
-      feature: "sticky messages (delete the bot's own previous sticky)",
-      optional: true,
-      fallback: 'The old sticky stays in place; the bot still posts a new one.',
     },
     {
       permission: PermissionFlagsBits.ManageChannels,
