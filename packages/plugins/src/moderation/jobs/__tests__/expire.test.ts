@@ -139,6 +139,73 @@ describe('expireJob — enforcer timed MUTE (ROLE_ADD) expiry', () => {
   });
 });
 
+describe('expireJob — overlapping enforcer mutes on one member', () => {
+  const LATER = new Date(Date.now() + 60 * 60 * 1000);
+  const EARLIER = new Date(Date.now() - 60 * 1000);
+
+  function build(others: Record<string, unknown>[]) {
+    const updateCalls: unknown[] = [];
+    const removeRole = vi.fn().mockResolvedValue(undefined);
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findUnique: async () => enforcerMuteCase({ expiresAt: EARLIER }),
+          findMany: async () => others,
+          update: async (args: any) => {
+            updateCalls.push(args);
+            return {};
+          },
+        },
+      },
+      overrides: {
+        client: {
+          guilds: {
+            fetch: async () => ({
+              members: { fetch: async () => ({ roles: { cache: new Map([[ROLE_ID, true]]), remove: removeRole } }) },
+            }),
+          },
+        } as any,
+      },
+    });
+    return { ctx, updateCalls, removeRole };
+  }
+
+  it('keeps the role on when a later mute on the same member is still running, and still closes this case', async () => {
+    const { ctx, updateCalls, removeRole } = build([enforcerMuteCase({ id: 'case-2', expiresAt: LATER })]);
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(removeRole).not.toHaveBeenCalled();
+    expect(updateCalls).toHaveLength(1);
+    expect((updateCalls[0] as any).where.id).toBe(CASE_ID);
+  });
+
+  it('keeps the role on when the other mute has no end date', async () => {
+    const { ctx, removeRole } = build([enforcerMuteCase({ id: 'case-2', expiresAt: null })]);
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(removeRole).not.toHaveBeenCalled();
+  });
+
+  it('removes the role when the only other mute is itself overdue, already closed, or for another role or member', async () => {
+    for (const other of [
+      enforcerMuteCase({ id: 'case-2', expiresAt: EARLIER }),
+      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, expiredAt: new Date() }),
+      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, deletedAt: new Date() }),
+      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, metadata: { enforcerMute: true, roleId: 'another-role' } }),
+      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, targetId: 'someone-else' }),
+      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, metadata: { roleId: ROLE_ID } }),
+    ]) {
+      const { ctx, removeRole } = build([other]);
+      await expireJob.processor(ctx, fakeJob(CASE_ID));
+      expect(removeRole, JSON.stringify(other)).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('does not count the expiring case as its own overlap', async () => {
+    const { ctx, removeRole } = build([enforcerMuteCase({ expiresAt: LATER })]);
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(removeRole).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('expireJob — temporary BAN expiry', () => {
   function banCase() {
     return enforcerMuteCase({ type: 'BAN', metadata: null });
