@@ -23,6 +23,7 @@ import {
   automodRuleConfigSchema,
   type AutomodRuleTypeValue,
 } from '../schemas';
+import { invalidateRuleCache } from '../service';
 import { ruleDetailEmbed, ruleListLine } from './format';
 import { ACTION_TYPE_LABELS, RULE_TYPE_LABELS } from './rule-labels';
 import { buildRuleConfigModal, readModalFieldValues } from './rule-modal';
@@ -127,6 +128,7 @@ export async function handleRuleCreateModalSubmit(c: ComponentContext, pendingId
     },
   });
 
+  invalidateRuleCache(c.ctx, c.guildId);
   await c.ctx.audit({
     guildId: c.guildId,
     actorId: c.interaction.user.id,
@@ -176,6 +178,7 @@ export async function handleRuleToggle(c: CommandContext): Promise<void> {
     data: { enabled: !rule.enabled },
   });
 
+  invalidateRuleCache(c.ctx, c.guildId);
   await c.ctx.audit({
     guildId: c.guildId,
     actorId: c.interaction.user.id,
@@ -214,6 +217,7 @@ export async function handleRuleDryRun(c: CommandContext): Promise<void> {
     data: { dryRun },
   });
 
+  invalidateRuleCache(c.ctx, c.guildId);
   await c.ctx.audit({
     guildId: c.guildId,
     actorId: c.interaction.user.id,
@@ -292,6 +296,7 @@ export async function handleRuleEditModalSubmit(c: ComponentContext, ruleId: str
     data: { config: config as unknown as Prisma.InputJsonValue },
   });
 
+  invalidateRuleCache(c.ctx, c.guildId);
   await c.ctx.audit({
     guildId: c.guildId,
     actorId: c.interaction.user.id,
@@ -344,6 +349,7 @@ export const ruleDeleteConfirmHandlers: ComponentHandler[] = registerConfirmHand
     return;
   }
   await c.ctx.prisma.automodRule.update({ where: { id: payload.ruleId }, data: { deletedAt: new Date() } });
+  invalidateRuleCache(c.ctx, c.guildId);
   await c.ctx.audit({
     guildId: c.guildId,
     actorId: c.interaction.user.id,
