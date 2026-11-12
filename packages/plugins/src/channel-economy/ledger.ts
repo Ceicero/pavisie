@@ -56,11 +56,7 @@ function isPositiveSafeInteger(amount: number): boolean {
  * Upsert a wallet by (economyId, viewerUserId); `displayName` (the viewer's Twitch display name, for boards) is
  * stored/refreshed only when provided — omitting it never wipes an existing one.
  */
-export async function getOrCreateChannelWallet(
-  prisma: PrismaClient,
-  key: ChannelWalletKey,
-  displayName?: string,
-) {
+export async function getOrCreateChannelWallet(prisma: PrismaClient, key: ChannelWalletKey, displayName?: string) {
   return prisma.channelWallet.upsert({
     where: { economyId_viewerUserId: { economyId: key.economyId, viewerUserId: key.viewerUserId } },
     create: { economyId: key.economyId, viewerUserId: key.viewerUserId, displayName },
@@ -77,7 +73,8 @@ export async function findChannelWallet(prisma: PrismaClient, key: ChannelWallet
 }
 
 export type ChannelClaimDailyResult =
-  { ok: false; retryAfterMs: number } | { ok: true; amount: bigint; streak: number };
+  | { ok: false; retryAfterMs: number }
+  | { ok: true; amount: bigint; streak: number };
 
 /**
  * Claim a daily reward. Same result shape as `economy/ledger.ts`'s `claimDaily`. The conditional `updateMany`
@@ -169,11 +166,7 @@ export async function giveChannel(
 ): Promise<ChannelGiveResult> {
   if (!isPositiveSafeInteger(amount)) return { ok: false, reason: 'invalid_amount' };
 
-  const senderWallet = await getOrCreateChannelWallet(
-    prisma,
-    { economyId, viewerUserId: fromUserId },
-    options.fromDisplayName,
-  );
+  const senderWallet = await getOrCreateChannelWallet(prisma, { economyId, viewerUserId: fromUserId }, options.fromDisplayName);
   const validation = validateGive({
     amount,
     senderBalance: senderWallet.balance,
@@ -183,11 +176,7 @@ export async function giveChannel(
   });
   if (!validation.ok) return { ok: false, reason: validation.reason };
 
-  const targetWallet = await getOrCreateChannelWallet(
-    prisma,
-    { economyId, viewerUserId: toUserId },
-    options.toDisplayName,
-  );
+  const targetWallet = await getOrCreateChannelWallet(prisma, { economyId, viewerUserId: toUserId }, options.toDisplayName);
   const bigAmount = BigInt(amount);
 
   try {
@@ -265,7 +254,8 @@ export async function creditChannel(
 }
 
 export type ChannelAdminAdjustResult =
-  { ok: true; newBalance: bigint } | { ok: false; reason: 'would_go_negative' | 'invalid_amount' };
+  | { ok: true; newBalance: bigint }
+  | { ok: false; reason: 'would_go_negative' | 'invalid_amount' };
 
 /**
  * The streamer's manual add/remove. `direction`: 1 to add, -1 to remove. A remove is guarded at write time so a
@@ -385,11 +375,7 @@ export async function getChannelBalanceLeaderboard(
     orderBy: { balance: 'desc' },
     take: limit,
   });
-  return wallets.map((w) => ({
-    viewerUserId: w.viewerUserId,
-    displayName: w.displayName ?? null,
-    balance: w.balance,
-  }));
+  return wallets.map((w) => ({ viewerUserId: w.viewerUserId, displayName: w.displayName ?? null, balance: w.balance }));
 }
 
 // ---------------------------------------------------------------------------------------------------------

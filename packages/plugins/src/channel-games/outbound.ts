@@ -124,8 +124,9 @@ export class CoalescingOutbound {
     if (this.stopped || queue.timer || queue.sending) return;
     if (queue.lines.length === 0) {
       for (const wake of queue.idleWaiters.splice(0)) wake();
-      // Nothing left to say: drop the bookkeeping so quiet channels do not accumulate.
-      this.queues.delete(channelKey);
+      // Nothing left to say. The bookkeeping is only dropped once a full interval has passed since the last
+      // send: until then it is what stops the very next line from going out too soon.
+      if (this.now() - queue.lastSendAt >= this.intervalMs) this.queues.delete(channelKey);
       return;
     }
     const wait = Math.max(0, queue.lastSendAt + this.intervalMs - this.now());

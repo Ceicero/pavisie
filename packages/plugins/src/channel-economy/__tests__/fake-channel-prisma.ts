@@ -38,9 +38,7 @@ export function walletId(economyId: string, viewerUserId: string): string {
   return `w-${economyId}-${viewerUserId}`;
 }
 
-export function buildFakeChannelPrisma(
-  seedWallets: Array<Partial<FakeWallet> & Pick<FakeWallet, 'economyId' | 'viewerUserId'>> = [],
-) {
+export function buildFakeChannelPrisma(seedWallets: Array<Partial<FakeWallet> & Pick<FakeWallet, 'economyId' | 'viewerUserId'>> = []) {
   const wallets = new Map<string, FakeWallet>();
   const transactions: FakeTx[] = [];
   let txSeq = 0;
@@ -63,8 +61,7 @@ export function buildFakeChannelPrisma(
       const ok = where.OR.some((cond) =>
         'lastDailyAt' in cond && cond.lastDailyAt === null
           ? w.lastDailyAt === null
-          : w.lastDailyAt !== null &&
-            w.lastDailyAt.getTime() <= (cond as { lastDailyAt: { lte: Date } }).lastDailyAt.lte.getTime(),
+          : w.lastDailyAt !== null && w.lastDailyAt.getTime() <= (cond as { lastDailyAt: { lte: Date } }).lastDailyAt.lte.getTime(),
       );
       if (!ok) return false;
     }
@@ -82,9 +79,7 @@ export function buildFakeChannelPrisma(
       update?: { displayName?: string };
     }) => {
       const { economyId, viewerUserId } = where.economyId_viewerUserId;
-      const existing = [...wallets.values()].find(
-        (w) => w.economyId === economyId && w.viewerUserId === viewerUserId,
-      );
+      const existing = [...wallets.values()].find((w) => w.economyId === economyId && w.viewerUserId === viewerUserId);
       if (existing) {
         if (update?.displayName !== undefined) existing.displayName = update.displayName;
         return { ...existing };
@@ -100,15 +95,9 @@ export function buildFakeChannelPrisma(
       wallets.set(created.id, created);
       return { ...created };
     },
-    findUnique: async ({
-      where,
-    }: {
-      where: { economyId_viewerUserId: { economyId: string; viewerUserId: string } };
-    }) => {
+    findUnique: async ({ where }: { where: { economyId_viewerUserId: { economyId: string; viewerUserId: string } } }) => {
       const { economyId, viewerUserId } = where.economyId_viewerUserId;
-      const found = [...wallets.values()].find(
-        (w) => w.economyId === economyId && w.viewerUserId === viewerUserId,
-      );
+      const found = [...wallets.values()].find((w) => w.economyId === economyId && w.viewerUserId === viewerUserId);
       return found ? { ...found } : null;
     },
     updateMany: async ({
@@ -148,8 +137,7 @@ export function buildFakeChannelPrisma(
       if (where?.economyId !== undefined) rows = rows.filter((w) => w.economyId === where.economyId);
       if (where?.id !== undefined) rows = rows.filter((w) => where.id!.in.includes(w.id));
       if (where?.balance !== undefined) rows = rows.filter((w) => w.balance > where.balance!.gt);
-      if (orderBy?.balance === 'desc')
-        rows = [...rows].sort((a, b) => (a.balance < b.balance ? 1 : a.balance > b.balance ? -1 : 0));
+      if (orderBy?.balance === 'desc') rows = [...rows].sort((a, b) => (a.balance < b.balance ? 1 : a.balance > b.balance ? -1 : 0));
       if (take !== undefined) rows = rows.slice(0, take);
       return rows.map((r) => ({ ...r }));
     },
@@ -196,12 +184,9 @@ export function buildFakeChannelPrisma(
         (t) => t.economyId === where.economyId && where.type.in.includes(t.type) && t.walletId !== null,
       );
       const sums = new Map<string, bigint>();
-      for (const t of matches)
-        sums.set(t.walletId as string, (sums.get(t.walletId as string) ?? 0n) + t.amount);
+      for (const t of matches) sums.set(t.walletId as string, (sums.get(t.walletId as string) ?? 0n) + t.amount);
       let rows = [...sums.entries()].map(([id, amount]) => ({ walletId: id, _sum: { amount } }));
-      rows = rows.sort((a, b) =>
-        a._sum.amount < b._sum.amount ? 1 : a._sum.amount > b._sum.amount ? -1 : 0,
-      );
+      rows = rows.sort((a, b) => (a._sum.amount < b._sum.amount ? 1 : a._sum.amount > b._sum.amount ? -1 : 0));
       if (take !== undefined) rows = rows.slice(0, take);
       return rows;
     },
