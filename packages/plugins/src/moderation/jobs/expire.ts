@@ -20,6 +20,9 @@ export const expireJob: PluginJob<ExpireJobData> = {
     if (!row || row.expiredAt || row.deletedAt) return;
 
     const service = new ModerationServiceImpl(ctx);
+    // A failed temp-ban lift must leave the case active so the job's retry (or a later run) can try again;
+    // only mark it expired once the ban is actually gone.
+    let markExpired = true;
     try {
       if (row.type === 'TIMEOUT') {
         const guild = await ctx.client.guilds.fetch(row.guildId).catch(() => null);
@@ -30,14 +33,22 @@ export const expireJob: PluginJob<ExpireJobData> = {
           await member.timeout(null, `Timeout expired (case #${row.caseNumber})`).catch(() => undefined);
         }
       } else if (row.type === 'BAN') {
-        await service.unban({
-          guildId: row.guildId,
-          targetId: row.targetId,
-          moderatorId: ctx.client.user.id,
-          reason: `Temporary ban expired (case #${row.caseNumber})`,
-          source: 'SYSTEM',
-        });
-        return; // unban() already marks BAN cases expired via markExpiredForActiveBan
+        try {
+          await service.unban({
+            guildId: row.guildId,
+            targetId: row.targetId,
+            moderatorId: ctx.client.user.id,
+            reason: `Temporary ban expired (case #${row.caseNumber})`,
+            source: 'SYSTEM',
+          });
+          return; // unban() already marks BAN cases expired via markExpiredForActiveBan
+        } catch (err) {
+          // 10026 = Unknown Ban: a moderator already lifted it by hand, so there is nothing left to undo.
+          if ((err as { code?: unknown })?.code !== 10026) {
+            markExpired = false;
+            throw err;
+          }
+        }
       } else if (row.type === 'ROLE_ADD') {
         const roleId = enforcerMuteRoleId(row.metadata);
         if (roleId) {
@@ -51,9 +62,11 @@ export const expireJob: PluginJob<ExpireJobData> = {
         }
       }
     } finally {
-      await ctx.prisma.moderationCase
-        .update({ where: { id: row.id }, data: { expiredAt: new Date() } })
-        .catch(() => undefined);
+      if (markExpired) {
+        await ctx.prisma.moderationCase
+          .update({ where: { id: row.id }, data: { expiredAt: new Date() } })
+          .catch(() => undefined);
+      }
     }
   },
 };
