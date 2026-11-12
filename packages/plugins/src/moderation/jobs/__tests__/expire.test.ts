@@ -111,3 +111,43 @@ describe('expireJob — enforcer timed MUTE (ROLE_ADD) expiry', () => {
     expect(update).not.toHaveBeenCalled();
   });
 });
+
+describe('expireJob — temporary BAN expiry', () => {
+  function banCase() {
+    return enforcerMuteCase({ type: 'BAN', metadata: null });
+  }
+  function build(removeBan: () => Promise<unknown>) {
+    const update = vi.fn().mockResolvedValue({});
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findUnique: async () => banCase(),
+          update,
+          updateMany: async () => ({ count: 1 }),
+          create: async () => ({ id: 'unban-1' }),
+        },
+      },
+      overrides: {
+        client: {
+          user: { id: 'bot' },
+          guilds: { fetch: async () => ({ id: GUILD_ID, bans: { remove: removeBan } }) },
+        } as any,
+      },
+    });
+    return { ctx, update };
+  }
+
+  it('leaves the case active and rethrows when Discord fails to lift the ban', async () => {
+    const { ctx, update } = build(() => Promise.reject(Object.assign(new Error('503'), { status: 503 })));
+    await expect(expireJob.processor(ctx, fakeJob(CASE_ID))).rejects.toThrow('503');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('marks the case expired when the ban was already lifted by hand (Unknown Ban)', async () => {
+    const { ctx, update } = build(() =>
+      Promise.reject(Object.assign(new Error('Unknown Ban'), { code: 10026 })),
+    );
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+});
