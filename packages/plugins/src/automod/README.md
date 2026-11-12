@@ -137,9 +137,10 @@ Every message and every join runs the guild's rules, so a raid multiplies whatev
 things keep that cost low:
 
 - **Rules are read once and reused for 2 seconds** (`RULE_CACHE_TTL_MS` in `service.ts`), already parsed. A
-  change made with `/automod rule ...` or `/automod exempt ...` drops the cached copy and applies to the next
-  event. A change made in the dashboard is written by the API process, which cannot reach the bot's cache, so
-  it applies within 2 seconds.
+  rule change applies to the very next event wherever it was made: `/automod rule ...` and `/automod exempt ...`
+  drop the cached copy directly, and a dashboard edit is announced by the API on a Redis channel that the bot
+  listens to (`rule-sync.ts`). The 2 seconds is only the worst case, for an announcement lost while the bot's
+  Redis subscriber was reconnecting.
 - **Each sliding-window check is one Redis round trip** (`RedisWindowStore.pushAndCount` runs as a single
   `MULTI`/`EXEC`), which also makes the count atomic.
 - **A word filter is compiled once per rule**, not once per message.
