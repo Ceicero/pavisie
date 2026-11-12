@@ -603,7 +603,16 @@ export class ModerationServiceImpl implements ModerationService {
         .queue('expire')
         // BullMQ rejects a custom job id containing `:` unless it has exactly three segments
         // (`Job.validateOptions`), so every jobId in this repo uses `-` as the separator.
-        .add('expire', { caseId: row.id }, { jobId: `case-${row.id}`, delay: row.durationMs });
+        .add(
+          'expire',
+          { caseId: row.id },
+          {
+            jobId: `case-${row.id}`,
+            delay: row.durationMs,
+            attempts: 5,
+            backoff: { type: 'exponential', delay: 30_000 },
+          },
+        );
     } catch (err) {
       this.ctx.logger.error(
         { err: String(err), caseId: row.id },
