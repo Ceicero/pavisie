@@ -6,6 +6,7 @@ import { messageCreateHandler } from './events/message-create';
 import { messageUpdateHandler } from './events/message-update';
 import { memberAddHandler } from './events/member-add';
 import { eventsRetentionJob } from './jobs/events-retention';
+import { raidAlertJob } from './raid-alert';
 import { createAutomodService } from './service';
 import * as ruleSchemas from './schemas';
 import en from './locales/en.json';
@@ -27,7 +28,7 @@ export const plugin = definePlugin({
   commands: [automodCommand],
   events: [messageCreateHandler, messageUpdateHandler, memberAddHandler],
   components: automodComponents,
-  jobs: [eventsRetentionJob],
+  jobs: [eventsRetentionJob, raidAlertJob],
   async onLoad(ctx) {
     ctx.services.register('automod', createAutomodService(ctx));
   },
