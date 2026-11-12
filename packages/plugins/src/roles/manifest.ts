@@ -105,10 +105,11 @@ export const manifest = defineManifest({
       fallback: 'Reaction panels cannot add the initial reactions; button/select panels are unaffected.',
     },
     {
-      permission: PermissionFlagsBits.ManageChannels,
-      feature: 'account-age quarantine channel visibility (optional)',
+      permission: PermissionFlagsBits.UseExternalEmojis,
+      feature: 'role panel options that use a custom emoji from another server',
       optional: true,
-      fallback: 'Quarantine still applies the role; channel overwrites are left as configured manually.',
+      fallback:
+        "Unicode emoji and this server's own emoji are unaffected; an emoji from another server is not rendered or reacted with.",
     },
     {
       permission: PermissionFlagsBits.KickMembers,

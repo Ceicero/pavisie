@@ -73,10 +73,10 @@ jobs:
       - name: Check plugin i18n coverage (every plugin registers locales/en.json; every t()/c.t() key resolves)
         run: pnpm --filter @pavisie/plugins check:i18n
 
-      - name: Export commands (fails if docs/commands.json is stale)
+      - name: Export commands (fails if docs/commands.json or either invite.json is stale)
         run: |
           pnpm commands:export
-          git diff --exit-code -- docs/commands.json docs/invite.json apps/web/src/data/commands.json
+          git diff --exit-code -- docs/commands.json docs/invite.json apps/web/src/data/commands.json apps/web/src/data/invite.json
 
       - name: Export permissions matrix (fails if docs/PERMISSIONS.md is stale)
         run: |
