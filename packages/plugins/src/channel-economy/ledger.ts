@@ -9,7 +9,13 @@
 //   - `give` stays inside ONE channel's currency (self / bot / min / max / insufficient checks);
 //   - the same transaction `type` vocabulary: daily, give, twitch_chat_earn, admin_add, admin_remove.
 // Wallets are keyed by (economyId, viewerUserId) and are never merged with Discord wallets or with another
-// channel's wallets. Virtual currency only — no purchase, no cash-out, no wagering (SPEC.md §G).
+// channel's wallets. Virtual currency only — no purchase and no cash-out, ever (SPEC.md §G).
+//
+// Table games (decided Nov 12 2026): a streamer may turn on games that bet this currency (`channel-games/`,
+// off by default). That is the one exception to "no wagering", and it is virtual in both directions. Games move
+// currency only through `debitChannel` and `settleChannelGameHand` below, with their own transaction types
+// (`GAME_TRANSACTION_TYPES`), which are deliberately NOT "earned": winning at a table must never lift a viewer
+// up the lifetime-earned board.
 //
 // Deliberate differences from `economy/ledger.ts` (each is a tightening, none changes an outcome a caller could
 // have relied on): amounts must be safe positive integers everywhere (`invalid_amount`, instead of a thrown
@@ -17,7 +23,7 @@
 // rejected `!give` never stores a bystander's display name); `claimDaily`'s retry-after is measured against the
 // injected `now`, not the wall clock.
 
-import type { PrismaClient } from '@pavisie/database';
+import type { ChannelGameType, Prisma, PrismaClient } from '@pavisie/database';
 import { EARNED_TRANSACTION_TYPES } from '../economy/ledger';
 import {
   DAILY_COOLDOWN_MS,
@@ -50,7 +56,11 @@ function isPositiveSafeInteger(amount: number): boolean {
  * Upsert a wallet by (economyId, viewerUserId); `displayName` (the viewer's Twitch display name, for boards) is
  * stored/refreshed only when provided — omitting it never wipes an existing one.
  */
-export async function getOrCreateChannelWallet(prisma: PrismaClient, key: ChannelWalletKey, displayName?: string) {
+export async function getOrCreateChannelWallet(
+  prisma: PrismaClient,
+  key: ChannelWalletKey,
+  displayName?: string,
+) {
   return prisma.channelWallet.upsert({
     where: { economyId_viewerUserId: { economyId: key.economyId, viewerUserId: key.viewerUserId } },
     create: { economyId: key.economyId, viewerUserId: key.viewerUserId, displayName },
@@ -67,8 +77,7 @@ export async function findChannelWallet(prisma: PrismaClient, key: ChannelWallet
 }
 
 export type ChannelClaimDailyResult =
-  | { ok: false; retryAfterMs: number }
-  | { ok: true; amount: bigint; streak: number };
+  { ok: false; retryAfterMs: number } | { ok: true; amount: bigint; streak: number };
 
 /**
  * Claim a daily reward. Same result shape as `economy/ledger.ts`'s `claimDaily`. The conditional `updateMany`
@@ -160,7 +169,11 @@ export async function giveChannel(
 ): Promise<ChannelGiveResult> {
   if (!isPositiveSafeInteger(amount)) return { ok: false, reason: 'invalid_amount' };
 
-  const senderWallet = await getOrCreateChannelWallet(prisma, { economyId, viewerUserId: fromUserId }, options.fromDisplayName);
+  const senderWallet = await getOrCreateChannelWallet(
+    prisma,
+    { economyId, viewerUserId: fromUserId },
+    options.fromDisplayName,
+  );
   const validation = validateGive({
     amount,
     senderBalance: senderWallet.balance,
@@ -170,7 +183,11 @@ export async function giveChannel(
   });
   if (!validation.ok) return { ok: false, reason: validation.reason };
 
-  const targetWallet = await getOrCreateChannelWallet(prisma, { economyId, viewerUserId: toUserId }, options.toDisplayName);
+  const targetWallet = await getOrCreateChannelWallet(
+    prisma,
+    { economyId, viewerUserId: toUserId },
+    options.toDisplayName,
+  );
   const bigAmount = BigInt(amount);
 
   try {
@@ -248,8 +265,7 @@ export async function creditChannel(
 }
 
 export type ChannelAdminAdjustResult =
-  | { ok: true; newBalance: bigint }
-  | { ok: false; reason: 'would_go_negative' | 'invalid_amount' };
+  { ok: true; newBalance: bigint } | { ok: false; reason: 'would_go_negative' | 'invalid_amount' };
 
 /**
  * The streamer's manual add/remove. `direction`: 1 to add, -1 to remove. A remove is guarded at write time so a
@@ -369,5 +385,170 @@ export async function getChannelBalanceLeaderboard(
     orderBy: { balance: 'desc' },
     take: limit,
   });
-  return wallets.map((w) => ({ viewerUserId: w.viewerUserId, displayName: w.displayName ?? null, balance: w.balance }));
+  return wallets.map((w) => ({
+    viewerUserId: w.viewerUserId,
+    displayName: w.displayName ?? null,
+    balance: w.balance,
+  }));
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Table games
+// ---------------------------------------------------------------------------------------------------------
+
+/** Transaction types written by table games. None of them is in `EARNED_TRANSACTION_TYPES`. */
+export const GAME_TRANSACTION_TYPES = ['blackjack_bet', 'blackjack_payout', 'blackjack_push'] as const;
+export type GameTransactionType = (typeof GAME_TRANSACTION_TYPES)[number];
+
+export type ChannelDebitResult =
+  { ok: true; newBalance: bigint } | { ok: false; reason: 'insufficient_balance' | 'invalid_amount' };
+
+/**
+ * Takes `amount` out of a wallet, for a bet. The conditional `updateMany` is the whole guard: the balance is only
+ * decremented if it still covers the amount at write time, so two bets placed at the same instant can never
+ * overdraw a wallet — exactly one wins and the loser writes nothing.
+ *
+ * `note` should be unique to this movement. A table writes it before debiting, so after a restart it can ask
+ * `findChannelTransactionByNote` whether the debit actually happened.
+ */
+export async function debitChannel(
+  prisma: PrismaClient,
+  key: ChannelWalletKey,
+  amount: number,
+  type: GameTransactionType,
+  options: { note?: string; displayName?: string } = {},
+): Promise<ChannelDebitResult> {
+  if (!isPositiveSafeInteger(amount)) return { ok: false, reason: 'invalid_amount' };
+
+  const wallet = await getOrCreateChannelWallet(prisma, key, options.displayName);
+  const bigAmount = BigInt(amount);
+
+  try {
+    const newBalance = await prisma.$transaction(async (tx) => {
+      const debited = await tx.channelWallet.updateMany({
+        where: { id: wallet.id, balance: { gte: bigAmount } },
+        data: { balance: { decrement: bigAmount } },
+      });
+      if (debited.count === 0) throw new InsufficientBalanceError();
+
+      await tx.channelTransaction.create({
+        data: {
+          economyId: key.economyId,
+          walletId: wallet.id,
+          fromUserId: key.viewerUserId,
+          amount: bigAmount,
+          type,
+          note: options.note,
+        },
+      });
+
+      const updated = await tx.channelWallet.findUniqueOrThrow({ where: { id: wallet.id } });
+      return updated.balance;
+    });
+    return { ok: true, newBalance };
+  } catch (err) {
+    if (err instanceof InsufficientBalanceError) return { ok: false, reason: 'insufficient_balance' };
+    throw err;
+  }
+}
+
+/** Whether a ledger row carrying exactly this `note` exists in this economy. Read-only. */
+export async function findChannelTransactionByNote(
+  prisma: PrismaClient,
+  economyId: string,
+  note: string,
+): Promise<boolean> {
+  const row = await prisma.channelTransaction.findFirst({ where: { economyId, note } });
+  return row !== null;
+}
+
+export interface GameHandPayout {
+  viewerUserId: string;
+  /** What goes back to the wallet. Zero (a loss) writes no balance change and no row. */
+  amount: number;
+  type: Extract<GameTransactionType, 'blackjack_payout' | 'blackjack_push'>;
+}
+
+export interface SettleGameHandInput {
+  /** Chosen by the table before it settles. The same id settled twice pays once. */
+  handId: string;
+  economyId: string;
+  game: ChannelGameType;
+  seed: string;
+  startedAt: Date;
+  endedAt: Date;
+  /** The public outcome: cards, totals, stakes, payouts. Must not contain chat text. */
+  result: Prisma.InputJsonValue;
+  payouts: GameHandPayout[];
+}
+
+export type SettleGameHandResult =
+  { ok: true; alreadySettled: boolean } | { ok: false; reason: 'invalid_amount' };
+
+/**
+ * Closes out one table-game hand: records the hand and pays every seat in ONE transaction, so a hand is either
+ * fully recorded and fully paid or neither. Each payout writes its own ledger row, noted with the hand id.
+ *
+ * Idempotent on `handId`: if the hand row already exists nothing is paid again. That is what lets a table that
+ * was interrupted mid-settle (a restart, a dropped connection) simply settle again when it comes back.
+ */
+export async function settleChannelGameHand(
+  prisma: PrismaClient,
+  input: SettleGameHandInput,
+): Promise<SettleGameHandResult> {
+  for (const payout of input.payouts) {
+    if (!Number.isSafeInteger(payout.amount) || payout.amount < 0)
+      return { ok: false, reason: 'invalid_amount' };
+  }
+
+  try {
+    const alreadySettled = await prisma.$transaction(async (tx) => {
+      const existing = await tx.channelGameHand.findUnique({ where: { id: input.handId } });
+      if (existing) return true;
+
+      await tx.channelGameHand.create({
+        data: {
+          id: input.handId,
+          economyId: input.economyId,
+          game: input.game,
+          seed: input.seed,
+          startedAt: input.startedAt,
+          endedAt: input.endedAt,
+          result: input.result,
+        },
+      });
+
+      for (const payout of input.payouts) {
+        if (payout.amount === 0) continue;
+        const bigAmount = BigInt(payout.amount);
+        const wallet = await tx.channelWallet.upsert({
+          where: {
+            economyId_viewerUserId: { economyId: input.economyId, viewerUserId: payout.viewerUserId },
+          },
+          create: { economyId: input.economyId, viewerUserId: payout.viewerUserId },
+          update: {},
+        });
+        await tx.channelWallet.update({
+          where: { id: wallet.id },
+          data: { balance: { increment: bigAmount } },
+        });
+        await tx.channelTransaction.create({
+          data: {
+            economyId: input.economyId,
+            walletId: wallet.id,
+            toUserId: payout.viewerUserId,
+            amount: bigAmount,
+            type: payout.type,
+            note: `hand:${input.handId}`,
+          },
+        });
+      }
+      return false;
+    });
+    return { ok: true, alreadySettled };
+  } catch (err) {
+    // Two settles racing on the same hand id: the loser hits the primary key. The hand is settled either way.
+    if ((err as { code?: string } | null)?.code === 'P2002') return { ok: true, alreadySettled: true };
+    throw err;
+  }
 }

@@ -1200,7 +1200,9 @@ model EconomyTransaction {
 /// streamer, works with no Discord server. Keyed by the platform + broadcaster user id — deliberately NOT a
 /// foreign key to TwitchChatChannel, so disconnecting or deleting the chat bot never deletes anyone's balance.
 /// Created on the streamer's first save (or by the 0015 carry-over migration), never by merely viewing.
-/// Virtual-only, exactly like the guild economy: no purchase, no cash-out, no wagering.
+/// Virtual-only, exactly like the guild economy: it can never be bought and never cashed out. One exception to
+/// "no wagering", decided Nov 12 2026: a streamer may turn on table games (`blackjackEnabled`, off by default) that
+/// let viewers bet this channel currency against the house. The stakes stay virtual in both directions.
 model ChannelEconomy {
   id                  String         @id @default(cuid())
   platform            StreamPlatform
@@ -1220,11 +1222,16 @@ model ChannelEconomy {
   earnPerMessage      Int            @default(5)
   earnCooldownSeconds Int            @default(60)
   earnDailyCap        Int            @default(200)
+  /// Table games (channel-games/): chat blackjack that bets this currency. Off until the streamer turns it on.
+  blackjackEnabled    Boolean        @default(false)
+  blackjackMinBet     Int            @default(10)
+  blackjackMaxBet     Int            @default(1000)
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
   wallets      ChannelWallet[]
   transactions ChannelTransaction[]
+  gameHands    ChannelGameHand[]
 
   @@unique([platform, channelUserId])
 }
@@ -1250,7 +1257,8 @@ model ChannelWallet {
 }
 
 /// Append-only ledger of channel-currency balance changes (same `type` vocabulary as EconomyTransaction: daily,
-/// give, twitch_chat_earn, admin_add, admin_remove). Never updated or deleted by application code.
+/// give, twitch_chat_earn, admin_add, admin_remove — plus the table-game types blackjack_bet, blackjack_payout
+/// and blackjack_push, which are never counted as "earned"). Never updated or deleted by application code.
 model ChannelTransaction {
   id         String          @id @default(cuid())
   economyId  String
@@ -1267,6 +1275,33 @@ model ChannelTransaction {
   @@index([economyId, createdAt])
   @@index([economyId, type])
   @@index([walletId])
+}
+
+/// Which table game a ChannelGameHand records. POKER and IDLE are reserved for later phases.
+enum ChannelGameType {
+  BLACKJACK
+  POKER
+  IDLE
+}
+
+/// One finished (or cancelled) table-game hand in a channel's currency. Written by
+/// `channel-economy/ledger.ts` in the same transaction as the payouts it describes, so a hand is either fully
+/// recorded and paid or not at all. `id` is chosen by the table before settling, which makes settling idempotent.
+/// `result` is the public outcome only (cards, totals, stakes, payouts, viewer ids and display names): it never
+/// contains anything a viewer typed in chat.
+model ChannelGameHand {
+  id        String          @id
+  economyId String
+  economy   ChannelEconomy  @relation(fields: [economyId], references: [id], onDelete: Cascade)
+  game      ChannelGameType
+  /// The shuffle this hand was dealt from, as "<shoe seed>:<cards already dealt>", so it can be replayed.
+  seed      String
+  startedAt DateTime
+  endedAt   DateTime
+  result    Json
+  createdAt DateTime        @default(now())
+
+  @@index([economyId, createdAt])
 }
 
 model AfkStatus {
