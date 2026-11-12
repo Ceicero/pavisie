@@ -29,6 +29,11 @@ import { isExempt, isTrustedDomain } from './exemptions';
 import { normalizeJoin, normalizeMessage } from './normalize';
 import { recordRaidAlertJoin } from './raid-alert';
 import {
+  publishAutomodRulesChanged,
+  subscribeAutomodRulesChanged,
+  type RulesChangedSubscription,
+} from './rule-sync';
+import {
   automodActionsSchema,
   automodRuleConfigSchema,
   type AutomodAction,
@@ -102,8 +107,9 @@ interface LoadedRule {
  * How long a guild's loaded rules are reused before the next event re-reads them. Every message and every join
  * needs the guild's rules, so during a raid this was one Postgres query (plus a zod parse of every rule) per
  * event — hundreds a second for rows that almost never change. Short on purpose: a rule edited from this bot's
- * own commands is dropped from the cache at once (`invalidateRuleCache`), but an edit made through the dashboard
- * happens in the API process, which cannot reach this cache, so it takes effect within this window instead.
+ * own commands is dropped from the cache at once (`invalidateRuleCache`), and an edit made through the dashboard
+ * is announced over Redis by the API and dropped as soon as that arrives (`startRuleSync`). This window is only
+ * the worst case, for an announcement lost while the subscriber was reconnecting.
  */
 const RULE_CACHE_TTL_MS = 2_000;
 /** Above this many cached guilds, expired entries are swept on the next load so idle guilds don't pile up. */
@@ -160,12 +166,26 @@ async function loadRules(ctx: PluginContext, guildId: string): Promise<LoadedRul
   return rules;
 }
 
+/** Drops this process's cached copy of `guildId`'s rules, so the next message or join re-reads them. */
+function dropCachedRules(ctx: PluginContext, guildId: string): void {
+  ruleCaches.get(ctx.prisma)?.delete(guildId);
+}
+
 /**
- * Drops `guildId`'s cached rules so the next message or join re-reads them. Called by every command that
- * creates, edits, toggles, exempts or deletes a rule, so a moderator's change applies to the very next event.
+ * Called by every command that creates, edits, toggles, exempts or deletes a rule: drops the cached copy here,
+ * so the change applies to the very next event, and announces it so any other bot process does the same.
  */
 export function invalidateRuleCache(ctx: PluginContext, guildId: string): void {
-  ruleCaches.get(ctx.prisma)?.delete(guildId);
+  dropCachedRules(ctx, guildId);
+  void publishAutomodRulesChanged(ctx.redis, guildId);
+}
+
+/**
+ * Starts listening for rule changes made elsewhere — the dashboard (through the API) or another bot process —
+ * and drops the cached copy as each one is announced. Called once when the plugin loads.
+ */
+export function startRuleSync(ctx: PluginContext): Promise<RulesChangedSubscription> {
+  return subscribeAutomodRulesChanged(ctx.redis, (guildId) => dropCachedRules(ctx, guildId));
 }
 
 interface ActionOutcome {
