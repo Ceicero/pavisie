@@ -262,6 +262,26 @@ function CurrencySettingsCard({
           </div>
         </fieldset>
 
+        <fieldset className="space-y-3">
+          <legend className="text-sm font-medium">Blackjack (!bj)</legend>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={draft.blackjackEnabled}
+              onCheckedChange={(checked) => setDraft((d) => ({ ...d, blackjackEnabled: checked }))}
+              disabled={update.isPending}
+              aria-label="Let viewers play blackjack with this currency"
+            />
+            <span className="text-sm text-muted-foreground">
+              Let viewers bet this currency at a blackjack table in chat. You or a mod open a table with{' '}
+              <code>!bj start</code>. The currency stays virtual: it cannot be bought or cashed out.
+            </span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {numberField('blackjackMinBet', 'The least a viewer can bet on a hand.')}
+            {numberField('blackjackMaxBet', 'The most a viewer can bet on a hand.')}
+          </div>
+        </fieldset>
+
         <div className="flex items-center gap-3">
           <Button onClick={save} disabled={!valid || !dirty || update.isPending}>
             {update.isPending ? 'Saving…' : 'Save settings'}

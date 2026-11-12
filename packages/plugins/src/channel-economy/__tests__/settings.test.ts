@@ -78,6 +78,17 @@ describe('channel economy settings', () => {
     expect(findChannelEconomySettingsProblem({ ...CHANNEL_ECONOMY_DEFAULTS, giveMinAmount: 50, giveMaxAmount: 10 })).toMatch(/give/i);
   });
 
+  it('blackjack is off by default, with bounded bet limits and a min that cannot exceed the max', () => {
+    expect(CHANNEL_ECONOMY_DEFAULTS).toMatchObject({ blackjackEnabled: false, blackjackMinBet: 10, blackjackMaxBet: 1000 });
+    expect(updateChannelEconomySettingsSchema.safeParse({ blackjackEnabled: true, blackjackMinBet: 1 }).success).toBe(true);
+    for (const bad of [{ blackjackMinBet: 0 }, { blackjackMaxBet: 1_000_001 }, { blackjackMinBet: 2.5 }, { blackjackEnabled: 'yes' }]) {
+      expect(updateChannelEconomySettingsSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+    expect(
+      findChannelEconomySettingsProblem({ ...CHANNEL_ECONOMY_DEFAULTS, blackjackMinBet: 500, blackjackMaxBet: 100 }),
+    ).toMatch(/blackjack/i);
+  });
+
   it('pickChannelEconomySettings returns only the settings fields', () => {
     const row = { ...CHANNEL_ECONOMY_DEFAULTS, id: 'x', channelUserId: '1', createdAt: new Date() };
     expect(Object.keys(pickChannelEconomySettings(row)).sort()).toEqual(Object.keys(CHANNEL_ECONOMY_DEFAULTS).sort());

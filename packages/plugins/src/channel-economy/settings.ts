@@ -2,8 +2,9 @@
 // Prisma/discord.js imports — so the creator API, the Twitch chat runtime and the tests all share one definition.
 //
 // Every bound mirrors the guild economy plugin's `configSchema` (`economy/manifest.ts`) for the fields both have, so
-// a currency behaves the same whether a Discord server or a streamer owns it. Virtual currency only: no purchase,
-// no cash-out, no wagering (SPEC.md §G).
+// a currency behaves the same whether a Discord server or a streamer owns it. Virtual currency only: it can never
+// be bought and never cashed out (SPEC.md §G). The one exception to "no wagering" is table games: a streamer may
+// turn on chat blackjack (`blackjackEnabled`, off by default), which bets this currency and nothing else.
 import { z } from 'zod';
 import type { GiveConfig, RollDailyConfig } from '../economy/service';
 
@@ -25,6 +26,12 @@ export const channelEconomySettingsSchema = z.object({
   earnCooldownSeconds: z.number().int().min(10).max(3600),
   /** Max currency one viewer can earn from chat per UTC day (0 = no earning). */
   earnDailyCap: z.number().int().min(0).max(1_000_000),
+  /** Table games: lets viewers bet this currency at a chat blackjack table (`channel-games/`). Off by default, and
+   * only works while the whole economy is `enabled`. */
+  blackjackEnabled: z.boolean(),
+  /** The smallest and largest bet a viewer may place on one blackjack hand. */
+  blackjackMinBet: z.number().int().min(1).max(1_000_000),
+  blackjackMaxBet: z.number().int().min(1).max(1_000_000),
 });
 
 export type ChannelEconomySettings = z.infer<typeof channelEconomySettingsSchema>;
@@ -46,6 +53,9 @@ export const CHANNEL_ECONOMY_DEFAULTS: ChannelEconomySettings = {
   earnPerMessage: 5,
   earnCooldownSeconds: 60,
   earnDailyCap: 200,
+  blackjackEnabled: false,
+  blackjackMinBet: 10,
+  blackjackMaxBet: 1000,
 };
 
 /** A partial update: every field optional, unknown keys rejected (a typo must be a 400, never a silent no-op). */
@@ -68,6 +78,9 @@ export function pickChannelEconomySettings(row: ChannelEconomySettings): Channel
     earnPerMessage: row.earnPerMessage,
     earnCooldownSeconds: row.earnCooldownSeconds,
     earnDailyCap: row.earnDailyCap,
+    blackjackEnabled: row.blackjackEnabled,
+    blackjackMinBet: row.blackjackMinBet,
+    blackjackMaxBet: row.blackjackMaxBet,
   };
 }
 
@@ -79,6 +92,9 @@ export function findChannelEconomySettingsProblem(settings: ChannelEconomySettin
   }
   if (settings.giveMinAmount > settings.giveMaxAmount) {
     return 'The minimum give amount cannot be higher than the maximum.';
+  }
+  if (settings.blackjackMinBet > settings.blackjackMaxBet) {
+    return 'The blackjack minimum bet cannot be higher than the maximum.';
   }
   return null;
 }
