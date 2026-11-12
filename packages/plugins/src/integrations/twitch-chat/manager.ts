@@ -14,21 +14,11 @@
 // the BROADCASTER's own token) — so the bookkeeping below tracks them separately per channel rather than
 // assuming 1:1, and `forgetSubscription`/the reconcile diff operate per subscription type: a channel can lose
 // its rewards subscription (rewards turned off, scope revoked) while chat keeps running, and vice versa.
-import type {
-  ChannelEconomy,
-  TwitchChatChannel,
-  TwitchChatCommand,
-  TwitchChatReward,
-} from '@pavisie/database';
+import type { ChannelEconomy, TwitchChatChannel, TwitchChatCommand, TwitchChatReward } from '@pavisie/database';
 import { randomUUID } from 'node:crypto';
 import { MessageFlags, WebhookClient, type Guild } from 'discord.js';
 import { decryptSecret, redisKey } from '@pavisie/core';
-import {
-  resolveTextChannel,
-  type PluginContext,
-  type TwitchChatRuntimeStatus,
-  type TwitchChatService,
-} from '../../sdk';
+import { resolveTextChannel, type PluginContext, type TwitchChatRuntimeStatus, type TwitchChatService } from '../../sdk';
 import { creditChannel } from '../../channel-economy/ledger';
 import { postAlert } from '../embeds';
 import {
@@ -185,10 +175,7 @@ export class TwitchChatManager {
   private readonly channelCache = new Map<string, ChannelCacheEntry>();
   /** Discord <-> Twitch chat bridge: which announce-once messages have already been sent for a channel, per
    * direction independently. Module-instance-lifetime, not persisted — see `runBridgeReconcile`'s doc comment. */
-  private readonly bridgeAnnounced = new Map<
-    string,
-    { discordToTwitch: boolean; twitchToDiscord: boolean }
-  >();
+  private readonly bridgeAnnounced = new Map<string, { discordToTwitch: boolean; twitchToDiscord: boolean }>();
   /** One cached `WebhookClient` per `TwitchChatChannel.id` for the Twitch -> Discord relay direction, so a busy
    * Twitch chat reuses a single discord.js rate-limit bucket instead of building (and throwing away) a fresh
    * client per message — see `relayTwitchToDiscordIfBridged`'s and `runBridgeReconcile`'s doc comments for the
@@ -476,10 +463,7 @@ export class TwitchChatManager {
           .catch(() => undefined);
       } else {
         await ctx.prisma.twitchChatChannel
-          .update({
-            where: { id: channel.id },
-            data: { status: 'ERROR', lastError: result.error.slice(0, 500) },
-          })
+          .update({ where: { id: channel.id }, data: { status: 'ERROR', lastError: result.error.slice(0, 500) } })
           .catch(() => undefined);
       }
     }
@@ -630,11 +614,7 @@ export class TwitchChatManager {
   /** Sends the one-time "this is now bridged" announcement for each direction that just turned on, and resets
    * a direction's announced flag once it's turned back off (so re-enabling it later re-announces). Never
    * throws — an announcement failing must never block the rest of reconcile. */
-  private async announceBridgeIfNeeded(
-    ctx: PluginContext,
-    guild: Guild,
-    channel: TwitchChatChannel,
-  ): Promise<void> {
+  private async announceBridgeIfNeeded(ctx: PluginContext, guild: Guild, channel: TwitchChatChannel): Promise<void> {
     const entry = this.bridgeAnnounced.get(channel.id) ?? { discordToTwitch: false, twitchToDiscord: false };
 
     if (channel.bridgeDiscordToTwitch && !entry.discordToTwitch) {
@@ -771,7 +751,7 @@ export class TwitchChatManager {
       case 'follower_only':
         return "Twitch won't let pavisiebot chat in follower-only mode. Fix: type /mod pavisiebot in your chat or disable follower-only mode.";
       case 'slow_mode':
-        return 'Twitch slow mode is preventing messages. Fix: type /mod pavisiebot in your chat or reduce the slow mode duration.';
+        return "Twitch slow mode is preventing messages. Fix: type /mod pavisiebot in your chat or reduce the slow mode duration.";
       case 'channel_suspended':
         return 'Your channel is suspended and cannot send or receive messages.';
       case 'emote_only':
@@ -779,10 +759,7 @@ export class TwitchChatManager {
       case 'subsonly':
         return "Twitch won't let pavisiebot chat in subscribers-only mode. Fix: type /mod pavisiebot in your chat or disable subscribers-only mode.";
       default:
-        return (
-          twitchMessage ||
-          `Twitch refused this message (${code}). Try again later or check your channel settings.`
-        );
+        return twitchMessage || `Twitch refused this message (${code}). Try again later or check your channel settings.`;
     }
   }
 
@@ -952,10 +929,7 @@ export class TwitchChatManager {
     }
   }
 
-  private async handleChatMessageNotification(
-    ctx: PluginContext,
-    message: EventSubNotification,
-  ): Promise<void> {
+  private async handleChatMessageNotification(ctx: PluginContext, message: EventSubNotification): Promise<void> {
     const event = message.event as RawChatMessageEvent;
     const channelId = this.channelIdByBroadcasterId.get(event.broadcaster_user_id);
     if (!channelId) return;
@@ -1022,12 +996,11 @@ export class TwitchChatManager {
         // Only a genuine (non-command) chat message can earn currency. `chatterLogin` is carried separately
         // from `chatEvent` (rather than added to it) so it never leaks into the engine call above, which is
         // typed against `ChatMessageEvent` and has no such field.
-        await this.tryEconomyEarn(ctx, cached, {
-          ...chatEvent,
-          chatterLogin: event.chatter_user_login ?? '',
-        }).catch((err: unknown) => {
-          ctx.logger.error({ err }, 'integrations/twitch-chat: economy earn handling threw');
-        });
+        await this.tryEconomyEarn(ctx, cached, { ...chatEvent, chatterLogin: event.chatter_user_login ?? '' }).catch(
+          (err: unknown) => {
+            ctx.logger.error({ err }, 'integrations/twitch-chat: economy earn handling threw');
+          },
+        );
       }
 
       if (reply) {
@@ -1047,10 +1020,7 @@ export class TwitchChatManager {
           // Send succeeded — if there was a prior drop error, clear it
           const cached_error = this.lastErrorByChannelId.get(cached.channel.id) ?? cached.channel.lastError;
           // Only clear if the cached error looks like a drop error (starts with our drop message patterns)
-          if (
-            cached_error &&
-            (cached_error.includes("Twitch won't let") || cached_error.includes('Twitch slow mode'))
-          ) {
+          if (cached_error && (cached_error.includes("Twitch won't let") || cached_error.includes('Twitch slow mode'))) {
             await this.updateChannelLastErrorIfChanged(ctx, cached.channel.id, null);
           }
         }
@@ -1257,10 +1227,7 @@ export class TwitchChatManager {
         await clearBridgeWebhook(ctx, channel.id);
         this.bridgeWebhookClients.delete(channel.id);
       }
-      ctx.logger.warn(
-        { channelId: channel.id, code },
-        'integrations/twitch-chat: bridge relay to Discord failed',
-      );
+      ctx.logger.warn({ channelId: channel.id, code }, 'integrations/twitch-chat: bridge relay to Discord failed');
     }
   }
 
@@ -1268,10 +1235,7 @@ export class TwitchChatManager {
    * that comes back. NEVER logs `event.userInput`/`event.userDisplayName` (nor passes them anywhere but into
    * `matchRewardActions`, which itself never logs) — only the reward title and action kind are safe to log,
    * same privacy stance as chat message handling. */
-  private async handleRewardRedemptionNotification(
-    ctx: PluginContext,
-    message: EventSubNotification,
-  ): Promise<void> {
+  private async handleRewardRedemptionNotification(ctx: PluginContext, message: EventSubNotification): Promise<void> {
     const event = message.event as RawRewardRedemptionEvent;
     const channelId = this.channelIdByBroadcasterId.get(event.broadcaster_user_id);
     if (!channelId) return;
@@ -1298,11 +1262,7 @@ export class TwitchChatManager {
   /** Runs one matched reward action. Each action is independently try/caught — one action failing (a bad
    * Discord channel id, a publish error, TTS being unavailable) must never stop the others configured for the
    * same redemption. Logs only the reward's title/id and action kind, never the templated text. */
-  private async runRewardAction(
-    ctx: PluginContext,
-    channel: TwitchChatChannel,
-    action: RewardAction,
-  ): Promise<void> {
+  private async runRewardAction(ctx: PluginContext, channel: TwitchChatChannel, action: RewardAction): Promise<void> {
     try {
       switch (action.kind) {
         case 'CHAT': {
@@ -1334,14 +1294,10 @@ export class TwitchChatManager {
             );
             return;
           }
-          await postAlert(
-            ctx,
-            { guildId: channel.guildId, channelId: action.discordChannelId },
-            {
-              title: `Channel point redeemed: ${action.reward.rewardTitle}`,
-              description: action.text,
-            },
-          );
+          await postAlert(ctx, { guildId: channel.guildId, channelId: action.discordChannelId }, {
+            title: `Channel point redeemed: ${action.reward.rewardTitle}`,
+            description: action.text,
+          });
           return;
         case 'SOUND':
           await this.publishOverlayEvent(ctx, channel.id, {
