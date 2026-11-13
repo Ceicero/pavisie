@@ -25,6 +25,14 @@ interface FakeGuildOptions {
   memberPresent?: boolean;
   /** Discord.js `Guild.available` — false during a regional outage. Defaults to true. */
   available?: boolean;
+  /** Defaults to `GUILD_ID`. ioredis-mock shares data across clients, so tests that stamp a guild-day key must not reuse it. */
+  guildId?: string;
+  /** Additional member ids `members.fetch` should resolve. The primary `USER_ID` is always present unless `memberPresent` is false. */
+  extraUserIds?: string[];
+  /** Runs before the payload is recorded. Throw to simulate a failed `channel.send`. */
+  onSend?: (payload: unknown) => Promise<void> | void;
+  /** Replaces `channels.fetch`. Receives the default text channel so a retry can return it. */
+  fetchChannel?: (channel: unknown) => Promise<unknown>;
 }
 
 /** Minimal discord.js Guild stand-in covering everything the birthday job touches. */
@@ -56,22 +64,35 @@ function makeFakeGuild(opts: FakeGuildOptions = {}) {
     isTextBased: () => true,
     permissionsFor: () => ({ has: () => true }),
     send: async (payload: unknown) => {
+      if (opts.onSend) await opts.onSend(payload);
       sent.push(payload);
     },
   };
   const guild = {
-    id: GUILD_ID,
+    id: opts.guildId ?? GUILD_ID,
     name: 'Test Guild',
     available: opts.available ?? true,
     memberCount: 42,
     members: {
       me: { roles: { highest: { position: 10 } } },
       fetch: async (id: string) => {
-        if (opts.memberPresent === false || id !== USER_ID) throw new Error('Unknown Member');
-        return member;
+        if (opts.memberPresent === false) throw new Error('Unknown Member');
+        if (id === USER_ID) return member;
+        if (opts.extraUserIds?.includes(id)) {
+          return {
+            id,
+            displayName: `Member ${id}`,
+            roles: {
+              cache: { has: () => false },
+              add: async () => undefined,
+              remove: async () => undefined,
+            },
+          };
+        }
+        throw new Error('Unknown Member');
       },
     },
-    channels: { fetch: async () => channel },
+    channels: { fetch: async () => (opts.fetchChannel ? opts.fetchChannel(channel) : channel) },
     roles: { cache: new Map([[ROLE_ID, role]]), fetch: async () => role },
   };
   return { guild: guild as unknown as Guild, sent, rolesAdded, rolesRemoved, memberRoleIds };
@@ -125,7 +146,8 @@ function setup(input: Setup = {}) {
           const yearNotCondition = where.AND[0].OR[1].lastAnnouncedYear.not;
           const isDue = (year: number | null) => year === null || year !== yearNotCondition;
           return rows.filter(
-            (r) => isDue(r.lastAnnouncedYear) && where.OR.some((md) => md.month === r.month && md.day === r.day),
+            (r) =>
+              isDue(r.lastAnnouncedYear) && where.OR.some((md) => md.month === r.month && md.day === r.day),
           );
         },
         update: async (args: unknown) => {
@@ -187,7 +209,7 @@ describe('announceBirthdaysForGuild', () => {
     expect(s.updates[0]).toMatchObject({ where: { id: 'b-null' } });
   });
 
-  it('skips when the guild-local hour does not match the configured hour', async () => {
+  it('skips before the guild-local announce hour', async () => {
     const s = setup();
     const result = await announceBirthdaysForGuild(s.ctx, s.guild, makeConfig({ announceHour: 10 }), NOW);
     expect(result).toMatchObject({ announced: 0, skippedReason: 'hour' });
@@ -200,11 +222,114 @@ describe('announceBirthdaysForGuild', () => {
     s.ctx.services.register('host', {
       getGuildConfig: async () => ({ timezone: 'Asia/Tokyo' }),
     } as never);
-    // 09:15 UTC is 18:15 in Tokyo → hour 9 doesn't match; hour 18 does.
-    expect((await announceBirthdaysForGuild(s.ctx, s.guild, makeConfig(), NOW)).skippedReason).toBe('hour');
+    // 09:15 UTC is 18:15 in Tokyo. Hour 19 has not started there; hour 18 has.
+    // (UTC hour 9 would also be before 19, so the second call — hour 18, which UTC has not reached — is what
+    // proves the guild timezone is the clock being compared.)
+    expect(
+      (await announceBirthdaysForGuild(s.ctx, s.guild, makeConfig({ announceHour: 19 }), NOW)).skippedReason,
+    ).toBe('hour');
     expect(
       (await announceBirthdaysForGuild(s.ctx, s.guild, makeConfig({ announceHour: 18 }), NOW)).announced,
     ).toBe(1);
+  });
+
+  it('retries a transient send later the same day and does not repeat a birthday that already went out', async () => {
+    let user1Attempts = 0;
+    const s = setup({
+      birthdayRows: [
+        { id: 'b1', userId: USER_ID, month: 3, day: 4, lastAnnouncedYear: null },
+        { id: 'b2', userId: 'user-2', month: 3, day: 4, lastAnnouncedYear: null },
+      ],
+      guildOptions: {
+        extraUserIds: ['user-2'],
+        onSend: async (payload) => {
+          const content = (payload as { content?: string }).content ?? '';
+          if (!content.includes(`<@${USER_ID}>`)) return;
+          user1Attempts += 1;
+          if (user1Attempts === 1) throw new Error('socket hang up');
+        },
+      },
+    });
+
+    const during = await announceBirthdaysForGuild(s.ctx, s.guild, makeConfig(), NOW);
+    expect(during.announced).toBe(1);
+    expect(s.rows.find((row) => row.id === 'b1')!.lastAnnouncedYear).toBeNull();
+    expect(s.rows.find((row) => row.id === 'b2')!.lastAnnouncedYear).toBe(2026);
+    expect(s.sent.filter((payload) => JSON.stringify(payload).includes('<@user-2>'))).toHaveLength(1);
+
+    // 11:15 UTC is after the configured hour (9). The old hour-equality gate skipped this person until next year.
+    const later = new Date('2026-03-04T11:15:00Z');
+    const retry = await announceBirthdaysForGuild(s.ctx, s.guild, makeConfig(), later);
+    expect(retry.announced).toBe(1);
+    expect(s.rows.find((row) => row.id === 'b1')!.lastAnnouncedYear).toBe(2026);
+    expect(s.sent.filter((payload) => JSON.stringify(payload).includes('<@user-2>'))).toHaveLength(1);
+    expect(s.sent.filter((payload) => JSON.stringify(payload).includes(`<@${USER_ID}>`))).toHaveLength(1);
+  });
+
+  it.each([50013, 50001, 10003])(
+    'does not retry a birthday Discord permanently rejected (%s)',
+    async (code) => {
+      let sends = 0;
+      const s = setup({
+        guildOptions: {
+          onSend: async () => {
+            sends += 1;
+            throw Object.assign(new Error(`Discord ${code}`), { code });
+          },
+        },
+      });
+      const during = await announceBirthdaysForGuild(s.ctx, s.guild, makeConfig(), NOW);
+      expect(during.announced).toBe(0);
+      expect(s.rows[0]!.lastAnnouncedYear).toBe(2026);
+
+      const later = new Date('2026-03-04T16:15:00Z');
+      const retry = await announceBirthdaysForGuild(s.ctx, s.guild, makeConfig(), later);
+      expect(retry.announced).toBe(0);
+      expect(sends).toBe(1);
+    },
+  );
+
+  it('retries a birthday channel that was temporarily unreachable, and stops when the channel is gone', async () => {
+    let transientFetches = 0;
+    const transient = setup({
+      guildOptions: {
+        fetchChannel: async (channel) => {
+          transientFetches += 1;
+          if (transientFetches === 1) throw new Error('ECONNRESET');
+          return channel;
+        },
+      },
+    });
+    expect(
+      (await announceBirthdaysForGuild(transient.ctx, transient.guild, makeConfig(), NOW)).skippedReason,
+    ).toBe('channel');
+    expect(transient.rows[0]!.lastAnnouncedYear).toBeNull();
+    const later = new Date('2026-03-04T12:15:00Z');
+    expect(
+      (await announceBirthdaysForGuild(transient.ctx, transient.guild, makeConfig(), later)).announced,
+    ).toBe(1);
+    expect(transientFetches).toBe(2);
+
+    let goneFetches = 0;
+    const gone = setup({
+      guildOptions: {
+        // Own guild id: the channel-blocked redis key is process-wide under ioredis-mock.
+        guildId: 'guild-channel-gone',
+        fetchChannel: async () => {
+          goneFetches += 1;
+          throw Object.assign(new Error('Unknown Channel'), { code: 10003 });
+        },
+      },
+    });
+    expect((await announceBirthdaysForGuild(gone.ctx, gone.guild, makeConfig(), NOW)).skippedReason).toBe(
+      'channel',
+    );
+    expect(gone.rows[0]!.lastAnnouncedYear).toBeNull();
+    expect((await announceBirthdaysForGuild(gone.ctx, gone.guild, makeConfig(), later)).skippedReason).toBe(
+      'channel',
+    );
+    expect(goneFetches).toBe(1);
+    expect(gone.sent).toHaveLength(0);
   });
 
   it('adds the role and enqueues a ~24h removal only when roleId is set', async () => {
@@ -251,9 +376,9 @@ describe('announceBirthdaysForGuild', () => {
     // ...but since the 24h auto-removal couldn't be scheduled, the grant is rolled back so it can't become permanent.
     expect(s.rolesRemoved).toEqual([ROLE_ID]);
     expect(s.memberRoleIds.has(ROLE_ID)).toBe(false);
-    expect(
-      warnings.some(([, msg]) => msg === 'community: could not schedule birthday role removal'),
-    ).toBe(true);
+    expect(warnings.some(([, msg]) => msg === 'community: could not schedule birthday role removal')).toBe(
+      true,
+    );
   });
 
   it('skips (without deleting) a member who has left, and still announces on Feb 28 for Feb 29 birthdays', async () => {
@@ -314,7 +439,7 @@ describe('birthdayAnnounceJob processor', () => {
     } finally {
       vi.useRealTimers();
     }
-    // The bad guild's channel fetch throws inside resolveTextChannel (caught → null → skipped); the good one posts.
+    // The bad guild's channel fetch throws inside openTextChannel (unavailable → skipped); the good one posts.
     expect(good.sent).toHaveLength(1);
   });
 
