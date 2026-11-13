@@ -2,7 +2,7 @@ import type { Message } from 'discord.js';
 import type { PluginEventHandler } from '../../sdk';
 import type { EngagementConfig } from '../manifest';
 import { applyLevelUp } from '../level-actions';
-import { isXpIgnored, levelFromXp, tryAwardMessageXp } from '../service';
+import { isXpIgnored, levelFromXp, resolveXpMultiplier, tryAwardMessageXp } from '../service';
 
 /** Parent channel of a thread or forum post; null for an ordinary channel or an orphaned thread. */
 function threadParentChannelId(message: Message): string | null {
@@ -41,7 +41,17 @@ export const messageCreateHandler: PluginEventHandler<'messageCreate'> = {
       return;
     }
 
-    const result = await tryAwardMessageXp(ctx.redis, message.guild.id, message.author.id, config.leveling);
+    // Roll stays 15–25 (the configured min–max). The factor is applied inside tryAwardMessageXp,
+    // then floored, then limited by the remaining hourly cap.
+    const multiplier = resolveXpMultiplier(config.leveling, {
+      channelId: message.channelId,
+      parentChannelId: threadParentChannelId(message),
+      roleIds: member ? [...member.roles.cache.keys()] : [],
+    });
+    const result = await tryAwardMessageXp(ctx.redis, message.guild.id, message.author.id, {
+      ...config.leveling,
+      multiplier,
+    });
     if (!result.awarded) return;
 
     const guildId = message.guild.id;
