@@ -469,7 +469,7 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 
 ### 7.8 Discord permission model
 
-- Bot invite permission set `INVITE_PERMISSIONS` (core): ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles, ReadMessageHistory, AddReactions, UseExternalEmojis, ManageMessages, ManageChannels, ManageRoles, ManageNicknames, ModerateMembers, KickMembers, BanMembers, ManageThreads, CreatePublicThreads, CreatePrivateThreads, ManageWebhooks, ViewAuditLog, Connect, Speak, MoveMembers, ManageEvents, MuteMembers, DeafenMembers. **Never Administrator.**
+- Bot invite permission set `INVITE_PERMISSIONS` (core): ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles, ReadMessageHistory, AddReactions, UseExternalEmojis, ManageMessages, ManageChannels, ManageRoles, ManageNicknames, ModerateMembers, KickMembers, BanMembers, ManageThreads, CreatePublicThreads, CreatePrivateThreads, ManageWebhooks, Connect, Speak, MoveMembers, ManageEvents, MuteMembers, DeafenMembers. **Never Administrator.** Manage Server is deliberately not in the set: it is a manual grant for the optional features that use it (raid lockdown's raise-verification, invite-use attribution in logging, and automod's invite-link rule recognising the server's own invites). View Audit Log is not requested; no feature reads the audit log. `docs/invite.json`, `apps/web/src/data/invite.json` and `docs/PERMISSIONS.md` are generated from this list, and CI fails if they are stale.
 - Each plugin lists its permissions in `manifest.permissions`; `/permissions audit` diffs against `guild.members.me.permissions` and reports missing ones per feature with the fallback text.
 
 ## 8. Database (`@pavisie/database`)
