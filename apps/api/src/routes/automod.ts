@@ -1,6 +1,7 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
 import { AuditAction, NotFoundError, buildPaginated, paginate, partialWithoutDefaults } from '@pavisie/core';
+import { publishAutomodRulesChanged } from '@pavisie/plugins/automod/rule-sync';
 import { testRuleWithText } from '@pavisie/plugins/automod/test-rule';
 import type { AutomodEventDto, AutomodRuleDto, Paginated } from '@pavisie/types';
 import { automodActionsSchema, automodRuleConfigSchema } from '../lib/automod-schemas';
@@ -40,6 +41,9 @@ const eventsQuerySchema = paginationQuerySchema.extend({
 const eventReviewSchema = z.object({ reviewStatus: z.enum(['CONFIRMED', 'FALSE_POSITIVE']) });
 const eventParamSchema = guildIdParamSchema.extend({ eventId: z.string().min(1) });
 
+// Every route below that writes a rule ends its write with `publishAutomodRulesChanged`: the bot caches each
+// guild's rules, and this is what makes a dashboard edit apply to the very next message instead of when that
+// cache expires. A new route that writes `automodRule` must do the same.
 /** `/guilds/:guildId/automod` — rule builder (CRUD, dry-run toggles) + false-positive review queue (ARCHITECTURE.md §10). */
 export default async function automodRoutes(app: ZodFastifyInstance): Promise<void> {
   app.get(
@@ -82,6 +86,7 @@ export default async function automodRoutes(app: ZodFastifyInstance): Promise<vo
         },
       });
 
+      await publishAutomodRulesChanged(app.redis, guildId);
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,
@@ -126,6 +131,7 @@ export default async function automodRoutes(app: ZodFastifyInstance): Promise<vo
         },
       });
 
+      await publishAutomodRulesChanged(app.redis, guildId);
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,
@@ -153,6 +159,7 @@ export default async function automodRoutes(app: ZodFastifyInstance): Promise<vo
       if (!existing) throw new NotFoundError('Automod rule not found.');
 
       await app.prisma.automodRule.update({ where: { id: ruleId }, data: { deletedAt: new Date() } });
+      await publishAutomodRulesChanged(app.redis, guildId);
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,
@@ -181,6 +188,7 @@ export default async function automodRoutes(app: ZodFastifyInstance): Promise<vo
         where: { id: ruleId },
         data: { dryRun: request.body.dryRun },
       });
+      await publishAutomodRulesChanged(app.redis, guildId);
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,
@@ -204,6 +212,7 @@ export default async function automodRoutes(app: ZodFastifyInstance): Promise<vo
         where: { guildId, deletedAt: null },
         data: { dryRun: request.body.dryRun },
       });
+      await publishAutomodRulesChanged(app.redis, guildId);
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,
