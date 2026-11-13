@@ -7,6 +7,7 @@ import {
   userMention,
   type ButtonInteraction,
   type EmbedBuilder,
+  type Guild,
 } from 'discord.js';
 import {
   assertStaffLevel,
@@ -25,13 +26,13 @@ import {
   type PluginContext,
 } from '../../sdk';
 import { clampXpMultiplier, type EngagementConfig } from '../manifest';
-import { applyLevelUp } from '../level-actions';
-import { computeLevelRewardPlan, formatProgressBar, levelFromXp, levelProgress } from '../service';
+import { applyLevelUp, REWARD_ROLE_SYNC_LIMIT, syncMemberRewardRoles } from '../level-actions';
+import { formatProgressBar, levelFromXp, levelProgress } from '../service';
 
 const LEADERBOARD_PAGE_SIZE = 10;
 
-/** Most ranked members one `/level rewards sync` will touch, highest-XP first (see the `sync` branch). */
-const REWARD_SYNC_LIMIT = 500;
+/** Most ranked members one `/level rewards sync` or `/level reset` will touch, highest-XP first. */
+const REWARD_SYNC_LIMIT = REWARD_ROLE_SYNC_LIMIT;
 
 const data = new SlashCommandBuilder()
   .setName('level')
@@ -338,7 +339,9 @@ export const command: PluginCommand = {
       });
 
       const newLevel = levelFromXp(nextXp);
-      const leveledUp = newLevel > (before?.level ?? 0);
+      const previousLevel = before?.level ?? 0;
+      const leveledUp = newLevel > previousLevel;
+      const levelChanged = newLevel !== previousLevel;
       if (newLevel !== profile.level) {
         await c.ctx.prisma.levelProfile.update({ where: { id: profile.id }, data: { level: newLevel } });
       }
@@ -355,6 +358,9 @@ export const command: PluginCommand = {
         source: 'bot',
       });
 
+      // Announcements and `level.up` stay level-up only. `remove` and `set` still recompute reward
+      // roles when the stored level drops; a level-up (including `set` upward) goes through applyLevelUp,
+      // which syncs roles and then announces.
       if (leveledUp) {
         const member = await fetchMemberSafe(c.interaction.guild, targetUser.id);
         await applyLevelUp({
@@ -366,6 +372,17 @@ export const command: PluginCommand = {
           newLevel,
           config: config.leveling,
         });
+      } else if ((sub === 'remove' || sub === 'set') && levelChanged) {
+        const member = await fetchMemberSafe(c.interaction.guild, targetUser.id);
+        if (member) {
+          await syncMemberRewardRoles({
+            ctx: c.ctx,
+            guildId: c.guildId,
+            member,
+            level: newLevel,
+            mode: config.leveling.rewardMode,
+          });
+        }
       }
 
       const key = sub === 'give' ? 'level.xp.given' : sub === 'remove' ? 'level.xp.removed' : 'level.xp.set';
@@ -459,22 +476,17 @@ export const command: PluginCommand = {
       for (const profile of profiles) {
         const member = await fetchMemberSafe(c.interaction.guild, profile.userId);
         if (!member) continue;
-        const plan = computeLevelRewardPlan(
-          [...member.roles.cache.keys()],
+        const wrote = await syncMemberRewardRoles({
+          ctx: c.ctx,
+          guildId: c.guildId,
+          member,
+          level: profile.level,
+          mode: config.leveling.rewardMode,
           rewards,
-          profile.level,
-          config.leveling.rewardMode,
-        );
-        if (plan.toAdd.length === 0 && plan.toRemove.length === 0) continue;
-        try {
-          if (plan.toAdd.length > 0)
-            await member.roles.add(plan.toAdd, 'Pavisie engagement: /level rewards sync');
-          if (plan.toRemove.length > 0)
-            await member.roles.remove(plan.toRemove, 'Pavisie engagement: /level rewards sync');
-          synced += 1;
-        } catch {
-          // Missing permission/hierarchy for this member; skip and keep going.
-        }
+          addReason: 'Pavisie engagement: /level rewards sync',
+          removeReason: 'Pavisie engagement: /level rewards sync',
+        });
+        if (wrote) synced += 1;
       }
       await c.interaction.editReply({
         embeds: [
@@ -746,7 +758,14 @@ export const command: PluginCommand = {
     });
 
     if (result.confirmed) {
-      const count = await performReset(c.ctx, c.guildId, c.interaction.user.id, result.payload);
+      const count = await performReset(
+        c.ctx,
+        c.interaction.guild,
+        c.guildId,
+        c.interaction.user.id,
+        result.payload,
+        config.leveling.rewardMode,
+      );
       await c.interaction.reply({
         embeds: [
           successEmbed(
@@ -763,11 +782,35 @@ export const command: PluginCommand = {
 
 async function performReset(
   ctx: PluginContext,
+  guild: Guild,
   guildId: string,
   actorId: string,
   payload: ResetPayload,
+  rewardMode: EngagementConfig['leveling']['rewardMode'],
 ): Promise<number> {
   const where = payload.targetUserId ? { guildId, userId: payload.targetUserId } : { guildId };
+  // Role removal is capped like `/level rewards sync` (highest XP first). The profile delete is not:
+  // every matching row goes, even when more than the cap still hold reward roles.
+  const rewards = await ctx.prisma.levelReward.findMany({ where: { guildId } });
+  const profiles = await ctx.prisma.levelProfile.findMany({
+    where,
+    orderBy: { xp: 'desc' },
+    take: REWARD_SYNC_LIMIT,
+  });
+  for (const profile of profiles) {
+    const member = await fetchMemberSafe(guild, profile.userId);
+    if (!member) continue;
+    await syncMemberRewardRoles({
+      ctx,
+      guildId,
+      member,
+      level: 0,
+      mode: rewardMode,
+      rewards,
+      addReason: 'Pavisie engagement: /level reset',
+      removeReason: 'Pavisie engagement: /level reset',
+    });
+  }
   const result = await ctx.prisma.levelProfile.deleteMany({ where });
   await ctx.audit({
     guildId,
@@ -785,7 +828,15 @@ async function performReset(
 const [confirmReset, cancelReset] = registerConfirmHandlers<ResetPayload>(
   'level-reset',
   async (c, payload) => {
-    const count = await performReset(c.ctx, c.guildId, c.interaction.user.id, payload);
+    const config = await c.config<EngagementConfig>();
+    const count = await performReset(
+      c.ctx,
+      c.interaction.guild,
+      c.guildId,
+      c.interaction.user.id,
+      payload,
+      config.leveling.rewardMode,
+    );
     await c.interaction.followUp({
       embeds: [
         successEmbed(

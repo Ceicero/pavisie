@@ -82,7 +82,7 @@ export function XpAdjustDialog({ guildId, open, onOpenChange }: XpAdjustDialogPr
           <DialogTitle>Adjust XP</DialogTitle>
           <DialogDescription>
             Give, remove, or set a member&apos;s XP total directly. Every adjustment is written to the audit
-            log.
+            log. Reward roles update shortly after, not instantly.
           </DialogDescription>
         </DialogHeader>
 
