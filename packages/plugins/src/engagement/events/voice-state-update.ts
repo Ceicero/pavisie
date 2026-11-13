@@ -18,6 +18,7 @@ import {
   isXpIgnored,
   levelFromXp,
   renderTempVoiceName,
+  resolveXpMultiplier,
   startVoiceSession,
   stopVoiceSession,
   voiceXpForMinutes,
@@ -35,18 +36,29 @@ function toVoiceMemberLike(member: GuildMember): VoiceMemberLike {
   };
 }
 
-/** Stops `userId`'s voice-XP session (if any), persists the earned XP/minutes, and handles a level-up. */
+/**
+ * Stops `userId`'s voice-XP session (if any), persists the earned XP/minutes, and handles a level-up.
+ *
+ * The multiplier is resolved at settle time from `subject` (the channel the minutes were earned in,
+ * and the member's roles now). A voice channel has no thread parent; do not pass a category id.
+ * Voice XP is not part of the message hourly cap.
+ */
 async function settleVoiceSession(
   ctx: PluginContext,
   guild: Guild,
   guildId: string,
   userId: string,
-  xpPerMinute: number,
+  leveling: EngagementLevelingConfig,
+  subject: { channelId?: string; roleIds?: readonly string[] },
 ): Promise<void> {
   const minutes = await stopVoiceSession(ctx.redis, guildId, userId);
   if (minutes <= 0) return;
 
-  const xpGained = voiceXpForMinutes(minutes, xpPerMinute);
+  const xpGained = voiceXpForMinutes(
+    minutes,
+    leveling.voiceXpPerMinute,
+    resolveXpMultiplier(leveling, subject),
+  );
   const profile = await ctx.prisma.levelProfile.upsert({
     where: { guildId_userId: { guildId, userId } },
     create: { guildId, userId, xp: xpGained, voiceMinutes: minutes },
@@ -101,7 +113,10 @@ async function reconcileChannelVoiceXp(
     if (earns && !tracking) {
       await startVoiceSession(ctx.redis, guildId, member.id);
     } else if (!earns && tracking) {
-      await settleVoiceSession(ctx, guild, guildId, member.id, leveling.voiceXpPerMinute);
+      await settleVoiceSession(ctx, guild, guildId, member.id, leveling, {
+        channelId: channel.id,
+        roleIds: [...member.roles.cache.keys()],
+      });
     }
   }
 }
@@ -211,8 +226,7 @@ async function cleanupIfOrphaned(ctx: PluginContext, guild: Guild, channelId: st
   const memberCount = channel && channel.isVoiceBased() ? channel.members.size : 0;
   if (!isOrphanTempVoiceChannel(memberCount)) return;
 
-  if (channel)
-    await channel.delete('Pavisie engagement: temp voice channel is empty').catch(() => undefined);
+  if (channel) await channel.delete('Pavisie engagement: temp voice channel is empty').catch(() => undefined);
   await ctx.prisma.tempVoiceChannel.delete({ where: { id: row.id } }).catch(() => undefined);
 }
 
@@ -257,7 +271,11 @@ export const voiceStateUpdateHandler: PluginEventHandler<'voiceStateUpdate'> = {
     // settle their session directly first so it isn't silently dropped.
     if (oldState.channelId && oldState.channelId !== newState.channelId) {
       if (await hasVoiceSession(ctx.redis, guildId, userId)) {
-        await settleVoiceSession(ctx, guild, guildId, userId, config.leveling.voiceXpPerMinute);
+        const member = newState.member ?? oldState.member;
+        await settleVoiceSession(ctx, guild, guildId, userId, config.leveling, {
+          channelId: oldState.channelId,
+          roleIds: member ? [...member.roles.cache.keys()] : [],
+        });
       }
     }
 
