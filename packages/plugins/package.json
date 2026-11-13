@@ -20,24 +20,24 @@
     "check:i18n": "tsx scripts/check-i18n.ts"
   },
   "dependencies": {
-    "discord.js": "^14.17.3",
-    "discord-api-types": "^0.37.114",
-    "bullmq": "^5.34.0",
-    "ioredis": "^5.4.2",
-    "zod": "^3.24.1",
-    "pino": "^9.6.0",
-    "luxon": "^3.5.0",
-    "cron-parser": "^4.9.0",
     "@pavisie/core": "workspace:*",
     "@pavisie/database": "workspace:*",
-    "@pavisie/types": "workspace:*"
+    "@pavisie/types": "workspace:*",
+    "bullmq": "^5.34.0",
+    "cron-parser": "^4.9.0",
+    "discord-api-types": "^0.37.114",
+    "discord.js": "^14.17.3",
+    "ioredis": "^5.4.2",
+    "luxon": "^3.5.0",
+    "pino": "^9.6.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "typescript": "^5.7.2",
-    "vitest": "^3.0.0",
-    "@types/node": "^22.10.0",
     "@types/luxon": "^3.4.2",
+    "@types/node": "^22.10.0",
     "ioredis-mock": "^8.9.0",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
   }
 }

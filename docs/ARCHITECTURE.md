@@ -469,7 +469,7 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 
 ### 7.8 Discord permission model
 
-- Bot invite permission set `INVITE_PERMISSIONS` (core): ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles, ReadMessageHistory, AddReactions, UseExternalEmojis, ManageMessages, ManageChannels, ManageRoles, ManageNicknames, ModerateMembers, KickMembers, BanMembers, ManageThreads, CreatePublicThreads, CreatePrivateThreads, ManageWebhooks, ViewAuditLog, Connect, Speak, MoveMembers, ManageEvents, MuteMembers, DeafenMembers. **Never Administrator.**
+- Bot invite permission set `INVITE_PERMISSIONS` (core): ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles, ReadMessageHistory, AddReactions, UseExternalEmojis, ManageMessages, ManageChannels, ManageRoles, ManageNicknames, ModerateMembers, KickMembers, BanMembers, ManageThreads, CreatePublicThreads, CreatePrivateThreads, ManageWebhooks, Connect, Speak, MoveMembers, ManageEvents, MuteMembers, DeafenMembers. **Never Administrator.** Manage Server is deliberately not in the set: it is a manual grant for the optional features that use it (raid lockdown's raise-verification, invite-use attribution in logging, and automod's invite-link rule recognising the server's own invites). View Audit Log is not requested; no feature reads the audit log. `docs/invite.json`, `apps/web/src/data/invite.json` and `docs/PERMISSIONS.md` are generated from this list, and CI fails if they are stale.
 - Each plugin lists its permissions in `manifest.permissions`; `/permissions audit` diffs against `guild.members.me.permissions` and reports missing ones per feature with the fallback text.
 
 ## 8. Database (`@pavisie/database`)
@@ -1698,10 +1698,10 @@ same origin (`https://pavisie.com`) post-merge, so this allowlist has one effect
 
 ## 22. Brand assets (logo = bot avatar)
 
-The Pavisie logo and bot avatar is a gold laurel-wreath medallion with a skull, on pure black, square,
+The Pavisie logo and bot avatar is a black shield with gold trim and a gold star gem, on a transparent background, square,
 1024×1024, used everywhere: website, dashboard, bot embed icon, and Discord avatar. Canonical file:
-`assets/brand/pavisie-skull.png` (present in the repo, lossless PNG; takes precedence over the `.jpg` when both
-exist). `assets/brand/pavisie-skull.jpg` is the same art re-encoded as JPEG, kept only so any URL or cached
+`assets/brand/pavisie-skull.png` (present in the repo, PNG; takes precedence over the `.jpg` when both
+exist). `assets/brand/pavisie-skull.jpg` is the same art re-encoded as JPEG on black, kept only so any URL or cached
 reference that still names the `.jpg` file keeps serving the current art instead of 404ing or showing stale art. The
 sync script copies every existing shared candidate (both `.png` and `.jpg`, when present) into each app's
 `public/brand/`, and writes `public/brand/manifest.json` with `logo` naming the preferred one
@@ -1722,7 +1722,7 @@ everything below must degrade gracefully — never fail a build because it is mi
   path, and falls back to a text wordmark when the image 404s (`<img onError>` → hide) or when the manifest has no
   logo.
 - Browser-tab favicons: `apps/web/src/app/icon.png` and `apps/dashboard/src/app/icon.png` (256×256, resized from
-  `assets/brand/pavisie-skull.png`, black background kept) are committed static files picked up by Next's
+  `assets/brand/pavisie-skull.png`, transparent background) are committed static files picked up by Next's
   app-router file convention — `sync-brand.mjs` does not generate or touch them, and no `icons` entry is needed in
   either app's `metadata`. Regenerate both by hand (see `assets/brand/README.md` "Regenerating favicons") whenever
   the canonical skull PNG changes.

@@ -2,6 +2,7 @@ import { PermissionFlagsBits } from 'discord-api-types/v10';
 import { describe, expect, it } from 'vitest';
 import {
   buildOnboardingChecklist,
+  canActorManageRole,
   canDecideVerification,
   checkRoleAssignable,
   filterPersistableRoles,
@@ -327,5 +328,21 @@ describe('selectAutoRoles', () => {
       'a',
       'b',
     ]);
+  });
+});
+
+describe('canActorManageRole', () => {
+  it('allows roles strictly below the actor', () => {
+    expect(canActorManageRole({ rolePosition: 3, actorTopRolePosition: 5, actorIsOwner: false })).toBe(true);
+  });
+  it('refuses roles at or above the actor', () => {
+    expect(canActorManageRole({ rolePosition: 5, actorTopRolePosition: 5, actorIsOwner: false })).toBe(false);
+    expect(canActorManageRole({ rolePosition: 9, actorTopRolePosition: 5, actorIsOwner: false })).toBe(false);
+  });
+  it('fails closed when the actor position is unknown', () => {
+    expect(canActorManageRole({ rolePosition: 1, actorTopRolePosition: undefined, actorIsOwner: false })).toBe(false);
+  });
+  it('lets the guild owner bypass hierarchy', () => {
+    expect(canActorManageRole({ rolePosition: 99, actorTopRolePosition: undefined, actorIsOwner: true })).toBe(true);
   });
 });

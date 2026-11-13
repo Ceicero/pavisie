@@ -46,6 +46,7 @@ export function toWebhookEndpointDetailDto(row: WebhookEndpoint): WebhookEndpoin
     events: row.events,
     channelId: row.channelId,
     failureCount: row.failureCount,
+    requireTimestamp: row.requireTimestamp,
     lastDeliveryAt: row.lastDeliveryAt ? row.lastDeliveryAt.toISOString() : null,
   };
 }

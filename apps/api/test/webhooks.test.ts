@@ -14,7 +14,7 @@ function genericSignature(secret: string, body: string): string {
   return createHmac('sha256', secret).update(body).digest('hex');
 }
 
-function endpointOverrides(secretPlain: string) {
+function endpointOverrides(secretPlain: string, extra: Record<string, unknown> = {}) {
   return {
     webhookEndpoint: {
       findFirst: async () => ({
@@ -24,6 +24,8 @@ function endpointOverrides(secretPlain: string) {
         enabled: true,
         deletedAt: null,
         secretEnc: encryptSecret(secretPlain),
+        requireTimestamp: false,
+        ...extra,
       }),
       update: async () => ({}),
     },
@@ -115,6 +117,91 @@ describe('webhook signature verification', () => {
     expect(queues.calls[0]).toMatchObject({ queue: 'integrations.inbound', name: 'generic' });
 
     await app.close();
+  });
+
+  describe('generic timestamp replay protection', () => {
+    async function send(headers: Record<string, string>, body: string) {
+      const { app, queues } = await buildTestApp(endpointOverrides(GENERIC_SECRET));
+      const res = await app.inject({
+        method: 'POST',
+        url: '/webhooks/generic/endpoint-1',
+        headers: { 'content-type': 'application/json', ...headers },
+        payload: body,
+      });
+      await app.close();
+      return { res, queues };
+    }
+    const body = JSON.stringify({ hello: 'ts' });
+
+    it('accepts a fresh timestamp signed over ts.body', async () => {
+      const ts = String(Math.floor(Date.now() / 1000));
+      const { res, queues } = await send(
+        { 'x-pavisie-timestamp': ts, 'x-pavisie-signature': genericSignature(GENERIC_SECRET, `${ts}.${body}`) },
+        body,
+      );
+      expect(res.statusCode).toBe(202);
+      expect(queues.calls).toHaveLength(1);
+    });
+
+    it('rejects a timestamp older than 5 minutes', async () => {
+      const ts = String(Math.floor(Date.now() / 1000) - 301);
+      const { res, queues } = await send(
+        { 'x-pavisie-timestamp': ts, 'x-pavisie-signature': genericSignature(GENERIC_SECRET, `${ts}.${body}`) },
+        body,
+      );
+      expect(res.statusCode).toBe(401);
+      expect(queues.calls).toHaveLength(0);
+    });
+
+    it('rejects a timestamped request whose signature only covers the body', async () => {
+      const ts = String(Math.floor(Date.now() / 1000));
+      const { res } = await send(
+        { 'x-pavisie-timestamp': ts, 'x-pavisie-signature': genericSignature(GENERIC_SECRET, body) },
+        body,
+      );
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('rejects a replay that strips the timestamp header', async () => {
+      const ts = String(Math.floor(Date.now() / 1000) - 3600);
+      const { res } = await send({ 'x-pavisie-signature': genericSignature(GENERIC_SECRET, `${ts}.${body}`) }, body);
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('400s a malformed timestamp', async () => {
+      const { res } = await send({ 'x-pavisie-timestamp': 'abc', 'x-pavisie-signature': 'x' }, body);
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  describe('per-endpoint requireTimestamp', () => {
+    const body = JSON.stringify({ hello: 'strict' });
+    async function post(headers: Record<string, string>) {
+      const { app, queues } = await buildTestApp(endpointOverrides(GENERIC_SECRET, { requireTimestamp: true }));
+      const res = await app.inject({
+        method: 'POST',
+        url: '/webhooks/generic/endpoint-1',
+        headers: { 'content-type': 'application/json', ...headers },
+        payload: body,
+      });
+      await app.close();
+      return { res, queues };
+    }
+
+    it('rejects a validly body-signed delivery without the timestamp header', async () => {
+      const { res, queues } = await post({ 'x-pavisie-signature': genericSignature(GENERIC_SECRET, body) });
+      expect(res.statusCode).toBe(401);
+      expect(queues.calls).toHaveLength(0);
+    });
+
+    it('accepts a fresh timestamped delivery', async () => {
+      const ts = String(Math.floor(Date.now() / 1000));
+      const { res } = await post({
+        'x-pavisie-timestamp': ts,
+        'x-pavisie-signature': genericSignature(GENERIC_SECRET, `${ts}.${body}`),
+      });
+      expect(res.statusCode).toBe(202);
+    });
   });
 
   it('rejects a generic webhook with an invalid signature', async () => {

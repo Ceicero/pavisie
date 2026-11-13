@@ -38,7 +38,7 @@ export const configSchema = z.object({
       /** Hard cap on the reply text sent back to Discord; the completion itself is separately capped by `AI_MAX_OUTPUT_TOKENS`. */
       maxReplyChars: z.number().int().min(200).max(2000).default(1200),
     })
-    .default({}),
+    .prefault({}),
 });
 export type AiConfig = z.infer<typeof configSchema>;
 

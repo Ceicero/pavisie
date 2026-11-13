@@ -13,6 +13,7 @@ import {
 import { Prisma, type StickyMessage } from '@pavisie/database';
 import { AuditAction, EMBED_LIMITS, sanitizeEmbedText, truncate } from '@pavisie/core';
 import { resolveTextChannel, type PluginContext } from '../sdk';
+import { isMissingChannelPermission, isUnknownChannel, isUnknownMessage } from './command-input';
 import type { CommunityConfig } from './manifest';
 import {
   STICKY_CHANNELS_TTL_SECONDS,
@@ -47,7 +48,8 @@ export type StickyErrorCode =
   | 'badChannel'
   | 'notFound'
   | 'missingEmbedPermission'
-  | 'autoPublishConflict';
+  | 'autoPublishConflict'
+  | 'postFailed';
 
 /** Thrown by the sticky service for user-facing failures; commands map `code` to a `sticky.<code>` locale key. */
 export class StickyError extends Error {
@@ -203,9 +205,11 @@ async function pruneSticky(ctx: PluginContext, sticky: StickyMessage): Promise<v
 async function deleteOwnMessage(channel: GuildTextBasedChannel, messageId: string): Promise<void> {
   try {
     await channel.messages.delete(messageId);
-  } catch {
-    // Unknown Message (already deleted by staff) is the expected failure; anything else (e.g. missing
-    // Manage Messages after a channel overwrite change) is also non-fatal — the new copy still gets posted.
+  } catch (err) {
+    // 10008 Unknown Message: staff already deleted it. 10003: the channel went away with the message.
+    // 50001/50013: a channel overwrite can block deleting our own copy. All of these are non-fatal —
+    // the new copy is still posted, or removal still clears the row.
+    if (isUnknownMessage(err) || isUnknownChannel(err) || isMissingChannelPermission(err)) return;
   }
 }
 
@@ -345,7 +349,9 @@ export async function runStickyCatchUp(
   try {
     // Re-read now that we hold the lock: a concurrent repost may have already moved the sticky (and armed the
     // cooldown) since this job was queued, in which case re-posting again would orphan that fresher copy.
-    const fresh = await ctx.prisma.stickyMessage.findUnique({ where: { guildId_channelId: { guildId, channelId } } });
+    const fresh = await ctx.prisma.stickyMessage.findUnique({
+      where: { guildId_channelId: { guildId, channelId } },
+    });
     if (!fresh) return;
 
     const channel = await resolveTextChannel(guild, channelId);
@@ -434,17 +440,10 @@ export async function upsertSticky(ctx: PluginContext, input: UpsertStickyInput)
   await invalidateStickyChannels(ctx, input.guildId);
 
   const posted = await repostSticky(ctx, input.guild, row);
-  await ctx.redis.set(
-    stickyCooldownKey(input.guildId, input.channelId),
-    '1',
-    'EX',
-    Math.max(1, input.cooldownSeconds),
-  );
-
-  await ctx.audit({
+  const auditEntry = {
     guildId: input.guildId,
     actorId: input.actorId,
-    actorType: 'user',
+    actorType: 'user' as const,
     action: AuditAction.CommunityStickySet,
     targetType: 'sticky_message',
     targetId: row.id,
@@ -455,10 +454,26 @@ export async function upsertSticky(ctx: PluginContext, input: UpsertStickyInput)
       hasEmbed: Boolean(embed),
       cooldownSeconds: input.cooldownSeconds,
     },
-    source: 'bot',
-  });
+    source: 'bot' as const,
+  };
 
-  return posted ?? row;
+  if (!posted) {
+    // `repostSticky` prunes the row when Discord says the channel is gone. Anything else (missing permission,
+    // a transient send failure) leaves the row so the next message in the channel tries again.
+    const still = await ctx.prisma.stickyMessage.findUnique({ where });
+    if (!still) throw new StickyError('badChannel');
+    await ctx.audit(auditEntry);
+    throw new StickyError('postFailed');
+  }
+
+  await ctx.redis.set(
+    stickyCooldownKey(input.guildId, input.channelId),
+    '1',
+    'EX',
+    Math.max(1, input.cooldownSeconds),
+  );
+  await ctx.audit(auditEntry);
+  return posted;
 }
 
 /** Deletes the sticky for a channel (DB row + the bot's last posted copy, best-effort). Resolves `false` when there was none. */

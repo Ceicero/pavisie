@@ -21,7 +21,7 @@ export const twitchChatNameSchema = z
 /** Rejects the built-in command names (`!commands`, `!uptime`, `!title`) every channel already answers. */
 export const twitchChatCommandNameSchema = twitchChatNameSchema.refine(
   (name) => !(TWITCH_CHAT_RESERVED_COMMAND_NAMES as readonly string[]).includes(name),
-  (name) => ({ message: `"${name}" is a built-in command name and can't be overridden.` }),
+  { error: (issue) => `"${String(issue.input)}" is a built-in command name and can't be overridden.` },
 );
 
 export const twitchChatResponseSchema = z.string().trim().min(1).max(400);

@@ -7,7 +7,7 @@ const logKindSchema = z.enum(ALL_LOG_KINDS);
 const channelKeySchema = z.union([logKindSchema, z.literal('default')]);
 
 /** `Record<LogKind | 'default', string | null>` (ARCHITECTURE.md's logging task config schema), default `{}` — an absent key simply has no channel configured. */
-const channelsSchema = z.record(channelKeySchema, z.string().nullable()).default({});
+const channelsSchema = z.partialRecord(channelKeySchema, z.string().nullable()).prefault({});
 
 export const configSchema = z.object({
   channels: channelsSchema,
@@ -50,12 +50,6 @@ export const manifest = defineManifest({
       feature: 'rich log embeds (title/fields/jump links)',
       optional: false,
       fallback: 'Discord blocks the send entirely, so the log embed is dropped',
-    },
-    {
-      permission: PermissionFlagsBits.ReadMessageHistory,
-      feature: 'live message-edit/delete diffing and invite-use context',
-      optional: true,
-      fallback: 'edits/deletes are still logged from cached data only',
     },
     {
       permission: PermissionFlagsBits.ManageGuild,

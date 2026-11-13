@@ -42,10 +42,10 @@ const tempVoiceSchema = z.object({
 });
 
 export const configSchema = z.object({
-  leveling: levelingSchema.default({}),
-  rep: repSchema.default({}),
-  starboard: starboardSchema.default({}),
-  tempVoice: tempVoiceSchema.default({}),
+  leveling: levelingSchema.prefault({}),
+  rep: repSchema.prefault({}),
+  starboard: starboardSchema.prefault({}),
+  tempVoice: tempVoiceSchema.prefault({}),
 });
 
 export type EngagementConfig = z.infer<typeof configSchema>;
@@ -76,6 +76,13 @@ export const manifest = defineManifest({
       optional: true,
       fallback:
         'Members can still join a hub channel; the bot cannot create/rename/delete their temp channel.',
+    },
+    {
+      permission: PermissionFlagsBits.Connect,
+      feature: 'temporary voice channels (granting the owner Connect on their own channel, and managing it)',
+      optional: true,
+      fallback:
+        'Discord rejects the owner overwrite, so no temp channel is created; the member stays in the hub channel.',
     },
     {
       permission: PermissionFlagsBits.MoveMembers,

@@ -12,6 +12,10 @@
     "plugin_unavailable": "The {plugin} plugin is not available: {reason}.",
     "validation": "That input isn't valid: {message}.",
     "not_found": "{thing} was not found.",
+    "channel_gone": "That channel was deleted.",
+    "message_gone": "That message was deleted.",
+    "cannot_post": "I can't post in that channel. Check my permissions.",
+    "cannot_dm": "I can't send a direct message to that user.",
     "hierarchy": {
       "self": "You can't do that to yourself.",
       "bot": "You can't do that to the bot.",

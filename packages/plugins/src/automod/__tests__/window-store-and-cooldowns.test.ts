@@ -1,6 +1,6 @@
 import RedisMock from 'ioredis-mock';
 import type Redis from 'ioredis';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Cooldowns } from '@pavisie/core';
 import { MemoryWindowStore, RedisWindowStore, scopedWindowStore } from '../engine/window-store';
 
@@ -26,6 +26,37 @@ describe('RedisWindowStore (ioredis-mock)', () => {
     await store.pushAndCount('prunes', 'a', now, 1000);
     const count = await store.pushAndCount('prunes', 'b', now + 5000, 1000);
     expect(count).toBe(1);
+  });
+
+  it('does the whole push-and-count in one round trip', async () => {
+    const redis = new RedisMock() as unknown as Redis;
+    const store = new RedisWindowStore(redis);
+    const multi = vi.spyOn(redis, 'multi');
+    const direct = [
+      vi.spyOn(redis, 'zremrangebyscore'),
+      vi.spyOn(redis, 'zadd'),
+      vi.spyOn(redis, 'zremrangebyrank'),
+      vi.spyOn(redis, 'pexpire'),
+      vi.spyOn(redis, 'zcard'),
+    ];
+
+    expect(await store.pushAndCount('one-trip', 'a', Date.now(), 10_000)).toBe(1);
+
+    // Everything goes through a single transaction; nothing is sent as its own command.
+    expect(multi).toHaveBeenCalledTimes(1);
+    for (const spy of direct) expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('gives simultaneous pushes consecutive counts', async () => {
+    const redis = new RedisMock() as unknown as Redis;
+    const store = new RedisWindowStore(redis);
+    const now = Date.now();
+
+    const counts = await Promise.all(
+      Array.from({ length: 20 }, (_, i) => store.pushAndCount('simultaneous', `m${i}`, now, 10_000)),
+    );
+
+    expect([...counts].sort((a, b) => a - b)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
   });
 
   it('peek does not add an entry', async () => {

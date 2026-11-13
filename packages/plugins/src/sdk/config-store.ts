@@ -90,15 +90,21 @@ function actorTypeFor(actor: ConfigActor): 'user' | 'system' {
  */
 export function configSchemaKeys(schema: z.ZodTypeAny): string[] | null {
   let current: z.ZodTypeAny = schema;
-  while (
-    current instanceof z.ZodDefault ||
-    current instanceof z.ZodOptional ||
-    current instanceof z.ZodNullable ||
-    current instanceof z.ZodEffects
-  ) {
-    current = (
-      current instanceof z.ZodEffects ? current._def.schema : current._def.innerType
-    ) as z.ZodTypeAny;
+  // zod 4: `.default()`/`.prefault()`/`.optional()`/`.nullable()` wrap via `def.innerType`; `.transform()`/`.pipe()`
+  // produce a `ZodPipe` whose input side is `def.in` (refinements no longer wrap — they stay the same class).
+  for (let depth = 0; depth < 20; depth++) {
+    if (
+      current instanceof z.ZodDefault ||
+      current instanceof z.ZodPrefault ||
+      current instanceof z.ZodOptional ||
+      current instanceof z.ZodNullable
+    ) {
+      current = current.def.innerType as z.ZodTypeAny;
+    } else if (current instanceof z.ZodPipe) {
+      current = current.def.in as z.ZodTypeAny;
+    } else {
+      break;
+    }
   }
   return current instanceof z.ZodObject ? Object.keys(current.shape) : null;
 }

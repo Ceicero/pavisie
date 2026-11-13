@@ -83,8 +83,70 @@ describe('LogBatcher', () => {
     const batcher = new LogBatcher({ send, onError, flushIntervalMs: 2000, maxBatchSize: 1 });
 
     batcher.enqueue('chan-1', fakeEmbed(1));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(onError).toHaveBeenCalledWith('chan-1', err, 3);
+  });
+
+  it('retries a failed send with backoff (1s, then 2s) and succeeds without reporting an error', async () => {
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('Service Unavailable'), { status: 503 }))
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockResolvedValue(undefined);
+    const onError = vi.fn();
+    const batcher = new LogBatcher({ send, onError, flushIntervalMs: 2000, maxBatchSize: 1 });
+
+    batcher.enqueue('chan-1', fakeEmbed(1));
     await vi.advanceTimersByTimeAsync(0);
-    expect(onError).toHaveBeenCalledWith('chan-1', err);
+    expect(send).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(send).toHaveBeenCalledTimes(1); // not retried early
+    await vi.advanceTimersByTimeAsync(1);
+    expect(send).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('drops the batch after maxAttempts and never loops', async () => {
+    const err = Object.assign(new Error('Too Many Requests'), { status: 429 });
+    const send = vi.fn().mockRejectedValue(err);
+    const onError = vi.fn();
+    const batcher = new LogBatcher({ send, onError, maxBatchSize: 1, maxAttempts: 3, retryBaseDelayMs: 100 });
+
+    batcher.enqueue('chan-1', fakeEmbed(1));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith('chan-1', err, 3);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not retry a permanent 4xx failure (e.g. Missing Access)', async () => {
+    const err = Object.assign(new Error('Missing Access'), { status: 403, code: 50001 });
+    const send = vi.fn().mockRejectedValue(err);
+    const onError = vi.fn();
+    const batcher = new LogBatcher({ send, onError, maxBatchSize: 1 });
+
+    batcher.enqueue('chan-1', fakeEmbed(1));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith('chan-1', err, 1);
+  });
+
+  it('keeps split groups in order while one is being retried', async () => {
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('Bad Gateway'), { status: 502 }))
+      .mockResolvedValue(undefined);
+    const batcher = new LogBatcher({ send, flushIntervalMs: 2000, maxBatchSize: 2 });
+
+    batcher.enqueue('chan-1', fakeEmbed(1, 4000));
+    batcher.enqueue('chan-1', fakeEmbed(2, 4000));
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(send.mock.calls.map((call) => (call[1] as EmbedBuilder[]).length)).toEqual([1, 1, 1]);
+    expect(send.mock.calls.map((call) => (call[1] as unknown as { id: number }[])[0]?.id)).toEqual([1, 1, 2]);
   });
 
   it('flushAll flushes every channel with a pending batch', () => {

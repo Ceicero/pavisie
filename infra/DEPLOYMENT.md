@@ -147,6 +147,7 @@ NEXT_PUBLIC_SUPPORT_SERVER_URL=<optional — shown in the dashboard sidebar/erro
 ```
 BOT_HEALTH_PORT=3002
 BOT_OWNER_IDS=<your Discord user id, comma-separated if more than one>
+ALERT_CHANNEL_ID=<optional — private channel id for crash alerts>
 ENABLE_GUILD_MEMBERS_INTENT=true
 ENABLE_MESSAGE_CONTENT_INTENT=false
 ```
