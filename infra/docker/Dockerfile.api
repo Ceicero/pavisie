@@ -2,6 +2,10 @@
 # Runs from TypeScript source via tsx; no build step (see ARCHITECTURE.md §3, §14).
 FROM node:22-alpine
 
+# Keep corepack's pnpm cache outside /root: the container runs as `pavisie` (below) and starts
+# through `pnpm`, so a cache under root's home is invisible at runtime and corepack would
+# re-download pnpm from registry.npmjs.org on every start (and fail to boot without it).
+ENV COREPACK_HOME=/opt/corepack
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 WORKDIR /app
