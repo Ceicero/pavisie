@@ -2,18 +2,27 @@
   "help": {
     "title": "Help",
     "intro": "Pick a plugin below to see its commands.",
-    "noPlugins": "No plugins are currently enabled in this server. Ask an admin to enable at least one."
+    "noPlugins": "No plugins are currently enabled in this server. Ask an admin to enable at least one.",
+    "nothingSelected": "Nothing was selected. Pick a plugin from the menu to see its commands.",
+    "statusField": "Status",
+    "catalogUnavailable": "The plugin catalog is not available right now. Try again in a moment."
   },
   "embed": {
     "title": "Embed builder",
     "expired": "This preview has expired. Run `/embed builder` again.",
     "emptyPayload": "Add at least a title, description, image, or footer before previewing.",
-    "invalidJson": "That JSON did not contain any recognizable embed fields."
+    "invalidJson": "That JSON did not contain any recognizable embed fields.",
+    "notTextChannel": "That channel is not a text channel I can send to.",
+    "missingPermission": "I'm missing permission to send in {channel}. I need View Channel, Send Messages, and Embed Links there.",
+    "channelGone": "That channel was deleted. Pick another channel.",
+    "sendFailed": "I couldn't send the embed to {channel}. Please try again in a moment.",
+    "sent": "Sent to {channel}."
   },
   "afk": {
     "disabled": "AFK status is disabled in this server.",
     "welcomeBack": "Welcome back — your AFK status has been cleared.",
-    "nowAfk": "You are now AFK{suffix}. I'll let anyone who mentions you know, and clear this the next time you send a message."
+    "nowAfk": "You are now AFK{suffix}. I'll let anyone who mentions you know, and clear this the next time you send a message.",
+    "title": "AFK"
   },
   "translate": {
     "notConfigured": "Translation is not configured on this bot. Ask an administrator to set `TRANSLATE_PROVIDER`.",
@@ -24,9 +33,27 @@
     "tooFast": "You're requesting weather too fast — try again in a few seconds."
   },
   "timezone": {
-    "invalid": "That is not a recognized IANA timezone. Use the autocomplete suggestions."
+    "invalid": "That is not a recognized IANA timezone. Use the autocomplete suggestions.",
+    "set": "Your timezone is now set to **{zone}**.",
+    "title": "Timezone",
+    "getSelf": "Your saved timezone is **{zone}**.",
+    "getOther": "{user}'s saved timezone is **{zone}**.",
+    "notSetSelf": "You haven't saved a timezone yet. Use `/utility timezone set`.",
+    "notSetOther": "{user} hasn't saved a timezone yet.",
+    "listTitle": "IANA timezones",
+    "listEmpty": "No matching timezones found. Try a shorter search, like a city or region name."
   },
   "status": {
-    "title": "Bot status"
+    "title": "Bot status",
+    "unavailable": "Status is not available right now. Try again in a moment."
+  },
+  "errors": {
+    "userFetchFailed": "Could not fetch that user.",
+    "channelResolveFailed": "Could not resolve that channel.",
+    "unknownSubcommand": "Unknown subcommand."
+  },
+  "banner": {
+    "noneTitle": "No banner",
+    "none": "{user} does not have a profile banner set."
   }
 }
