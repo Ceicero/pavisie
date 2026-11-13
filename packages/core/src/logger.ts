@@ -13,11 +13,14 @@ const REDACT_PATHS = [
   '*.content',
   '*.messageContent',
   '*.apiKey',
+  // discord.js REST errors carry the outgoing request (message text, embeds, files) as `err.requestBody`.
+  '*.requestBody',
 ];
 
 const usePretty = !isProduction && Boolean(process.stdout.isTTY);
 
-const options: LoggerOptions = {
+/** Exported for tests. */
+export const LOGGER_OPTIONS: LoggerOptions = {
   level: env.LOG_LEVEL,
   redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
   // Emit `"level":"warn"` instead of pino's numeric `"level":40`: Railway's log viewer only understands level
@@ -29,7 +32,7 @@ const options: LoggerOptions = {
 };
 
 /** Root process logger. Redacts tokens/secrets/message content; pretty-printed only in non-production TTYs. */
-export const logger: Logger = pino(options);
+export const logger: Logger = pino(LOGGER_OPTIONS);
 
 /** Returns a child logger scoped to a named module (`{ module: name }`). */
 export function createLogger(name: string): Logger {
