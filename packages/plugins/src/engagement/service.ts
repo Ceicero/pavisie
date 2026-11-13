@@ -126,6 +126,31 @@ export async function tryAwardMessageXp(
 }
 
 // ---------------------------------------------------------------------------
+// No-XP lists (channels, thread/forum parents, roles).
+// ---------------------------------------------------------------------------
+
+export interface XpSubject {
+  /** Channel the activity happened in. Omitted when only roles should be checked. */
+  channelId?: string;
+  /** Parent of a thread or forum post. A voice category id is not a parent for this check. */
+  parentChannelId?: string | null;
+  roleIds?: readonly string[];
+}
+
+/**
+ * True when this channel, a thread or forum post's parent channel, or any of these roles is on a
+ * leveling no-XP list. Omit `channelId` to test roles alone.
+ */
+export function isXpIgnored(
+  config: Pick<EngagementLevelingConfig, 'ignoredChannelIds' | 'ignoredRoleIds'>,
+  subject: XpSubject,
+): boolean {
+  if (subject.channelId && config.ignoredChannelIds.includes(subject.channelId)) return true;
+  if (subject.parentChannelId && config.ignoredChannelIds.includes(subject.parentChannelId)) return true;
+  return (subject.roleIds ?? []).some((roleId) => config.ignoredRoleIds.includes(roleId));
+}
+
+// ---------------------------------------------------------------------------
 // Voice XP engine (Redis-backed session timer per guild+user).
 // ---------------------------------------------------------------------------
 

@@ -8,13 +8,14 @@ import {
   type VoiceState,
 } from 'discord.js';
 import { fetchMemberSafe, type PluginContext, type PluginEventHandler } from '../../sdk';
-import type { EngagementConfig, EngagementTempVoiceConfig } from '../manifest';
+import type { EngagementConfig, EngagementLevelingConfig, EngagementTempVoiceConfig } from '../manifest';
 import { applyLevelUp } from '../level-actions';
 import {
   channelQualifiesForVoiceXp,
   hasVoiceSession,
   isEligibleVoiceMember,
   isOrphanTempVoiceChannel,
+  isXpIgnored,
   levelFromXp,
   renderTempVoiceName,
   startVoiceSession,
@@ -62,25 +63,45 @@ async function settleVoiceSession(
   await applyLevelUp({ ctx, guild, member, guildId, userId, newLevel, config: config.leveling });
 }
 
-/** Starts/stops voice-XP sessions for every member of `channel` so its tracked state matches "does this channel currently qualify, and is each member eligible". */
+/**
+ * Starts or stops voice-XP sessions so each member's tracked state matches the channel now.
+ *
+ * An ignored voice channel qualifies for nobody. An ignored-role member earns no voice XP and does
+ * not count toward the two-human minimum, so one earning member plus a no-XP account is not a
+ * qualifying channel. Mute, deafen, and bot rules are unchanged.
+ *
+ * Ignored time is not tracked. On a voiceStateUpdate that shows the channel is ignored, or that the
+ * member now holds an ignored role, an open session is settled — minutes already on the clock are
+ * paid — and not restarted. Role and ignore-list edits show up on the next voiceStateUpdate, not at
+ * the moment of the edit. Moving into an ignored channel settles the previous channel first (that
+ * time was eligible) and does not start a session in the ignored one. Moving back into a qualifying
+ * channel, or losing the ignored role, starts a new session from that event.
+ */
 async function reconcileChannelVoiceXp(
   ctx: PluginContext,
   guild: Guild,
   guildId: string,
   channel: VoiceBasedChannel,
-  xpPerMinute: number,
+  leveling: EngagementLevelingConfig,
 ): Promise<void> {
   const members = [...channel.members.values()];
-  const qualifies = channelQualifiesForVoiceXp(members.map(toVoiceMemberLike));
+  const channelIgnored = isXpIgnored(leveling, { channelId: channel.id });
+  const countsTowardQuorum = members
+    .filter((member) => !isXpIgnored(leveling, { roleIds: [...member.roles.cache.keys()] }))
+    .map(toVoiceMemberLike);
+  const qualifies = !channelIgnored && channelQualifiesForVoiceXp(countsTowardQuorum);
 
   for (const member of members) {
-    const eligible = isEligibleVoiceMember(toVoiceMemberLike(member));
+    const earns =
+      qualifies &&
+      isEligibleVoiceMember(toVoiceMemberLike(member)) &&
+      !isXpIgnored(leveling, { channelId: channel.id, roleIds: [...member.roles.cache.keys()] });
     const tracking = await hasVoiceSession(ctx.redis, guildId, member.id);
 
-    if (qualifies && eligible && !tracking) {
+    if (earns && !tracking) {
       await startVoiceSession(ctx.redis, guildId, member.id);
-    } else if ((!qualifies || !eligible) && tracking) {
-      await settleVoiceSession(ctx, guild, guildId, member.id, xpPerMinute);
+    } else if (!earns && tracking) {
+      await settleVoiceSession(ctx, guild, guildId, member.id, leveling.voiceXpPerMinute);
     }
   }
 }
@@ -250,7 +271,7 @@ export const voiceStateUpdateHandler: PluginEventHandler<'voiceStateUpdate'> = {
       for (const channelId of affectedChannelIds) {
         const channel = guild.channels.cache.get(channelId);
         if (channel && channel.isVoiceBased()) {
-          await reconcileChannelVoiceXp(ctx, guild, guildId, channel, config.leveling.voiceXpPerMinute);
+          await reconcileChannelVoiceXp(ctx, guild, guildId, channel, config.leveling);
         }
       }
     }
