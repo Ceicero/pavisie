@@ -5,7 +5,22 @@
     "statusTitle": "Enforcer status",
     "repaired": "Channel permission overwrites re-applied (ledger, flag queue{muteSuffix}).",
     "repairedMuteSuffix": ", mute role on {count} channel(s)",
-    "repairedMuteFailed": " ({count} failed — check my Manage Roles and Manage Channels permissions there)"
+    "repairedMuteFailed": " ({count} failed — check my Manage Roles and Manage Channels permissions there)",
+    "report": {
+      "muteHint": "({count} failed — check that I have Manage Roles and Manage Channels there, plus every permission the mute role denies: Send Messages, Send Messages in Threads, Speak, Add Reactions)",
+      "applied": "applied deny-overwrites to {applied} channel(s)",
+      "failed": "{failed} failed",
+      "skipped": "{skipped} skipped — I can't manage them",
+      "usingRole": "using <@&{roleId}> and {report}",
+      "createdRole": "created <@&{roleId}> and {report}",
+      "roleUnreadable": "using <@&{roleId}> — I could not read that role just now, so no deny-overwrites were applied; run `/enforcer setup repair:true` once I can",
+      "ledgerChannel": "Ledger channel: {channel} ({visibility})",
+      "flagQueueChannel": "Flag-queue channel: {channel} (staff only)",
+      "muteRole": "Mute role: {role}",
+      "captureOn": "Capture context: On",
+      "captureOff": "Capture context: Off",
+      "nextSteps": "Enable Enforcer with `/plugin enable enforcer`, then create your first policy with `/enforcer policy import` or `/enforcer policy create`."
+    }
   },
   "policy": {
     "notFound": "No policy found with that id.",
@@ -22,7 +37,21 @@
     "invalidMatcherValueGeneric": "Invalid matcher value.",
     "testNoMatchTitle": "No matches",
     "testNoMatch": "This text did not match any of the tested policies.",
-    "testMatchesTitle": "Test matches"
+    "testMatchesTitle": "Test matches",
+    "matcher": {
+      "mentionCount": "mention_count matchers need an integer value >= 1.",
+      "regexSingle": "regex matchers need a single pattern string.",
+      "needsValue": "{type} matchers need at least one non-empty value.",
+      "linkDomain": "link_domain matchers need a string or list of domains.",
+      "aiCategory": "ai_category matchers need a category name.",
+      "pattern": {
+        "empty": "Pattern must not be empty.",
+        "tooLong": "Pattern must be {max} characters or fewer.",
+        "badFlag": "Unsupported regex flag \"{flag}\". Allowed flags are g, i, m, s, u.",
+        "unsafe": "Pattern is not safe (risk of catastrophic backtracking).",
+        "compileFailed": "Pattern failed to compile: {detail}"
+      }
+    }
   },
   "flag": {
     "created": "Flag **#E-{number}** opened.",
@@ -43,7 +72,8 @@
   },
   "export": {
     "empty": "No records to export for the given filters.",
-    "count": "{count} record(s)."
+    "count": "{count} record(s).",
+    "emptyTitle": "Export"
   },
   "appeal": {
     "noCase": "This record has no linked moderation case, so it can't be appealed here — contact staff directly.",
@@ -67,7 +97,14 @@
     "modalTitle": "{decision} — #E-{id}",
     "reasonLabel": "Reason",
     "durationLabel": "Duration (e.g. 30m, 2h) — blank uses the server default",
-    "deleteDaysLabel": "Delete messages from the last N days (0-7)"
+    "deleteDaysLabel": "Delete messages from the last N days (0-7)",
+    "duration": {
+      "invalid": "\"{input}\" isn't a valid duration. Use a combination like `10m`, `2h`, or `1h30m`.",
+      "timeoutMin": "Timeout duration must be at least 5 seconds.",
+      "timeoutMax": "Timeouts cannot exceed 28 days — Discord enforces this limit. Use `/mod ban` with a duration for longer removals.",
+      "muteMin": "Mute duration must be at least 5 seconds.",
+      "muteMax": "Mute duration cannot exceed 1 year. Leave the duration off for an indefinite mute."
+    }
   },
   "search": {
     "title": "Ledger search",
