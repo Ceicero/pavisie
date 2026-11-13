@@ -352,3 +352,55 @@ describe('expireJob — enforcer mute removal failures', () => {
     expect(updateCalls).toHaveLength(1);
   });
 });
+
+describe('expireJob — skipped and tolerant paths', () => {
+  function build(row: unknown, guildFetch: () => Promise<unknown>) {
+    const update = vi.fn().mockResolvedValue({});
+    const { ctx } = createTestContext({
+      prismaOverrides: { moderationCase: { findUnique: async () => row, update } },
+      overrides: { client: { user: { id: 'bot' }, guilds: { fetch: guildFetch } } as any },
+    });
+    return { ctx, update };
+  }
+
+  it('does nothing when the case no longer exists', async () => {
+    const { ctx, update } = build(null, async () => ({}));
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the case was soft-deleted', async () => {
+    const { ctx, update } = build(enforcerMuteCase({ deletedAt: new Date() }), async () => ({}));
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('removes an active TIMEOUT and marks the case expired', async () => {
+    const timeout = vi.fn().mockResolvedValue(undefined);
+    const member = { communicationDisabledUntilTimestamp: Date.now() + 1000, timeout };
+    const { ctx, update } = build(enforcerMuteCase({ type: 'TIMEOUT', metadata: null }), async () => ({
+      members: { fetch: async () => member },
+    }));
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(timeout).toHaveBeenCalledWith(null, expect.stringContaining('Timeout expired'));
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks a TIMEOUT expired even if the member left the server', async () => {
+    const { ctx, update } = build(enforcerMuteCase({ type: 'TIMEOUT', metadata: null }), async () => ({
+      members: { fetch: async () => Promise.reject(Object.assign(new Error('Unknown Member'), { code: 10007 })) },
+    }));
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks a timed mute expired without calling Discord removal when the member no longer has the role', async () => {
+    const remove = vi.fn();
+    const { ctx, update } = build(enforcerMuteCase(), async () => ({
+      members: { fetch: async () => ({ roles: { cache: new Map(), remove } }) },
+    }));
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(remove).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+});
