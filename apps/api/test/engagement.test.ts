@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { rewardReconcileListKey } from '@pavisie/plugins/engagement/reward-queue';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
 const GUILD_ID = '111111111111111111';
@@ -329,6 +330,212 @@ describe('engagement reputation leaderboard', () => {
       { userId: 'b', total: 2, eventCount: 2 },
     ]);
 
+    await app.close();
+  });
+});
+
+describe('engagement reset', () => {
+  // Own guild and user ids (dated snowflakes). ioredis-mock is shared, and this route writes the
+  // reward-reconcile list plus the session guild cache.
+  const GUILD = '202611130000000101';
+  const ACTOR = '202611130000000102';
+  const MEMBER_A = '202611130000000103';
+  const MEMBER_B = '202611130000000104';
+  const OUTSIDER = '202611130000000105';
+  const SINGLE_GUILD = '202611130000000111';
+  const SINGLE_ACTOR = '202611130000000112';
+  const SINGLE_MEMBER = '202611130000000113';
+
+  async function listedFor(
+    redis: { lrange: (key: string, start: number, stop: number) => Promise<string[]> },
+    guildId: string,
+  ) {
+    const raw = await redis.lrange(rewardReconcileListKey(), 0, -1);
+    return raw
+      .map((item) => JSON.parse(item) as { guildId: string; userId: string })
+      .filter((entry) => entry.guildId === guildId);
+  }
+
+  it('rejects an unauthenticated request', async () => {
+    const { app, prismaCalls } = await buildTestApp({
+      guild: { findUnique: async () => ({ id: GUILD, botPresent: true }) },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD}/engagement/reset`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(401);
+    expect(prismaCalls.some((call) => call.model === 'levelProfile' && call.method === 'deleteMany')).toBe(
+      false,
+    );
+    await app.close();
+  });
+
+  it('rejects a signed-in member who is not an admin', async () => {
+    const { app, redis, prismaCalls } = await buildTestApp({
+      guild: { findUnique: async () => ({ id: GUILD, botPresent: true }) },
+    });
+    const { cookieHeader, session } = await loginAs(app, redis, { userId: OUTSIDER });
+    await seedUserGuilds(redis, OUTSIDER, [{ id: GUILD, owner: false, permissions: '0' }]);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD}/engagement/reset`,
+      headers: { cookie: cookieHeader, origin: 'http://localhost:3000', 'x-csrf-token': session.csrfToken },
+      payload: {},
+    });
+    expect(res.statusCode).toBe(403);
+    expect(prismaCalls.some((call) => call.model === 'levelProfile' && call.method === 'deleteMany')).toBe(
+      false,
+    );
+    await app.close();
+  });
+
+  it('deletes every profile, writes an audit row, and enqueues each member', async () => {
+    const rows = [
+      { userId: MEMBER_A, xp: 50, level: 2 },
+      { userId: MEMBER_B, xp: 10, level: 1 },
+    ];
+    const { app, redis, prismaCalls } = await buildTestApp({
+      guild: { findUnique: async () => ({ id: GUILD, botPresent: true }) },
+      levelProfile: {
+        findMany: async () => rows,
+        deleteMany: async () => ({ count: rows.length }),
+      },
+    });
+    const { cookieHeader, session } = await loginAs(app, redis, { userId: ACTOR });
+    await seedUserGuilds(redis, ACTOR, [{ id: GUILD, owner: true, permissions: '8' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD}/engagement/reset`,
+      headers: { cookie: cookieHeader, origin: 'http://localhost:3000', 'x-csrf-token': session.csrfToken },
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ count: 2 });
+
+    const levelCalls = prismaCalls.filter((call) => call.model === 'levelProfile');
+    expect(levelCalls.map((call) => call.method)).toEqual(['findMany', 'deleteMany']);
+    expect(levelCalls[1]?.args[0]).toEqual({ where: { guildId: GUILD } });
+
+    const audit = prismaCalls.find((call) => call.model === 'auditLog' && call.method === 'create');
+    expect(audit?.args[0]).toMatchObject({
+      data: {
+        guildId: GUILD,
+        actorId: ACTOR,
+        actorType: 'USER',
+        action: 'engagement.level.reset',
+        targetType: 'level_profile',
+        targetId: 'all',
+        source: 'DASHBOARD',
+        after: { count: 2 },
+      },
+    });
+
+    const queued = await listedFor(redis, GUILD);
+    expect(queued.map((entry) => entry.userId).sort()).toEqual([MEMBER_A, MEMBER_B].sort());
+    await app.close();
+  });
+
+  it('deletes and enqueues only the requested member', async () => {
+    const { app, redis, prismaCalls } = await buildTestApp({
+      guild: { findUnique: async () => ({ id: SINGLE_GUILD, botPresent: true }) },
+      levelProfile: {
+        deleteMany: async () => ({ count: 1 }),
+      },
+    });
+    const { cookieHeader, session } = await loginAs(app, redis, { userId: SINGLE_ACTOR });
+    await seedUserGuilds(redis, SINGLE_ACTOR, [
+      { id: SINGLE_GUILD, owner: false, permissions: String(0x20n) },
+    ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${SINGLE_GUILD}/engagement/reset`,
+      headers: { cookie: cookieHeader, origin: 'http://localhost:3000', 'x-csrf-token': session.csrfToken },
+      payload: { userId: SINGLE_MEMBER },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ count: 1 });
+    const levelCalls = prismaCalls.filter((call) => call.model === 'levelProfile');
+    expect(levelCalls.map((call) => call.method)).toEqual(['deleteMany']);
+    expect(levelCalls[0]?.args[0]).toEqual({ where: { guildId: SINGLE_GUILD, userId: SINGLE_MEMBER } });
+    const audit = prismaCalls.find((call) => call.model === 'auditLog' && call.method === 'create');
+    expect(audit?.args[0]).toMatchObject({
+      data: { action: 'engagement.level.reset', targetId: SINGLE_MEMBER, actorId: SINGLE_ACTOR },
+    });
+    expect(await listedFor(redis, SINGLE_GUILD)).toEqual([{ guildId: SINGLE_GUILD, userId: SINGLE_MEMBER }]);
+    await app.close();
+  });
+});
+
+describe('engagement xp-adjust reward reconcile', () => {
+  const GUILD = '202611130000000201';
+  const ACTOR = '202611130000000202';
+  const TARGET = '202611130000000203';
+
+  it('enqueues a reconcile entry only when the stored level changes', async () => {
+    const profiles = new Map<string, { xp: number; level: number }>();
+    const { app, redis } = await buildTestApp({
+      guild: { findUnique: async () => ({ id: GUILD, botPresent: true }) },
+      levelProfile: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test fake
+        findUnique: async (args: any) => {
+          const key = args.where.guildId_userId.userId;
+          return profiles.has(key) ? { userId: key, ...profiles.get(key)! } : null;
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test fake
+        upsert: async (args: any) => {
+          const key = args.where.guildId_userId.userId;
+          const data = { xp: args.create.xp, level: args.create.level };
+          profiles.set(key, data);
+          return { userId: key, messages: 0, voiceMinutes: 0, ...data };
+        },
+      },
+    });
+    const { cookieHeader, session } = await loginAs(app, redis, { userId: ACTOR });
+    await seedUserGuilds(redis, ACTOR, [{ id: GUILD, owner: true, permissions: '8' }]);
+    const headers = {
+      cookie: cookieHeader,
+      origin: 'http://localhost:3000',
+      'x-csrf-token': session.csrfToken,
+    };
+
+    const give = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD}/engagement/xp-adjust`,
+      headers,
+      payload: { userId: TARGET, mode: 'give', amount: 100 },
+    });
+    expect(give.json().level).toBe(1);
+
+    const stillSameLevel = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD}/engagement/xp-adjust`,
+      headers,
+      payload: { userId: TARGET, mode: 'give', amount: 1 },
+    });
+    expect(stillSameLevel.json().level).toBe(1);
+
+    const cleared = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD}/engagement/xp-adjust`,
+      headers,
+      payload: { userId: TARGET, mode: 'set', amount: 0 },
+    });
+    expect(cleared.json().level).toBe(0);
+
+    const raw = await redis.lrange(rewardReconcileListKey(), 0, -1);
+    const queued = raw
+      .map((item) => JSON.parse(item) as { guildId: string; userId: string })
+      .filter((entry) => entry.guildId === GUILD);
+    expect(queued).toEqual([
+      { guildId: GUILD, userId: TARGET },
+      { guildId: GUILD, userId: TARGET },
+    ]);
     await app.close();
   });
 });
