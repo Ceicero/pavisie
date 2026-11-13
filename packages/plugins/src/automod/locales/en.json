@@ -23,7 +23,20 @@
     "testMatched": "**Matched.** {reason}",
     "testNoMatch": "No match.",
     "testNoMatchReason": "No match. {reason}",
-    "viewTitle": "Rule: {name}"
+    "viewTitle": "Rule: {name}",
+    "invalidConfig": "Invalid configuration values.",
+    "field": {
+      "wholeNumber": "{label} must be a whole number.",
+      "range": "{label} must be between {min} and {max}.",
+      "expectedBoolean": "Expected \"true\" or \"false\"."
+    },
+    "pattern": {
+      "empty": "Pattern must not be empty.",
+      "tooLong": "Pattern must be {max} characters or fewer.",
+      "badFlag": "Unsupported regex flag \"{flag}\". Allowed flags are g, i, m, s, u.",
+      "unsafe": "Pattern is not safe (risk of catastrophic backtracking).",
+      "compileFailed": "Pattern failed to compile: {detail}"
+    }
   },
   "exempt": {
     "added": "Added a {kind} exemption: `{value}`.",
@@ -36,7 +49,12 @@
     "title": "Automod review queue",
     "empty": "Nothing pending review right now.",
     "eventTitle": "Automod event #{id}",
-    "marked": "Marked as **{label}** by {user}."
+    "marked": "Marked as **{label}** by {user}.",
+    "label": {
+      "confirmViolation": "Confirm violation",
+      "falsePositive": "False positive",
+      "confirmedViolation": "Confirmed violation"
+    }
   },
   "status": {
     "title": "Automod status"
