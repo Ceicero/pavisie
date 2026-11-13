@@ -127,6 +127,15 @@ class FakeDb {
           Object.assign(row, data);
           return { ...row };
         },
+        updateMany: async ({ where, data }: { where: Row; data: Row }) => {
+          const rows = tables.appeals.filter((a) => matches(a, where));
+          for (const row of rows) Object.assign(row, data);
+          return { count: rows.length };
+        },
+        findUnique: async ({ where }: { where: { id: string } }) => {
+          const row = tables.appeals.find((a) => a.id === where.id);
+          return row ? { ...row } : null;
+        },
       },
     };
   }

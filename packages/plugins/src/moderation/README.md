@@ -108,6 +108,17 @@ delayed by the duration) that reverses the action. A repeatable sweep (`moderati
 catches anything the delayed job missed (a Redis flush, worker downtime) by scanning for `TIMEOUT`/`BAN` cases
 whose `expiresAt` has passed but `expiredAt` is still null.
 
+Expiry never undoes a newer punishment:
+
+- A `TIMEOUT` case lifts the member's timeout only if it is the one that case set. If the member's Discord
+  timeout ends more than a minute after the case expires, a moderator gave them a newer timeout since, and that
+  one is left alone (the case is still marked expired).
+- An enforcer timed mute keeps the role while another mute on the same member is still running. A new mute
+  that starts while an old one is being lifted gets its role put back straight after the removal. The remaining
+  window is tiny: the enforcer adds the role before it writes its case, so a case written in the few
+  milliseconds after the lift's second check is still missed. Closing it needs the enforcer to write the case
+  first.
+
 ## Appeals
 
 `/appeal <case>` (member) and the **Warn user**/context-menu flows post to the resolved appeals channel with
@@ -121,6 +132,11 @@ client) — a repeatable job (`moderation.appeal-sync`, every minute) picks up a
 effects. Idempotency is tracked with the durable `ModerationAppeal.effectsAppliedAt` column, set once the
 effects are applied and never expiring — a short-lived Redis key is used only as an in-flight lock so two
 overlapping ticks can't race on the same appeal.
+
+Both paths are race-safe. A decision only counts while the appeal is still pending (a conditional update), so
+two moderators clicking Accept and Deny at once get one decision and one "already decided". The bot's own
+buttons and the sync job apply effects through the same per-appeal lease and re-check `effectsAppliedAt` once
+they hold it, so a decision made in Discord while the sync job ticks is acted on once.
 
 ## Dashboard
 

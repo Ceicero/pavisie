@@ -6,6 +6,23 @@ export interface ExpireJobData {
   caseId: string;
 }
 
+/**
+ * Discord's timeout end and the case's `expiresAt` differ only by how long writing the case took after the
+ * timeout was applied. A member timed out until noticeably later than this case expires has been given a newer
+ * timeout since, and lifting it would cut that one short.
+ */
+const TIMEOUT_MATCH_TOLERANCE_MS = 60_000;
+
+/** True when the member's current Discord timeout is the one this TIMEOUT case set (or the case has no end). */
+export function timeoutBelongsToCase(
+  memberTimeoutEndsAt: number | null,
+  caseExpiresAt: Date | null,
+): boolean {
+  if (!memberTimeoutEndsAt) return false;
+  if (!caseExpiresAt) return true;
+  return memberTimeoutEndsAt <= caseExpiresAt.getTime() + TIMEOUT_MATCH_TOLERANCE_MS;
+}
+
 /** Fires once when a specific TIMEOUT, (temp) BAN, or timed ROLE_ADD (enforcer mute) case's duration elapses (scheduled with `jobId: case-<id>`). */
 export const expireJob: PluginJob<ExpireJobData> = {
   name: 'expire',
@@ -23,8 +40,8 @@ export const expireJob: PluginJob<ExpireJobData> = {
         const member = guild ? await guild.members.fetch(row.targetId).catch(() => null) : null;
         // Member may already be gone (left the server) or the timeout may have already lapsed naturally on
         // Discord's side — either way, the case's expiredAt still needs to be marked below.
-        if (member?.communicationDisabledUntilTimestamp) {
-          await member.timeout(null, `Timeout expired (case #${row.caseNumber})`).catch(() => undefined);
+        if (timeoutBelongsToCase(member?.communicationDisabledUntilTimestamp ?? null, row.expiresAt)) {
+          await member!.timeout(null, `Timeout expired (case #${row.caseNumber})`).catch(() => undefined);
         }
       } else if (row.type === 'BAN') {
         try {

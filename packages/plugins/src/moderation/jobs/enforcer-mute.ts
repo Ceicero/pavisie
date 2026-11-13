@@ -30,7 +30,11 @@ export interface EnforcerMuteCaseRow {
  * not been closed and either never expires or expires in the future. An overdue case does not count. It is
  * waiting to be lifted itself, and two overdue mutes deferring to each other would never lift either.
  */
-async function hasAnotherActiveMute(ctx: PluginContext, row: EnforcerMuteCaseRow, roleId: string): Promise<boolean> {
+async function hasAnotherActiveMute(
+  ctx: PluginContext,
+  row: EnforcerMuteCaseRow,
+  roleId: string,
+): Promise<boolean> {
   const now = Date.now();
   const others = await ctx.prisma.moderationCase.findMany({
     where: {
@@ -104,5 +108,12 @@ export async function liftEnforcerMute(
     // The role was deleted, or the member left between the fetch and the removal.
     if (code === UNKNOWN_ROLE || code === UNKNOWN_MEMBER) return;
     throw err;
+  }
+
+  // A new mute can start between the check above and the removal: its role add changes nothing (the role is
+  // still on) and its case is written while this runs, so the removal just undid it. Check again and put the
+  // role back. Per-member and lock-free; see the README for the narrower window this leaves.
+  if (await hasAnotherActiveMute(ctx, row, roleId)) {
+    await member.roles.add(roleId, 'A newer mute is still in force');
   }
 }
