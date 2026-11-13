@@ -138,6 +138,8 @@ export function createFakeGuild(): { guild: Guild; channel: FakeTextChannel } {
 export function createCasePrisma(caseId = 'ckcase00000000000000000001'): {
   prisma: PluginContext['prisma'];
   rows: Record<string, unknown>[];
+  /** Audit rows written alongside the cases (in the same transaction). */
+  audits: Record<string, unknown>[];
 } {
   const rows: Record<string, unknown>[] = [];
   let maxCaseNumber = 0;
@@ -162,10 +164,19 @@ export function createCasePrisma(caseId = 'ckcase00000000000000000001'): {
     updateMany: async () => ({ count: 0 }),
   };
 
-  const prisma = {
-    moderationCase,
-    $transaction: async (cb: (tx: unknown) => unknown) => cb({ moderationCase }),
+  const audits: Record<string, unknown>[] = [];
+  const auditLog = {
+    create: async ({ data }: { data: Record<string, unknown> }) => {
+      audits.push(data);
+      return data;
+    },
   };
 
-  return { prisma: prisma as unknown as PluginContext['prisma'], rows };
+  const prisma = {
+    moderationCase,
+    auditLog,
+    $transaction: async (cb: (tx: unknown) => unknown) => cb({ moderationCase, auditLog }),
+  };
+
+  return { prisma: prisma as unknown as PluginContext['prisma'], rows, audits };
 }
