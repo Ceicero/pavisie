@@ -6,6 +6,7 @@ import { messageCreateHandler } from './events/message-create';
 import { messageUpdateHandler } from './events/message-update';
 import { memberAddHandler } from './events/member-add';
 import { eventsRetentionJob } from './jobs/events-retention';
+import { messageAlertJob } from './message-alert';
 import { raidAlertJob } from './raid-alert';
 import { createAutomodService, startRuleSync } from './service';
 import * as ruleSchemas from './schemas';
@@ -28,7 +29,7 @@ export const plugin = definePlugin({
   commands: [automodCommand],
   events: [messageCreateHandler, messageUpdateHandler, memberAddHandler],
   components: automodComponents,
-  jobs: [eventsRetentionJob, raidAlertJob],
+  jobs: [eventsRetentionJob, raidAlertJob, messageAlertJob],
   async onLoad(ctx) {
     ctx.services.register('automod', createAutomodService(ctx));
     // Dashboard rule edits reach this process over Redis. If the subscription cannot be set up the plugin still
