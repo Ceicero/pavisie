@@ -75,7 +75,7 @@ export function MatcherBuilder({ matchers, onChange, disabled }: MatcherBuilderP
               }
               disabled={disabled}
             >
-              <SelectTrigger className="w-64">
+              <SelectTrigger aria-label="Matcher type" className="w-64">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -105,6 +105,7 @@ export function MatcherBuilder({ matchers, onChange, disabled }: MatcherBuilderP
           ) : matcher.type === 'mention_count' ? (
             <Input
               type="number"
+              aria-label="Mention threshold"
               min={1}
               value={typeof matcher.value === 'number' ? matcher.value : 1}
               onChange={(e) => updateMatcher(index, { value: Number(e.target.value) })}
@@ -113,6 +114,7 @@ export function MatcherBuilder({ matchers, onChange, disabled }: MatcherBuilderP
             />
           ) : (
             <Input
+              aria-label="Matcher value"
               value={valueToText(matcher.value)}
               onChange={(e) => updateMatcher(index, { value: textToValue(matcher.type, e.target.value) })}
               disabled={disabled}

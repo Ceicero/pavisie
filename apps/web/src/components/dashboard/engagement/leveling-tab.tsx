@@ -289,10 +289,11 @@ export function LevelingTab({ guildId }: { guildId: string }) {
           <CardTitle>Leaderboard</CardTitle>
           <div className="flex items-center gap-2">
             <Input
+              aria-label="Search leaderboard by user ID"
               placeholder="Search by user ID…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-56"
+              className="w-full sm:w-56"
             />
             <Button size="sm" variant="outline" onClick={() => setXpDialogOpen(true)}>
               <Trophy className="h-4 w-4" />

@@ -90,8 +90,9 @@ export function LedgerTab({ guildId }: LedgerTabProps) {
 
       <div className="flex flex-wrap gap-3">
         <Input
+          aria-label="Filter by user id"
           placeholder="Filter by user id"
-          className="max-w-xs"
+          className="w-full sm:max-w-xs"
           value={filters.userId ?? ''}
           onChange={(e) => updateFilter({ userId: e.target.value || undefined })}
         />
@@ -99,7 +100,7 @@ export function LedgerTab({ guildId }: LedgerTabProps) {
           value={filters.kind ?? '__all__'}
           onValueChange={(v) => updateFilter({ kind: v === '__all__' ? undefined : v })}
         >
-          <SelectTrigger className="w-48">
+          <SelectTrigger aria-label="Record kind" className="w-full sm:w-48">
             <SelectValue placeholder="Kind" />
           </SelectTrigger>
           <SelectContent>
@@ -112,8 +113,9 @@ export function LedgerTab({ guildId }: LedgerTabProps) {
           </SelectContent>
         </Select>
         <Input
+          aria-label="Since"
           placeholder="Since, e.g. 7d, 24h"
-          className="max-w-xs"
+          className="w-full sm:max-w-xs"
           value={filters.since ?? ''}
           onChange={(e) => updateFilter({ since: e.target.value || undefined })}
         />

@@ -18,8 +18,9 @@ export function WarningsTab({ guildId }: { guildId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <Input
+          aria-label="Search by user id"
           placeholder="Search by user id"
-          className="max-w-xs"
+          className="w-full sm:max-w-xs"
           value={userIdInput}
           onChange={(e) => setUserIdInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && search()}

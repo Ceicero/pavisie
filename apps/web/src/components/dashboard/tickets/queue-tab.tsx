@@ -114,7 +114,7 @@ export function TicketsQueueTab({ guildId }: TicketsQueueTabProps) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger aria-label="Ticket status" className="w-full sm:w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -126,10 +126,11 @@ export function TicketsQueueTab({ guildId }: TicketsQueueTabProps) {
           </SelectContent>
         </Select>
         <Input
+          aria-label="Filter by tag"
           placeholder="Filter by tag…"
           value={tag}
           onChange={(e) => setTag(e.target.value)}
-          className="w-48"
+          className="w-full sm:w-48"
         />
       </div>
 
