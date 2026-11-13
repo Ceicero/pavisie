@@ -60,6 +60,7 @@ import verifyRoutes from './routes/verify';
 import overlayRoutes from './routes/overlay';
 import developerReportsRoutes from './routes/developer-reports';
 import ownerMetricsRoutes from './routes/owner-metrics';
+import ownerMetricsConnectionsRoutes from './routes/owner-metrics-connections';
 import twitchBotRoutes from './routes/twitch-bot';
 import twitchExtRoutes from './routes/twitch-ext';
 import creatorAuthRoutes from './routes/creator-auth';
@@ -365,6 +366,7 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   await app.register(overlayRoutes, { prefix: '/overlay' });
   await app.register(developerReportsRoutes, { prefix: '/owner' });
   await app.register(ownerMetricsRoutes, { prefix: '/owner' });
+  await app.register(ownerMetricsConnectionsRoutes, { prefix: '/owner' });
   await app.register(twitchBotRoutes, { prefix: '/owner' });
   await app.register(creatorAuthRoutes, { prefix: '/creator' });
   await app.register(creatorTwitchRoutes, { prefix: '/creator/twitch' });
