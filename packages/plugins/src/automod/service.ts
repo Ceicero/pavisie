@@ -27,6 +27,7 @@ import {
 import type { EvaluatorResult } from './engine';
 import { isExempt, isTrustedDomain } from './exemptions';
 import { normalizeJoin, normalizeMessage } from './normalize';
+import { recordMessageAlertOverflow, takeMessageAlertSlot } from './message-alert';
 import { recordRaidAlertJoin } from './raid-alert';
 import {
   publishAutomodRulesChanged,
@@ -329,6 +330,49 @@ async function postAlert(
   }
 }
 
+/**
+ * The "alert staff" action for a message rule. The first few matches per rule per channel each get a normal alert
+ * with review buttons; past that, matches are counted into one summary alert (see message-alert.ts) so a burst
+ * can't bury the alert channel. Every match is saved as its own AutomodEvent either way.
+ */
+async function alertStaffForMessage(
+  ctx: PluginContext,
+  guild: Guild,
+  config: AutomodConfig,
+  params: Parameters<typeof postAlert>[3] & { channelId: string },
+): Promise<void> {
+  // No alert channel: postAlert logs the misconfiguration, and there is nothing to count.
+  if (!config.alertChannelId) return postAlert(ctx, guild, config, params);
+
+  let individual = true;
+  try {
+    individual = await takeMessageAlertSlot(ctx, guild.id, params.rule.id, params.channelId);
+  } catch (err) {
+    // Redis unavailable: fall back to a normal alert rather than dropping it.
+    ctx.logger.warn(
+      { guildId: guild.id, ruleId: params.rule.id, err: err instanceof Error ? err.message : String(err) },
+      'automod: could not check the message alert limit; posting the alert anyway',
+    );
+  }
+  if (individual) return postAlert(ctx, guild, config, params);
+
+  await recordMessageAlertOverflow(ctx, guild, {
+    ruleId: params.rule.id,
+    ruleName: params.rule.name,
+    ruleType: params.rule.type,
+    channelId: params.channelId,
+    userId: params.userId,
+    alertChannelId: config.alertChannelId,
+    actionsText: formatActionOutcomes(params.actionOutcomes, params.dryRun),
+    dryRun: params.dryRun,
+  }).catch((err: unknown) => {
+    ctx.logger.error(
+      { guildId: guild.id, ruleId: params.rule.id, err: err instanceof Error ? err.message : String(err) },
+      'automod: failed to record a match on the message alert summary',
+    );
+  });
+}
+
 /** Executes one resolved action (message-rule context: a real message + optionally its member are available). */
 async function executeMessageAction(
   ctx: PluginContext,
@@ -627,7 +671,7 @@ export async function handleMessage(
     });
 
     if (actions.some((a) => a.type === 'alert_staff')) {
-      await postAlert(ctx, guild, config, {
+      await alertStaffForMessage(ctx, guild, config, {
         rule,
         userId: normalized.authorId,
         channelId: normalized.channelId,

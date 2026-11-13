@@ -128,8 +128,26 @@ A `RAID_DETECTION` rule with the "alert staff" action posts **one** alert per ra
   that starts a new alert.
 
 Every flagged join still gets its own `AutomodEvent`, so `/automod review` and the dashboard list each one. The
-raid alert has no Confirm / False positive buttons, because it stands for many events. Alerts from every other
-rule are unchanged: one message per match.
+raid alert has no Confirm / False positive buttons, because it stands for many events. `ACCOUNT_AGE` still posts
+one alert per flagged member.
+
+## Message alerts
+
+Message rules with the "alert staff" action are capped, so a spam wave can't bury the alert channel
+(`message-alert.ts`):
+
+- Each rule posts at most **5** normal alerts, with Confirm / False positive buttons, per channel the matches
+  happen in, per minute. The minute starts at the first alert.
+- Past that, further matches in that channel are counted into **one** summary alert: "+N more", how many members
+  were involved, and the channel. A background job edits it with the running count, at most once every 5 seconds.
+- After 60 seconds with no further match, the summary gets a final edit marking it as ended.
+- Rules and channels are counted separately: two rules matching the same burst each get their own 5 alerts and
+  their own summary.
+
+The summary has no review buttons, because it stands for many events, and it never quotes message text, even
+when the server has opted in to content logging. Every match still gets its own `AutomodEvent`, so
+`/automod review` and the dashboard list each one. If Redis can't be reached to check the cap, the match posts a
+normal alert, so an alert is never dropped.
 
 ## Performance under a raid
 
