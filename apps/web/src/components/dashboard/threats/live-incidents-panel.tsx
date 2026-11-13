@@ -16,18 +16,22 @@ import { formatDateTime } from '@/lib/dashboard/format';
 import { useThreatIncidents } from '@/lib/dashboard/threats-queries';
 import { ErrorState } from '../error-state';
 
-const KIND_LABEL: Record<ThreatIncidentKind, string> = {
+/** Honest empty-state copy: this panel is not a working detector yet. */
+export const NO_ACTIVE_THREATS_MESSAGE = 'No active threats. Raid detection is coming soon.';
+
+export const THREAT_KIND_LABEL: Record<ThreatIncidentKind, string> = {
   raid: 'Raid',
   message_burst: 'Message burst',
   lockdown: 'Lockdown',
 };
 
-const STATUS_BADGE: Record<ThreatIncidentStatus, 'destructive' | 'secondary'> = {
+export const THREAT_STATUS_BADGE: Record<ThreatIncidentStatus, 'destructive' | 'secondary'> = {
   active: 'destructive',
   ended: 'secondary',
 };
 
-function IncidentCard({ incident }: { incident: ThreatIncidentDto }) {
+/** Kind-specific fields shown on an incident card. Exported so tests can cover fixtures. */
+export function threatIncidentDetails(incident: ThreatIncidentDto): { label: string; value: string }[] {
   const details: { label: string; value: string }[] = [];
   if (incident.kind === 'raid' && incident.joinsFlagged !== undefined) {
     details.push({ label: 'Joins flagged', value: String(incident.joinsFlagged) });
@@ -40,14 +44,19 @@ function IncidentCard({ incident }: { incident: ThreatIncidentDto }) {
   if (incident.kind === 'lockdown' && incident.lockdownAction) {
     details.push({ label: 'Action', value: incident.lockdownAction });
   }
+  return details;
+}
+
+export function IncidentCard({ incident }: { incident: ThreatIncidentDto }) {
+  const details = threatIncidentDetails(incident);
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="text-base">{incident.ruleName}</CardTitle>
-          <Badge variant="outline">{KIND_LABEL[incident.kind]}</Badge>
-          <Badge variant={STATUS_BADGE[incident.status]} className="capitalize">
+          <Badge variant="outline">{THREAT_KIND_LABEL[incident.kind]}</Badge>
+          <Badge variant={THREAT_STATUS_BADGE[incident.status]} className="capitalize">
             {incident.status}
           </Badge>
           {incident.dryRun ? <Badge variant="secondary">Dry run</Badge> : null}
@@ -81,10 +90,8 @@ export function LiveIncidentsPanel({ guildId }: { guildId: string }) {
   return (
     <section className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold">Live threats</h2>
-        <p className="text-sm text-muted-foreground">
-          Active and recently ended raids, message bursts, and lockdowns. Updates every 15 seconds.
-        </p>
+        <h2 className="text-lg font-semibold">Threats</h2>
+        <p className="text-sm text-muted-foreground">Raids, message bursts, and lockdowns for this server.</p>
       </div>
 
       {isLoading ? (
@@ -93,13 +100,9 @@ export function LiveIncidentsPanel({ guildId }: { guildId: string }) {
           <Skeleton className="h-32" />
         </div>
       ) : error ? (
-        <ErrorState error={error} onRetry={() => refetch()} title="Could not load live threats" />
+        <ErrorState error={error} onRetry={() => refetch()} title="Could not load threats" />
       ) : !data || data.length === 0 ? (
-        <EmptyState
-          icon={<ShieldAlert />}
-          title="No live raid or threat incidents"
-          description="Active raids and staff-alert bursts will show up here."
-        />
+        <EmptyState icon={<ShieldAlert />} title={NO_ACTIVE_THREATS_MESSAGE} />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {data.map((incident) => (

@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 import { caseFieldsFromAfter, isModerationAuditAction } from '../src/routes/threats';
-import { listThreatIncidents } from '../src/lib/threat-incidents';
+import { listThreatIncidents, setThreatIncidentSourceForTests } from '../src/lib/threat-incidents';
+import { fixtureThreatIncidentSource, threatIncidentFixtures } from './fixtures/threat-incidents';
 import type { ThreatIncidentDto, ThreatIncidentKind, ThreatIncidentStatus } from '@pavisie/types';
 
 const GUILD_ID = '111111111111111111';
@@ -278,6 +279,10 @@ describe('GET /guilds/:guildId/threats/audit', () => {
 const KINDS: ThreatIncidentKind[] = ['raid', 'message_burst', 'lockdown'];
 const STATUSES: ThreatIncidentStatus[] = ['active', 'ended'];
 
+afterEach(() => {
+  setThreatIncidentSourceForTests(undefined);
+});
+
 describe('GET /guilds/:guildId/threats/incidents', () => {
   it('401s with no session', async () => {
     const { app } = await buildTestApp(auditOverrides([]));
@@ -299,7 +304,21 @@ describe('GET /guilds/:guildId/threats/incidents', () => {
     await app.close();
   });
 
-  it('returns the stub incidents stamped with this guild id, matching ThreatIncidentDto', async () => {
+  it('returns an empty list by default — no fixture incidents in production', async () => {
+    const { app, cookieHeader } = await authed([]);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/guilds/${GUILD_ID}/threats/incidents`,
+      headers: { cookie: cookieHeader },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([]);
+    expect(await listThreatIncidents(GUILD_ID)).toEqual([]);
+    await app.close();
+  });
+
+  it('returns injected fixtures stamped with this guild id, matching ThreatIncidentDto', async () => {
+    setThreatIncidentSourceForTests(fixtureThreatIncidentSource);
     const { app, cookieHeader } = await authed([]);
     const res = await app.inject({
       method: 'GET',
@@ -308,8 +327,9 @@ describe('GET /guilds/:guildId/threats/incidents', () => {
     });
     expect(res.statusCode).toBe(200);
     const items = res.json() as ThreatIncidentDto[];
-    const direct = await listThreatIncidents(GUILD_ID);
-    expect(items).toEqual(direct);
+    const expected = threatIncidentFixtures(GUILD_ID);
+    expect(items).toEqual(expected);
+    expect(await listThreatIncidents(GUILD_ID)).toEqual(expected);
     expect(items.length).toBeGreaterThan(0);
     for (const item of items) {
       expect(item.guildId).toBe(GUILD_ID);
@@ -327,14 +347,23 @@ describe('GET /guilds/:guildId/threats/incidents', () => {
 });
 
 describe('listThreatIncidents adapter', () => {
-  it('is a pure mock: same input yields the same incidents, with no shared mutable leftover', async () => {
+  it('returns [] for any guild when no source is injected', async () => {
+    expect(await listThreatIncidents('1')).toEqual([]);
+    expect(await listThreatIncidents('2')).toEqual([]);
+  });
+
+  it('uses the injected fixture source, then restores the empty default', async () => {
+    setThreatIncidentSourceForTests(fixtureThreatIncidentSource);
     const a = await listThreatIncidents('1');
     const b = await listThreatIncidents('1');
     const c = await listThreatIncidents('2');
     expect(a).toEqual(b);
+    expect(a).toEqual(threatIncidentFixtures('1'));
     expect(a.every((i) => i.guildId === '1')).toBe(true);
     expect(c.every((i) => i.guildId === '2')).toBe(true);
-    expect(new Set(a.map((i) => i.kind))).toContain('raid');
-    expect(new Set(a.map((i) => i.kind))).toContain('message_burst');
+    expect(new Set(a.map((i) => i.kind))).toEqual(new Set(KINDS));
+
+    setThreatIncidentSourceForTests(undefined);
+    expect(await listThreatIncidents('1')).toEqual([]);
   });
 });

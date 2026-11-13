@@ -12,7 +12,7 @@ export default function ThreatOverviewPage() {
     <div className="space-y-8">
       <PageHeader
         title="Threat overview"
-        description="Live raid and threat incidents, plus a read-only trail of every moderation action in this server."
+        description="Raid and threat incidents, plus a read-only trail of every moderation action in this server."
       />
       <LiveIncidentsPanel guildId={guildId} />
       <AuditTrailPanel guildId={guildId} />
