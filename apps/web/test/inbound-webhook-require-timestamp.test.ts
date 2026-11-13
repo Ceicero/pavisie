@@ -8,13 +8,13 @@ import {
   inboundRequireTimestampMutationOptions,
   integrationsQueryKeys,
 } from '../src/lib/dashboard/integrations-queries';
+import type { WebhookEndpointDetailDto } from '@pavisie/types/integrations';
 import {
   REQUIRE_TIMESTAMP_HELP,
   applyRequireTimestamp,
   patchInboundWebhookRequireTimestamp,
   readRequireTimestamp,
   requireTimestampErrorMessage,
-  type WithRequireTimestamp,
 } from '../src/lib/dashboard/webhook-require-timestamp';
 import {
   RequireTimestampField,
@@ -24,7 +24,7 @@ import {
 const HELP =
   'When on, each delivery must include X-Pavisie-Timestamp (Unix seconds), and X-Pavisie-Signature must be the hex HMAC-SHA256 of the timestamp, a full stop, then the raw body, using the endpoint secret. Deliveries more than 5 minutes off, or missing the header, are rejected with 401.';
 
-function endpoint(overrides: Partial<WithRequireTimestamp> & { id: string }): WithRequireTimestamp {
+function endpoint(overrides: Partial<WebhookEndpointDetailDto> & { id: string }): WebhookEndpointDetailDto {
   return {
     guildId: 'g1',
     provider: 'generic',
@@ -38,6 +38,7 @@ function endpoint(overrides: Partial<WithRequireTimestamp> & { id: string }): Wi
     channelId: null,
     failureCount: 0,
     lastDeliveryAt: null,
+    requireTimestamp: false,
     ...overrides,
   };
 }
@@ -157,7 +158,7 @@ describe('applyRequireTimestamp', () => {
 });
 
 describe('inbound require-timestamp mutation', () => {
-  function clientWith(rows: WithRequireTimestamp[]) {
+  function clientWith(rows: WebhookEndpointDetailDto[]) {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(integrationsQueryKeys.inboundWebhooks('g1'), rows);
     return queryClient;
@@ -168,7 +169,7 @@ describe('inbound require-timestamp mutation', () => {
     const options = inboundRequireTimestampMutationOptions('g1', queryClient);
 
     const context = await options.onMutate({ endpointId: 'a', requireTimestamp: true });
-    const during = queryClient.getQueryData<WithRequireTimestamp[]>(
+    const during = queryClient.getQueryData<WebhookEndpointDetailDto[]>(
       integrationsQueryKeys.inboundWebhooks('g1'),
     );
     expect(during?.map((hook) => readRequireTimestamp(hook))).toEqual([true, true]);
@@ -178,7 +179,7 @@ describe('inbound require-timestamp mutation', () => {
       { endpointId: 'a', requireTimestamp: true },
       context,
     );
-    const after = queryClient.getQueryData<WithRequireTimestamp[]>(
+    const after = queryClient.getQueryData<WebhookEndpointDetailDto[]>(
       integrationsQueryKeys.inboundWebhooks('g1'),
     );
     expect(after?.map((hook) => readRequireTimestamp(hook))).toEqual([false, true]);
@@ -189,7 +190,7 @@ describe('inbound require-timestamp mutation', () => {
     const options = inboundRequireTimestampMutationOptions('g1', queryClient);
     const context = await options.onMutate({ endpointId: 'a', requireTimestamp: false });
     options.onError(new Error('nope'), { endpointId: 'a', requireTimestamp: false }, context);
-    const after = queryClient.getQueryData<WithRequireTimestamp[]>(
+    const after = queryClient.getQueryData<WebhookEndpointDetailDto[]>(
       integrationsQueryKeys.inboundWebhooks('g1'),
     );
     expect(readRequireTimestamp(after?.[0])).toBe(true);
@@ -205,15 +206,15 @@ describe('inbound require-timestamp mutation', () => {
       { endpointId: 'a', requireTimestamp: true },
       undefined,
     );
-    let rows = queryClient.getQueryData<WithRequireTimestamp[]>(integrationsQueryKeys.inboundWebhooks('g1'));
+    let rows = queryClient.getQueryData<WebhookEndpointDetailDto[]>(integrationsQueryKeys.inboundWebhooks('g1'));
     expect(rows?.[0]?.name).toBe('Renamed');
     expect(readRequireTimestamp(rows?.[0])).toBe(true);
     expect(readRequireTimestamp(rows?.[1])).toBe(false);
 
     const omitted = endpoint({ id: 'a', name: 'Renamed' });
-    delete omitted.requireTimestamp;
+    delete (omitted as { requireTimestamp?: boolean }).requireTimestamp;
     options.onSuccess(omitted, { endpointId: 'a', requireTimestamp: true }, undefined);
-    rows = queryClient.getQueryData<WithRequireTimestamp[]>(integrationsQueryKeys.inboundWebhooks('g1'));
+    rows = queryClient.getQueryData<WebhookEndpointDetailDto[]>(integrationsQueryKeys.inboundWebhooks('g1'));
     expect(readRequireTimestamp(rows?.[0])).toBe(false);
   });
 });

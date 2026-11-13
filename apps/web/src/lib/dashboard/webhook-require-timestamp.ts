@@ -1,13 +1,6 @@
 import type { WebhookEndpointDetailDto } from '@pavisie/types/integrations';
 import { ApiClientError, apiFetch } from './api';
 
-/**
- * Local view of a webhook endpoint. `requireTimestamp` stays optional so this typechecks whether or
- * not the shared DTO already declares the field (`packages/types/src/integrations.ts` is owned by
- * another change). A missing value means the setting is off.
- */
-export type WithRequireTimestamp = WebhookEndpointDetailDto & { requireTimestamp?: boolean };
-
 /** Exact copy shown next to the incoming-webhook "Require timestamp" control. */
 export const REQUIRE_TIMESTAMP_HELP =
   'When on, each delivery must include X-Pavisie-Timestamp (Unix seconds), and X-Pavisie-Signature must be the hex HMAC-SHA256 of the timestamp, a full stop, then the raw body, using the endpoint secret. Deliveries more than 5 minutes off, or missing the header, are rejected with 401.';
@@ -51,8 +44,8 @@ export function patchInboundWebhookRequireTimestamp(
   guildId: string,
   endpointId: string,
   requireTimestamp: boolean,
-): Promise<WithRequireTimestamp> {
-  return apiFetch<WithRequireTimestamp>(`/guilds/${guildId}/integrations/webhooks/${endpointId}`, {
+): Promise<WebhookEndpointDetailDto> {
+  return apiFetch<WebhookEndpointDetailDto>(`/guilds/${guildId}/integrations/webhooks/${endpointId}`, {
     method: 'PATCH',
     body: { requireTimestamp },
   });

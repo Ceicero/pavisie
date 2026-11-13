@@ -17,7 +17,6 @@ import {
   applyRequireTimestamp,
   patchInboundWebhookRequireTimestamp,
   readRequireTimestamp,
-  type WithRequireTimestamp,
 } from './webhook-require-timestamp';
 
 export const integrationsQueryKeys = {
@@ -176,7 +175,7 @@ export function useDeleteAlertConnection(guildId: string) {
 export function useInboundWebhooks(guildId: string | undefined) {
   return useQuery({
     queryKey: integrationsQueryKeys.inboundWebhooks(guildId ?? ''),
-    queryFn: () => apiFetch<WithRequireTimestamp[]>(`/guilds/${guildId}/integrations/webhooks`),
+    queryFn: () => apiFetch<WebhookEndpointDetailDto[]>(`/guilds/${guildId}/integrations/webhooks`),
     enabled: Boolean(guildId),
   });
 }
@@ -252,9 +251,9 @@ export function inboundRequireTimestampMutationOptions(guildId: string, queryCli
       patchInboundWebhookRequireTimestamp(guildId, endpointId, requireTimestamp),
     onMutate: async ({ endpointId, requireTimestamp }: SetInboundWebhookRequireTimestampInput) => {
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<WithRequireTimestamp[]>(queryKey);
+      const previous = queryClient.getQueryData<WebhookEndpointDetailDto[]>(queryKey);
       const previousValue = readRequireTimestamp(previous?.find((hook) => hook.id === endpointId));
-      queryClient.setQueryData<WithRequireTimestamp[] | undefined>(queryKey, (current) =>
+      queryClient.setQueryData<WebhookEndpointDetailDto[] | undefined>(queryKey, (current) =>
         applyRequireTimestamp(current, endpointId, requireTimestamp),
       );
       return { endpointId, previousValue };
@@ -265,16 +264,16 @@ export function inboundRequireTimestampMutationOptions(guildId: string, queryCli
       context: { endpointId: string; previousValue: boolean } | undefined,
     ) => {
       if (!context) return;
-      queryClient.setQueryData<WithRequireTimestamp[] | undefined>(queryKey, (current) =>
+      queryClient.setQueryData<WebhookEndpointDetailDto[] | undefined>(queryKey, (current) =>
         applyRequireTimestamp(current, context.endpointId, context.previousValue),
       );
     },
     onSuccess: (
-      data: WithRequireTimestamp,
+      data: WebhookEndpointDetailDto,
       { endpointId }: SetInboundWebhookRequireTimestampInput,
       _context?: { endpointId: string; previousValue: boolean },
     ) => {
-      queryClient.setQueryData<WithRequireTimestamp[] | undefined>(queryKey, (current) =>
+      queryClient.setQueryData<WebhookEndpointDetailDto[] | undefined>(queryKey, (current) =>
         mergeRequireTimestampDetail(current, endpointId, data),
       );
     },
