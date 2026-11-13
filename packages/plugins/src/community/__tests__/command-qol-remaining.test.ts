@@ -407,6 +407,37 @@ describe('tag command quality of life', () => {
     expect(wrote(blocked.prismaCalls, 'tag', 'update')).toBe(false);
   });
 
+  it('labels a deleted trigger channel with the short word in /tag info', async () => {
+    const info = harness({
+      sub: 'info',
+      strings: { name: 'rules' },
+      config: enabled,
+      guild: {
+        id: 'guild-1',
+        channels: {
+          fetch: async (id: string) => {
+            if (id === 'live-ch') return { id: 'live-ch' };
+            throw Object.assign(new Error('Unknown Channel'), { code: 10003 });
+          },
+        },
+      },
+      prismaOverrides: {
+        tag: {
+          findUnique: async () => ({
+            ...tagRow,
+            triggerChannelIds: ['live-ch', 'gone-ch'],
+          }),
+        },
+      },
+    });
+    await tagCommand.execute(info.c);
+    const fields = info.replies[0]?.embeds?.[0]?.data.fields ?? [];
+    const channels = fields.find((field) => field.name === realT('tag.infoChannels'));
+    expect(realT('tag.infoChannelGone')).toBe('deleted');
+    expect(channels?.value).toBe(`<#live-ch>, <#gone-ch> (${realT('tag.infoChannelGone')})`);
+    expect(info.replies[0]?.ephemeral).toBe(true);
+  });
+
   it('explains a failed public post and does not count a use', async () => {
     let attempts = 0;
     const shown = harness({

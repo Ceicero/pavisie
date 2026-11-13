@@ -5,7 +5,7 @@
 // tests target").
 import type Redis from 'ioredis';
 import { redisKey } from '@pavisie/core';
-import type { EngagementLevelingConfig, EngagementRewardMode } from './manifest';
+import { clampXpMultiplier, type EngagementLevelingConfig, type EngagementRewardMode } from './manifest';
 
 // ---------------------------------------------------------------------------
 // Level math — level(xp) via cumulative 5*l^2 + 50*l + 100 per level (ARCHITECTURE task spec).
@@ -81,13 +81,22 @@ export interface XpAwardResult {
 export type MessageXpConfig = Pick<
   EngagementLevelingConfig,
   'xpPerMessageMin' | 'xpPerMessageMax' | 'xpCooldownSeconds' | 'maxXpPerHour'
->;
+> & {
+  /**
+   * Applied to the rolled amount before the hourly cap. Omitted means 1.
+   * The 15–25 (min–max) roll happens first, then this factor, then `Math.floor`. The cap limits the
+   * XP actually granted and the hour counter stores that same post-multiplier amount, so a 2× member
+   * reaches `maxXpPerHour` in fewer messages. Voice XP does not use this cap.
+   */
+  multiplier?: number;
+};
 
 /**
  * Attempts to award message XP to `userId` in `guildId`: enforces the per-user cooldown (Redis
  * `SET NX EX`) first, then a rolling-hour cap (Redis counter, TTL 3600s from first increment,
- * clamped so a roll never pushes the user over the cap). Never throws for "on cooldown"/"capped" —
- * those are reported via the result, not an exception, since they're expected steady-state outcomes.
+ * clamped so a multiplied roll never pushes the user over the cap). Never throws for "on cooldown"/
+ * "capped" — those are reported via the result, not an exception, since they're expected steady-state
+ * outcomes.
  */
 export async function tryAwardMessageXp(
   redis: Redis,
@@ -112,8 +121,11 @@ export async function tryAwardMessageXp(
   }
 
   const rolled = rollMessageXp(config.xpPerMessageMin, config.xpPerMessageMax, rng);
-  const grant = Math.max(0, Math.min(rolled, config.maxXpPerHour - current));
+  const scaled = Math.floor(rolled * clampXpMultiplier(config.multiplier ?? 1));
+  const grant = Math.max(0, Math.min(scaled, config.maxXpPerHour - current));
   if (grant <= 0) {
+    // A factor that floors the roll to 0 is not the hourly cap, and it must not consume cap budget.
+    if (scaled <= 0) return { awarded: false, xpGained: 0 };
     return { awarded: false, xpGained: 0, reason: 'hourly_cap' };
   }
 
@@ -123,6 +135,77 @@ export async function tryAwardMessageXp(
   }
 
   return { awarded: true, xpGained: grant };
+}
+
+// ---------------------------------------------------------------------------
+// No-XP lists (channels, thread/forum parents, roles).
+// ---------------------------------------------------------------------------
+
+export interface XpSubject {
+  /** Channel the activity happened in. Omitted when only roles should be checked. */
+  channelId?: string;
+  /** Parent of a thread or forum post. A voice category id is not a parent for this check. */
+  parentChannelId?: string | null;
+  roleIds?: readonly string[];
+}
+
+/**
+ * True when this channel, a thread or forum post's parent channel, or any of these roles is on a
+ * leveling no-XP list. Omit `channelId` to test roles alone.
+ */
+export function isXpIgnored(
+  config: Pick<EngagementLevelingConfig, 'ignoredChannelIds' | 'ignoredRoleIds'>,
+  subject: XpSubject,
+): boolean {
+  if (subject.channelId && config.ignoredChannelIds.includes(subject.channelId)) return true;
+  if (subject.parentChannelId && config.ignoredChannelIds.includes(subject.parentChannelId)) return true;
+  return (subject.roleIds ?? []).some((roleId) => config.ignoredRoleIds.includes(roleId));
+}
+
+/**
+ * XP factor for this member and channel.
+ *
+ * Roles: the highest matching `roleMultipliers` entry. They are not multiplied together.
+ * Channels: the highest matching `channelMultipliers` entry among `channelId` and, when set,
+ * `parentChannelId`. A thread therefore falls back to its parent, and if both have entries the
+ * higher one wins. A voice category is not a parent — callers omit `parentChannelId` for voice.
+ *
+ * The role factor and the channel factor are not multiplied. The final factor is the larger of the
+ * two. A side with no matching entry does not participate, so a 0.25 role multiplier still reduces
+ * XP in a channel that has no entry (it is not compared with an implicit 1). A stored 1 does
+ * participate, and can outweigh a lower factor on the other side. When nothing matches, the factor
+ * is 1.
+ *
+ * Message XP rolls its min–max amount first, multiplies by this factor, floors, then clamps to the
+ * remaining hourly cap. The cap counts that granted XP. Voice XP is `floor(minutes) * rate * factor`,
+ * floored again, and is not part of the hourly cap.
+ */
+export function resolveXpMultiplier(
+  config: Pick<EngagementLevelingConfig, 'roleMultipliers' | 'channelMultipliers'>,
+  subject: XpSubject,
+): number {
+  const roleFactor = highestListedMultiplier(config.roleMultipliers, subject.roleIds ?? []);
+  const channelFactor = highestListedMultiplier(config.channelMultipliers, [
+    subject.channelId,
+    subject.parentChannelId,
+  ]);
+  if (roleFactor === null && channelFactor === null) return 1;
+  return Math.max(roleFactor ?? Number.NEGATIVE_INFINITY, channelFactor ?? Number.NEGATIVE_INFINITY);
+}
+
+function highestListedMultiplier(
+  entries: readonly { id: string; multiplier: number }[],
+  ids: readonly (string | null | undefined)[],
+): number | null {
+  const wanted = new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0));
+  if (wanted.size === 0) return null;
+  let best: number | null = null;
+  for (const entry of entries) {
+    if (!wanted.has(entry.id)) continue;
+    const value = clampXpMultiplier(entry.multiplier);
+    if (best === null || value > best) best = value;
+  }
+  return best;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,9 +286,15 @@ export async function stopVoiceSession(
   return Math.min(elapsed, MAX_VOICE_SESSION_MINUTES);
 }
 
-/** XP earned for `minutes` of qualifying voice presence at `xpPerMinute`. */
-export function voiceXpForMinutes(minutes: number, xpPerMinute: number): number {
-  return Math.max(0, Math.floor(minutes)) * Math.max(0, xpPerMinute);
+/**
+ * XP earned for `minutes` of qualifying voice presence at `xpPerMinute`, times `multiplier`
+ * (default 1). Minutes are floored first, then the product is floored. The hourly message cap
+ * does not apply. The multiplier is the same role/channel factor as message XP, resolved by the
+ * caller for the channel being settled and the member's roles at settle time.
+ */
+export function voiceXpForMinutes(minutes: number, xpPerMinute: number, multiplier = 1): number {
+  const base = Math.max(0, Math.floor(minutes)) * Math.max(0, xpPerMinute);
+  return Math.floor(base * clampXpMultiplier(multiplier));
 }
 
 // ---------------------------------------------------------------------------

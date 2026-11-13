@@ -2,6 +2,24 @@ import { GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
 import { z } from 'zod';
 import { defineManifest } from '../sdk';
 
+/** Inclusive range for a role or channel XP multiplier. The stored value is clamped, not rejected. */
+export const XP_MULTIPLIER_MIN = 0.25;
+export const XP_MULTIPLIER_MAX = 5;
+
+/**
+ * Clamps one multiplier into {@link XP_MULTIPLIER_MIN}–{@link XP_MULTIPLIER_MAX}.
+ * A non-finite value becomes 1, which does not change XP.
+ */
+export function clampXpMultiplier(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(XP_MULTIPLIER_MAX, Math.max(XP_MULTIPLIER_MIN, value));
+}
+
+const xpMultiplierEntrySchema = z.object({
+  id: z.string().min(1),
+  multiplier: z.number().transform((value) => clampXpMultiplier(value)),
+});
+
 const levelingSchema = z.object({
   enabled: z.boolean().default(true),
   /** Minimum XP awarded per eligible message (SPEC.md §G "anti-farming controls"). */
@@ -15,6 +33,17 @@ const levelingSchema = z.object({
   voiceXpPerMinute: z.number().int().min(0).max(1000).default(5),
   ignoredChannelIds: z.array(z.string()).default([]),
   ignoredRoleIds: z.array(z.string()).default([]),
+  /**
+   * XP factor for members holding the role. Several matches: the highest wins (they are not multiplied).
+   * The role factor and the channel factor then combine by max, not by product. Default `[]` so a saved
+   * config from before this key existed still parses.
+   */
+  roleMultipliers: z.array(xpMultiplierEntrySchema).default([]),
+  /**
+   * XP factor for a channel. A thread matches its own id and its parent; the highest of those wins.
+   * Voice uses the voice channel id only — a category is not a parent. Same max-combine rule as roles.
+   */
+  channelMultipliers: z.array(xpMultiplierEntrySchema).default([]),
   /** `'current'` | `'dm'` | `'none'` | a channel snowflake id. */
   levelUpChannel: z.string().default('current'),
   levelUpMessage: z.string().min(1).max(500).default('🎉 {user} just reached **level {level}**!'),
