@@ -64,6 +64,33 @@ describe('expireJob — enforcer timed MUTE (ROLE_ADD) expiry', () => {
     expect((updateCalls[0] as any).data.expiredAt).toBeInstanceOf(Date);
   });
 
+  it('fetches the member fresh instead of trusting the member cache, and expires the case when the role is already gone', async () => {
+    const updateCalls: unknown[] = [];
+    const removeRole = vi.fn();
+    const fetchMember = vi.fn().mockResolvedValue({ roles: { cache: new Map(), remove: removeRole } });
+
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findUnique: async () => enforcerMuteCase(),
+          update: async (args: any) => {
+            updateCalls.push(args);
+            return {};
+          },
+        },
+      },
+      overrides: {
+        client: { guilds: { fetch: async () => ({ members: { fetch: fetchMember } }) } } as any,
+      },
+    });
+
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+
+    expect(fetchMember).toHaveBeenCalledWith({ user: TARGET_ID, force: true });
+    expect(removeRole).not.toHaveBeenCalled();
+    expect(updateCalls).toHaveLength(1);
+  });
+
   it('does not touch roles for a ROLE_ADD case that is not an enforcer mute, but still marks it expired', async () => {
     const updateCalls: unknown[] = [];
     const removeRole = vi.fn();
@@ -112,6 +139,73 @@ describe('expireJob — enforcer timed MUTE (ROLE_ADD) expiry', () => {
   });
 });
 
+describe('expireJob — overlapping enforcer mutes on one member', () => {
+  const LATER = new Date(Date.now() + 60 * 60 * 1000);
+  const EARLIER = new Date(Date.now() - 60 * 1000);
+
+  function build(others: Record<string, unknown>[]) {
+    const updateCalls: unknown[] = [];
+    const removeRole = vi.fn().mockResolvedValue(undefined);
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findUnique: async () => enforcerMuteCase({ expiresAt: EARLIER }),
+          findMany: async () => others,
+          update: async (args: any) => {
+            updateCalls.push(args);
+            return {};
+          },
+        },
+      },
+      overrides: {
+        client: {
+          guilds: {
+            fetch: async () => ({
+              members: { fetch: async () => ({ roles: { cache: new Map([[ROLE_ID, true]]), remove: removeRole } }) },
+            }),
+          },
+        } as any,
+      },
+    });
+    return { ctx, updateCalls, removeRole };
+  }
+
+  it('keeps the role on when a later mute on the same member is still running, and still closes this case', async () => {
+    const { ctx, updateCalls, removeRole } = build([enforcerMuteCase({ id: 'case-2', expiresAt: LATER })]);
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(removeRole).not.toHaveBeenCalled();
+    expect(updateCalls).toHaveLength(1);
+    expect((updateCalls[0] as any).where.id).toBe(CASE_ID);
+  });
+
+  it('keeps the role on when the other mute has no end date', async () => {
+    const { ctx, removeRole } = build([enforcerMuteCase({ id: 'case-2', expiresAt: null })]);
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(removeRole).not.toHaveBeenCalled();
+  });
+
+  it('removes the role when the only other mute is itself overdue, already closed, or for another role or member', async () => {
+    for (const other of [
+      enforcerMuteCase({ id: 'case-2', expiresAt: EARLIER }),
+      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, expiredAt: new Date() }),
+      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, deletedAt: new Date() }),
+      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, metadata: { enforcerMute: true, roleId: 'another-role' } }),
+      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, targetId: 'someone-else' }),
+      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, metadata: { roleId: ROLE_ID } }),
+    ]) {
+      const { ctx, removeRole } = build([other]);
+      await expireJob.processor(ctx, fakeJob(CASE_ID));
+      expect(removeRole, JSON.stringify(other)).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('does not count the expiring case as its own overlap', async () => {
+    const { ctx, removeRole } = build([enforcerMuteCase({ expiresAt: LATER })]);
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(removeRole).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('expireJob — temporary BAN expiry', () => {
   function banCase() {
     return enforcerMuteCase({ type: 'BAN', metadata: null });
@@ -149,5 +243,112 @@ describe('expireJob — temporary BAN expiry', () => {
     );
     await expireJob.processor(ctx, fakeJob(CASE_ID));
     expect(update).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('expireJob — enforcer mute removal failures', () => {
+  function build(removeRole: ReturnType<typeof vi.fn>) {
+    const updateCalls: unknown[] = [];
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findUnique: async () => enforcerMuteCase(),
+          update: async (args: any) => {
+            updateCalls.push(args);
+            return {};
+          },
+        },
+      },
+      overrides: {
+        client: {
+          guilds: {
+            fetch: async () => ({
+              members: {
+                fetch: async () => ({ roles: { cache: new Map([[ROLE_ID, true]]), remove: removeRole } }),
+              },
+            }),
+          },
+        } as any,
+      },
+    });
+    return { ctx, updateCalls };
+  }
+
+  it('keeps the case active and rethrows so the job retries when role removal fails', async () => {
+    const { ctx, updateCalls } = build(vi.fn().mockRejectedValue(Object.assign(new Error('outage'), { code: 500 })));
+    await expect(expireJob.processor(ctx, fakeJob(CASE_ID))).rejects.toThrow('outage');
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it('treats an already-deleted mute role (10011) as lifted and marks the case expired', async () => {
+    const { ctx, updateCalls } = build(vi.fn().mockRejectedValue(Object.assign(new Error('Unknown Role'), { code: 10011 })));
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(updateCalls).toHaveLength(1);
+  });
+
+  /** Builds a context whose guild or member lookup fails before any role can be removed. */
+  function buildLookupFailure(fail: { guild?: unknown; member?: unknown }) {
+    const updateCalls: unknown[] = [];
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findUnique: async () => enforcerMuteCase(),
+          update: async (args: any) => {
+            updateCalls.push(args);
+            return {};
+          },
+        },
+      },
+      overrides: {
+        client: {
+          guilds: {
+            fetch: async () => {
+              if (fail.guild) throw fail.guild;
+              return {
+                members: {
+                  fetch: async () => {
+                    throw fail.member;
+                  },
+                },
+              };
+            },
+          },
+        } as any,
+      },
+    });
+    return { ctx, updateCalls };
+  }
+
+  it('keeps the case active and rethrows when the member lookup fails for a reason other than Unknown Member', async () => {
+    const { ctx, updateCalls } = buildLookupFailure({
+      member: Object.assign(new Error('Service Unavailable'), { status: 503 }),
+    });
+    await expect(expireJob.processor(ctx, fakeJob(CASE_ID))).rejects.toThrow('Service Unavailable');
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it('marks the case expired when the member has left the server (10007)', async () => {
+    const { ctx, updateCalls } = buildLookupFailure({
+      member: Object.assign(new Error('Unknown Member'), { code: 10007 }),
+    });
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(updateCalls).toHaveLength(1);
+  });
+
+  it('keeps the case active and rethrows when the guild lookup fails during an outage', async () => {
+    const { ctx, updateCalls } = buildLookupFailure({
+      guild: Object.assign(new Error('Service Unavailable'), { status: 503 }),
+    });
+    await expect(expireJob.processor(ctx, fakeJob(CASE_ID))).rejects.toThrow('Service Unavailable');
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it.each([
+    ['Unknown Guild', 10004],
+    ['Missing Access', 50001],
+  ])('marks the case expired when the bot is no longer in the guild (%s)', async (message, code) => {
+    const { ctx, updateCalls } = buildLookupFailure({ guild: Object.assign(new Error(message), { code }) });
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(updateCalls).toHaveLength(1);
   });
 });
