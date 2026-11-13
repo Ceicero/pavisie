@@ -24,6 +24,7 @@
   },
   "playlist": {
     "listTitle": "Saved playlists",
+    "listEmpty": "No playlists yet. Save the current queue with `/music playlist save`.",
     "saved": "Saved the current queue as \"{name}\".",
     "loaded": "Queued {count} track(s) from \"{name}\".",
     "deleted": "Deleted the playlist \"{name}\"."

@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { Prisma, type PrismaClient, type Suggestion } from '@pavisie/database';
 import { errorEmbed, resolveTextChannel, successEmbed, type PluginCommand } from '../../sdk';
+import { isMissingChannelPermission, nonBlank } from '../command-input';
 import type { CommunityConfig } from '../manifest';
 import { buildSuggestionComponents, buildSuggestionEmbed } from '../render';
 
@@ -54,47 +55,71 @@ export const command: PluginCommand = {
       return;
     }
 
+    const content = nonBlank(interaction.options.getString('text', true));
+    if (!content) {
+      await interaction.reply({ embeds: [errorEmbed(t('suggest.empty'))], ephemeral: true });
+      return;
+    }
+
     const channel = await resolveTextChannel(interaction.guild, config.suggestions.channelId);
     if (!channel) {
       await interaction.reply({ embeds: [errorEmbed(t('suggest.channelUnavailable'))], ephemeral: true });
       return;
     }
 
-    const content = interaction.options.getString('text', true);
-    const suggestion = await createSuggestionWithNextNumber(ctx.prisma, guildId, (number) => ({
-      guildId,
-      number,
-      authorId: interaction.user.id,
-      channelId: channel.id,
-      content,
-    }));
+    let suggestionId: string | null = null;
+    let suggestionNumber = 0;
+    let messageId: string | null = null;
+    try {
+      const suggestion = await createSuggestionWithNextNumber(ctx.prisma, guildId, (number) => ({
+        guildId,
+        number,
+        authorId: interaction.user.id,
+        channelId: channel.id,
+        content,
+      }));
+      suggestionId = suggestion.id;
+      suggestionNumber = suggestion.number;
 
-    const message = await channel.send({
-      embeds: [buildSuggestionEmbed(suggestion)],
-      components: buildSuggestionComponents(suggestion.id),
-    });
+      const message = await channel.send({
+        embeds: [buildSuggestionEmbed(suggestion)],
+        components: buildSuggestionComponents(suggestion.id),
+      });
+      messageId = message.id;
 
-    let threadId: string | null = null;
-    if (config.suggestions.threads && message.thread === null) {
-      try {
-        const thread = await message.startThread({
-          name: `Suggestion #${suggestion.number}`.slice(0, 100),
-          autoArchiveDuration: 1440,
-        });
-        threadId = thread.id;
-      } catch {
-        // Threads may be unavailable (missing permission, or the channel doesn't support them); the suggestion still posts.
+      let threadId: string | null = null;
+      if (config.suggestions.threads && message.thread === null) {
+        try {
+          const thread = await message.startThread({
+            name: `Suggestion #${suggestion.number}`.slice(0, 100),
+            autoArchiveDuration: 1440,
+          });
+          threadId = thread.id;
+        } catch {
+          // Threads may be unavailable (missing permission, or the channel doesn't support them); the suggestion still posts.
+        }
       }
-    }
 
-    await ctx.prisma.suggestion.update({
-      where: { id: suggestion.id },
-      data: { messageId: message.id, threadId },
-    });
+      await ctx.prisma.suggestion.update({
+        where: { id: suggestion.id },
+        data: { messageId: message.id, threadId },
+      });
+    } catch (err) {
+      if (messageId) await channel.messages.delete(messageId).catch(() => undefined);
+      if (suggestionId) await ctx.prisma.suggestion.delete({ where: { id: suggestionId } }).catch(() => undefined);
+      ctx.logger.warn({ err, guildId }, 'community: failed to submit a suggestion');
+      const key = suggestionId
+        ? isMissingChannelPermission(err)
+          ? 'suggest.channelUnavailable'
+          : 'suggest.postFailed'
+        : 'suggest.saveFailed';
+      await interaction.reply({ embeds: [errorEmbed(t(key))], ephemeral: true });
+      return;
+    }
 
     await interaction.reply({
       embeds: [
-        successEmbed(t('suggest.submitted', { number: suggestion.number, channel: `<#${channel.id}>` })),
+        successEmbed(t('suggest.submitted', { number: suggestionNumber, channel: `<#${channel.id}>` })),
       ],
       ephemeral: true,
     });

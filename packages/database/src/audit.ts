@@ -48,8 +48,15 @@ const AUDIT_SOURCE_MAP: Record<AuditWriteSource, AuditSource> = {
   system: 'SYSTEM',
 };
 
-/** Creates an AuditLog row, redacting `before`/`after` payloads and mapping friendly string enums to Prisma enums. */
-export async function writeAudit(prisma: PrismaClient, entry: WriteAuditInput): Promise<AuditLog> {
+/**
+ * Creates an AuditLog row, redacting `before`/`after` payloads and mapping friendly string enums to Prisma enums.
+ * Accepts a transaction client too, so a caller can write the audit row in the same transaction as the change it
+ * records (then the two can never exist without each other).
+ */
+export async function writeAudit(
+  prisma: Pick<PrismaClient, 'auditLog'> | Prisma.TransactionClient,
+  entry: WriteAuditInput,
+): Promise<AuditLog> {
   return prisma.auditLog.create({
     data: {
       guildId: entry.guildId,

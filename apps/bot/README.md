@@ -84,6 +84,7 @@ See `.env.example` for the full documented list. The ones that specifically affe
 | `BOT_OWNER_IDS`                                                                                   | comma-separated user ids; floored at `admin` staff level everywhere, and required for `botOwnerOnly` commands                                                              |
 | `DEV_GUILD_ID`                                                                                    | default target for `register` (instant guild-scoped updates instead of global)                                                                                             |
 | `BOT_HEALTH_PORT`                                                                                 | health server port, default `3002`                                                                                                                                         |
+| `ALERT_CHANNEL_ID`                                                                                | optional private channel id; the bot posts a short alert there on `unhandledRejection` / `uncaughtException` (max one per kind per minute)                                 |
 | `ENABLE_MESSAGE_CONTENT_INTENT` / `ENABLE_GUILD_MEMBERS_INTENT` / `ENABLE_GUILD_PRESENCES_INTENT` | privileged intents — only enable after Discord approval/eligibility; plugins that need one degrade gracefully (not crash) when it's off, per `PluginRegistry.availability` |
 
 ## What to test by hand after a change

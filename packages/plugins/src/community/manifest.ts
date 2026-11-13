@@ -2,6 +2,17 @@ import { GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
 import { z } from 'zod';
 import { defineManifest } from '../sdk';
 
+/**
+ * Object default that is parsed, so nested `.default()` values are part of the default itself (and of the
+ * default the dashboard schema publishes). Under zod 4 a plain `.default({})` would return the bare `{}`.
+ */
+function prefaultObject<S extends z.ZodRawShape>(shape: S) {
+  const objectSchema = z.object(shape);
+  return objectSchema.default(
+    () => objectSchema.parse({}) as z.core.util.NoUndefined<z.output<typeof objectSchema>>,
+  );
+}
+
 export const configSchema = z.object({
   tags: z
     .object({
@@ -13,32 +24,29 @@ export const configSchema = z.object({
       /** Master switch for keyword triggers (needs the Message Content intent). */
       triggersEnabled: z.boolean().default(false),
     })
-    .default({}),
-  suggestions: z
-    .object({
-      channelId: z.string().nullable().default(null),
-      threads: z.boolean().default(true),
-      dmAuthorOnStatus: z.boolean().default(true),
-    })
-    .default({}),
-  giveaways: z
-    .object({
-      defaultWinners: z.number().int().min(1).max(50).default(1),
-    })
-    .default({}),
-  eventReminderMinutes: z.array(z.number().int().min(1).max(10_080)).max(5).default([60, 10]),
-  polls: z
-    .object({
-      maxOptions: z.number().int().min(2).max(10).default(10),
-    })
-    .default({}),
+    .prefault({}),
+  suggestions: prefaultObject({
+    channelId: z.string().nullable().default(null),
+    threads: z.boolean().default(true),
+    dmAuthorOnStatus: z.boolean().default(true),
+  }),
+  giveaways: prefaultObject({
+    defaultWinners: z.number().int().min(1).max(50).default(1),
+  }),
+  eventReminderMinutes: z
+    .array(z.number().int().min(1).max(10_080))
+    .max(5)
+    .default(() => [60, 10]),
+  polls: prefaultObject({
+    maxOptions: z.number().int().min(2).max(10).default(10),
+  }),
   sticky: z
     .object({
       enabled: z.boolean().default(true),
       maxPerGuild: z.number().int().min(1).max(100).default(25),
       defaultCooldownSeconds: z.number().int().min(3).max(600).default(10),
     })
-    .default({}),
+    .prefault({}),
   autoPublish: z
     .object({
       /** Announcement (type 5) channel ids whose new messages the bot crossposts. */
@@ -46,7 +54,7 @@ export const configSchema = z.object({
       /** Also publish messages sent by other bots/webhooks (default: humans + this bot only). */
       includeBots: z.boolean().default(false),
     })
-    .default({}),
+    .prefault({}),
   autoThreads: z
     .array(
       z.object({
@@ -94,7 +102,7 @@ export const configSchema = z.object({
        * When false, only an admin can set or remove a birthday (for themselves or another member). */
       allowSelfService: z.boolean().default(true),
     })
-    .default({}),
+    .prefault({}),
 });
 
 export type CommunityConfig = z.infer<typeof configSchema>;
@@ -124,12 +132,6 @@ export const manifest = defineManifest({
       fallback: 'Falls back to plain text where possible.',
     },
     {
-      permission: PermissionFlagsBits.ManageThreads,
-      feature: 'auto-threading suggestions, auto-threads',
-      optional: true,
-      fallback: 'The suggestion/message is still posted; no thread is created.',
-    },
-    {
       permission: PermissionFlagsBits.CreatePublicThreads,
       feature: 'auto-threading suggestions, auto-threads',
       optional: true,
@@ -147,12 +149,6 @@ export const manifest = defineManifest({
       feature: 'creating a native Discord scheduled event for /event create',
       optional: true,
       fallback: 'The event is still tracked and announced in-channel; no Discord Events entry is created.',
-    },
-    {
-      permission: PermissionFlagsBits.ManageMessages,
-      feature: "sticky messages (delete the bot's own previous sticky)",
-      optional: true,
-      fallback: 'The old sticky stays in place; the bot still posts a new one.',
     },
     {
       permission: PermissionFlagsBits.ManageChannels,

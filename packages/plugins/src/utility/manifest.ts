@@ -40,11 +40,11 @@ export const manifest = defineManifest({
         'Without Embed Links the bot can still reply, but Discord may render embeds as plain links in some contexts.',
     },
     {
-      permission: PermissionFlagsBits.ManageMessages,
+      permission: PermissionFlagsBits.SendMessages,
       feature: '/embed builder (send to channel)',
-      optional: false,
+      optional: true,
       fallback:
-        'The command is hidden from members without Manage Messages by default (setDefaultMemberPermissions); "Send to channel" additionally checks the bot can send/embed in the target channel.',
+        '"Send to channel" checks the bot can view, send, and embed in the target channel and replies with an error if it cannot; every other utility command is unaffected. (Manage Messages is required of the member running /embed, never of the bot.)',
     },
   ],
   intents: [],

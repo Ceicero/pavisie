@@ -11,7 +11,7 @@ import {
   type Guild,
   type User,
 } from 'discord.js';
-import { AuditAction, ValidationError, hasStaffLevel, truncate } from '@pavisie/core';
+import { AuditAction, hasStaffLevel, truncate } from '@pavisie/core';
 import type { Tag } from '@pavisie/database';
 import {
   assertStaffLevel,
@@ -21,12 +21,14 @@ import {
   listEmbed,
   paginatedReply,
   requestConfirmation,
+  resolveTextChannel,
   successEmbed,
   type AutocompleteContext,
   type CommandContext,
   type PluginCommand,
   type PluginContext,
 } from '../../sdk';
+import { channelPresence, isMissingChannelPermission, isUnknownChannel, nonBlank } from '../command-input';
 import type { CommunityConfig } from '../manifest';
 import { invalidateTagTriggerCache } from '../tag-cache';
 import {
@@ -150,10 +152,11 @@ const data = new SlashCommandBuilder()
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-async function requireTagsEnabled(c: CommandContext): Promise<CommunityConfig> {
+async function requireTagsEnabled(c: CommandContext): Promise<CommunityConfig | null> {
   const config = await c.config<CommunityConfig>();
   if (!config.tags.enabled) {
-    throw new ValidationError(c.t('tag.disabled'));
+    await c.interaction.reply({ embeds: [errorEmbed(c.t('tag.disabled'))], ephemeral: true });
+    return null;
   }
   return config;
 }
@@ -252,7 +255,7 @@ function describeTrigger(c: CommandContext, tag: Tag): string | null {
 // ---------------------------------------------------------------------------
 
 async function handleShow(c: CommandContext): Promise<void> {
-  await requireTagsEnabled(c);
+  if (!(await requireTagsEnabled(c))) return;
   const tag = await findTagOrReply(c, c.interaction.options.getString('name', true));
   if (!tag) return;
   if (tag.staffOnly) {
@@ -264,12 +267,25 @@ async function handleShow(c: CommandContext): Promise<void> {
     tagTemplateVars(c.interaction.user as User, c.interaction.guild as Guild),
     c.interaction.user.id,
   );
-  await c.interaction.reply({ ...rendered, ephemeral });
-  await c.ctx.prisma.tag.update({ where: { id: tag.id }, data: { uses: { increment: 1 } } });
+  try {
+    await c.interaction.reply({ ...rendered, ephemeral });
+  } catch (err) {
+    if (!isMissingChannelPermission(err) && !isUnknownChannel(err)) throw err;
+    if (c.interaction.replied || c.interaction.deferred) return;
+    const key = isUnknownChannel(err) ? 'tag.channelGone' : 'tag.cantPost';
+    await c.interaction.reply({ embeds: [errorEmbed(c.t(key))], ephemeral: true });
+    return;
+  }
+  try {
+    await c.ctx.prisma.tag.update({ where: { id: tag.id }, data: { uses: { increment: 1 } } });
+  } catch (err) {
+    // The tag is already on screen. A failed use-counter write must not turn that into an error reply.
+    c.ctx.logger.warn({ err, guildId: c.guildId, tagId: tag.id }, 'community: failed to increment tag uses');
+  }
 }
 
 async function handleList(c: CommandContext): Promise<void> {
-  await requireTagsEnabled(c);
+  if (!(await requireTagsEnabled(c))) return;
   const isStaff = hasStaffLevel(c.staffLevel, 'helper');
   const tags = await c.ctx.prisma.tag.findMany({
     where: { guildId: c.guildId, ...(isStaff ? {} : { staffOnly: false }) },
@@ -305,8 +321,11 @@ async function handleList(c: CommandContext): Promise<void> {
 async function handleCreate(c: CommandContext): Promise<void> {
   assertStaffLevel(c.staffLevel, 'moderator', c.t);
   const config = await requireTagsEnabled(c);
+  if (!config) return;
   const name = normalizeTagName(c.interaction.options.getString('name', true));
-  const content = c.interaction.options.getString('content');
+  const rawContent = c.interaction.options.getString('content');
+  // Omitted or blank content opens the editor so the tag can be embed-only. Stored text is trimmed.
+  const content = rawContent === null ? null : nonBlank(rawContent);
   const staffOnly = c.interaction.options.getBoolean('staff_only') ?? false;
 
   if (!isValidTagName(name)) {
@@ -357,7 +376,7 @@ async function handleCreate(c: CommandContext): Promise<void> {
 
 async function handleEdit(c: CommandContext): Promise<void> {
   assertStaffLevel(c.staffLevel, 'moderator', c.t);
-  await requireTagsEnabled(c);
+  if (!(await requireTagsEnabled(c))) return;
   const tag = await findTagOrReply(c, c.interaction.options.getString('name', true));
   if (!tag) return;
   const embed = parseStoredTagEmbed(tag.embed);
@@ -370,7 +389,7 @@ async function handleEdit(c: CommandContext): Promise<void> {
 
 async function handleDelete(c: CommandContext): Promise<void> {
   assertStaffLevel(c.staffLevel, 'moderator', c.t);
-  await requireTagsEnabled(c);
+  if (!(await requireTagsEnabled(c))) return;
   const tag = await findTagOrReply(c, c.interaction.options.getString('name', true));
   if (!tag) return;
   await requestConfirmation({
@@ -391,10 +410,11 @@ async function handleDelete(c: CommandContext): Promise<void> {
 async function handleTrigger(c: CommandContext): Promise<void> {
   assertStaffLevel(c.staffLevel, 'admin', c.t);
   const config = await requireTagsEnabled(c);
+  if (!config) return;
   const tag = await findTagOrReply(c, c.interaction.options.getString('name', true));
   if (!tag) return;
   const mode = c.interaction.options.getString('mode', true) as TagTriggerModeValue;
-  const phrase = c.interaction.options.getString('phrase')?.trim() ?? '';
+  const phrase = nonBlank(c.interaction.options.getString('phrase') ?? '') ?? '';
   const channel = c.interaction.options.getChannel('channel');
 
   // Staff-only tags must never auto-respond publicly (same rule enforced in `tagBodySchema` for the API/dashboard).
@@ -430,9 +450,25 @@ async function handleTrigger(c: CommandContext): Promise<void> {
     return;
   }
 
+  if (!phrase) {
+    await c.interaction.reply({ embeds: [errorEmbed(c.t('tag.emptyTrigger'))], ephemeral: true });
+    return;
+  }
   if (phrase.length < TAG_TRIGGER_MIN || phrase.length > TAG_TRIGGER_MAX) {
     await c.interaction.reply({ embeds: [errorEmbed(c.t('tag.badTrigger'))], ephemeral: true });
     return;
+  }
+  if (channel) {
+    const presence = await channelPresence(c.interaction.guild, channel.id);
+    if (presence === 'gone') {
+      await c.interaction.reply({ embeds: [errorEmbed(c.t('tag.channelGone'))], ephemeral: true });
+      return;
+    }
+    const text = await resolveTextChannel(c.interaction.guild, channel.id);
+    if (!text) {
+      await c.interaction.reply({ embeds: [errorEmbed(c.t('tag.badChannel'))], ephemeral: true });
+      return;
+    }
   }
   const triggerChannelIds = channel ? [channel.id] : [];
   await c.ctx.prisma.tag.update({
@@ -472,14 +508,16 @@ async function handleTrigger(c: CommandContext): Promise<void> {
 
 async function handleInfo(c: CommandContext): Promise<void> {
   assertStaffLevel(c.staffLevel, 'helper', c.t);
-  await requireTagsEnabled(c);
+  if (!(await requireTagsEnabled(c))) return;
   const tag = await findTagOrReply(c, c.interaction.options.getString('name', true));
   if (!tag) return;
   const trigger = describeTrigger(c, tag);
-  const channels =
-    tag.triggerChannelIds.length > 0
-      ? tag.triggerChannelIds.map((id) => `<#${id}>`).join(', ')
-      : c.t('tag.infoAllChannels');
+  const channelBits: string[] = [];
+  for (const id of tag.triggerChannelIds) {
+    const presence = await channelPresence(c.interaction.guild, id);
+    channelBits.push(presence === 'gone' ? `<#${id}> (${c.t('tag.channelGone')})` : `<#${id}>`);
+  }
+  const channels = channelBits.length > 0 ? channelBits.join(', ') : c.t('tag.infoAllChannels');
   const preview = tag.content
     ? truncate(tag.content, 300)
     : parseStoredTagEmbed(tag.embed)?.title || parseStoredTagEmbed(tag.embed)?.description || '';

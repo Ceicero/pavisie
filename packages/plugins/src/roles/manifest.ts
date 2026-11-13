@@ -54,14 +54,14 @@ export const AUTO_ROLES_MAX_DELAY_SECONDS = 604_800;
 export const configSchema = z.object({
   /** When false (default), role panels / groups refuse to attach a role that grants an elevated permission. */
   allowElevatedRoles: z.boolean().default(false),
-  welcome: welcomeGoodbyeSchema.default({}),
-  goodbye: welcomeGoodbyeSchema.default({}),
+  welcome: welcomeGoodbyeSchema.prefault({}),
+  goodbye: welcomeGoodbyeSchema.prefault({}),
   rulesText: z.string().max(4000).nullable().default(null),
   rulesRoleId: z.string().nullable().default(null),
   steps: z.array(onboardingStepSchema).max(20).default([]),
-  verification: verificationSchema.default({}),
-  rolePersistence: rolePersistenceSchema.default({}),
-  autoRoles: autoRolesSchema.default({}),
+  verification: verificationSchema.prefault({}),
+  rolePersistence: rolePersistenceSchema.prefault({}),
+  autoRoles: autoRolesSchema.prefault({}),
 });
 
 export type RolesConfig = z.infer<typeof configSchema>;
@@ -105,10 +105,11 @@ export const manifest = defineManifest({
       fallback: 'Reaction panels cannot add the initial reactions; button/select panels are unaffected.',
     },
     {
-      permission: PermissionFlagsBits.ManageChannels,
-      feature: 'account-age quarantine channel visibility (optional)',
+      permission: PermissionFlagsBits.UseExternalEmojis,
+      feature: 'role panel options that use a custom emoji from another server',
       optional: true,
-      fallback: 'Quarantine still applies the role; channel overwrites are left as configured manually.',
+      fallback:
+        "Unicode emoji and this server's own emoji are unaffected; an emoji from another server is not rendered or reacted with.",
     },
     {
       permission: PermissionFlagsBits.KickMembers,

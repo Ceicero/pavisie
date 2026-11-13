@@ -27,6 +27,13 @@ import {
 import type { EvaluatorResult } from './engine';
 import { isExempt, isTrustedDomain } from './exemptions';
 import { normalizeJoin, normalizeMessage } from './normalize';
+import { recordMessageAlertOverflow, takeMessageAlertSlot } from './message-alert';
+import { recordRaidAlertJoin } from './raid-alert';
+import {
+  publishAutomodRulesChanged,
+  subscribeAutomodRulesChanged,
+  type RulesChangedSubscription,
+} from './rule-sync';
 import {
   automodActionsSchema,
   automodRuleConfigSchema,
@@ -79,13 +86,6 @@ export async function getStaffContext(
   }
 }
 
-async function fetchRules(ctx: PluginContext, guildId: string): Promise<AutomodRule[]> {
-  return ctx.prisma.automodRule.findMany({
-    where: { guildId, enabled: true, deletedAt: null },
-    orderBy: { priority: 'asc' },
-  });
-}
-
 function parseRuleConfig(rule: AutomodRule): AutomodRuleConfig | null {
   const result = automodRuleConfigSchema.safeParse(rule.config);
   return result.success ? result.data : null;
@@ -94,6 +94,99 @@ function parseRuleConfig(rule: AutomodRule): AutomodRuleConfig | null {
 function parseRuleActions(rule: AutomodRule): AutomodAction[] {
   const result = automodActionsSchema.safeParse(rule.actions);
   return result.success ? result.data : [];
+}
+
+/** A stored rule with its `config`/`actions` JSON already validated, so the hot path never re-parses them. */
+interface LoadedRule {
+  rule: AutomodRule;
+  /** `null` when the stored config no longer validates; such a rule is skipped (and, for messages, logged). */
+  config: AutomodRuleConfig | null;
+  actions: AutomodAction[];
+}
+
+/**
+ * How long a guild's loaded rules are reused before the next event re-reads them. Every message and every join
+ * needs the guild's rules, so during a raid this was one Postgres query (plus a zod parse of every rule) per
+ * event — hundreds a second for rows that almost never change. Short on purpose: a rule edited from this bot's
+ * own commands is dropped from the cache at once (`invalidateRuleCache`), and an edit made through the dashboard
+ * is announced over Redis by the API and dropped as soon as that arrives (`startRuleSync`). This window is only
+ * the worst case, for an announcement lost while the subscriber was reconnecting.
+ */
+const RULE_CACHE_TTL_MS = 2_000;
+/** Above this many cached guilds, expired entries are swept on the next load so idle guilds don't pile up. */
+const RULE_CACHE_SWEEP_SIZE = 1_000;
+
+interface RuleCacheEntry {
+  expiresAt: number;
+  rules: Promise<LoadedRule[]>;
+}
+
+// Keyed by the Prisma client rather than held in one module-level map: the bot has exactly one client, so this
+// is one cache in production, while every unit test's own stub client gets a cache nothing else can see.
+const ruleCaches = new WeakMap<object, Map<string, RuleCacheEntry>>();
+
+function ruleCacheFor(ctx: PluginContext): Map<string, RuleCacheEntry> {
+  let cache = ruleCaches.get(ctx.prisma);
+  if (!cache) {
+    cache = new Map();
+    ruleCaches.set(ctx.prisma, cache);
+  }
+  return cache;
+}
+
+/**
+ * Returns the guild's enabled rules in priority order, parsed once and reused for `RULE_CACHE_TTL_MS`. Concurrent
+ * callers share one in-flight query, so a burst of events arriving just as the entry expires costs one read, not
+ * one per event. A failed read is not cached: the next event simply tries again.
+ */
+async function loadRules(ctx: PluginContext, guildId: string): Promise<LoadedRule[]> {
+  const cache = ruleCacheFor(ctx);
+  const now = Date.now();
+  const cached = cache.get(guildId);
+  if (cached && cached.expiresAt > now) return cached.rules;
+
+  if (cache.size >= RULE_CACHE_SWEEP_SIZE) {
+    for (const [key, entry] of cache) {
+      if (entry.expiresAt <= now) cache.delete(key);
+    }
+  }
+
+  const rules = ctx.prisma.automodRule
+    .findMany({
+      where: { guildId, enabled: true, deletedAt: null },
+      orderBy: { priority: 'asc' },
+    })
+    .then((rows) =>
+      rows.map((rule) => ({ rule, config: parseRuleConfig(rule), actions: parseRuleActions(rule) })),
+    );
+  const entry: RuleCacheEntry = { expiresAt: now + RULE_CACHE_TTL_MS, rules };
+  cache.set(guildId, entry);
+  rules.catch(() => {
+    if (cache.get(guildId) === entry) cache.delete(guildId);
+  });
+  return rules;
+}
+
+/** Drops this process's cached copy of `guildId`'s rules, so the next message or join re-reads them. */
+function dropCachedRules(ctx: PluginContext, guildId: string): void {
+  ruleCaches.get(ctx.prisma)?.delete(guildId);
+}
+
+/**
+ * Called by every command that creates, edits, toggles, exempts or deletes a rule: drops the cached copy here,
+ * so the change applies to the very next event, and announces it so any other bot process does the same.
+ */
+export function invalidateRuleCache(ctx: PluginContext, guildId: string): void {
+  dropCachedRules(ctx, guildId);
+  void publishAutomodRulesChanged(ctx.redis, guildId);
+}
+
+/**
+ * Starts listening for rule changes made elsewhere — the dashboard (through the API) or another bot process —
+ * and drops the cached copy as each one is announced. Called once when the plugin loads.
+ */
+export function startRuleSync(ctx: PluginContext): Promise<RulesChangedSubscription> {
+  return subscribeAutomodRulesChanged(ctx.redis, (guildId) => dropCachedRules(ctx, guildId));
 }
 
 interface ActionOutcome {
@@ -138,6 +231,14 @@ async function applyQuarantine(
   }
 }
 
+/** One line per configured action and what became of it — the "Actions" field of every alert embed. */
+function formatActionOutcomes(actionOutcomes: ActionOutcome[], dryRun: boolean): string {
+  if (actionOutcomes.length === 0) return '_None configured_';
+  return actionOutcomes
+    .map((a) => `${a.applied ? '✅' : dryRun ? '⏸️' : '⚠️'} ${a.type}${a.detail ? ` — ${a.detail}` : ''}`)
+    .join('\n');
+}
+
 function alertEmbed(params: {
   rule: AutomodRule;
   userId: string;
@@ -158,18 +259,7 @@ function alertEmbed(params: {
       { name: 'User', value: `<@${userId}>`, inline: true },
       { name: 'Rule type', value: rule.type, inline: true },
       { name: 'Channel', value: channelId ? `<#${channelId}>` : '—', inline: true },
-      {
-        name: 'Actions',
-        value:
-          actionOutcomes.length > 0
-            ? actionOutcomes
-                .map(
-                  (a) =>
-                    `${a.applied ? '✅' : dryRun ? '⏸️' : '⚠️'} ${a.type}${a.detail ? ` — ${a.detail}` : ''}`,
-                )
-                .join('\n')
-            : '_None configured_',
-      },
+      { name: 'Actions', value: formatActionOutcomes(actionOutcomes, dryRun) },
     )
     .setTimestamp();
 
@@ -238,6 +328,49 @@ async function postAlert(
       'automod: failed to post alert embed',
     );
   }
+}
+
+/**
+ * The "alert staff" action for a message rule. The first few matches per rule per channel each get a normal alert
+ * with review buttons; past that, matches are counted into one summary alert (see message-alert.ts) so a burst
+ * can't bury the alert channel. Every match is saved as its own AutomodEvent either way.
+ */
+async function alertStaffForMessage(
+  ctx: PluginContext,
+  guild: Guild,
+  config: AutomodConfig,
+  params: Parameters<typeof postAlert>[3] & { channelId: string },
+): Promise<void> {
+  // No alert channel: postAlert logs the misconfiguration, and there is nothing to count.
+  if (!config.alertChannelId) return postAlert(ctx, guild, config, params);
+
+  let individual = true;
+  try {
+    individual = await takeMessageAlertSlot(ctx, guild.id, params.rule.id, params.channelId);
+  } catch (err) {
+    // Redis unavailable: fall back to a normal alert rather than dropping it.
+    ctx.logger.warn(
+      { guildId: guild.id, ruleId: params.rule.id, err: err instanceof Error ? err.message : String(err) },
+      'automod: could not check the message alert limit; posting the alert anyway',
+    );
+  }
+  if (individual) return postAlert(ctx, guild, config, params);
+
+  await recordMessageAlertOverflow(ctx, guild, {
+    ruleId: params.rule.id,
+    ruleName: params.rule.name,
+    ruleType: params.rule.type,
+    channelId: params.channelId,
+    userId: params.userId,
+    alertChannelId: config.alertChannelId,
+    actionsText: formatActionOutcomes(params.actionOutcomes, params.dryRun),
+    dryRun: params.dryRun,
+  }).catch((err: unknown) => {
+    ctx.logger.error(
+      { guildId: guild.id, ruleId: params.rule.id, err: err instanceof Error ? err.message : String(err) },
+      'automod: failed to record a match on the message alert summary',
+    );
+  });
 }
 
 /** Executes one resolved action (message-rule context: a real message + optionally its member are available). */
@@ -415,8 +548,8 @@ export async function handleMessage(
   if (message.author?.bot || message.author?.system) return;
   if (message.webhookId) return;
 
-  const allRules = await fetchRules(ctx, guildId);
-  const rules = allRules.filter((r) => isMessageRuleType(r.type));
+  const allRules = await loadRules(ctx, guildId);
+  const rules = allRules.filter((r) => isMessageRuleType(r.rule.type));
   if (rules.length === 0) return;
 
   const guild =
@@ -438,7 +571,7 @@ export async function handleMessage(
   const cooldowns = new Cooldowns(ctx.redis);
   const logContent = await getLogMessageContentEnabled(ctx, guildId);
 
-  for (const rule of rules) {
+  for (const { rule, config: ruleConfig, actions } of rules) {
     if (!isRuleTypeActive(rule.type, ctx.intentsEnabled)) continue;
     // An edit is one message being re-read, not a new one — feeding it back into a frequency/duplicate window
     // would count it twice and fire the rule before the member actually reached the threshold.
@@ -459,7 +592,6 @@ export async function handleMessage(
       continue;
     }
 
-    const ruleConfig = parseRuleConfig(rule);
     if (!ruleConfig) {
       ctx.logger.warn({ guildId, ruleId: rule.id }, 'automod: rule has an invalid stored config; skipping');
       continue;
@@ -504,7 +636,6 @@ export async function handleMessage(
     }
 
     const dryRun = config.dryRun || rule.dryRun;
-    const actions = parseRuleActions(rule);
     const reason = result.reason ?? `Matched automod rule "${rule.name}".`;
 
     const actionOutcomes: ActionOutcome[] = [];
@@ -540,7 +671,7 @@ export async function handleMessage(
     });
 
     if (actions.some((a) => a.type === 'alert_staff')) {
-      await postAlert(ctx, guild, config, {
+      await alertStaffForMessage(ctx, guild, config, {
         rule,
         userId: normalized.authorId,
         channelId: normalized.channelId,
@@ -577,8 +708,8 @@ export async function handleMemberJoin(ctx: PluginContext, member: GuildMember):
     await applyQuarantine(ctx, guildId, member.id, 'Raid lockdown active — new joins are quarantined.');
   }
 
-  const allRules = await fetchRules(ctx, guildId);
-  const rules = allRules.filter((r) => !isMessageRuleType(r.type));
+  const allRules = await loadRules(ctx, guildId);
+  const rules = allRules.filter((r) => !isMessageRuleType(r.rule.type));
   if (rules.length === 0) return;
 
   const staffCtx = await getStaffContext(ctx, member.guild, member);
@@ -586,7 +717,7 @@ export async function handleMemberJoin(ctx: PluginContext, member: GuildMember):
   const windowStoreBase = new RedisWindowStore(ctx.redis);
   const cooldowns = new Cooldowns(ctx.redis);
 
-  for (const rule of rules) {
+  for (const { rule, config: ruleConfig, actions } of rules) {
     if (!isRuleTypeActive(rule.type, ctx.intentsEnabled)) continue;
     if (
       isExempt(
@@ -597,7 +728,6 @@ export async function handleMemberJoin(ctx: PluginContext, member: GuildMember):
     )
       continue;
 
-    const ruleConfig = parseRuleConfig(rule);
     if (!ruleConfig) continue;
 
     const windowStore = scopedWindowStore(windowStoreBase, rule.id);
@@ -610,7 +740,6 @@ export async function handleMemberJoin(ctx: PluginContext, member: GuildMember):
     }
 
     const dryRun = config.dryRun || rule.dryRun;
-    const actions = parseRuleActions(rule);
     const reason = result.reason ?? `Matched automod rule "${rule.name}".`;
 
     const actionOutcomes: ActionOutcome[] = [];
@@ -651,16 +780,35 @@ export async function handleMemberJoin(ctx: PluginContext, member: GuildMember):
     });
 
     if (actions.some((a) => a.type === 'alert_staff')) {
-      await postAlert(ctx, member.guild, config, {
-        rule,
-        userId: member.id,
-        channelId: null,
-        result,
-        excerpt: null,
-        actionOutcomes,
-        dryRun,
-        eventId: event.id,
-      });
+      if (rule.type === 'RAID_DETECTION') {
+        // A raid is one incident, not one per account: the first flagged join posts a single alert and the rest
+        // only add to its running count (see raid-alert.ts). Every join still gets its own AutomodEvent above.
+        // Never allowed to throw — the lockdown below matters more than the alert.
+        await recordRaidAlertJoin(ctx, member.guild, {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          alertChannelId: config.alertChannelId,
+          reason,
+          actionsText: formatActionOutcomes(actionOutcomes, dryRun),
+          dryRun,
+        }).catch((err: unknown) => {
+          ctx.logger.error(
+            { guildId, ruleId: rule.id, err: err instanceof Error ? err.message : String(err) },
+            'automod: failed to record a join on the raid alert',
+          );
+        });
+      } else {
+        await postAlert(ctx, member.guild, config, {
+          rule,
+          userId: member.id,
+          channelId: null,
+          result,
+          excerpt: null,
+          actionOutcomes,
+          dryRun,
+          eventId: event.id,
+        });
+      }
     }
 
     ctx.events.emit('automod.triggered', {

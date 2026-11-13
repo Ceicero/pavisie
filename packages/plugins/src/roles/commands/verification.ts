@@ -1,4 +1,6 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { PermissionError } from '@pavisie/core';
+import type { StaffLevel } from '@pavisie/types';
 import { assertStaffLevel, errorEmbed, listEmbed, successEmbed, type PluginCommand } from '../../sdk';
 import type { RolesConfig, VerificationConfig } from '../manifest';
 
@@ -107,6 +109,27 @@ const data = new SlashCommandBuilder()
       ),
   );
 
+/**
+ * `/verification setup` changes server-wide verification config, so it requires the admin staff level AND Discord's
+ * Manage Server permission (matching the slash command's default_member_permissions, which prefix invocations bypass).
+ * `queue`/`approve`/`deny` stay at the command-level moderator requirement.
+ */
+export function assertCanRunVerificationSetup(
+  staffLevel: StaffLevel,
+  memberPermissions: bigint | null | undefined,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): void {
+  assertStaffLevel(staffLevel, 'admin', t);
+  const manageGuild = PermissionFlagsBits.ManageGuild;
+  if (
+    memberPermissions === null ||
+    memberPermissions === undefined ||
+    (memberPermissions & manageGuild) !== manageGuild
+  ) {
+    throw new PermissionError(t('errors.missing_discord_permission', { permission: 'Manage Server' }));
+  }
+}
+
 export const command: PluginCommand = {
   data,
   requirement: { staffLevel: 'moderator', guildOnly: true },
@@ -114,7 +137,7 @@ export const command: PluginCommand = {
     const sub = c.interaction.options.getSubcommand(true);
 
     if (sub === 'setup') {
-      assertStaffLevel(c.staffLevel, 'admin', c.t);
+      assertCanRunVerificationSetup(c.staffLevel, c.interaction.memberPermissions?.bitfield, c.t);
       const mode = c.interaction.options.getString('mode') as VerificationConfig['mode'] | null;
       if (mode === 'captcha' && (!c.ctx.env.CAPTCHA_PROVIDER || c.ctx.env.CAPTCHA_PROVIDER === 'none')) {
         await c.interaction.reply({

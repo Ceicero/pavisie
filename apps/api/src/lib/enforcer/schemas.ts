@@ -1,3 +1,4 @@
+import { partialWithoutDefaults } from '@pavisie/core';
 import { z } from 'zod';
 import { matcherSchema, policyMatchersSchema } from '@pavisie/plugins/enforcer/schemas';
 import { guildIdParamSchema, paginationQuerySchema, snowflakeSchema } from '../schemas';
@@ -42,7 +43,7 @@ export const policyBodySchema = z.object({
   suggestedAction: decisionSchema.nullable().default(null),
 });
 
-export const policyUpdateBodySchema = policyBodySchema.partial();
+export const policyUpdateBodySchema = partialWithoutDefaults(policyBodySchema);
 
 export const policyTestBodySchema = z.object({
   text: z.string().min(1).max(4000),

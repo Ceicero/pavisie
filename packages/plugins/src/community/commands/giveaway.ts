@@ -1,7 +1,8 @@
-import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { parseDuration } from '@pavisie/core';
 import {
   errorEmbed,
+  infoEmbed,
   listEmbed,
   resolveTextChannel,
   successEmbed,
@@ -9,6 +10,7 @@ import {
   type PluginCommand,
 } from '../../sdk';
 import { cancelGiveaway, finalizeGiveaway, rerollGiveaway } from '../actions';
+import { durationIssue, isMissingChannelPermission, nonBlank } from '../command-input';
 import type { CommunityConfig } from '../manifest';
 import { buildGiveawayComponents, buildGiveawayEmbed } from '../render';
 
@@ -39,7 +41,8 @@ const data = new SlashCommandBuilder()
         opt
           .setName('channel')
           .setDescription('Channel to post in (default: this channel)')
-          .setRequired(false),
+          .setRequired(false)
+          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
       )
       .addRoleOption((opt) =>
         opt.setName('required-role').setDescription('Role required to enter').setRequired(false),
@@ -99,13 +102,20 @@ async function handleStart(c: CommandContext): Promise<void> {
   const { interaction, ctx, guildId, t } = c;
   const config = await c.config<CommunityConfig>();
 
-  const prize = interaction.options.getString('prize', true);
-  const durationStr = interaction.options.getString('duration', true);
-  const ms = parseDuration(durationStr);
-  if (ms === null || ms <= 0) {
-    await interaction.reply({ embeds: [errorEmbed(t('giveaway.badDuration'))], ephemeral: true });
+  const prize = nonBlank(interaction.options.getString('prize', true));
+  if (!prize) {
+    await interaction.reply({ embeds: [errorEmbed(t('giveaway.emptyPrize'))], ephemeral: true });
     return;
   }
+  const durationStr = interaction.options.getString('duration', true);
+  const parsedMs = parseDuration(durationStr);
+  const durationProblem = durationIssue(parsedMs);
+  if (durationProblem || parsedMs === null) {
+    const key = durationProblem === 'range' ? 'giveaway.durationRange' : 'giveaway.badDuration';
+    await interaction.reply({ embeds: [errorEmbed(t(key))], ephemeral: true });
+    return;
+  }
+  const ms = parsedMs;
 
   const winnerCount = interaction.options.getInteger('winners') ?? config.giveaways.defaultWinners;
   const channelOption = interaction.options.getChannel('channel');
@@ -121,28 +131,41 @@ async function handleStart(c: CommandContext): Promise<void> {
   const minLevel = interaction.options.getInteger('min-level');
   const endsAt = new Date(Date.now() + ms);
 
-  const giveaway = await ctx.prisma.giveaway.create({
-    data: {
-      guildId,
-      channelId,
-      prize,
-      winnerCount,
-      hostId: interaction.user.id,
-      endsAt,
-      requiredRoleIds: requiredRole ? [requiredRole.id] : [],
-      minAccountAgeDays: minAccountAgeDays ?? undefined,
-      minLevel: minLevel ?? undefined,
-    },
-  });
+  let giveawayId: string | null = null;
+  let messageId: string | null = null;
+  try {
+    const giveaway = await ctx.prisma.giveaway.create({
+      data: {
+        guildId,
+        channelId,
+        prize,
+        winnerCount,
+        hostId: interaction.user.id,
+        endsAt,
+        requiredRoleIds: requiredRole ? [requiredRole.id] : [],
+        minAccountAgeDays: minAccountAgeDays ?? undefined,
+        minLevel: minLevel ?? undefined,
+      },
+    });
+    giveawayId = giveaway.id;
 
-  const message = await channel.send({
-    embeds: [buildGiveawayEmbed(giveaway, 0)],
-    components: buildGiveawayComponents(giveaway.id, false),
-  });
-  await ctx.prisma.giveaway.update({ where: { id: giveaway.id }, data: { messageId: message.id } });
-  await ctx
-    .queue('giveaway-end')
-    .add('giveaway-end', { giveawayId: giveaway.id }, { jobId: `gw-${giveaway.id}`, delay: ms });
+    const message = await channel.send({
+      embeds: [buildGiveawayEmbed(giveaway, 0)],
+      components: buildGiveawayComponents(giveaway.id, false),
+    });
+    messageId = message.id;
+    await ctx.prisma.giveaway.update({ where: { id: giveaway.id }, data: { messageId: message.id } });
+    await ctx
+      .queue('giveaway-end')
+      .add('giveaway-end', { giveawayId: giveaway.id }, { jobId: `gw-${giveaway.id}`, delay: ms });
+  } catch (err) {
+    if (messageId) await channel.messages.delete(messageId).catch(() => undefined);
+    if (giveawayId) await ctx.prisma.giveaway.delete({ where: { id: giveawayId } }).catch(() => undefined);
+    ctx.logger.warn({ err, guildId }, 'community: failed to post a giveaway');
+    const key = isMissingChannelPermission(err) ? 'giveaway.badChannel' : 'giveaway.postFailed';
+    await interaction.reply({ embeds: [errorEmbed(t(key))], ephemeral: true });
+    return;
+  }
 
   await interaction.reply({
     embeds: [successEmbed(t('giveaway.started', { channel: `<#${channelId}>` }))],
@@ -205,6 +228,13 @@ async function handleList(c: CommandContext): Promise<void> {
     orderBy: { endsAt: 'desc' },
     take: 25,
   });
+  if (giveaways.length === 0) {
+    await interaction.reply({
+      embeds: [infoEmbed(t('giveaway.listTitle'), t('giveaway.listEmpty'))],
+      ephemeral: true,
+    });
+    return;
+  }
   const lines = giveaways.map(
     (g) => `${g.ended ? '🏁' : '🎉'} **${g.prize}** — ${g.ended ? 'ended' : 'active'} · \`${g.id}\``,
   );

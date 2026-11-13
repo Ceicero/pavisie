@@ -336,16 +336,23 @@ export default async function moderationRoutes(app: ZodFastifyInstance): Promise
       // Discord-side effects (DM, auto-remove an active timeout, offer an "Unban now" button) are applied by the
       // bot's `moderation:appeal-sync` job (every minute) — this process has no Discord client. See the
       // moderation plugin's README ("Appeals") for the full flow and the idempotency-tracking tradeoff.
-      const updated = await app.prisma.moderationAppeal.update({
-        where: { id: appealId },
+      // Conditional on status=PENDING so two concurrent decisions can't both win (the check above is only a fast
+      // path; this is the actual guard against a TOCTOU race flipping/overwriting an already-decided appeal).
+      const claimed = await app.prisma.moderationAppeal.updateMany({
+        where: { id: appealId, guildId, status: 'PENDING' },
         data: {
           status: request.body.accept ? 'ACCEPTED' : 'DENIED',
           reviewedBy: session.userId,
           reviewedAt: new Date(),
           decisionNote: request.body.decisionNote,
         },
+      });
+      if (claimed.count === 0) throw new NotFoundError('This appeal has already been decided.');
+      const updated = await app.prisma.moderationAppeal.findFirst({
+        where: { id: appealId, guildId },
         include: { case: { select: { caseNumber: true } } },
       });
+      if (!updated) throw new NotFoundError('Appeal not found.');
 
       await writeDashboardAudit(app.prisma, {
         guildId,
