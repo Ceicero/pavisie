@@ -35,7 +35,11 @@ function summarizeActions(rule: AutomodRule): string {
 }
 
 /** Builds the detail embed used by `/automod rule view` and (as a list) `/automod rule list`. */
-export function ruleDetailEmbed(rule: AutomodRule, intentsEnabled: IntentsEnabledLike): EmbedBuilder {
+export function ruleDetailEmbed(
+  rule: AutomodRule,
+  intentsEnabled: IntentsEnabledLike,
+  title: string,
+): EmbedBuilder {
   const lines = [
     `Status: ${ruleStatusLine(rule, intentsEnabled)}`,
     `Type: **${rule.type}**`,
@@ -47,7 +51,7 @@ export function ruleDetailEmbed(rule: AutomodRule, intentsEnabled: IntentsEnable
     `Exempt users: ${rule.exemptUserIds.length > 0 ? rule.exemptUserIds.map((id) => `<@${id}>`).join(', ') : '_none_'}`,
     `Trusted domains: ${rule.trustedDomains.length > 0 ? rule.trustedDomains.join(', ') : '_none_'}`,
   ];
-  return infoEmbed(`Rule: ${rule.name}`, lines.join('\n'));
+  return infoEmbed(title, lines.join('\n'));
 }
 
 /** Short list line for `/automod rule list` (one rule per line, ordered by priority). */

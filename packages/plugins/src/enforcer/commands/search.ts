@@ -76,16 +76,16 @@ export async function executeSearch(c: CommandContext): Promise<void> {
 
   const PAGE_SIZE = 10;
   const pages = [];
-  for (let i = 0; i < rows.length; i += PAGE_SIZE) {
-    const slice = rows.slice(i, i + PAGE_SIZE);
-    pages.push(
-      infoEmbed(
-        `Ledger search (${rows.length} result${rows.length === 1 ? '' : 's'})`,
-        slice.map(recordLine).join('\n'),
-      ),
-    );
+  if (rows.length === 0) {
+    pages.push(infoEmbed(c.t('search.title'), c.t('search.empty')));
+  } else {
+    for (let i = 0; i < rows.length; i += PAGE_SIZE) {
+      const slice = rows.slice(i, i + PAGE_SIZE);
+      pages.push(
+        infoEmbed(c.t('search.titleWithCount', { count: rows.length }), slice.map(recordLine).join('\n')),
+      );
+    }
   }
-  if (pages.length === 0) pages.push(infoEmbed('Ledger search', 'No records matched.'));
 
   await paginatedReply({
     interaction: c.interaction,

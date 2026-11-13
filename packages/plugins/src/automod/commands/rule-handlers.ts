@@ -1,9 +1,12 @@
-import { AuditAction, NotFoundError, ValidationError } from '@pavisie/core';
+import { AuditAction, NotFoundError } from '@pavisie/core';
 import type { Prisma } from '@pavisie/database';
 import {
   PendingStore,
   assertStaffLevel,
   buildCustomId,
+  classifyDiscordFailure,
+  discordErrorCode,
+  discordFailureKey,
   errorEmbed,
   infoEmbed,
   listEmbed,
@@ -30,6 +33,17 @@ import { buildRuleConfigModal, readModalFieldValues } from './rule-modal';
 import { parseRuleFieldValues } from './rule-fields';
 
 const MAX_RULES_LISTED = 25;
+
+/** Shared Discord-failure sentence, or `errors.generic` for any other numeric Discord code. Never reads `err.message`. */
+function discordRestReply(t: CommandContext['t'], err: unknown): string | null {
+  const key = discordFailureKey(err);
+  if (key) return t(key);
+  if (classifyDiscordFailure(err) !== null || discordErrorCode(err) !== null) return t('errors.generic');
+  return null;
+}
+
+/** Modal config parse failed. Field-level sentences have no locale key, so this fallback stays literal. */
+const INVALID_CONFIG_VALUES = 'Invalid configuration values.';
 
 interface CreatePendingPayload {
   type: AutomodRuleTypeValue;
@@ -95,7 +109,7 @@ export async function handleRuleCreateModalSubmit(c: ComponentContext, pendingId
   try {
     config = parseRuleFieldValues(payload.type, rawValues);
   } catch (err) {
-    const message = err instanceof ValidationError ? err.message : 'Invalid configuration values.';
+    const message = discordRestReply(c.t, err) ?? INVALID_CONFIG_VALUES;
     await c.interaction.reply({ embeds: [errorEmbed(message)], ephemeral: true });
     return;
   }
@@ -167,7 +181,10 @@ export async function handleRuleList(c: CommandContext): Promise<void> {
 
 export async function handleRuleView(c: CommandContext): Promise<void> {
   const rule = await resolveRuleByOption(c);
-  await c.interaction.reply({ embeds: [ruleDetailEmbed(rule, c.ctx.intentsEnabled)], ephemeral: true });
+  await c.interaction.reply({
+    embeds: [ruleDetailEmbed(rule, c.ctx.intentsEnabled, c.t('automod.rule.viewTitle', { name: rule.name }))],
+    ephemeral: true,
+  });
 }
 
 export async function handleRuleToggle(c: CommandContext): Promise<void> {
@@ -286,7 +303,7 @@ export async function handleRuleEditModalSubmit(c: ComponentContext, ruleId: str
   try {
     config = parseRuleFieldValues(rule.type as AutomodRuleTypeValue, rawValues);
   } catch (err) {
-    const message = err instanceof ValidationError ? err.message : 'Invalid configuration values.';
+    const message = discordRestReply(c.t, err) ?? INVALID_CONFIG_VALUES;
     await c.interaction.reply({ embeds: [errorEmbed(message)], ephemeral: true });
     return;
   }
@@ -386,8 +403,10 @@ export async function handleRuleTest(c: CommandContext): Promise<void> {
   });
 
   const embed = result.matched
-    ? errorEmbed(`**Matched.** ${result.reason ?? ''}`)
-    : successEmbed(`No match.${result.reason ? ` ${result.reason}` : ''}`);
+    ? errorEmbed(c.t('automod.rule.testMatched', { reason: result.reason ?? '' }))
+    : result.reason
+      ? successEmbed(c.t('automod.rule.testNoMatchReason', { reason: result.reason }))
+      : successEmbed(c.t('automod.rule.testNoMatch'));
   await c.interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
