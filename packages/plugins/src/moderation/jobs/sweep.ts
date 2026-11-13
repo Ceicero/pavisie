@@ -1,6 +1,7 @@
 import type { PluginJob } from '../../sdk';
 import { ModerationServiceImpl } from '../service';
 import { liftEnforcerMute } from './enforcer-mute';
+import { timeoutBelongsToCase } from './expire';
 
 const SWEEP_BATCH = 100;
 
@@ -31,7 +32,8 @@ export const sweepJob: PluginJob<Record<string, never>> = {
         if (row.type === 'TIMEOUT') {
           const guild = await ctx.client.guilds.fetch(row.guildId).catch(() => null);
           const member = guild ? await guild.members.fetch(row.targetId).catch(() => null) : null;
-          if (member?.communicationDisabledUntilTimestamp) {
+          // Same rule as the expire job: never lift a newer timeout the member was given since this case.
+          if (member && timeoutBelongsToCase(member.communicationDisabledUntilTimestamp, row.expiresAt)) {
             await member
               .timeout(null, `Timeout expired (case #${row.caseNumber}, caught by sweep)`)
               .catch(() => undefined);

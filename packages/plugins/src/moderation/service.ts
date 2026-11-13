@@ -6,7 +6,7 @@ import {
   type GuildTextBasedChannel,
   type User,
 } from 'discord.js';
-import { AppError, AuditAction, NotFoundError, ValidationError, redisKey } from '@pavisie/core';
+import { AppError, AuditAction, NotFoundError, PermissionError, ValidationError, redisKey } from '@pavisie/core';
 import {
   nextCaseNumber,
   withNextCaseNumber,
@@ -1282,8 +1282,11 @@ export class ModerationServiceImpl implements ModerationService {
     // The decision and its audit row are one transaction; the Discord-side effects (DM, lifting a timeout,
     // offering an unban) come after and cannot undo or skip the record if they fail.
     const updated = await this.ctx.prisma.$transaction(async (tx) => {
-      const row = await tx.moderationAppeal.update({
-        where: { id: input.appealId },
+      // Conditional on PENDING: when two moderators click Accept/Deny at the same moment, both handlers pass
+      // their "still pending?" check, but only one of these updates can match. The other gets "already decided"
+      // instead of flipping the decision and applying its effects a second time.
+      const claimed = await tx.moderationAppeal.updateMany({
+        where: { id: input.appealId, guildId: input.guildId, status: 'PENDING' },
         data: {
           status: input.accept ? 'ACCEPTED' : 'DENIED',
           reviewedBy: input.reviewerId,
@@ -1291,6 +1294,9 @@ export class ModerationServiceImpl implements ModerationService {
           decisionNote: input.decisionNote?.trim() || null,
         },
       });
+      if (claimed.count === 0) throw new PermissionError('This appeal has already been decided.');
+      const row = await tx.moderationAppeal.findUnique({ where: { id: input.appealId } });
+      if (!row) throw new NotFoundError('Appeal not found.');
       await writeAudit(tx, {
         guildId: input.guildId,
         actorId: input.reviewerId,
@@ -1304,10 +1310,37 @@ export class ModerationServiceImpl implements ModerationService {
       return row;
     });
 
-    await this.applyAppealDecisionEffects(updated);
-    await this.markAppealEffectsApplied(updated.id);
+    await this.applyAppealEffectsOnce(updated.id);
 
     return updated;
+  }
+
+  /**
+   * Applies a decided appeal's effects (DM, lifting a timeout, offering an unban) unless they already ran.
+   * Both the bot's own Accept/Deny buttons and the `appeal-sync` job come through here, so a decision made in
+   * Discord while the sync job is ticking is acted on once, not once per path. Serialized per appeal by a
+   * short-lived Redis lease (never a global lock); `effectsAppliedAt` is re-read once the lease is held, so a
+   * path that lost the race sees the effects as done. Returns whether this call applied them.
+   */
+  private async applyAppealEffectsOnce(appealId: string): Promise<boolean> {
+    const lockKey = this.appealSyncLockKey(appealId);
+    const acquired = await this.ctx.redis
+      .set(lockKey, '1', 'PX', APPEAL_SYNC_LOCK_TTL_MS, 'NX')
+      .catch((err: unknown) => {
+        // Without Redis this degrades to the previous, unserialized behaviour rather than skipping effects.
+        this.ctx.logger.warn({ err: String(err), appealId }, 'moderation: appeal effects lease unavailable');
+        return 'OK' as const;
+      });
+    if (acquired !== 'OK') return false;
+    try {
+      const current = await this.ctx.prisma.moderationAppeal.findUnique({ where: { id: appealId } });
+      if (!current || current.effectsAppliedAt || current.status === 'PENDING') return false;
+      await this.applyAppealDecisionEffects(current);
+      await this.markAppealEffectsApplied(appealId);
+      return true;
+    } finally {
+      await this.ctx.redis.del(lockKey).catch(() => undefined);
+    }
   }
 
   /** DMs the appellant and, on acceptance, reverses a still-active TIMEOUT automatically (offers an "Unban now" button for BAN). Shared by the bot's own Accept/Deny buttons and the `appeal-sync` job (dashboard decisions). */
@@ -1421,20 +1454,13 @@ export class ModerationServiceImpl implements ModerationService {
 
     let applied = 0;
     for (const appeal of pending) {
-      const lockKey = this.appealSyncLockKey(appeal.id);
-      const acquired = await this.ctx.redis.set(lockKey, '1', 'PX', APPEAL_SYNC_LOCK_TTL_MS, 'NX');
-      if (acquired !== 'OK') continue;
       try {
-        await this.applyAppealDecisionEffects(appeal);
-        await this.markAppealEffectsApplied(appeal.id);
-        applied += 1;
+        if (await this.applyAppealEffectsOnce(appeal.id)) applied += 1;
       } catch (err) {
         this.ctx.logger.error(
           { err: String(err), appealId: appeal.id },
           'moderation: appeal-sync failed to apply a decision',
         );
-      } finally {
-        await this.ctx.redis.del(lockKey);
       }
     }
     return applied;
