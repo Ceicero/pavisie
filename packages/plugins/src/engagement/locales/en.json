@@ -21,7 +21,9 @@
       "empty": "Nobody has earned XP yet."
     },
     "config": {
-      "title": "Leveling configuration"
+      "title": "Leveling configuration",
+      "publicLeaderboardOn": "Public leaderboard: on. Anyone can view the XP leaderboard and a member's rank without signing in.",
+      "publicLeaderboardOff": "Public leaderboard: off."
     },
     "xp": {
       "given": "Gave **{amount} XP** to {user} (now level {level}, {xp} XP total).",

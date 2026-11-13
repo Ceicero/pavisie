@@ -21,6 +21,8 @@ export interface EngagementXpMultiplier {
 
 export interface EngagementLevelingConfig {
   enabled: boolean;
+  /** When true, the unauthenticated leaderboard and rank routes are available. Off by default. */
+  publicLeaderboard: boolean;
   xpPerMessageMin: number;
   xpPerMessageMax: number;
   xpCooldownSeconds: number;
@@ -70,8 +72,44 @@ export interface LevelProfileDto {
   level: number;
   messages: number;
   voiceMinutes: number;
-  /** 1-based leaderboard position within the guild, when known (omitted from plain list endpoints that don't compute it). */
+  /** 1-based position on a leaderboard page (`offset + index + 1`). Omitted by endpoints that don't compute it. */
   rank?: number;
+}
+
+/** One public leaderboard row. No other member fields are included. */
+export interface PublicLeaderboardEntryDto {
+  rank: number;
+  userId: string;
+  username: string | null;
+  globalName: string | null;
+  avatarUrl: string | null;
+  xp: number;
+  level: number;
+  messages: number;
+  voiceMinutes: number;
+}
+
+/** Unauthenticated leveling leaderboard. `404` when the toggle is off or the bot is not in the guild. */
+export interface PublicLeaderboardDto {
+  guildId: string;
+  items: PublicLeaderboardEntryDto[];
+  nextCursor: string | null;
+  total: number;
+}
+
+/** Unauthenticated `/level rank` payload. `404` when the toggle is off, the bot is absent, or there is no profile. */
+export interface PublicRankDto {
+  userId: string;
+  username: string | null;
+  globalName: string | null;
+  avatarUrl: string | null;
+  rank: number;
+  level: number;
+  xp: number;
+  intoLevel: number;
+  span: number;
+  messages: number;
+  voiceMinutes: number;
 }
 
 export interface LevelRewardDto {
