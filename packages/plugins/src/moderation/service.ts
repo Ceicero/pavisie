@@ -6,10 +6,12 @@ import {
   type GuildTextBasedChannel,
   type User,
 } from 'discord.js';
-import { NotFoundError, ValidationError, redisKey } from '@pavisie/core';
+import { AppError, AuditAction, NotFoundError, ValidationError, redisKey } from '@pavisie/core';
 import {
   nextCaseNumber,
   withNextCaseNumber,
+  writeAudit,
+  type WriteAuditInput,
   type ModerationAppeal,
   type ModerationCase,
   type ModerationCaseType,
@@ -313,21 +315,38 @@ export class ModerationServiceImpl implements ModerationService {
   async createCase(input: CreateModerationCaseInput): Promise<ModerationCase> {
     const expiresAt = input.durationMs ? new Date(Date.now() + input.durationMs) : null;
 
+    // The case and its audit row are written in ONE transaction: a case can never exist without exactly one
+    // audit row, nor an audit row without its case. Everything after this (mod-log post, logging, DM, expiry
+    // job) is best-effort and can fail without touching the record.
     const row = await withNextCaseNumber(this.ctx.prisma, input.guildId, (caseNumber) =>
-      this.ctx.prisma.moderationCase.create({
-        data: {
-          guildId: input.guildId,
-          caseNumber,
-          type: input.type,
-          targetId: input.targetId,
-          moderatorId: input.moderatorId,
-          reason: input.reason?.trim() || null,
-          evidenceUrls: input.evidenceUrls ?? [],
-          durationMs: input.durationMs ?? null,
-          expiresAt,
-          source: input.source,
-          metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
-        },
+      this.ctx.prisma.$transaction(async (tx) => {
+        const created = await tx.moderationCase.create({
+          data: {
+            guildId: input.guildId,
+            caseNumber,
+            type: input.type,
+            targetId: input.targetId,
+            moderatorId: input.moderatorId,
+            reason: input.reason?.trim() || null,
+            evidenceUrls: input.evidenceUrls ?? [],
+            durationMs: input.durationMs ?? null,
+            expiresAt,
+            source: input.source,
+            metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
+          },
+        });
+        await writeAudit(tx, {
+          guildId: created.guildId,
+          actorId: created.moderatorId,
+          actorType: input.source === 'BOT' ? 'user' : 'system',
+          action: AuditAction.ModerationCaseCreate,
+          targetType: 'moderation_case',
+          targetId: created.id,
+          after: { type: created.type, targetId: created.targetId, caseNumber: created.caseNumber },
+          reason: created.reason ?? undefined,
+          source: auditSourceFor(input.source),
+        });
+        return created;
       }),
     );
 
@@ -370,7 +389,11 @@ export class ModerationServiceImpl implements ModerationService {
 
     let dmSent = false;
     if (input.dmUser !== false) {
-      dmSent = await this.maybeDmForCase(row);
+      // Reads config before DMing; a config read failing here must not turn a recorded case into an error.
+      dmSent = await this.maybeDmForCase(row).catch((err: unknown) => {
+        this.ctx.logger.warn({ err: String(err), caseId: row.id }, 'moderation: case DM failed (not fatal)');
+        return false;
+      });
     }
     if (dmSent !== row.dmSent) {
       await this.ctx.prisma.moderationCase
@@ -378,24 +401,30 @@ export class ModerationServiceImpl implements ModerationService {
         .catch(() => undefined);
     }
 
-    await this.ctx.audit({
-      guildId: row.guildId,
-      actorId: row.moderatorId,
-      actorType: input.source === 'BOT' ? 'user' : 'system',
-      action: 'moderation.case.create',
-      targetType: 'moderation_case',
-      targetId: row.id,
-      after: { type: row.type, targetId: row.targetId, caseNumber: row.caseNumber },
-      reason: row.reason ?? undefined,
-      source:
-        input.source === 'DASHBOARD'
-          ? 'dashboard'
-          : input.source === 'AUTOMOD' || input.source === 'SYSTEM'
-            ? 'system'
-            : 'bot',
-    });
-
     return { ...row, dmSent };
+  }
+
+  /**
+   * Records the case (and its audit row) for an action Discord has ALREADY applied. If that write fails, the
+   * action happened with no record, so this logs everything needed to reconstruct it before rethrowing.
+   */
+  private async recordAppliedAction(input: CreateModerationCaseInput): Promise<ModerationCase> {
+    try {
+      return await this.createCase(input);
+    } catch (err) {
+      this.ctx.logger.error(
+        {
+          err: String(err),
+          guildId: input.guildId,
+          type: input.type,
+          targetId: input.targetId,
+          moderatorId: input.moderatorId,
+          source: input.source,
+        },
+        'moderation: action was applied on Discord but its case and audit row could not be written',
+      );
+      throw err;
+    }
   }
 
   /**
@@ -446,7 +475,16 @@ export class ModerationServiceImpl implements ModerationService {
         },
       });
 
-      rule = await this.selectEscalation(input.guildId, input.targetId);
+      // The WARN case (and its audit row) is already recorded. If choosing the rung fails, skip escalation for
+      // this warning rather than reporting the warn as failed: a moderator retrying a "failed" warn would record
+      // the same warning twice.
+      rule = await this.selectEscalation(input.guildId, input.targetId).catch((err: unknown) => {
+        this.ctx.logger.error(
+          { err: String(err), guildId: input.guildId, targetId: input.targetId, caseId },
+          'moderation: could not evaluate the escalation ladder; warning recorded without escalation',
+        );
+        return null;
+      });
     } finally {
       if (lockKey) await this.ctx.redis.del(lockKey).catch(() => undefined);
     }
@@ -550,7 +588,7 @@ export class ModerationServiceImpl implements ModerationService {
     const member = await this.fetchMember(guild, input.targetId);
     await member.timeout(input.durationMs, input.reason);
 
-    const row = await this.createCase({
+    const row = await this.recordAppliedAction({
       guildId: input.guildId,
       type: 'TIMEOUT',
       targetId: input.targetId,
@@ -576,9 +614,16 @@ export class ModerationServiceImpl implements ModerationService {
     const guild = await this.fetchGuild(input.guildId);
     const member = await this.fetchMember(guild, input.targetId);
     await member.timeout(null, input.reason);
-    await this.markExpiredForActiveTimeout(input.guildId, input.targetId);
+    // Discord has already applied this. Marking the older case expired is bookkeeping and must not stop the
+    // new case from being recorded.
+    await this.markExpiredForActiveTimeout(input.guildId, input.targetId).catch((err: unknown) =>
+      this.ctx.logger.warn(
+        { err: String(err), guildId: input.guildId, targetId: input.targetId },
+        'moderation: could not mark the earlier case expired',
+      ),
+    );
 
-    return this.createCase({
+    return this.recordAppliedAction({
       guildId: input.guildId,
       type: 'UNTIMEOUT',
       targetId: input.targetId,
@@ -698,7 +743,7 @@ export class ModerationServiceImpl implements ModerationService {
 
     await member.kick(input.reason);
 
-    const row = await this.createCase({
+    const row = await this.recordAppliedAction({
       guildId: input.guildId,
       type: 'KICK',
       targetId: input.targetId,
@@ -738,7 +783,7 @@ export class ModerationServiceImpl implements ModerationService {
       deleteMessageSeconds: input.deleteMessageSeconds ?? 0,
     });
 
-    const row = await this.createCase({
+    const row = await this.recordAppliedAction({
       guildId: input.guildId,
       type: 'BAN',
       targetId: input.targetId,
@@ -775,9 +820,35 @@ export class ModerationServiceImpl implements ModerationService {
       reason: input.reason ?? 'Softban',
       deleteMessageSeconds: input.deleteMessageSeconds ?? 86400,
     });
-    await guild.bans.remove(input.targetId, 'Softban cleanup — automatic unban after message purge.');
+    try {
+      await guild.bans.remove(input.targetId, 'Softban cleanup — automatic unban after message purge.');
+    } catch (err) {
+      // The ban went through but the automatic unban did not: the member is now BANNED. Record exactly that, as
+      // a BAN case, so the record matches Discord and `/mod unban` (or a temp-ban expiry) finds it.
+      const row = await this.recordAppliedAction({
+        guildId: input.guildId,
+        type: 'BAN',
+        targetId: input.targetId,
+        moderatorId: input.moderatorId,
+        reason: input.reason,
+        evidenceUrls: input.evidenceUrls,
+        source: input.source,
+        dmUser: false,
+        metadata: { softban: true, softbanUnbanFailed: true },
+      });
+      if (dmSent) await this.markDmSent(row);
+      this.ctx.logger.warn(
+        { err: String(err), guildId: input.guildId, caseId: row.id },
+        'moderation: softban unban failed; member left banned and recorded as a BAN case',
+      );
+      throw new AppError(
+        'softban_unban_failed',
+        `The member was banned and their recent messages were deleted, but the automatic unban failed, so they are still banned (case #${row.caseNumber}). Use \`/mod unban\` to lift it.`,
+        { status: 502, expose: true },
+      );
+    }
 
-    const row = await this.createCase({
+    const row = await this.recordAppliedAction({
       guildId: input.guildId,
       type: 'SOFTBAN',
       targetId: input.targetId,
@@ -794,9 +865,16 @@ export class ModerationServiceImpl implements ModerationService {
   async unban(input: UnbanInput): Promise<ModerationCase> {
     const guild = await this.fetchGuild(input.guildId);
     await guild.bans.remove(input.targetId, input.reason);
-    await this.markExpiredForActiveBan(input.guildId, input.targetId);
+    // Discord has already applied this. Marking the older case expired is bookkeeping and must not stop the
+    // new case from being recorded.
+    await this.markExpiredForActiveBan(input.guildId, input.targetId).catch((err: unknown) =>
+      this.ctx.logger.warn(
+        { err: String(err), guildId: input.guildId, targetId: input.targetId },
+        'moderation: could not mark the earlier case expired',
+      ),
+    );
 
-    return this.createCase({
+    return this.recordAppliedAction({
       guildId: input.guildId,
       type: 'UNBAN',
       targetId: input.targetId,
@@ -850,7 +928,7 @@ export class ModerationServiceImpl implements ModerationService {
       deletedCount = deleted.size;
     }
 
-    const row = await this.createCase({
+    const row = await this.recordAppliedAction({
       guildId: input.guildId,
       type: 'PURGE',
       targetId: input.userId ?? input.moderatorId,
@@ -941,7 +1019,7 @@ export class ModerationServiceImpl implements ModerationService {
       { reason: input.reason },
     );
 
-    return this.createCase({
+    return this.recordAppliedAction({
       guildId: input.guildId,
       type: 'LOCK',
       targetId: input.channelId,
@@ -967,9 +1045,16 @@ export class ModerationServiceImpl implements ModerationService {
       { SendMessages: null, SendMessagesInThreads: null },
       { reason: input.reason },
     );
-    await this.clearBotLockOverwrite(channel, input.reason);
+    // The channel is unlocked at this point. Dropping the bot's own leftover allow is cleanup only: if it fails,
+    // the unlock still happened and must still be recorded.
+    await this.clearBotLockOverwrite(channel, input.reason).catch((err: unknown) =>
+      this.ctx.logger.warn(
+        { err: String(err), guildId: input.guildId, channelId: input.channelId },
+        'moderation: channel unlocked but the bot could not remove its own lock overwrite',
+      ),
+    );
 
-    return this.createCase({
+    return this.recordAppliedAction({
       guildId: input.guildId,
       type: 'UNLOCK',
       targetId: input.channelId,
@@ -992,7 +1077,7 @@ export class ModerationServiceImpl implements ModerationService {
       throw new ValidationError('Slowmode cannot be set on that channel.');
     await channel.setRateLimitPerUser(input.seconds ?? 0, input.reason);
 
-    return this.createCase({
+    return this.recordAppliedAction({
       guildId: input.guildId,
       type: 'SLOWMODE',
       targetId: input.channelId,
@@ -1009,7 +1094,7 @@ export class ModerationServiceImpl implements ModerationService {
     const member = await this.fetchMember(guild, input.targetId);
     await member.setNickname(input.nickname, input.reason);
 
-    return this.createCase({
+    return this.recordAppliedAction({
       guildId: input.guildId,
       type: 'NICK',
       targetId: input.targetId,
@@ -1030,7 +1115,7 @@ export class ModerationServiceImpl implements ModerationService {
       await member.roles.add(input.roleId, input.reason);
     }
 
-    return this.createCase({
+    return this.recordAppliedAction({
       guildId: input.guildId,
       type: input.remove ? 'ROLE_REMOVE' : 'ROLE_ADD',
       targetId: input.targetId,
@@ -1076,18 +1161,36 @@ export class ModerationServiceImpl implements ModerationService {
     });
   }
 
-  /** Clears one active warning (or, if `warningId` is omitted, every active warning for the user). */
+  /**
+   * Clears one active warning (or, if `warningId` is omitted, every active warning for the user). Clearing
+   * warnings changes what the escalation ladder does next, so it is audited — in the same transaction as the
+   * change, and only when something was actually cleared.
+   */
   async clearWarnings(
     guildId: string,
     userId: string,
     clearedBy: string,
     warningId?: string,
   ): Promise<number> {
-    const result = await this.ctx.prisma.moderationWarning.updateMany({
-      where: { guildId, userId, active: true, ...(warningId ? { id: warningId } : {}) },
-      data: { active: false, clearedAt: new Date(), clearedBy },
+    return this.ctx.prisma.$transaction(async (tx) => {
+      const result = await tx.moderationWarning.updateMany({
+        where: { guildId, userId, active: true, ...(warningId ? { id: warningId } : {}) },
+        data: { active: false, clearedAt: new Date(), clearedBy },
+      });
+      if (result.count > 0) {
+        await writeAudit(tx, {
+          guildId,
+          actorId: clearedBy,
+          actorType: 'user',
+          action: AuditAction.ModerationWarningClear,
+          targetType: 'user',
+          targetId: userId,
+          after: { cleared: result.count, warningId: warningId ?? null },
+          source: 'bot',
+        });
+      }
+      return result.count;
     });
-    return result.count;
   }
 
   // ---------------------------------------------------------------------
@@ -1176,29 +1279,33 @@ export class ModerationServiceImpl implements ModerationService {
 
   /** Bot-path decision (Accept/Deny buttons on the appeal prompt). Dashboard decisions write the DB directly and are picked up by the `appeal-sync` job. */
   async decideAppeal(input: DecideAppealInput): Promise<ModerationAppeal> {
-    const updated = await this.ctx.prisma.moderationAppeal.update({
-      where: { id: input.appealId },
-      data: {
-        status: input.accept ? 'ACCEPTED' : 'DENIED',
-        reviewedBy: input.reviewerId,
-        reviewedAt: new Date(),
-        decisionNote: input.decisionNote?.trim() || null,
-      },
+    // The decision and its audit row are one transaction; the Discord-side effects (DM, lifting a timeout,
+    // offering an unban) come after and cannot undo or skip the record if they fail.
+    const updated = await this.ctx.prisma.$transaction(async (tx) => {
+      const row = await tx.moderationAppeal.update({
+        where: { id: input.appealId },
+        data: {
+          status: input.accept ? 'ACCEPTED' : 'DENIED',
+          reviewedBy: input.reviewerId,
+          reviewedAt: new Date(),
+          decisionNote: input.decisionNote?.trim() || null,
+        },
+      });
+      await writeAudit(tx, {
+        guildId: input.guildId,
+        actorId: input.reviewerId,
+        actorType: 'user',
+        action: input.accept ? AuditAction.ModerationAppealApprove : AuditAction.ModerationAppealDeny,
+        targetType: 'moderation_appeal',
+        targetId: row.id,
+        after: { status: row.status },
+        source: 'bot',
+      });
+      return row;
     });
 
     await this.applyAppealDecisionEffects(updated);
     await this.markAppealEffectsApplied(updated.id);
-
-    await this.ctx.audit({
-      guildId: input.guildId,
-      actorId: input.reviewerId,
-      actorType: 'user',
-      action: input.accept ? 'moderation.appeal.approve' : 'moderation.appeal.deny',
-      targetType: 'moderation_appeal',
-      targetId: updated.id,
-      after: { status: updated.status },
-      source: 'bot',
-    });
 
     return updated;
   }
@@ -1337,6 +1444,13 @@ export class ModerationServiceImpl implements ModerationService {
 // -----------------------------------------------------------------------
 // Cursor helpers (offset-based, matching @pavisie/core's paginate() shape without importing an api-only dep)
 // -----------------------------------------------------------------------
+
+/** Maps a case's source to the audit log's source. */
+function auditSourceFor(source: CreateModerationCaseInput['source']): WriteAuditInput['source'] {
+  if (source === 'DASHBOARD') return 'dashboard';
+  if (source === 'AUTOMOD' || source === 'SYSTEM') return 'system';
+  return 'bot';
+}
 
 function decodeOffsetCursor(cursor: string | null | undefined): number {
   if (!cursor) return 0;
