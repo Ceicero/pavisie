@@ -14,8 +14,6 @@ export interface PublicLeaderboardEntryDto {
   avatarUrl: string | null;
   xp: number;
   level: number;
-  messages: number;
-  voiceMinutes: number;
 }
 
 export interface PublicLeaderboardDto {
@@ -33,6 +31,7 @@ export const PUBLIC_LEADERBOARD_LIMIT = 25;
 export const NOT_PUBLIC_MESSAGE = "This leaderboard isn't public.";
 export const EMPTY_LEADERBOARD_MESSAGE = 'No ranked members yet.';
 export const INVALID_GUILD_MESSAGE = "This isn't a valid leaderboard link.";
+export const UNKNOWN_USER_NAME = 'Unknown user';
 
 export function isGuildSnowflake(guildId: string): boolean {
   return GUILD_ID_PATTERN.test(guildId);
@@ -45,15 +44,13 @@ export function leaderboardDisplayName(
   if (globalName) return globalName;
   const username = entry.username?.trim();
   if (username) return username;
-  return 'Unknown user';
+  return UNKNOWN_USER_NAME;
 }
 
-export function formatVoiceMinutes(minutes: number): string {
-  if (minutes < 60) return `${minutes.toLocaleString()} min`;
-  const hours = Math.floor(minutes / 60);
-  const remaining = minutes % 60;
-  if (remaining === 0) return `${hours.toLocaleString()}h`;
-  return `${hours.toLocaleString()}h ${remaining}m`;
+/** Placeholder initial when a row has no usable name (lookup miss or budget exhaustion). */
+export function leaderboardAvatarInitial(name: string): string {
+  if (!name || name === UNKNOWN_USER_NAME) return '?';
+  return name.charAt(0).toUpperCase();
 }
 
 export class PublicLeaderboardError extends Error {
@@ -81,11 +78,10 @@ export const publicLeaderboardQueryKeys = {
 export async function fetchPublicLeaderboard(
   guildId: string,
   cursor?: string,
-  limit: number = PUBLIC_LEADERBOARD_LIMIT,
 ): Promise<PublicLeaderboardDto> {
   const qs = new URLSearchParams();
   if (cursor) qs.set('cursor', cursor);
-  qs.set('limit', String(limit));
+  qs.set('limit', String(PUBLIC_LEADERBOARD_LIMIT));
   const url = `${apiUrl()}/guilds/${guildId}/engagement/leaderboard/public?${qs.toString()}`;
 
   let response: Response;

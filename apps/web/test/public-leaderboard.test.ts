@@ -7,10 +7,11 @@ import {
   NOT_PUBLIC_MESSAGE,
   PUBLIC_LEADERBOARD_LIMIT,
   PublicLeaderboardError,
+  UNKNOWN_USER_NAME,
   fetchPublicLeaderboard,
-  formatVoiceMinutes,
   isGuildSnowflake,
   isNotPublicError,
+  leaderboardAvatarInitial,
   leaderboardDisplayName,
   publicLeaderboardQueryKeys,
 } from '../src/lib/public/leaderboard';
@@ -39,14 +40,15 @@ describe('public leaderboard helpers', () => {
     expect(leaderboardDisplayName({ globalName: 'Ada', username: 'ada' })).toBe('Ada');
     expect(leaderboardDisplayName({ globalName: '  ', username: 'ada' })).toBe('ada');
     expect(leaderboardDisplayName({ globalName: null, username: 'ada' })).toBe('ada');
-    expect(leaderboardDisplayName({ globalName: null, username: null })).toBe('Unknown user');
+    expect(leaderboardDisplayName({ globalName: null, username: null })).toBe(UNKNOWN_USER_NAME);
   });
 
-  it('formats voice time', () => {
-    expect(formatVoiceMinutes(0)).toBe('0 min');
-    expect(formatVoiceMinutes(45)).toBe('45 min');
-    expect(formatVoiceMinutes(60)).toBe('1h');
-    expect(formatVoiceMinutes(90)).toBe('1h 30m');
+  it('falls back when every identity field is null', () => {
+    const row = { globalName: null, username: null, avatarUrl: null };
+    expect(leaderboardDisplayName(row)).toBe(UNKNOWN_USER_NAME);
+    expect(leaderboardAvatarInitial(leaderboardDisplayName(row))).toBe('?');
+    expect(leaderboardAvatarInitial('')).toBe('?');
+    expect(leaderboardAvatarInitial('Ada')).toBe('A');
   });
 
   it('builds stable query keys', () => {
@@ -183,6 +185,13 @@ describe('public leaderboard page conventions', () => {
     expect(lib).toContain('/engagement/leaderboard/public');
     expect(lib).not.toContain('apiFetch');
     expect(lib).not.toContain("credentials: 'include'");
+    expect(lib).not.toContain('messages');
+    expect(lib).not.toContain('voiceMinutes');
+    expect(lib).not.toContain('formatVoiceMinutes');
+    expect(panel).not.toContain('messages');
+    expect(panel).not.toContain('voiceMinutes');
+    expect(panel).not.toContain('formatVoiceMinutes');
+    expect(panel).toContain('leaderboardAvatarInitial');
     expect(NOT_PUBLIC_MESSAGE).toBe("This leaderboard isn't public.");
     expect(EMPTY_LEADERBOARD_MESSAGE).toBe('No ranked members yet.');
     expect(INVALID_GUILD_MESSAGE).toBe("This isn't a valid leaderboard link.");

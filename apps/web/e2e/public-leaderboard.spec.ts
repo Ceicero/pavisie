@@ -100,12 +100,19 @@ test.describe('public XP leaderboard', () => {
           avatarUrl: null,
           xp: 1500,
           level: 8,
-          messages: 40,
-          voiceMinutes: 90,
+        },
+        {
+          rank: 2,
+          userId: '222222222222222222',
+          username: null,
+          globalName: null,
+          avatarUrl: null,
+          xp: 200,
+          level: 2,
         },
       ],
       nextCursor: null,
-      total: 1,
+      total: 2,
     });
 
     await page.goto(`/leaderboard/${DEMO_GUILD_ID}`);
@@ -113,6 +120,8 @@ test.describe('public XP leaderboard', () => {
     await expect(page.getByRole('heading', { name: 'XP Leaderboard', level: 1 })).toBeVisible();
     await expect(page.getByText('Ada Lovelace')).toBeVisible();
     await expect(page.getByText('1,500')).toBeVisible();
-    await expect(page.getByText('1h 30m')).toBeVisible();
+    await expect(page.getByText('Unknown user')).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Messages' })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: 'Voice' })).toHaveCount(0);
   });
 });

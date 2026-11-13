@@ -10,8 +10,8 @@ import {
   NOT_PUBLIC_MESSAGE,
   PUBLIC_LEADERBOARD_LIMIT,
   fetchPublicLeaderboard,
-  formatVoiceMinutes,
   isNotPublicError,
+  leaderboardAvatarInitial,
   leaderboardDisplayName,
   publicLeaderboardQueryKeys,
   type PublicLeaderboardEntryDto,
@@ -29,7 +29,7 @@ function MemberAvatar({ entry, name }: { entry: PublicLeaderboardEntryDto; name:
   if (entry.avatarUrl) {
     return <img src={entry.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full" />;
   }
-  const initial = name === 'Unknown user' ? '?' : name.charAt(0).toUpperCase();
+  const initial = leaderboardAvatarInitial(name);
   return (
     <span
       aria-hidden
@@ -116,12 +116,6 @@ export function PublicLeaderboard({ guildId }: { guildId: string }) {
               <th scope="col" className="px-6 py-3 font-medium">
                 XP
               </th>
-              <th scope="col" className="px-6 py-3 font-medium">
-                Messages
-              </th>
-              <th scope="col" className="px-6 py-3 font-medium">
-                Voice
-              </th>
             </tr>
           </thead>
           <tbody>
@@ -148,12 +142,6 @@ export function PublicLeaderboard({ guildId }: { guildId: string }) {
                   </td>
                   <td className="whitespace-nowrap px-6 py-3 tabular-nums text-grey-7">
                     {entry.xp.toLocaleString()}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-3 tabular-nums text-grey-7">
-                    {entry.messages.toLocaleString()}
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-3 tabular-nums text-grey-7">
-                    {formatVoiceMinutes(entry.voiceMinutes)}
                   </td>
                 </tr>
               );
