@@ -119,3 +119,112 @@ export interface OwnerMetricsUsageDto {
   points: OwnerMetricsUsagePointDto[];
   totals: OwnerMetricsUsageTotalsDto;
 }
+
+/** Lower-cased Prisma `ConnectionStatus`, tallied — every key is always present (zero when no row has that status). */
+export interface OwnerMetricsStatusCountsDto {
+  connected: number;
+  disconnected: number;
+  error: number;
+  pending: number;
+}
+
+/** One day of `GET /owner/metrics/twitch` — zero-filled for days nobody linked a channel. */
+export interface OwnerMetricsTwitchPointDto {
+  /** `YYYY-MM-DD`, UTC. */
+  date: string;
+  /** Twitch channels first linked on this day (`TwitchChatChannel.createdAt`) that still exist. */
+  linked: number;
+  /** Running total of `linked` from the start of the requested window (not an absolute channel count — a deleted channel leaves no row to count). */
+  runningTotal: number;
+}
+
+/**
+ * `GET /owner/metrics/twitch?days=` — the Twitch side of the fleet: Pavisie's own chat-bot account, every linked
+ * channel, what streamers have configured, the channel economy, and the per-guild "stream is live" alert
+ * connections. Aggregate counts only: no viewer ids, no chat content, no token material.
+ */
+export interface OwnerMetricsTwitchDto {
+  /** The singleton `TwitchBotIdentity`. `configured: false` (with the other fields null) until the owner authorizes it. */
+  bot: {
+    configured: boolean;
+    login: string | null;
+    status: keyof OwnerMetricsStatusCountsDto | null;
+    lastError: string | null;
+  };
+  channels: {
+    total: number;
+    /** `TwitchChatChannel.enabled` — the streamer's own on/off switch, independent of connection `status`. */
+    enabled: number;
+    status: OwnerMetricsStatusCountsDto;
+    /** Linked to a Discord server (`guildId` set). */
+    guildLinked: number;
+    /** Set up from the creator dashboard with no Discord server. */
+    standalone: number;
+    linked7d: number;
+    linked30d: number;
+    rewardsEnabled: number;
+    /** At least one direction of the Discord <-> Twitch chat bridge is on. */
+    bridgeEnabled: number;
+  };
+  /** Enabled items only — a disabled command/timer/reward is configured but not in use. */
+  features: {
+    commands: number;
+    timers: number;
+    rewards: number;
+    rewardsByAction: { sound: number; tts: number; chat: number; discord: number };
+  };
+  economy: {
+    /** `ChannelEconomy` rows (a channel that saved economy settings at least once). */
+    economies: number;
+    enabled: number;
+    /** Viewer wallets across every channel. */
+    wallets: number;
+    /** Wallets whose balance changed in the window (`updatedAt`) — the closest signal to "active viewers". */
+    activeWallets7d: number;
+    activeWallets30d: number;
+    transactions7d: number;
+    transactions30d: number;
+    /** Last 30 days of ledger rows by `type` (daily, give, twitch_chat_earn, admin_add, admin_remove), busiest first. */
+    transactionsByType30d: { type: string; count: number }[];
+  };
+  /** Per-guild Twitch "stream is live" alert connections (`IntegrationConnection`, provider TWITCH, not soft-deleted). */
+  alerts: {
+    total: number;
+    status: OwnerMetricsStatusCountsDto;
+  };
+  points: OwnerMetricsTwitchPointDto[];
+}
+
+/** One row of `GET /owner/metrics/twitch/channels` — cursor-paginated, newest-linked first. */
+export interface OwnerMetricsTwitchChannelDto {
+  id: string;
+  broadcasterLogin: string;
+  enabled: boolean;
+  status: keyof OwnerMetricsStatusCountsDto;
+  /** `null` for a creator-dashboard-only channel with no Discord server linked. */
+  guildId: string | null;
+  guildName: string | null;
+  commands: number;
+  timers: number;
+  rewards: number;
+  rewardsEnabled: boolean;
+  bridgeEnabled: boolean;
+  lastConnectedAt: string | null;
+  lastError: string | null;
+  linkedAt: string;
+}
+
+/** One provider's row in `GET /owner/metrics/integrations`. */
+export interface OwnerMetricsIntegrationProviderDto {
+  /** Prisma `IntegrationProvider` value, e.g. `TWITCH`, `YOUTUBE`. */
+  provider: string;
+  total: number;
+  status: OwnerMetricsStatusCountsDto;
+}
+
+/** `GET /owner/metrics/integrations` — every non-deleted guild integration connection, tallied by provider and status. */
+export interface OwnerMetricsIntegrationsDto {
+  /** Busiest provider first. Providers with no connections are omitted. */
+  providers: OwnerMetricsIntegrationProviderDto[];
+  totals: { total: number; status: OwnerMetricsStatusCountsDto };
+}

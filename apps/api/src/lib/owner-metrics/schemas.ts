@@ -34,3 +34,15 @@ export const ownerMetricsGrowthQuerySchema = z.object({
 export const ownerMetricsUsageQuerySchema = z.object({
   days: z.coerce.number().int().optional(),
 });
+
+/** `GET /owner/metrics/twitch` query. Same clamp-don't-reject contract as the growth schema above. */
+export const ownerMetricsTwitchQuerySchema = z.object({
+  days: z.coerce.number().int().optional(),
+});
+
+/** `GET /owner/metrics/twitch/channels` query — search + status filter plus the shared cursor/limit pagination params. */
+export const ownerMetricsTwitchChannelsQuerySchema = paginationQuerySchema.extend({
+  /** Matched against `TwitchChatChannel.broadcasterLogin` (case-insensitive substring). */
+  query: z.string().trim().min(1).max(200).optional(),
+  status: z.enum(['connected', 'disconnected', 'error', 'pending']).optional(),
+});

@@ -105,6 +105,7 @@ pavisie/
 ├── infra/
 │   ├── docker/           Dockerfile.bot, Dockerfile.api, Dockerfile.dashboard, Dockerfile.web
 │   └── DEPLOYMENT.md
+├── desktop/              "Pavisie Dev" — owner-only Electron app for fleet-wide Discord + Twitch stats (standalone, not in the pnpm workspace)
 ├── assets/brand/         Logo source (pavisie-skull.png / .jpg)
 ├── docs/                 SPEC, ARCHITECTURE, PERMISSIONS, TROUBLESHOOTING, and more
 ├── .github/workflows/ci.yml
