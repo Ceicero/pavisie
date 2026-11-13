@@ -1,5 +1,13 @@
 import { ChannelType, type SlashCommandBuilder } from 'discord.js';
-import { assertStaffLevel, errorEmbed, successEmbed, type CommandContext } from '../../sdk';
+import {
+  assertStaffLevel,
+  classifyDiscordFailure,
+  discordErrorCode,
+  discordFailureKey,
+  errorEmbed,
+  successEmbed,
+  type CommandContext,
+} from '../../sdk';
 import {
   applyFlagQueueOverwrites,
   applyLedgerOverwrites,
@@ -72,6 +80,14 @@ export function addSetupSubcommand(builder: SlashCommandBuilder): SlashCommandBu
 const MUTE_APPLY_HINT =
   'check that I have Manage Roles and Manage Channels there, plus every permission the mute role denies: Send Messages, Send Messages in Threads, Speak, Add Reactions';
 
+/** Shared Discord-failure sentence, or `errors.generic` for any other numeric Discord code. Never reads `err.message`. */
+function discordRestReply(t: CommandContext['t'], err: unknown): string | null {
+  const key = discordFailureKey(err);
+  if (key) return t(key);
+  if (classifyDiscordFailure(err) !== null || discordErrorCode(err) !== null) return t('errors.generic');
+  return null;
+}
+
 /**
  * One sentence describing a bulk mute-role apply. Channels that failed and channels the bot cannot manage at all
  * are both named: a mute that silently doesn't reach part of the server is the failure mode this command has to
@@ -96,6 +112,20 @@ export async function executeSetup(c: CommandContext): Promise<void> {
 
   await c.interaction.deferReply({ ephemeral: true });
 
+  try {
+    await runSetup(c);
+  } catch (err) {
+    const text = discordRestReply(c.t, err);
+    if (!text) throw err;
+    c.ctx.logger.warn(
+      { code: discordErrorCode(err), guildId: c.guildId },
+      'enforcer: setup hit a Discord error',
+    );
+    await c.interaction.editReply({ embeds: [errorEmbed(text)] });
+  }
+}
+
+async function runSetup(c: CommandContext): Promise<void> {
   const guild = c.interaction.guild;
   const config = await c.config<EnforcerConfig>();
   const repairOnly = c.interaction.options.getBoolean('repair') ?? false;
@@ -110,10 +140,12 @@ export async function executeSetup(c: CommandContext): Promise<void> {
       : { muteApplied: 0, muteFailed: 0 };
     const muteSuffix =
       muteApplied > 0 || muteFailed > 0
-        ? `, mute role on ${muteApplied} channel(s)${muteFailed > 0 ? ` (${muteFailed} failed — ${MUTE_APPLY_HINT})` : ''}`
+        ? `${c.t('setup.repairedMuteSuffix', { count: muteApplied })}${
+            muteFailed > 0 ? ` (${muteFailed} failed — ${MUTE_APPLY_HINT})` : ''
+          }`
         : '';
     await c.interaction.editReply({
-      embeds: [successEmbed(`Channel permission overwrites re-applied (ledger, flag queue${muteSuffix}).`)],
+      embeds: [successEmbed(c.t('setup.repaired', { muteSuffix }))],
     });
     return;
   }

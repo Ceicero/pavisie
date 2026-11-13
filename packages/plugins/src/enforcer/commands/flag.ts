@@ -128,13 +128,10 @@ export const flagContextMenuCommand: PluginCommand = {
         })),
       );
 
-    const contentWarning =
-      message.content.length === 0
-        ? '\n-# This message has no readable content here (the Message Content intent may be off) — the flag will carry only a jump link unless your note adds context.'
-        : '';
+    const contentWarning = message.content.length === 0 ? `\n${c.t('flag.noContentWarning')}` : '';
 
     await c.interaction.reply({
-      content: `Flagging this message for review. Pick a policy (or none), then add an optional note.${contentWarning}`,
+      content: `${c.t('flag.prompt')}${contentWarning}`,
       components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
       ephemeral: true,
     });

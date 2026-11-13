@@ -246,7 +246,10 @@ function buildMatcherFromOptions(
 
   const value = parseMatcherValue(type, rawValue);
   if (value === undefined) {
-    return { matcher: null, error: `"${rawValue}" is not a valid value for a ${type} matcher.` };
+    return {
+      matcher: null,
+      error: c.t('policy.invalidMatcherValue', { value: rawValue, type }),
+    };
   }
 
   // Validate through the same `matcherSchema` the API/dashboard path uses (policyMatchersSchema) — a slash
@@ -254,7 +257,10 @@ function buildMatcherFromOptions(
   // threshold that matches every message.
   const parsed = matcherSchema.safeParse({ type, value, caseSensitive, wholeWord });
   if (!parsed.success) {
-    return { matcher: null, error: parsed.error.issues[0]?.message ?? 'Invalid matcher value.' };
+    return {
+      matcher: null,
+      error: parsed.error.issues[0]?.message ?? c.t('policy.invalidMatcherValueGeneric'),
+    };
   }
 
   return { matcher: parsed.data };
@@ -271,18 +277,21 @@ function policySummaryLine(policy: {
   return `${policy.enabled ? '🟢' : '⚪'} **${policy.name}** (${policy.severity}) — ${matcherCount} matcher(s) — \`${policy.id}\``;
 }
 
-function policyDetailEmbed(policy: {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  severity: string;
-  matchers: MatcherInput[];
-  channelIds: string[];
-  exemptRoleIds: string[];
-  exemptChannelIds: string[];
-  suggestedAction: string | null;
-}) {
+function policyDetailEmbed(
+  policy: {
+    id: string;
+    name: string;
+    description: string;
+    enabled: boolean;
+    severity: string;
+    matchers: MatcherInput[];
+    channelIds: string[];
+    exemptRoleIds: string[];
+    exemptChannelIds: string[];
+    suggestedAction: string | null;
+  },
+  title: string,
+) {
   const lines = [
     policy.description,
     '',
@@ -298,7 +307,7 @@ function policyDetailEmbed(policy: {
       (m) => `• ${m.type}: ${Array.isArray(m.value) ? m.value.join(', ') : String(m.value)}`,
     ),
   ];
-  return infoEmbed(`Policy: ${policy.name}`, lines.join('\n'));
+  return infoEmbed(title, lines.join('\n'));
 }
 
 async function findPolicyOrReply(c: CommandContext, policyId: string) {
@@ -410,6 +419,13 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
       where: { guildId: c.guildId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
+    if (policies.length === 0) {
+      await c.interaction.reply({
+        embeds: [infoEmbed(c.t('policy.listTitle'), c.t('policy.listEmpty'))],
+        ephemeral: true,
+      });
+      return;
+    }
     await c.interaction.reply({
       embeds: [listEmbed(c.t('policy.listTitle'), policies.map(policySummaryLine))],
       ephemeral: true,
@@ -421,7 +437,12 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
     const policy = await findPolicyOrReply(c, c.interaction.options.getString('policy', true));
     if (!policy) return;
     await c.interaction.reply({
-      embeds: [policyDetailEmbed({ ...policy, matchers: policy.matchers as MatcherInput[] })],
+      embeds: [
+        policyDetailEmbed(
+          { ...policy, matchers: policy.matchers as MatcherInput[] },
+          c.t('policy.viewTitle', { name: policy.name }),
+        ),
+      ],
       ephemeral: true,
     });
     return;
@@ -491,7 +512,9 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
       const value = parseMatcherValue(matcherType, matcherValueRaw);
       if (value === undefined) {
         await c.interaction.reply({
-          embeds: [errorEmbed(`"${matcherValueRaw}" is not a valid value for a ${matcherType} matcher.`)],
+          embeds: [
+            errorEmbed(c.t('policy.invalidMatcherValue', { value: matcherValueRaw, type: matcherType })),
+          ],
           ephemeral: true,
         });
         return;
@@ -499,7 +522,7 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
       const parsed = matcherSchema.safeParse({ type: matcherType, value });
       if (!parsed.success) {
         await c.interaction.reply({
-          embeds: [errorEmbed(parsed.error.issues[0]?.message ?? 'Invalid matcher value.')],
+          embeds: [errorEmbed(parsed.error.issues[0]?.message ?? c.t('policy.invalidMatcherValueGeneric'))],
           ephemeral: true,
         });
         return;
@@ -575,7 +598,7 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
     const matches = evaluate(message, policies);
     if (matches.length === 0) {
       await c.interaction.reply({
-        embeds: [infoEmbed('No matches', 'This text did not match any of the tested policies.')],
+        embeds: [infoEmbed(c.t('policy.testNoMatchTitle'), c.t('policy.testNoMatch'))],
         ephemeral: true,
       });
       return;
@@ -584,7 +607,7 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
     await c.interaction.reply({
       embeds: [
         listEmbed(
-          'Test matches',
+          c.t('policy.testMatchesTitle'),
           matches.map((m) => `**${m.policyName}** (${m.severity}) — ${m.matcherSummary}`),
         ),
       ],
