@@ -24,7 +24,7 @@ import {
   type PluginCommand,
   type PluginContext,
 } from '../../sdk';
-import type { EngagementConfig } from '../manifest';
+import { clampXpMultiplier, type EngagementConfig } from '../manifest';
 import { applyLevelUp } from '../level-actions';
 import { computeLevelRewardPlan, formatProgressBar, levelFromXp, levelProgress } from '../service';
 
@@ -176,11 +176,71 @@ const data = new SlashCommandBuilder()
           )
           .addRoleOption((opt) => opt.setName('role').setDescription('Role to un-ignore.')),
       ),
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName('multiplier')
+      .setDescription('Boost or reduce XP for a role or channel.')
+      .addSubcommand((sub) =>
+        sub
+          .setName('set')
+          .setDescription('Set the XP multiplier for one role or one channel.')
+          .addNumberOption((opt) =>
+            opt
+              .setName('multiplier')
+              .setDescription('Factor from 0.25 to 5. The higher of the role and channel factors is used.')
+              .setMinValue(0.25)
+              .setMaxValue(5)
+              .setRequired(true),
+          )
+          .addChannelOption((opt) =>
+            opt
+              .setName('channel')
+              .setDescription('Channel whose messages or voice time use this factor.')
+              .addChannelTypes(
+                ChannelType.GuildText,
+                ChannelType.GuildAnnouncement,
+                ChannelType.GuildForum,
+                ChannelType.GuildVoice,
+              ),
+          )
+          .addRoleOption((opt) => opt.setName('role').setDescription('Role whose members use this factor.')),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('clear')
+          .setDescription('Remove the XP multiplier from one role or one channel.')
+          .addChannelOption((opt) =>
+            opt
+              .setName('channel')
+              .setDescription('Channel to clear.')
+              .addChannelTypes(
+                ChannelType.GuildText,
+                ChannelType.GuildAnnouncement,
+                ChannelType.GuildForum,
+                ChannelType.GuildVoice,
+              ),
+          )
+          .addRoleOption((opt) => opt.setName('role').setDescription('Role to clear.')),
+      ),
   );
 
 function xpBar(xp: number): { level: number; intoLevel: number; span: number; bar: string } {
   const { level, intoLevel, span } = levelProgress(xp);
   return { level, intoLevel, span, bar: formatProgressBar(intoLevel, span) };
+}
+
+function formatXpMultiplier(value: number): string {
+  return String(Math.round(value * 1000) / 1000);
+}
+
+/** `none` when the list is empty, otherwise `<mention> ×2` entries joined with commas. */
+function formatXpMultiplierList(
+  entries: { id: string; multiplier: number }[],
+  mention: (id: string) => string,
+): string {
+  if (entries.length === 0) return 'none';
+  return entries.map((entry) => `${mention(entry.id)} ×${formatXpMultiplier(entry.multiplier)}`).join(', ');
 }
 
 /** Renders `leveling.levelUpChannel` for display: the special modes as words, a channel snowflake as `<#id>`. */
@@ -484,6 +544,69 @@ export const command: PluginCommand = {
       return;
     }
 
+    if (group === 'multiplier') {
+      assertStaffLevel(c.staffLevel, 'admin', c.t);
+      const channel = c.interaction.options.getChannel('channel', false);
+      const role = c.interaction.options.getRole('role', false);
+      if ((!channel && !role) || (channel && role)) {
+        await c.interaction.reply({
+          embeds: [errorEmbed(c.t('errors.needExactlyOneOption'))],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const id = channel ? channel.id : role!.id;
+      const key = channel ? 'channelMultipliers' : 'roleMultipliers';
+      const mention = channel ? `<#${id}>` : `<@&${id}>`;
+      const current = config.leveling[key];
+
+      if (sub === 'clear') {
+        await c.ctx.setConfig<EngagementConfig>(
+          c.guildId,
+          { leveling: { ...config.leveling, [key]: current.filter((entry) => entry.id !== id) } },
+          { id: c.interaction.user.id, source: 'bot' },
+        );
+        await c.interaction.reply({
+          embeds: [
+            successEmbed(
+              c.t(channel ? 'level.multiplier.clearedChannel' : 'level.multiplier.clearedRole', {
+                channel: mention,
+                role: mention,
+              }),
+            ),
+          ],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const multiplier = clampXpMultiplier(c.interaction.options.getNumber('multiplier', true));
+      await c.ctx.setConfig<EngagementConfig>(
+        c.guildId,
+        {
+          leveling: {
+            ...config.leveling,
+            [key]: [...current.filter((entry) => entry.id !== id), { id, multiplier }],
+          },
+        },
+        { id: c.interaction.user.id, source: 'bot' },
+      );
+      await c.interaction.reply({
+        embeds: [
+          successEmbed(
+            c.t(channel ? 'level.multiplier.setChannel' : 'level.multiplier.setRole', {
+              channel: mention,
+              role: mention,
+              multiplier: formatXpMultiplier(multiplier),
+            }),
+          ),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+
     // Top-level subcommands.
     if (sub === 'rank') {
       const target = c.interaction.options.getUser('user') ?? c.interaction.user;
@@ -543,6 +666,9 @@ export const command: PluginCommand = {
         `Reward mode: ${l.rewardMode}`,
         `Ignored channels: ${l.ignoredChannelIds.length}`,
         `Ignored roles: ${l.ignoredRoleIds.length}`,
+        `Role XP multipliers: ${formatXpMultiplierList(l.roleMultipliers, (id) => `<@&${id}>`)}`,
+        `Channel XP multipliers: ${formatXpMultiplierList(l.channelMultipliers, (id) => `<#${id}>`)}`,
+        'XP factor: the higher of the best matching role and the best matching channel (not multiplied). A thread counts its own channel and its parent. Message XP is rolled, multiplied, floored, then limited by the hourly cap. Voice XP uses the same factor.',
       ];
       await c.interaction.reply({ embeds: [listEmbed(c.t('level.config.title'), lines)], ephemeral: true });
       return;

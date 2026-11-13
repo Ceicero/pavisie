@@ -9,6 +9,16 @@ export type EngagementRewardMode = 'stack' | 'replace';
 /** `levelUpChannel`: `'current'` (the channel the message was sent in), `'dm'`, `'none'`, or a channel snowflake id. */
 export type EngagementLevelUpChannel = 'current' | 'dm' | 'none' | string;
 
+/**
+ * One role or channel XP multiplier. `multiplier` is clamped to 0.25–5 when the config is parsed.
+ * Several matching roles (or the thread channel and its parent) keep the highest value. The role
+ * result and the channel result are then combined by taking the max, not the product.
+ */
+export interface EngagementXpMultiplier {
+  id: string;
+  multiplier: number;
+}
+
 export interface EngagementLevelingConfig {
   enabled: boolean;
   xpPerMessageMin: number;
@@ -18,6 +28,8 @@ export interface EngagementLevelingConfig {
   voiceXpPerMinute: number;
   ignoredChannelIds: string[];
   ignoredRoleIds: string[];
+  roleMultipliers: EngagementXpMultiplier[];
+  channelMultipliers: EngagementXpMultiplier[];
   levelUpChannel: EngagementLevelUpChannel;
   levelUpMessage: string;
   rewardMode: EngagementRewardMode;

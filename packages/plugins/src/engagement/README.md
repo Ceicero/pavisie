@@ -68,6 +68,7 @@ temporary voice channels (SPEC.md §G subset; ARCHITECTURE.md §7.1 row `engagem
 | `/level xp give\|remove\|set <user> <amount>`                             | Admin. Audited.                                                                             |
 | `/level rewards add\|remove\|list\|sync`                                  | Admin. `sync` recomputes rewards for every ranked member.                                   |
 | `/level ignore add\|remove <channel\|role>`                               | Admin. Exactly one of channel/role per call.                                                |
+| `/level multiplier set\|clear <channel\|role>`                            | Admin. Exactly one of channel/role per call. `set` takes a factor; the highest role or channel factor wins (0.25–5×). A thread falls back to its parent channel. |
 | `/level announce <mode> [channel]`                                        | Admin. Sets `leveling.levelUpChannel` (same-channel/dm/off/a specific channel).             |
 | `/level reset <user?>`                                                    | Admin. Confirmation prompt (skipped if `fastActions` is on). Omit `user` to reset everyone. |
 | `/rep give\|check\|leaderboard`                                           | Public.                                                                                     |
