@@ -2,7 +2,10 @@
   "setup": {
     "moderationRequired": "Enforcer needs the **moderation** plugin enabled first (`/plugin enable moderation`) — decisions are executed through it.",
     "done": "Enforcer setup complete.",
-    "statusTitle": "Enforcer status"
+    "statusTitle": "Enforcer status",
+    "repaired": "Channel permission overwrites re-applied (ledger, flag queue{muteSuffix}).",
+    "repairedMuteSuffix": ", mute role on {count} channel(s)",
+    "repairedMuteFailed": " ({count} failed — check my Manage Roles and Manage Channels permissions there)"
   },
   "policy": {
     "notFound": "No policy found with that id.",
@@ -12,25 +15,41 @@
     "toggled": "Policy **{name}** is now {state}.",
     "listTitle": "Enforcer policies",
     "imported": "Imported the **{name}** policy pack as a new policy.",
-    "unknownPack": "Unknown policy pack \"{key}\"."
+    "unknownPack": "Unknown policy pack \"{key}\".",
+    "listEmpty": "No policies yet. Create one with `/enforcer policy create`, or import a pack with `/enforcer policy import`.",
+    "viewTitle": "Policy: {name}",
+    "invalidMatcherValue": "\"{value}\" is not a valid value for a {type} matcher.",
+    "invalidMatcherValueGeneric": "Invalid matcher value.",
+    "testNoMatchTitle": "No matches",
+    "testNoMatch": "This text did not match any of the tested policies.",
+    "testMatchesTitle": "Test matches"
   },
   "flag": {
     "created": "Flag **#E-{number}** opened.",
-    "flagChannelMissing": "No flag-queue channel is configured yet — run `/enforcer setup` first."
+    "flagChannelMissing": "No flag-queue channel is configured yet — run `/enforcer setup` first.",
+    "prompt": "Flagging this message for review. Pick a policy (or none), then add an optional note.",
+    "noContentWarning": "-# This message has no readable content here (the Message Content intent may be off). The flag will carry only a jump link unless your note adds context.",
+    "sessionExpired": "This flag session has expired. Run \"Flag for review\" again.",
+    "modalTitle": "Flag for review",
+    "noteLabel": "Note for the moderator queue (optional)"
   },
   "record": {
     "notFound": "No record found with that number.",
-    "detailTitle": "Record #E-{number}"
+    "detailTitle": "Record #E-{number}",
+    "notFoundTitle": "Not found"
   },
   "history": {
     "title": "History for <@{userId}>"
   },
   "export": {
-    "empty": "No records to export for the given filters."
+    "empty": "No records to export for the given filters.",
+    "count": "{count} record(s)."
   },
   "appeal": {
     "noCase": "This record has no linked moderation case, so it can't be appealed here — contact staff directly.",
-    "opened": "Your appeal has been submitted for staff review."
+    "opened": "Your appeal has been submitted for staff review.",
+    "sessionExpired": "This appeal session has expired. Run `/enforcer appeal` again.",
+    "moderationUnavailable": "The moderation plugin is unavailable right now. Please contact staff directly."
   },
   "mute": {
     "noRole": "No mute role is configured — run `/enforcer setup` first.",
@@ -42,6 +61,17 @@
     "alreadyDecided": "This flag has already been decided.",
     "reasonRequired": "A reason is required for this decision.",
     "disallowed": "That decision is disabled on this server.",
-    "actionAppliedRecordingFailed": "The action was applied on Discord, but Pavisie could not save the record (a database error). Do NOT retry — that would apply it a second time. Check `/enforcer search` or the ledger channel, and record it manually if it's missing."
+    "actionAppliedRecordingFailed": "The action was applied on Discord, but Pavisie could not save the record (a database error). Do NOT retry — that would apply it a second time. Check `/enforcer search` or the ledger channel, and record it manually if it's missing.",
+    "unknown": "Unknown decision.",
+    "recorded": "Recorded **{decision}** on #E-{number}.",
+    "modalTitle": "{decision} — #E-{id}",
+    "reasonLabel": "Reason",
+    "durationLabel": "Duration (e.g. 30m, 2h) — blank uses the server default",
+    "deleteDaysLabel": "Delete messages from the last N days (0-7)"
+  },
+  "search": {
+    "title": "Ledger search",
+    "titleWithCount": "Ledger search ({count} result(s))",
+    "empty": "No records matched. Try a wider filter."
   }
 }

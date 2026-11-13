@@ -97,6 +97,8 @@
     "renamed": "Channel renamed to **{name}**.",
     "claimed": "{user} is now the owner of this channel.",
     "kicked": "Kicked {user} from the channel.",
-    "permitted": "{user} can now join this channel."
+    "permitted": "{user} can now join this channel.",
+    "cannotKickSelf": "You can't kick yourself.",
+    "actionFailed": "I couldn't make that change. I may be missing permission to manage this channel or move members, or the channel was deleted."
   }
 }
