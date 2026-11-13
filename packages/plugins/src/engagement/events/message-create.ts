@@ -2,7 +2,14 @@ import type { Message } from 'discord.js';
 import type { PluginEventHandler } from '../../sdk';
 import type { EngagementConfig } from '../manifest';
 import { applyLevelUp } from '../level-actions';
-import { levelFromXp, tryAwardMessageXp } from '../service';
+import { isXpIgnored, levelFromXp, resolveXpMultiplier, tryAwardMessageXp } from '../service';
+
+/** Parent channel of a thread or forum post; null for an ordinary channel or an orphaned thread. */
+function threadParentChannelId(message: Message): string | null {
+  const channel = message.channel;
+  if (channel?.isThread()) return channel.parentId;
+  return null;
+}
 
 /**
  * Awards message XP (no message content ever read — only that an eligible, non-bot, non-ignored
@@ -20,14 +27,31 @@ export const messageCreateHandler: PluginEventHandler<'messageCreate'> = {
 
     const config = await ctx.getConfig<EngagementConfig>(message.guild.id);
     if (!config.leveling.enabled) return;
-    if (config.leveling.ignoredChannelIds.includes(message.channelId)) return;
 
     const member = message.member;
-    if (member && config.leveling.ignoredRoleIds.some((roleId) => member.roles.cache.has(roleId))) {
+    // A thread or forum post has its own channel id, so the parent's no-XP entry has to be checked too.
+    // A missing member cache skips the role list, matching the previous guard (uncached authors still earn).
+    if (
+      isXpIgnored(config.leveling, {
+        channelId: message.channelId,
+        parentChannelId: threadParentChannelId(message),
+        roleIds: member ? [...member.roles.cache.keys()] : [],
+      })
+    ) {
       return;
     }
 
-    const result = await tryAwardMessageXp(ctx.redis, message.guild.id, message.author.id, config.leveling);
+    // Roll stays 15–25 (the configured min–max). The factor is applied inside tryAwardMessageXp,
+    // then floored, then limited by the remaining hourly cap.
+    const multiplier = resolveXpMultiplier(config.leveling, {
+      channelId: message.channelId,
+      parentChannelId: threadParentChannelId(message),
+      roleIds: member ? [...member.roles.cache.keys()] : [],
+    });
+    const result = await tryAwardMessageXp(ctx.redis, message.guild.id, message.author.id, {
+      ...config.leveling,
+      multiplier,
+    });
     if (!result.awarded) return;
 
     const guildId = message.guild.id;

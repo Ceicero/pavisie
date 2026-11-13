@@ -7,6 +7,7 @@ import { command as tempvoiceCommand } from './commands/tempvoice';
 import { messageCreateHandler } from './events/message-create';
 import { voiceStateUpdateHandler } from './events/voice-state-update';
 import { messageReactionAddHandler, messageReactionRemoveHandler } from './events/reactions';
+import { rewardReconcileJob } from './jobs/reward-reconcile';
 import { tempVoiceSweepJob } from './jobs/tempvoice-sweep';
 import en from './locales/en.json';
 
@@ -22,7 +23,7 @@ export const plugin = definePlugin({
     messageReactionAddHandler,
     messageReactionRemoveHandler,
   ],
-  jobs: [tempVoiceSweepJob],
+  jobs: [tempVoiceSweepJob, rewardReconcileJob],
   async health(ctx) {
     try {
       await ctx.redis.ping();
