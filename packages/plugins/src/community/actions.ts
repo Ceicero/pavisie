@@ -38,8 +38,22 @@ function cryptoRng(maxExclusive: number): number {
 const GIVEAWAY_ANNOUNCED_TTL_SECONDS = 30 * 24 * 3600;
 const EVENT_REMINDED_TTL_SECONDS = 7 * 24 * 3600;
 
+/** Ids whose winner post or ended-message edit still needs another try. Not a per-giveaway TTL — `finalizeGiveaway` retires an id once both steps are settled or the giveaway is older than `GIVEAWAY_ANNOUNCED_TTL_SECONDS`. */
+export function giveawayPendingKey(): string {
+  return redisKey('community', 'giveaway-pending');
+}
+
+export function giveawayAnnouncedKey(giveawayId: string): string {
+  return redisKey('community', 'giveaway-announced', giveawayId);
+}
+
+/** Set once the original message shows the ended state (button removed), or Discord will never accept that edit. */
+export function giveawayMessageClosedKey(giveawayId: string): string {
+  return redisKey('community', 'giveaway-message-closed', giveawayId);
+}
+
 /** Thrown when a send failed for a reason that may succeed later (network, 5xx). Terminal Discord codes are not this. */
-class RetryableDelivery extends Error {
+export class RetryableDelivery extends Error {
   constructor() {
     super('community: delivery will be retried');
     this.name = 'RetryableDelivery';
@@ -99,7 +113,7 @@ async function editPollMessage(ctx: PluginContext, poll: Poll): Promise<Delivery
     return deliveryFromFailure(opened.failure);
   }
 
-    if (!poll.messageId) {
+  if (!poll.messageId) {
     if (!poll.closed) return 'ok';
     try {
       await opened.channel.send(payload);
@@ -181,18 +195,18 @@ async function editGiveawayMessage(
   ctx: PluginContext,
   giveaway: Giveaway,
   entryCount: number,
-): Promise<void> {
-  if (!giveaway.messageId) return;
+): Promise<DeliveryResult> {
+  if (!giveaway.messageId) return 'ok';
   const logContext = { giveawayId: giveaway.id, guildId: giveaway.guildId, channelId: giveaway.channelId };
   const guild = await fetchGuild(ctx, giveaway.guildId);
   if (!guild.ok) {
     warnDiscord(ctx, guild.failure, logContext, 'community: could not reach the guild to update a giveaway');
-    return;
+    return deliveryFromFailure(guild.failure);
   }
   const opened = await openTextChannel(guild.guild, giveaway.channelId);
   if (!opened.ok) {
     warnDiscord(ctx, opened.failure, logContext, 'community: could not open the giveaway channel');
-    return;
+    return deliveryFromFailure(opened.failure);
   }
 
   try {
@@ -201,9 +215,16 @@ async function editGiveawayMessage(
       embeds: [buildGiveawayEmbed(giveaway, entryCount)],
       components: buildGiveawayComponents(giveaway.id, giveaway.ended),
     });
+    return 'ok';
   } catch (err) {
-    const failure = classifyDiscordFailure(err) ?? 'unavailable';
+    const failure = classifyDiscordFailure(err);
+    if (!failure) {
+      ctx.logger.error({ err, ...logContext }, 'community: editing a giveaway failed and will be retried');
+      return 'retryable';
+    }
+    // 10003 / 10008 / 50001 / 50013 will not start succeeding on the next pass.
     warnDiscord(ctx, failure, logContext, 'community: giveaway message could not be edited');
+    return 'terminal';
   }
 }
 
@@ -215,7 +236,12 @@ async function announceWinners(
   const logContext = { giveawayId: giveaway.id, guildId: giveaway.guildId, channelId: giveaway.channelId };
   const guild = await fetchGuild(ctx, giveaway.guildId);
   if (!guild.ok) {
-    warnDiscord(ctx, guild.failure, logContext, 'community: could not reach the guild to announce giveaway winners');
+    warnDiscord(
+      ctx,
+      guild.failure,
+      logContext,
+      'community: could not reach the guild to announce giveaway winners',
+    );
     return deliveryFromFailure(guild.failure);
   }
 
@@ -224,6 +250,7 @@ async function announceWinners(
       ? `🎉 Congratulations ${winnerIds.map((id) => `<@${id}>`).join(', ')}! You won **${giveaway.prize}**.`
       : `😔 No valid entries for **${giveaway.prize}** — no winner could be drawn.`;
 
+  let posted = false;
   const opened = await openTextChannel(guild.guild, giveaway.channelId);
   if (!opened.ok) {
     warnDiscord(ctx, opened.failure, logContext, 'community: could not announce giveaway winners in channel');
@@ -231,10 +258,14 @@ async function announceWinners(
   } else {
     try {
       await opened.channel.send({ content, allowedMentions: { users: winnerIds } });
+      posted = true;
     } catch (err) {
       const failure = classifyDiscordFailure(err);
       if (!failure) {
-        ctx.logger.error({ err, ...logContext }, 'community: announcing giveaway winners failed and will be retried');
+        ctx.logger.error(
+          { err, ...logContext },
+          'community: announcing giveaway winners failed and will be retried',
+        );
         return 'retryable';
       }
       warnDiscord(ctx, failure, logContext, 'community: could not announce giveaway winners in channel');
@@ -244,42 +275,59 @@ async function announceWinners(
   for (const userId of winnerIds) {
     const member = await fetchMemberSafe(guild.guild, userId);
     if (member) {
-      await safeDm(member.user, `🎉 You won **${giveaway.prize}** in **${guild.guild.name}**! Congratulations.`);
+      await safeDm(
+        member.user,
+        `🎉 You won **${giveaway.prize}** in **${guild.guild.name}**! Congratulations.`,
+      );
     }
   }
-  return opened.ok ? 'ok' : 'terminal';
+  return posted ? 'ok' : 'terminal';
 }
 
-/** Ends a giveaway (idempotent). A lost job after the draw still announces the same winners; a second run does not draw again. */
+/**
+ * Ends a giveaway (idempotent). Winners are stored on the row before anything is posted, so a later catch-up
+ * announces those same ids and does not draw again. The winner post and the edit that removes the Enter
+ * button are tracked separately: a transient failure of one is retried without repeating the other. Permanent
+ * Discord errors (unknown channel/message, missing access/permissions) are recorded so they are not retried.
+ */
 export async function finalizeGiveaway(ctx: PluginContext, giveawayId: string): Promise<Giveaway | null> {
-  const announcedKey = redisKey('community', 'giveaway-announced', giveawayId);
-  if (await ctx.redis.get(announcedKey)) {
+  const announcedKey = giveawayAnnouncedKey(giveawayId);
+  const closedKey = giveawayMessageClosedKey(giveawayId);
+  const pendingKey = giveawayPendingKey();
+
+  if ((await ctx.redis.get(announcedKey)) && (await ctx.redis.get(closedKey))) {
+    await ctx.redis.srem(pendingKey, giveawayId);
     return ctx.prisma.giveaway.findUnique({ where: { id: giveawayId } });
   }
 
-  const existing = await ctx.prisma.giveaway.findUnique({
+  let record = await ctx.prisma.giveaway.findUnique({
     where: { id: giveawayId },
     include: { entries: true },
   });
-  if (!existing) return null;
+  if (!record) return null;
 
-  let winnerIds = existing.winnerIds;
-  let giveaway: Giveaway = existing;
-  if (!existing.ended) {
-    const winners = pickWinners(
-      uniqueGiveawayEntries(existing.entries),
-      existing.winnerCount,
-      cryptoRng,
-    );
+  let winnerIds = record.winnerIds;
+  let giveaway: Giveaway = record;
+  if (!record.ended) {
+    const winners = pickWinners(uniqueGiveawayEntries(record.entries), record.winnerCount, cryptoRng);
     winnerIds = winners.map((winner) => winner.userId);
     const claim = await ctx.prisma.giveaway.updateMany({
       where: { id: giveawayId, ended: false },
       data: { ended: true, winnerIds },
     });
     if (claim.count === 0) {
-      return ctx.prisma.giveaway.findUnique({ where: { id: giveawayId } });
+      // Another worker stored the winners. Announce those ids; don't draw a second set.
+      const current = await ctx.prisma.giveaway.findUnique({
+        where: { id: giveawayId },
+        include: { entries: true },
+      });
+      if (!current) return null;
+      record = current;
+      winnerIds = current.winnerIds;
+      giveaway = current;
+    } else {
+      giveaway = { ...record, ended: true, winnerIds };
     }
-    giveaway = { ...existing, ended: true, winnerIds };
   }
 
   const lockKey = redisKey('community', 'giveaway-announce-lock', giveawayId);
@@ -287,12 +335,50 @@ export async function finalizeGiveaway(ctx: PluginContext, giveawayId: string): 
   if (lock !== 'OK') return giveaway;
 
   try {
-    if (await ctx.redis.get(announcedKey)) return giveaway;
-    await editGiveawayMessage(ctx, giveaway, existing.entries.length);
-    const announced = await announceWinners(ctx, giveaway, winnerIds);
-    if (announced === 'retryable') throw new RetryableDelivery();
-    await ctx.redis.set(announcedKey, '1', 'EX', GIVEAWAY_ANNOUNCED_TTL_SECONDS);
-    return giveaway;
+    let messageSettled = Boolean(await ctx.redis.get(closedKey));
+    let winnersSettled = Boolean(await ctx.redis.get(announcedKey));
+    if (messageSettled && winnersSettled) {
+      await ctx.redis.srem(pendingKey, giveawayId);
+      return giveaway;
+    }
+
+    if (!messageSettled) {
+      const edited = await editGiveawayMessage(ctx, giveaway, record.entries.length);
+      if (edited !== 'retryable') {
+        await ctx.redis.set(closedKey, '1', 'EX', GIVEAWAY_ANNOUNCED_TTL_SECONDS);
+        messageSettled = true;
+      }
+    }
+
+    if (!winnersSettled) {
+      const announced = await announceWinners(ctx, giveaway, winnerIds);
+      if (announced !== 'retryable') {
+        await ctx.redis.set(announcedKey, '1', 'EX', GIVEAWAY_ANNOUNCED_TTL_SECONDS);
+        winnersSettled = true;
+      }
+    }
+
+    if (messageSettled && winnersSettled) {
+      await ctx.redis.srem(pendingKey, giveawayId);
+      return giveaway;
+    }
+
+    // Unclassified failures (network, 5xx) stay pending so catch-up can try again. Past the announcement
+    // TTL they are retired — a deleted channel that never produced a Discord code must not retry forever.
+    const ageMs = Date.now() - new Date(giveaway.endsAt).getTime();
+    if (ageMs > GIVEAWAY_ANNOUNCED_TTL_SECONDS * 1000) {
+      ctx.logger.warn(
+        { giveawayId, guildId: giveaway.guildId, ageMs },
+        'community: giving up on a giveaway announcement that is still failing',
+      );
+      if (!messageSettled) await ctx.redis.set(closedKey, '1', 'EX', GIVEAWAY_ANNOUNCED_TTL_SECONDS);
+      if (!winnersSettled) await ctx.redis.set(announcedKey, '1', 'EX', GIVEAWAY_ANNOUNCED_TTL_SECONDS);
+      await ctx.redis.srem(pendingKey, giveawayId);
+      return giveaway;
+    }
+
+    await ctx.redis.sadd(pendingKey, giveawayId);
+    throw new RetryableDelivery();
   } finally {
     await ctx.redis.del(lockKey);
   }
@@ -332,8 +418,12 @@ export async function cancelGiveaway(ctx: PluginContext, giveawayId: string): Pr
     data: { ended: true, winnerIds: [] },
   });
   await ctx.redis
-    .set(redisKey('community', 'giveaway-announced', giveawayId), '1', 'EX', GIVEAWAY_ANNOUNCED_TTL_SECONDS)
+    .set(giveawayAnnouncedKey(giveawayId), '1', 'EX', GIVEAWAY_ANNOUNCED_TTL_SECONDS)
     .catch(() => undefined);
+  await ctx.redis
+    .set(giveawayMessageClosedKey(giveawayId), '1', 'EX', GIVEAWAY_ANNOUNCED_TTL_SECONDS)
+    .catch(() => undefined);
+  await ctx.redis.srem(giveawayPendingKey(), giveawayId).catch(() => undefined);
   await ctx
     .queue('giveaway-end')
     .remove(`gw-${giveawayId}`)
@@ -342,12 +432,22 @@ export async function cancelGiveaway(ctx: PluginContext, giveawayId: string): Pr
 
   const guild = await fetchGuild(ctx, updated.guildId);
   if (!guild.ok) {
-    warnDiscord(ctx, guild.failure, { giveawayId }, 'community: could not reach the guild to cancel a giveaway post');
+    warnDiscord(
+      ctx,
+      guild.failure,
+      { giveawayId },
+      'community: could not reach the guild to cancel a giveaway post',
+    );
     return;
   }
   const opened = await openTextChannel(guild.guild, updated.channelId);
   if (!opened.ok) {
-    warnDiscord(ctx, opened.failure, { giveawayId }, 'community: could not open the channel to cancel a giveaway post');
+    warnDiscord(
+      ctx,
+      opened.failure,
+      { giveawayId },
+      'community: could not open the channel to cancel a giveaway post',
+    );
     return;
   }
   try {
@@ -421,7 +521,11 @@ async function openSuggestionChannel(
  */
 export async function syncSuggestionMessage(ctx: PluginContext, suggestion: Suggestion): Promise<void> {
   if (!suggestion.messageId) return;
-  const logContext = { suggestionId: suggestion.id, guildId: suggestion.guildId, channelId: suggestion.channelId };
+  const logContext = {
+    suggestionId: suggestion.id,
+    guildId: suggestion.guildId,
+    channelId: suggestion.channelId,
+  };
   const opened = await openSuggestionChannel(ctx, suggestion);
   if (!opened.ok) {
     if (opened.failure === 'unknown_channel' || opened.failure === 'unknown_guild') {
@@ -551,12 +655,22 @@ async function sendReminder(ctx: PluginContext, reminder: Reminder): Promise<voi
   if (reminder.channelId && reminder.guildId) {
     const guild = await fetchGuild(ctx, reminder.guildId);
     if (!guild.ok) {
-      warnDiscord(ctx, guild.failure, logContext, 'community: could not reach the guild for a channel reminder');
+      warnDiscord(
+        ctx,
+        guild.failure,
+        logContext,
+        'community: could not reach the guild for a channel reminder',
+      );
       if (guild.failure === 'unavailable') throw new RetryableDelivery();
     } else {
       const opened = await openTextChannel(guild.guild, reminder.channelId);
       if (!opened.ok) {
-        warnDiscord(ctx, opened.failure, logContext, 'community: channel reminder could not be posted; falling back to DM');
+        warnDiscord(
+          ctx,
+          opened.failure,
+          logContext,
+          'community: channel reminder could not be posted; falling back to DM',
+        );
         if (opened.failure === 'unavailable') throw new RetryableDelivery();
       } else {
         try {
@@ -568,7 +682,12 @@ async function sendReminder(ctx: PluginContext, reminder: Reminder): Promise<voi
         } catch (err) {
           const failure = classifyDiscordFailure(err);
           if (!failure) throw new RetryableDelivery();
-          warnDiscord(ctx, failure, logContext, 'community: channel reminder was rejected; falling back to DM');
+          warnDiscord(
+            ctx,
+            failure,
+            logContext,
+            'community: channel reminder was rejected; falling back to DM',
+          );
         }
       }
     }
@@ -735,7 +854,12 @@ export async function fireEventReminder(
 
     const guild = await fetchGuild(ctx, event.guildId);
     if (!guild.ok) {
-      warnDiscord(ctx, guild.failure, logContext, 'community: could not reach the guild for an event reminder');
+      warnDiscord(
+        ctx,
+        guild.failure,
+        logContext,
+        'community: could not reach the guild for an event reminder',
+      );
       if (guild.failure === 'unavailable') throw new RetryableDelivery();
       await ctx.redis.set(doneKey, '1', 'EX', EVENT_REMINDED_TTL_SECONDS);
       return;
