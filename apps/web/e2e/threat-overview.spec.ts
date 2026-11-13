@@ -16,7 +16,8 @@ test.describe('threat overview', () => {
 
     await page.goto(`/dashboard/${DEMO_GUILD_ID}/threats`);
     await expect(page.getByRole('heading', { name: 'Threat overview' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Live threats' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Threats' })).toBeVisible();
+    await expect(page.getByText('No active threats. Raid detection is coming soon.')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Moderation audit trail' })).toBeVisible();
   });
 });

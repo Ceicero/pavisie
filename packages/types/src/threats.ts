@@ -4,10 +4,11 @@
  *
  * `ThreatIncidentDto` is the contract Claude's raid-mode API will satisfy.
  * Until that API exists, `GET /guilds/:guildId/threats/incidents` is served
- * from a typed mock in `apps/api/src/lib/threat-incidents.ts`. Swapping to
- * the real source is a one-file change behind that adapter; this module's
- * shapes should not need to change when that happens, except to add fields
- * the real API introduces.
+ * from the adapter in `apps/api/src/lib/threat-incidents.ts`, which returns
+ * an empty list in production (no fixture incidents). Swapping to the real
+ * source is a one-file change behind that adapter; this module's shapes
+ * should not need to change when that happens, except to add fields the
+ * real API introduces.
  *
  * The audit-trail half is live now: it is a filtered, read-only view of the
  * existing `AuditLog` table (every `moderation.*` action, including
