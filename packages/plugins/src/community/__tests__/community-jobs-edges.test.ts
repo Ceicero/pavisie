@@ -240,6 +240,8 @@ describe('giveaway-end', () => {
     const row = giveaway({
       id: 'gw-retry',
       winnerCount: 1,
+      // Within GIVEAWAY_ANNOUNCED_TTL_SECONDS (30 days). Older endsAt is retired without throwing.
+      endsAt: new Date(),
       entries: [{ userId: 'alpha' }, { userId: 'beta' }],
     });
     let claims = 0;
@@ -681,8 +683,11 @@ function birthdayGuild(
     canSend?: boolean;
     role?: { managed?: boolean; position?: number; permissionsBitfield?: bigint } | null;
     roleAdd?: () => Promise<void>;
+    /** ioredis-mock shares data across clients; tests that stamp a guild-day blocked key must not reuse guild-1. */
+    guildId?: string;
   } = {},
 ) {
+  const guildId = opts.guildId ?? BIRTHDAY_GUILD;
   const users = opts.users ?? [{ id: BIRTHDAY_USER, displayName: 'Ada' }];
   const sent: SentPayload[] = [];
   const rolesAdded: string[] = [];
@@ -707,7 +712,7 @@ function birthdayGuild(
     },
   };
   const guild = {
-    id: BIRTHDAY_GUILD,
+    id: guildId,
     name: 'Test Guild',
     available: true,
     memberCount: 42,
@@ -832,12 +837,12 @@ describe('birthday announce edges', () => {
 
   it('skips a missing birthday channel without stamping the year', async () => {
     const s = birthdaySetup({
-      guild: birthdayGuild({ channelError: discordError(10003) }),
+      guild: birthdayGuild({ channelError: discordError(10003), guildId: 'guild-missing-channel' }),
     });
 
     const result = await announceBirthdaysForGuild(s.ctx, s.guild, birthdayConfig(), BIRTHDAY_NOW);
 
-    expect(result).toEqual({ guildId: BIRTHDAY_GUILD, announced: 0, skippedReason: 'channel' });
+    expect(result).toEqual({ guildId: 'guild-missing-channel', announced: 0, skippedReason: 'channel' });
     expect(s.updates).toHaveLength(0);
     expect(s.rows[0]?.lastAnnouncedYear).toBeNull();
     expect(s.sent).toHaveLength(0);
