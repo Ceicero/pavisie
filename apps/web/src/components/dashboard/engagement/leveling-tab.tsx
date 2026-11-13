@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Trophy } from 'lucide-react';
+import { RotateCcw, Trophy } from 'lucide-react';
 import {
   Button,
   Card,
@@ -26,12 +26,14 @@ import type { EngagementConfigDto, LevelProfileDto } from '@pavisie/types/engage
 import {
   useEngagementConfig,
   useLevelLeaderboard,
+  useResetLeveling,
   useUpdateEngagementConfig,
 } from '@/lib/dashboard/engagement-queries';
 import { useGuildChannels, useGuildRoles } from '@/lib/dashboard/queries';
 import { DataTable, type DataTableColumn } from '../data-table';
 import { DiscordChannelSelect } from '../discord-selects';
 import { MultiRolePicker } from '../multi-role-picker';
+import { ConfirmDialog } from '../confirm-dialog';
 import { ErrorState } from '../error-state';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { XpAdjustDialog } from './xp-adjust-dialog';
@@ -148,9 +150,11 @@ const LEVEL_UP_CHANNEL_MODES = [
 export function LevelingTab({ guildId }: { guildId: string }) {
   const { data, isLoading, error, refetch } = useEngagementConfig(guildId);
   const update = useUpdateEngagementConfig(guildId);
+  const reset = useResetLeveling(guildId);
   const { toast } = useToast();
   const [draft, setDraft] = React.useState<EngagementConfigDto['leveling'] | null>(null);
   const [xpDialogOpen, setXpDialogOpen] = React.useState(false);
+  const [resetOpen, setResetOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const [cursor, setCursor] = React.useState<string | undefined>(undefined);
   const [cursorHistory, setCursorHistory] = React.useState<string[]>([]);
@@ -199,6 +203,25 @@ export function LevelingTab({ guildId }: { guildId: string }) {
           }),
       },
     );
+  }
+
+  function handleReset() {
+    reset.mutate(undefined, {
+      onSuccess: (result) => {
+        setResetOpen(false);
+        toast({
+          title: 'Leveling reset',
+          description: `Cleared ${result.count.toLocaleString()} profile(s). Reward roles update shortly after, not instantly.`,
+          variant: 'success',
+        });
+      },
+      onError: (err) =>
+        toast({
+          title: 'Could not reset leveling',
+          description: err instanceof ApiClientError ? err.message : 'Please try again.',
+          variant: 'destructive',
+        }),
+    });
   }
 
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
@@ -498,7 +521,33 @@ export function LevelingTab({ guildId }: { guildId: string }) {
         </CardContent>
       </Card>
 
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="text-destructive">Reset leveling</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Clears every member&apos;s XP, level, message count, and voice minutes in this server. Reward
+            roles update shortly after, not instantly. This cannot be undone.
+          </p>
+          <Button variant="destructive" onClick={() => setResetOpen(true)} disabled={reset.isPending}>
+            <RotateCcw className="h-4 w-4" />
+            Reset all XP
+          </Button>
+        </CardContent>
+      </Card>
+
       <XpAdjustDialog guildId={guildId} open={xpDialogOpen} onOpenChange={setXpDialogOpen} />
+      <ConfirmDialog
+        open={resetOpen}
+        onOpenChange={setResetOpen}
+        title="Reset leveling for everyone?"
+        description="This clears every member's XP, level, message count, and voice minutes in this server. Reward roles update shortly after, not instantly. This cannot be undone."
+        confirmLabel="Reset leveling"
+        variant="destructive"
+        loading={reset.isPending}
+        onConfirm={handleReset}
+      />
     </div>
   );
 }

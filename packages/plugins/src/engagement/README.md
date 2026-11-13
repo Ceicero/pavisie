@@ -24,10 +24,18 @@ temporary voice channels (SPEC.md §G subset; ARCHITECTURE.md §7.1 row `engagem
   `config.leveling.levelUpMessage` (`{user}`/`{level}` placeholders). Settable from the dashboard or
   with `/level announce <mode> [channel]` (validates the bot can View Channel + Send Messages there
   before saving).
-- **Level-role rewards** (`LevelReward`): applied automatically on level-up, and recomputable for
-  every ranked member via `/level rewards sync`. `config.leveling.rewardMode` — `'stack'` grants
-  every reward at or below the new level; `'replace'` keeps only the single highest-earned reward
-  role, removing lower ones.
+- **Level-role rewards** (`LevelReward`): recomputed whenever a member's stored level changes, up or
+  down (message XP, voice XP, and `/level xp`). Announcements and the
+  `level.up` event still fire only on a level-up. `config.leveling.rewardMode` — `'stack'` keeps every
+  reward at or below the new level and removes reward roles above it; `'replace'` keeps only the single
+  highest-earned reward role. `/level rewards sync` runs the same recompute for every ranked member
+  (highest XP first, 500 per command). `/level reset` removes reward roles for up to 500 affected
+  members, then deletes the matching profile rows.
+- Dashboard XP adjustments enqueue `{guildId, userId}` on the Redis list `pavisie:engagement:reward-reconcile`
+  when the stored level changes. `POST /guilds/:guildId/engagement/reset` only deletes profile rows and
+  pushes the same entries (one member when `userId` is set, otherwise everyone who had a profile). The
+  `engagement.reward-reconcile` job drains that list once a minute, 500 members per tick, and applies
+  the same role sync. Roles update shortly after, not in the HTTP request.
 - Emits the platform `level.up` event on every level-up (message or voice).
 
 ### Reputation
@@ -60,22 +68,22 @@ temporary voice channels (SPEC.md §G subset; ARCHITECTURE.md §7.1 row `engagem
 
 ## Commands
 
-| Command                                                                   | Notes                                                                                       |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `/level rank [user]`                                                      | Public. Progress bar + rank position.                                                       |
-| `/level leaderboard [page]`                                               | Public, paginated (10/page) with Previous/Next buttons.                                     |
-| `/level config`                                                           | Moderator+. View-only.                                                                      |
-| `/level xp give\|remove\|set <user> <amount>`                             | Admin. Audited.                                                                             |
-| `/level rewards add\|remove\|list\|sync`                                  | Admin. `sync` recomputes rewards for every ranked member.                                   |
-| `/level ignore add\|remove <channel\|role>`                               | Admin. Exactly one of channel/role per call.                                                |
-| `/level multiplier set\|clear <channel\|role>`                            | Admin. Exactly one of channel/role per call. `set` takes a factor; the highest role or channel factor wins (0.25–5×). A thread falls back to its parent channel. |
-| `/level announce <mode> [channel]`                                        | Admin. Sets `leveling.levelUpChannel` (same-channel/dm/off/a specific channel).             |
-| `/level reset <user?>`                                                    | Admin. Confirmation prompt (skipped if `fastActions` is on). Omit `user` to reset everyone. |
-| `/rep give\|check\|leaderboard`                                           | Public.                                                                                     |
-| `/rep revoke <user> <amount>`                                             | Admin.                                                                                      |
-| `/starboard set channel\|threshold\|emoji\|selfstar`, `/starboard status` | Admin (`ManageGuild`).                                                                      |
-| `/tempvoice setup <hub> [category] [name-template]`                       | Admin.                                                                                      |
-| `/tempvoice lock\|unlock\|limit\|rename\|claim\|kick\|permit`             | Anyone currently in their own temp channel.                                                 |
+| Command                                                                   | Notes                                                                                                                                                                   |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/level rank [user]`                                                      | Public. Progress bar + rank position.                                                                                                                                   |
+| `/level leaderboard [page]`                                               | Public, paginated (10/page) with Previous/Next buttons.                                                                                                                 |
+| `/level config`                                                           | Moderator+. View-only.                                                                                                                                                  |
+| `/level xp give\|remove\|set <user> <amount>`                             | Admin. Audited. `remove` and `set` recompute reward roles when the level changes. Announcements stay level-up only.                                                     |
+| `/level rewards add\|remove\|list\|sync`                                  | Admin. `sync` recomputes rewards for every ranked member.                                                                                                               |
+| `/level ignore add\|remove <channel\|role>`                               | Admin. Exactly one of channel/role per call.                                                                                                                            |
+| `/level multiplier set\|clear <channel\|role>`                            | Admin. Exactly one of channel/role per call. `set` takes a factor; the highest role or channel factor wins (0.25–5×). A thread falls back to its parent channel.        |
+| `/level announce <mode> [channel]`                                        | Admin. Sets `leveling.levelUpChannel` (same-channel/dm/off/a specific channel).                                                                                         |
+| `/level reset <user?>`                                                    | Admin. Confirmation prompt (skipped if `fastActions` is on). Removes reward roles for up to 500 affected members, then deletes profiles. Omit `user` to reset everyone. |
+| `/rep give\|check\|leaderboard`                                           | Public.                                                                                                                                                                 |
+| `/rep revoke <user> <amount>`                                             | Admin.                                                                                                                                                                  |
+| `/starboard set channel\|threshold\|emoji\|selfstar`, `/starboard status` | Admin (`ManageGuild`).                                                                                                                                                  |
+| `/tempvoice setup <hub> [category] [name-template]`                       | Admin.                                                                                                                                                                  |
+| `/tempvoice lock\|unlock\|limit\|rename\|claim\|kick\|permit`             | Anyone currently in their own temp channel.                                                                                                                             |
 
 ## Config keys
 
@@ -110,7 +118,9 @@ only upgrades the starboard embed to include a content excerpt when the guild ha
 `/dashboard/[guildId]/engagement` — four tabs (Leveling, Reputation, Starboard, Temp voice), all
 built on `GET/PUT /guilds/:guildId/engagement/config` (one JSON blob covering every sub-feature's
 settings) plus dedicated endpoints for the leaderboard, level-role rewards CRUD, an audited XP
-adjustment, and the reputation leaderboard.
+adjustment, an audited guild-wide or per-member leveling reset, and the reputation leaderboard.
+XP changes that move the stored level, and resets, enqueue reward-role reconciliation; the dashboard
+tells admins that roles update shortly after, not instantly.
 
 ## Known gaps / follow-ups
 
@@ -119,12 +129,10 @@ adjustment, and the reputation leaderboard.
   `ctx.services.register('engagement', ...)` — there is currently no cross-plugin consumer for one
   anyway. If a future plugin needs to call into engagement (e.g. automod granting/removing XP), add
   the key there first.
-- **Dashboard XP adjustments and role rewards**: the dashboard's XP-adjust endpoint writes
-  `LevelProfile` directly (no Discord round-trip). It does **not** reconcile level-role rewards for
-  the member immediately, since that needs live guild/member data the API process doesn't have and
-  `apps/bot/src/host/bot-actions.ts`'s `BotActionType`/`DISPATCH_TABLE` (owned by the bot-host build
-  stage) has no `engagement.*` entry to enqueue that reconciliation onto. Rewards catch up the next
-  time the member is active in Discord, or immediately via `/level rewards sync`.
+- **Role removal past the 500 cap**: `/level reset` and one reconcile-job tick each write roles for at
+  most 500 members. A slash-command reset still deletes every matching profile, so members past that
+  cap keep their reward roles — a later `/level rewards sync` only walks profiles that still exist.
+  A dashboard reset enqueues every deleted member; the job continues on the next minute.
 - **Temp voice category picker** in the dashboard has no server-side channel-type filter (no
   dedicated "categories only" endpoint), so it lists every channel; picking a non-category id fails
   the eventual Discord API call rather than being blocked in the UI.

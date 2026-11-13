@@ -76,6 +76,22 @@ export function useXpAdjust(guildId: string) {
   });
 }
 
+export interface LevelResetResult {
+  count: number;
+}
+
+/** Guild-wide leveling reset. `userId` is accepted by the route; the dashboard always resets everyone. */
+export function useResetLeveling(guildId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<LevelResetResult>(`/guilds/${guildId}/engagement/reset`, { method: 'POST', body: {} }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['guilds', guildId, 'engagement', 'leaderboard'] });
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Level-role rewards.
 // ---------------------------------------------------------------------------
