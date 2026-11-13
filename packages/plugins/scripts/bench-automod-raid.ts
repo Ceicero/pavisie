@@ -767,6 +767,13 @@ async function main(): Promise<void> {
   const raidAlert = await import('../src/automod/raid-alert').catch(() => null);
   if (raidAlert)
     jobs.register(raidAlert.RAID_ALERT_JOB_NAME, raidAlert.raidAlertJob.processor as JobProcessor);
+  // Same for the capped message alerts, so the "before" run of this script counts one alert per match.
+  const messageAlert = await import('../src/automod/message-alert').catch(() => null);
+  if (messageAlert)
+    jobs.register(
+      messageAlert.MESSAGE_ALERT_JOB_NAME,
+      messageAlert.messageAlertJob.processor as JobProcessor,
+    );
   const ctx: PluginContext = {
     client: discord.client,
     prisma,
