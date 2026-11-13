@@ -645,7 +645,7 @@ Components (all accessible, keyboard-friendly, dark-mode aware, `cn()` helper): 
 
 ## 14. Docker
 
-- `infra/docker/Dockerfile.{bot,api}`: `node:22-alpine`, `corepack enable && corepack prepare pnpm@9.15.9 --activate`, copy workspace manifests, `pnpm install --frozen-lockfile`, copy source, `pnpm db:generate`, `CMD ["pnpm","--filter","@pavisie/bot","start"]` (start = `tsx src/index.ts`). Non-root user. Healthcheck hits `BOT_HEALTH_PORT` / `API_PORT/health`.
+- `infra/docker/Dockerfile.{bot,api}`: `node:22-alpine`, `COREPACK_HOME=/opt/corepack` then `corepack enable && corepack prepare pnpm@9.15.9 --activate` (the cache must live outside `/root` so the non-root runtime user's `pnpm` start command finds it offline), copy workspace manifests, `pnpm install --frozen-lockfile`, copy source, `pnpm db:generate`, `CMD ["pnpm","--filter","@pavisie/bot","start"]` (start = `tsx src/index.ts`). Non-root user. Healthcheck hits `BOT_HEALTH_PORT` / `API_PORT/health`.
 - `Dockerfile.dashboard`: multi-stage `next build` with `output: 'standalone'`, `CMD ["node","apps/dashboard/server.js"]`.
 - `docker-compose.yml`: `postgres` (16-alpine, volume, healthcheck), `redis` (7-alpine), `migrate` (api image, `pnpm db:migrate`, depends_on healthy postgres), `bot`, `api`, `dashboard` — all `env_file: .env`, DATABASE_URL/REDIS_URL overridden to service hostnames.
 
