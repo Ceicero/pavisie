@@ -32,7 +32,7 @@ const selectPolicyHandler: ComponentHandler = {
     const pending = pendingId ? await pendingStore.peek<PendingFlagTarget>(pendingId) : null;
     if (!pending) {
       await interaction.update({
-        content: 'This flag session has expired — run "Flag for review" again.',
+        content: c.t('flag.sessionExpired'),
         components: [],
       });
       return;
@@ -48,12 +48,12 @@ const selectPolicyHandler: ComponentHandler = {
           policyId,
         ),
       )
-      .setTitle('Flag for review')
+      .setTitle(c.t('flag.modalTitle'))
       .addComponents(
         new ActionRowBuilder<TextInputBuilder>().addComponents(
           new TextInputBuilder()
             .setCustomId('note')
-            .setLabel('Note for the moderator queue (optional)')
+            .setLabel(c.t('flag.noteLabel'))
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(false)
             .setMaxLength(500),
@@ -79,7 +79,7 @@ const noteModalHandler: ComponentHandler = {
     const pending = pendingId ? await pendingStore.take<PendingFlagTarget>(pendingId) : null;
     if (!pending) {
       await interaction.reply({
-        embeds: [errorEmbed('This flag session has expired — run "Flag for review" again.')],
+        embeds: [errorEmbed(c.t('flag.sessionExpired'))],
         ephemeral: true,
       });
       return;
@@ -120,7 +120,7 @@ const noteModalHandler: ComponentHandler = {
     });
 
     await interaction.reply({
-      embeds: [successEmbed(`Flag **#E-${result.recordNumber}** opened.`)],
+      embeds: [successEmbed(c.t('flag.created', { number: result.recordNumber }))],
       ephemeral: true,
     });
   },

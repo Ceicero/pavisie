@@ -79,7 +79,10 @@ async function eventDetailEmbed(c: ComponentContext, eventId: string) {
   ];
   if (event.matched) lines.push(`Matched content: \`\`\`${event.matched.slice(0, 900)}\`\`\``);
 
-  return { event, embed: infoEmbed(`Automod event #${event.id.slice(0, 8)}`, lines.join('\n')) };
+  return {
+    event,
+    embed: infoEmbed(c.t('automod.review.eventTitle', { id: event.id.slice(0, 8) }), lines.join('\n')),
+  };
 }
 
 function reviewButtonsRow(eventId: string): ActionRowBuilder<ButtonBuilder>[] {
@@ -153,7 +156,9 @@ function makeReviewResolveHandler(status: 'CONFIRMED' | 'FALSE_POSITIVE', label:
       });
 
       const interaction = c.interaction as unknown as ButtonInteraction<'cached'>;
-      const confirmationEmbed = successEmbed(`Marked as **${label}** by <@${c.interaction.user.id}>.`);
+      const confirmationEmbed = successEmbed(
+        c.t('automod.review.marked', { label, user: `<@${c.interaction.user.id}>` }),
+      );
       await interaction.update({
         embeds: [...interaction.message.embeds, confirmationEmbed],
         components: [],
