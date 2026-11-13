@@ -11,7 +11,7 @@ default.
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | `/poll create`                                                               | Start a poll (2-10 options, optional duration/anonymous/multi-select)                                      | Everyone                                  |
 | `/poll end <id>`                                                             | End a poll early                                                                                           | Poll creator or moderator+                |
-| `/poll results <id>`                                                         | Show a poll's current results                                                                              | Everyone                                  |
+| `/poll results <id>`                                                         | Show a poll's current results (ephemeral when the poll is anonymous)                                       | Everyone                                  |
 | `/giveaway start`                                                            | Start a giveaway (prize, duration, winners, optional eligibility rules)                                    | Moderator+                                |
 | `/giveaway end \| reroll \| list \| cancel`                                  | Manage giveaways                                                                                           | Moderator+                                |
 | `/suggest <text>`                                                            | Submit a suggestion                                                                                        | Everyone                                  |
@@ -26,7 +26,7 @@ default.
 | `/event list \| cancel \| rsvps`                                             | Manage events                                                                                              | Helper+                                   |
 | `/tag show <name> [ephemeral]`                                               | Post a tag (custom command); staff-only tags need helper+                                                  | Everyone                                  |
 | `/tag list`                                                                  | List this server's tags (staff-only tags hidden from non-staff)                                            | Everyone                                  |
-| `/tag create <name> [content] [staff_only]`                                  | Create a tag; omit `content` to open a modal with embed fields                                             | Moderator+                                |
+| `/tag create <name> [content] [staff_only]`                                  | Create a tag; omit or leave `content` blank to open a modal with embed fields                              | Moderator+                                |
 | `/tag edit <name>`                                                           | Edit a tag's content / embed title / embed description in a modal                                          | Moderator+                                |
 | `/tag delete <name>`                                                         | Delete a tag (confirmation prompt)                                                                         | Moderator+                                |
 | `/tag trigger <name> <mode> [phrase] [channel]`                              | Set/clear a keyword auto-responder (exact / contains / starts_with)                                        | Admin                                     |
@@ -48,6 +48,40 @@ default.
 | `/birthday upcoming [ephemeral]`                                             | Next 15 upcoming birthdays (ephemeral; staff may post it publicly)                                         | Everyone if public list, else Helper+     |
 | `/birthday config <channel> [hour] [role] [message] [enabled] [public_list] [allow_self_service]` | Configure birthday announcements                                                      | Admin+                                    |
 | `/birthday config-view`                                                      | Show birthday settings + how many members registered (count only)                                          | Moderator+                                |
+
+### Input checks
+
+Whitespace-only text is rejected before anything is saved: a poll question, giveaway prize, suggestion,
+announcement, reminder, or event title; a birthday announcement message; a tag trigger phrase; sticky text; an
+auto-thread name or starter; and a stats-channel template. Poll options that repeat once case is ignored are
+rejected. Giveaways and polls must stay open between 15 seconds and 28 days. One-off announcements, one-off
+reminders, and event start times more than 30 seconds in the past are rejected. An event's end has to be after
+its start. Recurring reminders are scheduled from their cron expression.
+
+If posting or enqueueing fails, the new row is deleted: giveaways, events, suggestions, announcements, and
+reminders. A giveaway or event also deletes the Discord message it already posted, and an event deletes the
+native scheduled event when one was created with it. A suggestion deletes its post the same way. Discord
+50001/50013 on a giveaway, event, or suggestion post is a permissions reply. Any other failure on those posts,
+and a failed announcement or reminder save, asks for a retry. `/giveaway list`, `/announce list`, `/remind
+list`, `/event list`, and `/suggestions list` say when there is nothing to show. A status filter that matches
+nothing says that no suggestion has that status. `/poll results` on an anonymous poll is ephemeral (counts
+only — see Privacy); a public poll's results are posted in the channel.
+
+Birthday config, tags, stickies, channel automations, and stats channels use the same kind of reply. A channel
+Discord reports as deleted (10003) is its own error. `/birthday config` separates that from a channel the bot
+cannot post in, and rejects a deleted birthday role. `/birthday config-view` says when the announcement channel
+was deleted and keeps the saved setting. `/birthday upcoming` with nobody registered says so. A birthday,
+channel-automation, or stats config save that throws is an error reply. Tag, sticky, channel-automation, and
+stats-channel replies are detailed in the sections below.
+
+### Schedules
+
+`/announce schedule` takes a cron expression (5 or 6 fields), an ISO date/time, or a duration such as `10m` or
+`2h`. `/remind set` and `/event create` take an ISO date/time or a duration for the main time; a reminder's
+`recurring` option is cron. A date/time with no zone is read in the guild timezone. `Z` or an explicit offset
+such as `-04:00` is that exact instant. A local time that does not exist on a spring-forward day, or that
+happens twice on a fall-back day, is rejected until the input includes an offset. A duration is an offset from
+now.
 
 ## Config keys (`configSchema`)
 
@@ -99,6 +133,10 @@ status community` reports the plugin as degraded, and triggers are simply inacti
   equals the phrase), `contains` (phrase appears as a whole word), `starts_with`. Optional channel restriction;
   one reply per tag per `tags.triggerCooldownSeconds`.
 - Every create/edit/delete (bot or dashboard) writes an audit row (`community.tag.create|update|delete`).
+- `/tag show` replies with an error on Discord 10003 (channel deleted) or 50001/50013 (missing access or
+  permissions) and does not increment the use counter. Blank `content` on `/tag create` opens the editor modal.
+  A blank trigger phrase, or a deleted or unusable trigger channel, is rejected. `/tag info` marks a trigger
+  channel Discord says is gone and keeps the tag.
 
 ### Channel automations
 
@@ -116,6 +154,11 @@ status community` reports the plugin as degraded, and triggers are simply inacti
   text-only posts are skipped. Errors are logged once per hour per channel and never thrown.
 - Neither feature reads or stores message content — only channel id, author id/bot flag, message flags, and
   whether attachments/embeds are present.
+- `/channelauto publish add` and `/channelauto thread add` reject a deleted channel (10003) and a channel the
+  bot cannot view. Missing Manage Messages or Create Public Threads still saves the rule and warns (the
+  runtime fallbacks above). Both list subcommands drop channels Discord reports as deleted and say how many. A
+  blank thread name or starter is rejected. Omitting the name keeps the current template, or `{user} — {date}`
+  for a new rule; omitting the starter keeps the current one. A failed config save is an error reply.
 
 ### Server-stats counter channels
 
@@ -133,8 +176,12 @@ Constraints (also stated in the UI):
 - `{humans}`/`{bots}` need the Server Members intent; without it `{humans}` = `{members}` and `{bots}` = 0 (the
   reply says so).
 
-`/statschannel create` makes a voice channel with `@everyone` denied Connect (visible, not joinable). If a counter
-channel is deleted in Discord, the next refresh drops it from config (info log, no crash).
+`/statschannel create` makes a voice channel with `@everyone` denied Connect (visible, not joinable). If that
+create hits Discord 50001/50013, the reply says Manage Channels is required; any other create failure asks for
+a retry. If the channel is created and the config save then fails, the new channel is deleted. `/statschannel
+add` rejects a deleted channel and a channel the bot cannot manage. `/statschannel list` names a deleted
+counter and points at `/statschannel refresh` to drop it from config. An empty list says how to create one. If
+a counter channel is deleted in Discord, the next refresh drops it from config (info log, no crash).
 
 ## Permissions
 
@@ -181,13 +228,14 @@ show`) works without it; the plugin degrades rather than disables when the inten
 
 ## Background jobs
 
-- `community:poll-end` — delayed, one per timed poll (`jobId poll-<id>`); closes the poll and renders final results.
-- `community:giveaway-end` — delayed, one per giveaway (`jobId gw-<id>`); draws winners with `crypto.randomInt`, announces, and DMs them.
+- `community:poll-end` — delayed, one per timed poll (`jobId poll-<id>`); closes the poll and renders final results. A closed poll names the single leading option, names a tie when several options share that count, or says there were no votes. Closing still completes when the original message was deleted (10008 — the results are posted as a new message in the channel). A missing channel or missing permission (10003/50001/50013) leaves the poll closed without a new post. A transient edit failure (network, 5xx) reopens a poll this run just closed and fails the job; `community:community-catchup` closes it again on a later pass.
+- `community:giveaway-end` — delayed, one per giveaway (`jobId gw-<id>`); draws winners with `crypto.randomInt`, announces, and DMs them. Entries are unique per member. Zero entrants end with no winner. One entrant is drawn once, even when more winners were requested. `/giveaway reroll` draws only from entrants who have not already won and replaces the stored winners with that draw; when nobody new is left, the stored winners stay and nothing is announced. After the draw is saved, a later run announces those same winner ids and does not draw again. Once that announcement is recorded (Redis, 30 days) a further run does not announce again. A deleted original message (10008) still announces the winners. A missing channel or missing permission (10003/50001/50013) still DMs the winners when the guild can be reached, records the announcement, and completes the job. A transient send failure fails the job without drawing a new set; the winners already stored are what a later run announces.
 - `community:announcement-run` — delayed for one-off announcements, or a repeatable scheduler for cron ones (`jobId ann-<id>`).
-- `community:reminder-deliver` — delayed for one-off reminders, or a repeatable scheduler for recurring ones (`jobId rem-<id>`).
-- `community:reminder-sweep` — every 5 minutes; catches up any one-off reminder whose delayed job was lost.
-- `community:event-reminder` — delayed, one per configured reminder mark (`jobId ev-<id>-<minutes>`).
-- `community:suggestion-sync` — every minute; reflects dashboard suggestion status/note edits into the posted Discord embed (dashboard writes only touch the database).
+- `community:reminder-deliver` — delayed for one-off reminders, or a repeatable scheduler for recurring ones (`jobId rem-<id>`). A one-off is claimed with a conditional update (`delivered: false` → `true`) before it is sent, so this job and `community:reminder-sweep` cannot both deliver it; a retryable send clears that claim. A deleted channel or missing permission (10003/50001/50013) falls back to a DM. Recurring reminders stay `delivered: false`, so they remain on `/remind list`; a 30-second lock stops the same tick from sending twice.
+- `community:reminder-sweep` — every 5 minutes; catches up any one-off reminder whose delayed job was lost, through the same claim-once delivery. Recurring reminders are not sent from this sweep. A recurring reminder whose scheduler is missing gets a new one on its cron expression in the guild timezone (UTC when that timezone cannot be read).
+- `community:community-catchup` — every 5 minutes (job name `community-catchup`, queue `community.community-catchup`). Ends up to 50 giveaways and closes up to 50 polls that are still open with `endsAt` in the past, and sends event reminders that are at most 15 minutes late (up to 100 events that still have a channel). Ending, closing, and reminding go through the same actions as the delayed jobs, so the catch-up running beside a delayed job that still fires does not draw, close, or remind twice.
+- `community:event-reminder` — delayed, one per configured reminder mark (`jobId ev-<id>-<minutes>`). A Redis flag per event and mark dedupes this job against `community:community-catchup`. A deleted channel or missing permission marks that reminder done. A transient failure leaves the flag unset so a later run can send it.
+- `community:suggestion-sync` — every minute; reflects dashboard suggestion status/note edits into the posted Discord embed (dashboard writes only touch the database). A missing channel or guild (10003/10004) clears the stored message and thread ids; a missing message (10008) clears the stored message id. Missing access or permissions (50001/50013) keeps the ids and does not throw. A soft-deleted suggestion treats an already-deleted Discord message (10008) as success and clears the stored message id; a gone channel clears the thread id as well.
 - `community:sticky-repost` — delayed catch-up re-post for a channel whose cooldown blocked an immediate one (`jobId sticky-<guildId>-<channelId>`, delay = the sticky's cooldown; enqueuing while one is pending is a no-op, so a burst of messages yields one re-post now and one after the cooldown).
 - `community:stats-refresh` — every 5 minutes; renames each guild's stats channels at most once per `statsRefreshMinutes` (Redis `SET NX EX` gate per guild) and each individual channel at most once per 10 minutes (Redis `SET NX EX` gate per channel, since Discord's 2-renames/10-min limit is per channel; a 429 pushes that gate out to Discord's `retry_after`), concurrency 1, never throws. Skips unavailable (outage) guilds. A rename failing with 50013 Missing Permissions or 50001 Missing Access pauses the guild's automatic renames (one warn naming the guild) until its stats config or the bot's permissions on those channels change; `/statschannel refresh` still tries, and a successful rename lifts the pause.
 - `community:birthday-announce` — hourly (top of the hour); for each available guild with birthdays enabled + a channel, when the guild-local hour equals `birthdays.announceHour`, posts one message per birthday due today (Feb 29 → Feb 28 in non-leap years; `lastAnnouncedYear IS NULL OR <> current year`, since a plain `NOT` would silently skip never-announced rows under Postgres NULL semantics), adds the optional role, and stamps `lastAnnouncedYear` so nothing is announced twice in a year. Members who left are skipped, not deleted.
@@ -198,7 +246,12 @@ show`) works without it; the plugin degrades rather than disables when the inten
 `/sticky set` posts the sticky immediately. Whenever a member posts in that channel, the bot deletes its previous
 copy and re-posts at the bottom — but never more than once per `cooldown` seconds (per channel, Redis
 `SET NX EX`); a blocked re-post schedules the single `sticky-repost` catch-up job instead. Mentions are always
-suppressed in the re-posted payload. If the channel is deleted, the sticky record is dropped automatically.
+suppressed in the re-posted payload. If the channel is deleted, the sticky record is dropped automatically. If
+the first post is rejected and the channel still exists, the row is kept and the reply says the next message
+in the channel will try again. `/sticky list` drops stickies whose channels are gone and says how many.
+`/sticky remove` still clears the row when the channel is already gone. A failure deleting the bot's previous
+copy — including Discord 10008 (message already deleted), 10003 (channel gone), and 50001/50013 (missing access
+or permission) — does not fail the removal.
 
 ## Dashboard
 
