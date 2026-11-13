@@ -163,6 +163,7 @@ export function LevelingTab({ guildId }: { guildId: string }) {
     if (!data) return;
     setDraft({
       ...data.leveling,
+      publicLeaderboard: data.leveling.publicLeaderboard ?? false,
       roleMultipliers: data.leveling.roleMultipliers ?? [],
       channelMultipliers: data.leveling.channelMultipliers ?? [],
     });
@@ -244,6 +245,11 @@ export function LevelingTab({ guildId }: { guildId: string }) {
   const filteredRows = (leaderboard.data?.items ?? []).filter((row) => row.userId.includes(search.trim()));
 
   const columns: DataTableColumn<LevelProfileDto>[] = [
+    {
+      key: 'rank',
+      header: 'Rank',
+      render: (r) => (typeof r.rank === 'number' ? r.rank.toLocaleString() : '—'),
+    },
     { key: 'userId', header: 'User ID', render: (r) => <code className="text-xs">{r.userId}</code> },
     { key: 'level', header: 'Level', render: (r) => r.level },
     { key: 'xp', header: 'XP', render: (r) => r.xp.toLocaleString() },
@@ -272,6 +278,22 @@ export function LevelingTab({ guildId }: { guildId: string }) {
               checked={draft.enabled}
               onCheckedChange={(v) => set('enabled', v)}
               disabled={update.isPending}
+            />
+          </div>
+
+          <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+            <div>
+              <p className="text-sm font-medium">Public leaderboard</p>
+              <p className="text-xs text-muted-foreground">
+                Anyone can view the XP leaderboard and a member&apos;s rank without signing in. Off by
+                default.
+              </p>
+            </div>
+            <Switch
+              checked={draft.publicLeaderboard}
+              onCheckedChange={(v) => set('publicLeaderboard', v)}
+              disabled={update.isPending}
+              aria-label="Public leaderboard"
             />
           </div>
 

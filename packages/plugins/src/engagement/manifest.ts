@@ -22,6 +22,11 @@ const xpMultiplierEntrySchema = z.object({
 
 const levelingSchema = z.object({
   enabled: z.boolean().default(true),
+  /**
+   * When true, the unauthenticated leaderboard and rank routes are available. Default `false` so a saved
+   * config from before this key existed stays private.
+   */
+  publicLeaderboard: z.boolean().default(false),
   /** Minimum XP awarded per eligible message (SPEC.md §G "anti-farming controls"). */
   xpPerMessageMin: z.number().int().min(1).max(1000).default(15),
   xpPerMessageMax: z.number().int().min(1).max(1000).default(25),
