@@ -13,7 +13,9 @@ export type EconomyNumericField =
   | 'giveMaxAmount'
   | 'earnPerMessage'
   | 'earnCooldownSeconds'
-  | 'earnDailyCap';
+  | 'earnDailyCap'
+  | 'blackjackMinBet'
+  | 'blackjackMaxBet';
 
 /** Mirrors `channelEconomySettingsSchema` in `packages/plugins/src/channel-economy/settings.ts`. */
 export const ECONOMY_NUMERIC_FIELDS: Record<EconomyNumericField, { label: string; min: number; max: number }> = {
@@ -26,6 +28,8 @@ export const ECONOMY_NUMERIC_FIELDS: Record<EconomyNumericField, { label: string
   earnPerMessage: { label: 'Earned per message', min: 1, max: 1000 },
   earnCooldownSeconds: { label: 'Seconds between earns', min: 10, max: 3600 },
   earnDailyCap: { label: 'Daily earning cap per viewer', min: 0, max: 1_000_000 },
+  blackjackMinBet: { label: 'Smallest bet', min: 1, max: 1_000_000 },
+  blackjackMaxBet: { label: 'Largest bet', min: 1, max: 1_000_000 },
 };
 
 export const ECONOMY_NAME_MAX = 32;
@@ -35,6 +39,7 @@ export interface EconomyDraft {
   currencyName: string;
   currencySymbol: string;
   earnEnabled: boolean;
+  blackjackEnabled: boolean;
   /** Numbers are kept as the text the streamer typed, so an empty box can be shown (and flagged) while editing. */
   numbers: Record<EconomyNumericField, string>;
 }
@@ -48,6 +53,7 @@ export function toDraft(settings: CreatorChannelEconomySettingsDto): EconomyDraf
     currencyName: settings.currencyName,
     currencySymbol: settings.currencySymbol,
     earnEnabled: settings.earnEnabled,
+    blackjackEnabled: settings.blackjackEnabled,
     numbers,
   };
 }
@@ -99,6 +105,14 @@ export function validateDraft(draft: EconomyDraft): EconomyDraftErrors {
   ) {
     errors.giveMinAmount = 'The minimum cannot be higher than the maximum.';
   }
+  if (
+    parsed.blackjackMinBet !== undefined &&
+    parsed.blackjackMaxBet !== undefined &&
+    parsed.blackjackMinBet > parsed.blackjackMaxBet &&
+    !errors.blackjackMinBet
+  ) {
+    errors.blackjackMinBet = 'The smallest bet cannot be higher than the largest.';
+  }
   return errors;
 }
 
@@ -114,6 +128,7 @@ export function buildPatch(
   if (name !== saved.currencyName) patch.currencyName = name;
   if (symbol !== saved.currencySymbol) patch.currencySymbol = symbol;
   if (draft.earnEnabled !== saved.earnEnabled) patch.earnEnabled = draft.earnEnabled;
+  if (draft.blackjackEnabled !== saved.blackjackEnabled) patch.blackjackEnabled = draft.blackjackEnabled;
   for (const field of Object.keys(ECONOMY_NUMERIC_FIELDS) as EconomyNumericField[]) {
     const value = parseWholeNumber(draft.numbers[field]);
     if (value !== null && value !== saved[field]) patch[field] = value;
