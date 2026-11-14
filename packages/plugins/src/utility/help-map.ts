@@ -28,6 +28,9 @@ export const HELP_MAP: Record<string, PluginId> = {
   // automod
   automod: 'automod',
 
+  // raid mode
+  raidmode: 'raidmode',
+
   // enforcer
   enforcer: 'enforcer',
   'Flag for review': 'enforcer',

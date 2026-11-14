@@ -1,6 +1,7 @@
 import admin from './admin';
 import moderation from './moderation';
 import automod from './automod';
+import raidmode from './raidmode';
 import enforcer from './enforcer';
 import logging from './logging';
 import tickets from './tickets';
@@ -20,6 +21,7 @@ export const allPlugins: Plugin[] = [
   admin,
   moderation,
   automod,
+  raidmode,
   enforcer,
   logging,
   tickets,

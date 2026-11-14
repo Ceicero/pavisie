@@ -1,0 +1,23 @@
+{
+  "status": {
+    "title": "Raid mode",
+    "noIncident": "No raid has been detected in this server yet."
+  },
+  "lockdown": {
+    "locked": "Locked down ({actions}): {channels} channel(s) closed.",
+    "lockedWithFailures": "Locked down ({actions}): {channels} channel(s) closed, {failures} change(s) Discord refused.",
+    "restoreHint": "Press **Restore permissions** to put back exactly what changed.",
+    "alreadyLocked": "This incident is already locked down.",
+    "nothingToLock": "Nothing was locked: every target channel is already closed to @everyone, or the bot lacks Manage Roles there."
+  },
+  "restore": {
+    "restored": "Put back {count} change(s).",
+    "skippedChannel": "Skipped {where}: {why}.",
+    "skipChangedByAdmin": "changed by someone during the raid, left as it is",
+    "skipChannelDeleted": "channel no longer exists",
+    "retry": "{count} change(s) could not be put back yet. Press **Restore permissions** again to retry.",
+    "notLocked": "This incident is not locked down."
+  },
+  "busy": "A lockdown or restore for this incident is already running. Try again in a moment.",
+  "notFound": "That raid incident was not found."
+}
