@@ -3,7 +3,6 @@ import {
   ContextMenuCommandBuilder,
   EmbedBuilder,
   PermissionFlagsBits,
-  type UserContextMenuCommandInteraction,
 } from 'discord.js';
 import { assertStaffLevel, errorEmbed, listEmbed, paginatedReply, type PluginCommand } from '../../sdk';
 import { caseTypeLabel } from '../embeds';
@@ -30,8 +29,11 @@ export const command: PluginCommand = {
     assertStaffLevel(c.staffLevel, 'helper', c.t);
     // `ContextMenuContext.interaction` is typed as the umbrella `ContextMenuCommandInteraction`, which has no
     // `targetUser` — this command is only ever registered as a User context menu (`data.setType(User)` above),
-    // so narrowing here is safe (same pattern as router.ts's `repliable` cast for the shared umbrella type).
-    const target = (c.interaction as unknown as UserContextMenuCommandInteraction<'cached'>).targetUser;
+    // so narrowing here is safe (checked at runtime with isUserContextMenuCommand()).
+    if (!c.interaction.isUserContextMenuCommand()) {
+      throw new Error('moderation: expected a user context menu interaction');
+    }
+    const target = c.interaction.targetUser;
     const service = moderationService(c.ctx);
 
     const pages: EmbedBuilder[] = [];

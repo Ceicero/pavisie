@@ -1,6 +1,6 @@
 import type { PluginJob } from '../../sdk';
 import { ModerationServiceImpl } from '../service';
-import { liftEnforcerMute } from './enforcer-mute';
+import { discordCode, liftEnforcerMute } from './enforcer-mute';
 
 export interface ExpireJobData {
   caseId: string;
@@ -55,7 +55,7 @@ export const expireJob: PluginJob<ExpireJobData> = {
           return; // unban() already marks BAN cases expired via markExpiredForActiveBan
         } catch (err) {
           // 10026 = Unknown Ban: a moderator already lifted it by hand, so there is nothing left to undo.
-          if ((err as { code?: unknown })?.code !== 10026) {
+          if (discordCode(err) !== 10026) {
             markExpired = false;
             throw err;
           }

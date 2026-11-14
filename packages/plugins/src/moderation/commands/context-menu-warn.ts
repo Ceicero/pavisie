@@ -6,8 +6,6 @@ import {
   PermissionFlagsBits,
   TextInputBuilder,
   TextInputStyle,
-  type GuildMember,
-  type UserContextMenuCommandInteraction,
 } from 'discord.js';
 import { assertStaffLevel, buildCustomId, errorEmbed, hierarchyGuard, type PluginCommand } from '../../sdk';
 
@@ -30,14 +28,16 @@ export const command: PluginCommand = {
     assertStaffLevel(c.staffLevel, 'moderator', c.t);
     // Same umbrella-type narrowing as context-menu-cases.ts — this command is only ever registered as a User
     // context menu.
-    const target = (c.interaction as unknown as UserContextMenuCommandInteraction<'cached'>)
-      .targetMember as GuildMember | null;
+    if (!c.interaction.isUserContextMenuCommand()) {
+      throw new Error('moderation: expected a user context menu interaction');
+    }
+    const target = c.interaction.targetMember;
     if (!target) {
       await c.interaction.reply({ embeds: [errorEmbed(c.t('errors.notAMember'))], ephemeral: true });
       return;
     }
     hierarchyGuard(
-      { guild: c.interaction.guild, member: c.interaction.member as GuildMember },
+      { guild: c.interaction.guild, member: c.interaction.member },
       target,
       c.ctx.botOwnerIds,
       c.t,
