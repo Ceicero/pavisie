@@ -56,6 +56,8 @@ interface Options {
   label: string;
   json: string | null;
   allowRemote: boolean;
+  /** Also run raid mode's join handler on every join (the regression gate for raid mode). */
+  raidMode: boolean;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -71,6 +73,7 @@ function parseOptions(argv: string[]): Options {
     label: 'run',
     json: null,
     allowRemote: false,
+    raidMode: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -113,6 +116,9 @@ function parseOptions(argv: string[]): Options {
         break;
       case '--allow-remote':
         options.allowRemote = true;
+        break;
+      case '--raid-mode':
+        options.raidMode = true;
         break;
       case '--manage-guild':
         options.manageGuild = true;
@@ -379,7 +385,15 @@ function createFakeDiscord(options: Options, recorder: Recorder): FakeDiscord {
 
   type FakeMember = {
     id: string;
-    user: { id: string; bot: boolean; system: boolean; createdAt: Date };
+    user: {
+      id: string;
+      bot: boolean;
+      system: boolean;
+      createdAt: Date;
+      avatar: string | null;
+      username: string;
+      flags: null;
+    };
     roles: { cache: Map<string, unknown>; add: (roleId: string) => Promise<void> };
     permissions: { has: (name: unknown) => boolean };
     joinedAt: Date;
@@ -435,7 +449,8 @@ function createFakeDiscord(options: Options, recorder: Recorder): FakeDiscord {
   const makeMember = (id: string, createdAt: Date, roleIds: string[]): FakeMember => {
     const member: FakeMember = {
       id,
-      user: { id, bot: false, system: false, createdAt },
+      // avatar/username/flags: what raid mode's scorer reads. Default avatar, generic name, no Discord flags.
+      user: { id, bot: false, system: false, createdAt, avatar: null, username: `member${id}`, flags: null },
       roles: {
         cache: new Map(roleIds.map((roleId) => [roleId, {}])),
         add: async (roleId: string) => {
@@ -597,7 +612,8 @@ async function clearRedis(redis: Redis): Promise<void> {
 }
 
 async function cleanup(redis: Redis): Promise<void> {
-  // AutomodEvent -> AutomodRule is `Restrict`, so events go first; the rest cascades from the guild.
+  // AutomodEvent -> AutomodRule is `Restrict`, so events go first; the rest (raid mode's tables too) cascades
+  // from the guild.
   await basePrisma.automodEvent.deleteMany({ where: { guildId: GUILD_ID } });
   await basePrisma.guild.deleteMany({ where: { id: GUILD_ID } });
   await clearRedis(redis);
@@ -625,6 +641,17 @@ async function seed(redis: Redis, options: Options): Promise<void> {
     },
   });
   await basePrisma.automodRule.createMany({ data: benchRules(options.mode) });
+  if (options.raidMode) {
+    await basePrisma.pluginConfig.create({
+      data: {
+        guildId: GUILD_ID,
+        pluginId: 'raidmode',
+        // Dry run: detection, scoring and the alert run on every join; lockdown is a one-off and not part of the
+        // per-join cost this gate measures.
+        config: { dryRun: true, alertChannelId: ALERT_CHANNEL_ID, joinThreshold: 10, windowSeconds: 30 },
+      },
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -795,6 +822,23 @@ async function main(): Promise<void> {
 
   jobs.attach(ctx);
 
+  // Raid mode is a separate plugin: the host gives it its own context (its own config) and runs its listener
+  // alongside automod's for the same join.
+  const raidModeModule = options.raidMode ? await import('../src/raidmode/incident') : null;
+  const raidCtx: PluginContext | null = raidModeModule
+    ? {
+        ...ctx,
+        getConfig: <T>(guildId: string) => configStore.getConfig<T>(guildId, 'raidmode'),
+        isEnabled: (guildId: string) => configStore.isEnabled(guildId, 'raidmode'),
+        queue: (name: string) => jobs.queue(`raidmode.${name}`) as never,
+      }
+    : null;
+  if (raidModeModule)
+    jobs.register(
+      `raidmode.${raidModeModule.UPDATE_JOB_NAME}`,
+      raidModeModule.updateJob.processor as JobProcessor,
+    );
+
   const workload = buildWorkload(options);
   // Message/join timestamps feed the sliding windows, so they are anchored to one fixed instant per run.
   const baseTimeMs = Date.now();
@@ -803,8 +847,14 @@ async function main(): Promise<void> {
   // Mirrors the host's listener (apps/bot loader.ts): check the plugin is enabled for the guild, then run the handler.
   const dispatch = async (event: BenchEvent): Promise<void> => {
     if (!(await ctx.isEnabled(GUILD_ID))) return;
-    if (event.kind === 'join') await handleMemberJoin(ctx, discord.makeJoin(event, baseTimeMs));
-    else await handleMessage(ctx, discord.makeMessage(event, baseTimeMs));
+    if (event.kind === 'join') {
+      const member = discord.makeJoin(event, baseTimeMs);
+      if (raidModeModule && raidCtx) {
+        await Promise.all([handleMemberJoin(ctx, member), raidModeModule.handleJoin(raidCtx, member)]);
+      } else {
+        await handleMemberJoin(ctx, member);
+      }
+    } else await handleMessage(ctx, discord.makeMessage(event, baseTimeMs));
   };
 
   // Warm caches the way a running bot has them warm, then measure only the raid itself.

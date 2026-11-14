@@ -51,6 +51,19 @@ _Configurable automated moderation rules — spam, mentions, invites, scam links
 | Manage Server | raising the verification level during a raid lockdown | Optional | "raise-verification" raid lockdown is skipped; the rule still alerts staff. |
 
 
+### Raid mode (`raidmode`)
+
+_Detects raids from join rate and account age, locks channels down with one-click exact restore, and scores risky joins with as little stored data as possible._ (disabled by default, moderation)
+
+| Permission | Feature | Required? | Fallback if missing |
+|---|---|---|---|
+| View Channel | seeing the channels a lockdown closes, and the alert channel | Required | Channels the bot cannot see are left out of a lockdown. |
+| Send Messages | posting the raid alert and the "lockdown still on" reminder | Required | No alert is posted; incidents are still recorded and shown on the dashboard. |
+| Embed Links | the raid alert embed | Required | The alert cannot be posted. |
+| Manage Roles | changing and restoring the @everyone channel overwrites during a lockdown | Optional | Lockdown skips every channel; staff are told nothing was locked. |
+| Manage Server | raising the verification level and pausing invites during a lockdown (manual grant) | Optional | Those two lockdown options are skipped; channel lockdown still works. |
+
+
 ### Enforcer (`enforcer`)
 
 _Policy-driven, hands-off moderation: the bot flags possible violations from a server policy and a moderator decides — everything is bookkept in a read-only ledger and the database. Moderators never DM or confront the suspect directly; the bot mediates every action._ (disabled by default, moderation)
@@ -215,6 +228,7 @@ Intent" eligibility in the Developer Portal) — see the README's Discord Develo
 | Plugin | What degrades without it |
 |---|---|
 | Automod (`automod`) | The account-age gate and raid (join-burst) detection rules cannot evaluate and show as inactive. |
+| Raid mode (`raidmode`) | _(see the plugin README for what degrades without this intent)_ |
 | Logging (`logging`) | Member join/leave logs and invite-use attribution on join are unavailable. |
 | Roles & Onboarding (`roles`) | Welcome/goodbye messages, the account-age gate, membership screening, and role persistence on rejoin cannot function — the bot is not told about join/leave events. |
 
