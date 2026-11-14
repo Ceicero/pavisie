@@ -42,6 +42,7 @@ import auditRoutes from './routes/audit';
 import moderationRoutes from './routes/moderation';
 import automodRoutes from './routes/automod';
 import threatsRoutes from './routes/threats';
+import raidModeRoutes from './routes/raid-mode';
 import loggingRoutes from './routes/logging';
 import ticketsRoutes from './routes/tickets';
 import rolesRoutes from './routes/roles';
@@ -348,6 +349,7 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   await app.register(moderationRoutes, { prefix: '/guilds' });
   await app.register(automodRoutes, { prefix: '/guilds' });
   await app.register(threatsRoutes, { prefix: '/guilds' });
+  await app.register(raidModeRoutes, { prefix: '/guilds' });
   await app.register(loggingRoutes, { prefix: '/guilds' });
   await app.register(ticketsRoutes, { prefix: '/guilds' });
   await app.register(rolesRoutes, { prefix: '/guilds' });

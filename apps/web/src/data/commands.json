@@ -946,6 +946,46 @@
       ]
     },
     {
+      "id": "raidmode",
+      "name": "Raid mode",
+      "description": "Detects raids from join rate and account age, locks channels down with one-click exact restore, and scores risky joins with as little stored data as possible.",
+      "category": "moderation",
+      "defaultEnabled": false,
+      "privilegedIntents": [
+        "GuildMembers"
+      ],
+      "commands": [
+        {
+          "name": "raidmode",
+          "fullName": "/raidmode",
+          "type": "slash",
+          "description": "Raid mode: see the latest raid, lock down, or restore permissions. • +help",
+          "staffLevel": "admin",
+          "options": [],
+          "subcommands": [
+            {
+              "name": "status",
+              "fullName": "/raidmode status",
+              "description": "Show the latest raid incident.",
+              "options": []
+            },
+            {
+              "name": "lockdown",
+              "fullName": "/raidmode lockdown",
+              "description": "Lock down for the latest raid incident.",
+              "options": []
+            },
+            {
+              "name": "restore",
+              "fullName": "/raidmode restore",
+              "description": "Put back exactly the permissions the last lockdown changed.",
+              "options": []
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "enforcer",
       "name": "Enforcer",
       "description": "Policy-driven, hands-off moderation: the bot flags possible violations from a server policy and a moderator decides — everything is bookkept in a read-only ledger and the database. Moderators never DM or confront the suspect directly; the bot mediates every action.",

@@ -343,6 +343,7 @@ model Guild {
   developerReports       DeveloperReport[]
   gameAccountLinks       GameAccountLink[]
   gameStatSnapshots      GameStatSnapshot[]
+  raidModeIncidents      RaidModeIncident[]
 }
 
 model GuildConfig {
@@ -1816,4 +1817,107 @@ model GameStatSnapshot {
 
   @@unique([guildId, userId, game])
   @@index([guildId, game])
+}
+
+// ---------------------------------------------------------------------------
+// Raid mode (packages/plugins/src/raidmode)
+// ---------------------------------------------------------------------------
+
+enum RaidModeIncidentStatus {
+  ACTIVE
+  ENDED
+}
+
+enum RaidModeLockdownState {
+  NONE
+  LOCKED
+  PARTIALLY_RESTORED
+  RESTORED
+}
+
+enum RaidModeLockdownChangeKind {
+  CHANNEL_OVERWRITE
+  VERIFICATION_LEVEL
+  INVITES_PAUSED
+}
+
+/// One raid: counts and timestamps only. No usernames, avatars or message content.
+model RaidModeIncident {
+  id                 String                 @id @default(cuid())
+  guildId            String
+  guild              Guild                  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  status             RaidModeIncidentStatus @default(ACTIVE)
+  /// Detection only: staff were alerted, no lockdown was applied automatically.
+  dryRun             Boolean
+  startedAt          DateTime               @default(now())
+  lastJoinAt         DateTime               @default(now())
+  endedAt            DateTime?
+  joinsTotal         Int                    @default(0)
+  joinsFlagged       Int                    @default(0)
+  riskLow            Int                    @default(0)
+  riskMedium         Int                    @default(0)
+  riskHigh           Int                    @default(0)
+  /// The thresholds in force when the incident started (joins / window / account age / new-account share).
+  thresholds         Json
+  lockdownState      RaidModeLockdownState  @default(NONE)
+  /// Comma-free list of what the lockdown did, e.g. ["channel-send-deny", "raise-verification"].
+  lockdownActions    String[]               @default([])
+  lockdownAppliedAt  DateTime?
+  /// "auto" or the Discord id of the admin who pressed "Lock down now".
+  lockdownAppliedBy  String?
+  lockdownRestoredAt DateTime?
+  lockdownRestoredBy String?
+  reminderSentAt     DateTime?
+  alertChannelId     String?
+  alertMessageId     String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  changes RaidModeLockdownChange[]
+  scores  RaidModeRiskScore[]
+
+  @@index([guildId, status])
+  @@index([guildId, startedAt])
+}
+
+/// Exactly what a lockdown changed, so restore can put back the previous state. Restored rows are deleted.
+model RaidModeLockdownChange {
+  id                        String                     @id @default(cuid())
+  incidentId                String
+  incident                  RaidModeIncident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  guildId                   String
+  kind                      RaidModeLockdownChangeKind
+  channelId                 String?
+  /// The role whose channel overwrite was changed (the guild's @everyone role).
+  targetId                  String?
+  /// Per-flag state before the lockdown, for the flags the lockdown touches: { "SendMessages": true | false | null, ... }.
+  previousFlags             Json?
+  /// Whether the overwrite existed at all before the lockdown (if not, restore deletes it again when it is empty).
+  previousOverwriteExisted  Boolean?
+  previousVerificationLevel Int?
+  appliedVerificationLevel  Int?
+  /// Set when restore left this change in place, e.g. "changed_by_admin" or "channel_deleted".
+  restoreSkippedReason      String?
+  createdAt                 DateTime                   @default(now())
+
+  @@index([incidentId])
+  @@index([guildId])
+}
+
+/// Risk score for a join during a raid: member id, score and reason codes only. Only medium and high scores are
+/// kept, and they are purged 30 days after the incident ends.
+model RaidModeRiskScore {
+  id         String           @id @default(cuid())
+  incidentId String
+  incident   RaidModeIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  guildId    String
+  userId     String
+  score      Int
+  reasons    String[]
+  joinedAt   DateTime
+  createdAt  DateTime         @default(now())
+
+  @@unique([incidentId, userId])
+  @@index([incidentId, score])
+  @@index([guildId, createdAt])
 }
