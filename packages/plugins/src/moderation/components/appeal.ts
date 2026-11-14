@@ -1,7 +1,6 @@
-import type { ButtonInteraction, ModalSubmitInteraction } from 'discord.js';
 import { NotFoundError, PermissionError } from '@pavisie/core';
 import { infoEmbed, successEmbed, type ComponentHandler } from '../../sdk';
-import { moderationService } from '../commands/shared';
+import { expectButton, expectModal, moderationService } from '../commands/shared';
 
 class AppealAlreadyDecidedError extends PermissionError {
   constructor() {
@@ -22,7 +21,7 @@ const appealAcceptHandler: ComponentHandler = {
   requirement: { staffLevel: 'moderator' },
   async handler(c) {
     const [appealId] = c.args;
-    const interaction = c.interaction as ButtonInteraction<'cached'>;
+    const interaction = expectButton(c);
 
     const existing = await c.ctx.prisma.moderationAppeal.findUnique({ where: { id: appealId } });
     if (!existing || existing.guildId !== c.guildId) throw new NotFoundError('Appeal not found.');
@@ -50,7 +49,7 @@ const appealDenyHandler: ComponentHandler = {
   requirement: { staffLevel: 'moderator' },
   async handler(c) {
     const [appealId] = c.args;
-    const interaction = c.interaction as ButtonInteraction<'cached'>;
+    const interaction = expectButton(c);
 
     const existing = await c.ctx.prisma.moderationAppeal.findUnique({ where: { id: appealId } });
     if (!existing || existing.guildId !== c.guildId) throw new NotFoundError('Appeal not found.');
@@ -78,7 +77,7 @@ const appealUnbanHandler: ComponentHandler = {
   requirement: { staffLevel: 'moderator' },
   async handler(c) {
     const [appealId] = c.args;
-    const interaction = c.interaction as ButtonInteraction<'cached'>;
+    const interaction = expectButton(c);
     const appeal = await c.ctx.prisma.moderationAppeal.findUnique({ where: { id: appealId } });
     if (!appeal || appeal.guildId !== c.guildId) throw new NotFoundError('Appeal not found.');
 
@@ -103,7 +102,7 @@ const appealModalHandler: ComponentHandler = {
   ownerOnly: true,
   async handler(c) {
     const [, caseNumberRaw] = c.args;
-    const interaction = c.interaction as ModalSubmitInteraction<'cached'>;
+    const interaction = expectModal(c);
     const content = interaction.fields.getTextInputValue('content');
     const caseNumber = caseNumberRaw ? Number(caseNumberRaw) : undefined;
 
