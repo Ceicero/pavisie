@@ -158,12 +158,12 @@
                     }
                   },
                   "modLogChannelId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "staffChannelId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "fastActions": {
                     "type": "boolean"
@@ -177,8 +177,7 @@
                   "dmOnModeration": {
                     "type": "boolean"
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -529,80 +528,6 @@
         }
       }
     },
-    "/guilds/{guildId}/threats/audit": {
-      "get": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "query",
-            "name": "cursor",
-            "required": false
-          },
-          {
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            },
-            "in": "query",
-            "name": "limit",
-            "required": false
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "query",
-            "name": "action",
-            "required": false
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "query",
-            "name": "actorId",
-            "required": false
-          },
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/guilds/{guildId}/threats/incidents": {
-      "get": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
     "/guilds/{guildId}/moderation/cases": {
       "get": {
         "parameters": [
@@ -698,8 +623,9 @@
           {
             "schema": {
               "type": "integer",
+              "minimum": 0,
               "exclusiveMinimum": true,
-              "minimum": 0
+              "maximum": 9007199254740991
             },
             "in": "path",
             "name": "caseNumber",
@@ -726,10 +652,7 @@
                     "maxLength": 1000
                   }
                 },
-                "required": [
-                  "reason"
-                ],
-                "additionalProperties": false
+                "required": ["reason"]
               }
             }
           }
@@ -747,8 +670,9 @@
           {
             "schema": {
               "type": "integer",
+              "minimum": 0,
               "exclusiveMinimum": true,
-              "minimum": 0
+              "maximum": 9007199254740991
             },
             "in": "path",
             "name": "caseNumber",
@@ -891,11 +815,7 @@
                     "maxLength": 2000
                   }
                 },
-                "required": [
-                  "userId",
-                  "content"
-                ],
-                "additionalProperties": false
+                "required": ["userId", "content"]
               }
             }
           }
@@ -971,11 +891,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "PENDING",
-                "ACCEPTED",
-                "DENIED"
-              ]
+              "enum": ["PENDING", "ACCEPTED", "DENIED"]
             },
             "in": "query",
             "name": "status",
@@ -1015,10 +931,7 @@
                     "maxLength": 2000
                   }
                 },
-                "required": [
-                  "accept"
-                ],
-                "additionalProperties": false
+                "required": ["accept"]
               }
             }
           }
@@ -1132,160 +1045,133 @@
                     "maxLength": 100
                   },
                   "enabled": {
-                    "type": "boolean",
-                    "default": true
+                    "default": true,
+                    "type": "boolean"
                   },
                   "dryRun": {
-                    "type": "boolean",
-                    "default": true
+                    "default": true,
+                    "type": "boolean"
                   },
                   "config": {
-                    "anyOf": [
+                    "oneOf": [
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "MESSAGE_FREQUENCY"
-                            ]
+                            "enum": ["MESSAGE_FREQUENCY"]
                           },
                           "maxMessages": {
+                            "default": 5,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 50,
-                            "default": 5
+                            "maximum": 50
                           },
                           "windowSeconds": {
+                            "default": 10,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 300,
-                            "default": 10
+                            "maximum": 300
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "DUPLICATE_MESSAGES"
-                            ]
+                            "enum": ["DUPLICATE_MESSAGES"]
                           },
                           "maxDuplicates": {
+                            "default": 3,
                             "type": "integer",
                             "minimum": 2,
-                            "maximum": 20,
-                            "default": 3
+                            "maximum": 20
                           },
                           "windowSeconds": {
+                            "default": 60,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 600,
-                            "default": 60
+                            "maximum": 600
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "MENTION_SPAM"
-                            ]
+                            "enum": ["MENTION_SPAM"]
                           },
                           "maxMentions": {
+                            "default": 5,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 50,
-                            "default": 5
+                            "maximum": 50
                           },
                           "includeRoleMentions": {
-                            "type": "boolean",
-                            "default": true
+                            "default": true,
+                            "type": "boolean"
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "INVITE_LINKS"
-                            ]
+                            "enum": ["INVITE_LINKS"]
                           },
                           "allowOwnServerInvites": {
-                            "type": "boolean",
-                            "default": true
+                            "default": true,
+                            "type": "boolean"
                           },
                           "allowedInviteCodes": {
+                            "default": [],
+                            "maxItems": 100,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 32
-                            },
-                            "maxItems": 100,
-                            "default": []
+                            }
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "SCAM_LINKS"
-                            ]
+                            "enum": ["SCAM_LINKS"]
                           },
                           "useBuiltInList": {
-                            "type": "boolean",
-                            "default": true
+                            "default": true,
+                            "type": "boolean"
                           },
                           "blockedDomains": {
+                            "default": [],
+                            "maxItems": 500,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 253
-                            },
-                            "maxItems": 500,
-                            "default": []
+                            }
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "REGEX_FILTER"
-                            ]
+                            "enum": ["REGEX_FILTER"]
                           },
                           "pattern": {
                             "type": "string",
@@ -1293,124 +1179,95 @@
                             "maxLength": 256
                           },
                           "flags": {
+                            "default": "i",
                             "type": "string",
-                            "maxLength": 5,
-                            "default": "i"
+                            "maxLength": 5
                           }
                         },
-                        "required": [
-                          "type",
-                          "pattern"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type", "pattern"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "WORD_FILTER"
-                            ]
+                            "enum": ["WORD_FILTER"]
                           },
                           "words": {
+                            "minItems": 1,
+                            "maxItems": 500,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 64
-                            },
-                            "minItems": 1,
-                            "maxItems": 500
+                            }
                           },
                           "wholeWord": {
-                            "type": "boolean",
-                            "default": true
+                            "default": true,
+                            "type": "boolean"
                           },
                           "caseSensitive": {
-                            "type": "boolean",
-                            "default": false
+                            "default": false,
+                            "type": "boolean"
                           }
                         },
-                        "required": [
-                          "type",
-                          "words"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type", "words"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "CAPS"
-                            ]
+                            "enum": ["CAPS"]
                           },
                           "minLength": {
+                            "default": 10,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 2000,
-                            "default": 10
+                            "maximum": 2000
                           },
                           "maxCapsPercent": {
+                            "default": 70,
                             "type": "number",
                             "minimum": 1,
-                            "maximum": 100,
-                            "default": 70
+                            "maximum": 100
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "REPEATED_CHARS"
-                            ]
+                            "enum": ["REPEATED_CHARS"]
                           },
                           "maxRepeats": {
+                            "default": 6,
                             "type": "integer",
                             "minimum": 2,
-                            "maximum": 50,
-                            "default": 6
+                            "maximum": 50
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "ATTACHMENTS"
-                            ]
+                            "enum": ["ATTACHMENTS"]
                           },
                           "blockedExtensions": {
+                            "default": ["exe", "bat", "scr", "msi", "jar", "cmd"],
+                            "maxItems": 100,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 10
-                            },
-                            "maxItems": 100,
-                            "default": [
-                              "exe",
-                              "bat",
-                              "scr",
-                              "msi",
-                              "jar",
-                              "cmd"
-                            ]
+                            }
                           },
                           "maxAttachments": {
                             "type": "integer",
@@ -1418,164 +1275,131 @@
                             "maximum": 20
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "NSFW_ENFORCEMENT"
-                            ]
+                            "enum": ["NSFW_ENFORCEMENT"]
                           },
                           "requireNsfwChannelForKeywords": {
+                            "default": [],
+                            "maxItems": 200,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 64
-                            },
-                            "maxItems": 200,
-                            "default": []
+                            }
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "ACCOUNT_AGE"
-                            ]
+                            "enum": ["ACCOUNT_AGE"]
                           },
                           "minAccountAgeHours": {
+                            "default": 24,
                             "type": "integer",
                             "minimum": 0,
-                            "maximum": 8760,
-                            "default": 24
+                            "maximum": 8760
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "RAID_DETECTION"
-                            ]
+                            "enum": ["RAID_DETECTION"]
                           },
                           "joinBurstCount": {
+                            "default": 10,
                             "type": "integer",
                             "minimum": 2,
-                            "maximum": 200,
-                            "default": 10
+                            "maximum": 200
                           },
                           "joinBurstWindowSeconds": {
+                            "default": 30,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 3600,
-                            "default": 30
+                            "maximum": 3600
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       }
                     ]
                   },
                   "actions": {
+                    "minItems": 1,
+                    "maxItems": 6,
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
                         "type": {
                           "type": "string",
-                          "enum": [
-                            "warn",
-                            "delete",
-                            "timeout",
-                            "quarantine",
-                            "alert_staff",
-                            "ignore"
-                          ]
+                          "enum": ["warn", "delete", "timeout", "quarantine", "alert_staff", "ignore"]
                         },
                         "timeoutMs": {
                           "type": "integer",
-                          "exclusiveMinimum": true,
                           "minimum": 0,
+                          "exclusiveMinimum": true,
                           "maximum": 2419200000
                         }
                       },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "minItems": 1,
-                    "maxItems": 6
+                      "required": ["type"]
+                    }
                   },
                   "exemptRoleIds": {
+                    "default": [],
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "default": []
+                    }
                   },
                   "exemptChannelIds": {
+                    "default": [],
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "default": []
+                    }
                   },
                   "exemptUserIds": {
+                    "default": [],
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "default": []
+                    }
                   },
                   "trustedDomains": {
+                    "default": [],
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "default": []
+                    }
                   },
                   "cooldownSeconds": {
+                    "default": 0,
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 86400,
-                    "default": 0
+                    "maximum": 86400
                   },
                   "priority": {
+                    "default": 0,
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 1000,
-                    "default": 0
+                    "maximum": 1000
                   }
                 },
-                "required": [
-                  "name",
-                  "config",
-                  "actions"
-                ],
-                "additionalProperties": false
+                "required": ["name", "config", "actions"]
               }
             }
           }
@@ -1613,160 +1437,131 @@
                     "maxLength": 100
                   },
                   "enabled": {
-                    "type": "boolean",
-                    "default": true
+                    "type": "boolean"
                   },
                   "dryRun": {
-                    "type": "boolean",
-                    "default": true
+                    "type": "boolean"
                   },
                   "config": {
-                    "anyOf": [
+                    "oneOf": [
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "MESSAGE_FREQUENCY"
-                            ]
+                            "enum": ["MESSAGE_FREQUENCY"]
                           },
                           "maxMessages": {
+                            "default": 5,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 50,
-                            "default": 5
+                            "maximum": 50
                           },
                           "windowSeconds": {
+                            "default": 10,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 300,
-                            "default": 10
+                            "maximum": 300
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "DUPLICATE_MESSAGES"
-                            ]
+                            "enum": ["DUPLICATE_MESSAGES"]
                           },
                           "maxDuplicates": {
+                            "default": 3,
                             "type": "integer",
                             "minimum": 2,
-                            "maximum": 20,
-                            "default": 3
+                            "maximum": 20
                           },
                           "windowSeconds": {
+                            "default": 60,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 600,
-                            "default": 60
+                            "maximum": 600
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "MENTION_SPAM"
-                            ]
+                            "enum": ["MENTION_SPAM"]
                           },
                           "maxMentions": {
+                            "default": 5,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 50,
-                            "default": 5
+                            "maximum": 50
                           },
                           "includeRoleMentions": {
-                            "type": "boolean",
-                            "default": true
+                            "default": true,
+                            "type": "boolean"
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "INVITE_LINKS"
-                            ]
+                            "enum": ["INVITE_LINKS"]
                           },
                           "allowOwnServerInvites": {
-                            "type": "boolean",
-                            "default": true
+                            "default": true,
+                            "type": "boolean"
                           },
                           "allowedInviteCodes": {
+                            "default": [],
+                            "maxItems": 100,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 32
-                            },
-                            "maxItems": 100,
-                            "default": []
+                            }
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "SCAM_LINKS"
-                            ]
+                            "enum": ["SCAM_LINKS"]
                           },
                           "useBuiltInList": {
-                            "type": "boolean",
-                            "default": true
+                            "default": true,
+                            "type": "boolean"
                           },
                           "blockedDomains": {
+                            "default": [],
+                            "maxItems": 500,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 253
-                            },
-                            "maxItems": 500,
-                            "default": []
+                            }
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "REGEX_FILTER"
-                            ]
+                            "enum": ["REGEX_FILTER"]
                           },
                           "pattern": {
                             "type": "string",
@@ -1774,124 +1569,95 @@
                             "maxLength": 256
                           },
                           "flags": {
+                            "default": "i",
                             "type": "string",
-                            "maxLength": 5,
-                            "default": "i"
+                            "maxLength": 5
                           }
                         },
-                        "required": [
-                          "type",
-                          "pattern"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type", "pattern"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "WORD_FILTER"
-                            ]
+                            "enum": ["WORD_FILTER"]
                           },
                           "words": {
+                            "minItems": 1,
+                            "maxItems": 500,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 64
-                            },
-                            "minItems": 1,
-                            "maxItems": 500
+                            }
                           },
                           "wholeWord": {
-                            "type": "boolean",
-                            "default": true
+                            "default": true,
+                            "type": "boolean"
                           },
                           "caseSensitive": {
-                            "type": "boolean",
-                            "default": false
+                            "default": false,
+                            "type": "boolean"
                           }
                         },
-                        "required": [
-                          "type",
-                          "words"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type", "words"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "CAPS"
-                            ]
+                            "enum": ["CAPS"]
                           },
                           "minLength": {
+                            "default": 10,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 2000,
-                            "default": 10
+                            "maximum": 2000
                           },
                           "maxCapsPercent": {
+                            "default": 70,
                             "type": "number",
                             "minimum": 1,
-                            "maximum": 100,
-                            "default": 70
+                            "maximum": 100
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "REPEATED_CHARS"
-                            ]
+                            "enum": ["REPEATED_CHARS"]
                           },
                           "maxRepeats": {
+                            "default": 6,
                             "type": "integer",
                             "minimum": 2,
-                            "maximum": 50,
-                            "default": 6
+                            "maximum": 50
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "ATTACHMENTS"
-                            ]
+                            "enum": ["ATTACHMENTS"]
                           },
                           "blockedExtensions": {
+                            "default": ["exe", "bat", "scr", "msi", "jar", "cmd"],
+                            "maxItems": 100,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 10
-                            },
-                            "maxItems": 100,
-                            "default": [
-                              "exe",
-                              "bat",
-                              "scr",
-                              "msi",
-                              "jar",
-                              "cmd"
-                            ]
+                            }
                           },
                           "maxAttachments": {
                             "type": "integer",
@@ -1899,159 +1665,124 @@
                             "maximum": 20
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "NSFW_ENFORCEMENT"
-                            ]
+                            "enum": ["NSFW_ENFORCEMENT"]
                           },
                           "requireNsfwChannelForKeywords": {
+                            "default": [],
+                            "maxItems": 200,
                             "type": "array",
                             "items": {
                               "type": "string",
                               "minLength": 1,
                               "maxLength": 64
-                            },
-                            "maxItems": 200,
-                            "default": []
+                            }
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "ACCOUNT_AGE"
-                            ]
+                            "enum": ["ACCOUNT_AGE"]
                           },
                           "minAccountAgeHours": {
+                            "default": 24,
                             "type": "integer",
                             "minimum": 0,
-                            "maximum": 8760,
-                            "default": 24
+                            "maximum": 8760
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       },
                       {
                         "type": "object",
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "RAID_DETECTION"
-                            ]
+                            "enum": ["RAID_DETECTION"]
                           },
                           "joinBurstCount": {
+                            "default": 10,
                             "type": "integer",
                             "minimum": 2,
-                            "maximum": 200,
-                            "default": 10
+                            "maximum": 200
                           },
                           "joinBurstWindowSeconds": {
+                            "default": 30,
                             "type": "integer",
                             "minimum": 1,
-                            "maximum": 3600,
-                            "default": 30
+                            "maximum": 3600
                           }
                         },
-                        "required": [
-                          "type"
-                        ],
-                        "additionalProperties": false
+                        "required": ["type"]
                       }
                     ]
                   },
                   "actions": {
+                    "minItems": 1,
+                    "maxItems": 6,
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
                         "type": {
                           "type": "string",
-                          "enum": [
-                            "warn",
-                            "delete",
-                            "timeout",
-                            "quarantine",
-                            "alert_staff",
-                            "ignore"
-                          ]
+                          "enum": ["warn", "delete", "timeout", "quarantine", "alert_staff", "ignore"]
                         },
                         "timeoutMs": {
                           "type": "integer",
-                          "exclusiveMinimum": true,
                           "minimum": 0,
+                          "exclusiveMinimum": true,
                           "maximum": 2419200000
                         }
                       },
-                      "required": [
-                        "type"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "minItems": 1,
-                    "maxItems": 6
+                      "required": ["type"]
+                    }
                   },
                   "exemptRoleIds": {
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "default": []
+                    }
                   },
                   "exemptChannelIds": {
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "default": []
+                    }
                   },
                   "exemptUserIds": {
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "default": []
+                    }
                   },
                   "trustedDomains": {
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "default": []
+                    }
                   },
                   "cooldownSeconds": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 86400,
-                    "default": 0
+                    "maximum": 86400
                   },
                   "priority": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 1000,
-                    "default": 0
+                    "maximum": 1000
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -2123,10 +1854,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "dryRun"
-                ],
-                "additionalProperties": false
+                "required": ["dryRun"]
               }
             }
           }
@@ -2171,10 +1899,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "dryRun"
-                ],
-                "additionalProperties": false
+                "required": ["dryRun"]
               }
             }
           }
@@ -2221,12 +1946,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "NONE",
-                "PENDING",
-                "CONFIRMED",
-                "FALSE_POSITIVE"
-              ]
+              "enum": ["NONE", "PENDING", "CONFIRMED", "FALSE_POSITIVE"]
             },
             "in": "query",
             "name": "reviewStatus",
@@ -2260,16 +1980,10 @@
                 "properties": {
                   "reviewStatus": {
                     "type": "string",
-                    "enum": [
-                      "CONFIRMED",
-                      "FALSE_POSITIVE"
-                    ]
+                    "enum": ["CONFIRMED", "FALSE_POSITIVE"]
                   }
                 },
-                "required": [
-                  "reviewStatus"
-                ],
-                "additionalProperties": false
+                "required": ["reviewStatus"]
               }
             }
           }
@@ -2316,10 +2030,7 @@
                     "maxLength": 2000
                   }
                 },
-                "required": [
-                  "text"
-                ],
-                "additionalProperties": false
+                "required": ["text"]
               }
             }
           }
@@ -2370,24 +2081,91 @@
                           },
                           {
                             "type": "boolean"
-                          },
-                          {
-                            "enum": [
-                              "null"
-                            ],
-                            "nullable": true
                           }
-                        ]
+                        ],
+                        "nullable": true
                       }
                     }
                   },
-                  "required": [
-                    "matched"
-                  ],
+                  "required": ["matched"],
                   "additionalProperties": false
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/guilds/{guildId}/threats/audit": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "action",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "actorId",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{17,20}$"
+            },
+            "in": "path",
+            "name": "guildId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/guilds/{guildId}/threats/incidents": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{17,20}$"
+            },
+            "in": "path",
+            "name": "guildId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
           }
         }
       }
@@ -2489,7 +2267,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "date-time"
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
             },
             "in": "query",
             "name": "since",
@@ -2498,7 +2277,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "date-time"
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
             },
             "in": "query",
             "name": "until",
@@ -2579,7 +2359,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "date-time"
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
             },
             "in": "query",
             "name": "since",
@@ -2588,7 +2369,8 @@
           {
             "schema": {
               "type": "string",
-              "format": "date-time"
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
             },
             "in": "query",
             "name": "until",
@@ -2636,10 +2418,7 @@
                     "maxLength": 4000
                   }
                 },
-                "required": [
-                  "text"
-                ],
-                "additionalProperties": false
+                "required": ["text"]
               }
             }
           }
@@ -2753,32 +2532,31 @@
                     "maxLength": 2000
                   },
                   "buttonLabel": {
+                    "default": "Open a ticket",
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 80,
-                    "default": "Open a ticket"
+                    "maxLength": 80
                   },
                   "categoryId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "supportRoleIds": {
+                    "default": [],
+                    "maxItems": 3,
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "maxItems": 3,
-                    "default": []
+                    }
                   },
                   "mode": {
+                    "default": "CHANNEL",
                     "type": "string",
-                    "enum": [
-                      "CHANNEL",
-                      "THREAD"
-                    ],
-                    "default": "CHANNEL"
+                    "enum": ["CHANNEL", "THREAD"]
                   },
                   "intakeForm": {
+                    "nullable": true,
+                    "maxItems": 5,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -2789,39 +2567,27 @@
                           "maxLength": 100
                         },
                         "style": {
+                          "default": "short",
                           "type": "string",
-                          "enum": [
-                            "short",
-                            "paragraph"
-                          ],
-                          "default": "short"
+                          "enum": ["short", "paragraph"]
                         },
                         "required": {
-                          "type": "boolean",
-                          "default": true
+                          "default": true,
+                          "type": "boolean"
                         }
                       },
-                      "required": [
-                        "label"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "maxItems": 5,
-                    "nullable": true
+                      "required": ["label"]
+                    }
                   },
                   "slaMinutes": {
+                    "nullable": true,
                     "type": "integer",
-                    "exclusiveMinimum": true,
                     "minimum": 0,
-                    "nullable": true
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
                   }
                 },
-                "required": [
-                  "channelId",
-                  "title",
-                  "description"
-                ],
-                "additionalProperties": false
+                "required": ["channelId", "title", "description"]
               }
             }
           }
@@ -2870,30 +2636,26 @@
                   "buttonLabel": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 80,
-                    "default": "Open a ticket"
+                    "maxLength": 80
                   },
                   "categoryId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "supportRoleIds": {
+                    "maxItems": 3,
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "maxItems": 3,
-                    "default": []
+                    }
                   },
                   "mode": {
                     "type": "string",
-                    "enum": [
-                      "CHANNEL",
-                      "THREAD"
-                    ],
-                    "default": "CHANNEL"
+                    "enum": ["CHANNEL", "THREAD"]
                   },
                   "intakeForm": {
+                    "nullable": true,
+                    "maxItems": 5,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -2904,34 +2666,26 @@
                           "maxLength": 100
                         },
                         "style": {
+                          "default": "short",
                           "type": "string",
-                          "enum": [
-                            "short",
-                            "paragraph"
-                          ],
-                          "default": "short"
+                          "enum": ["short", "paragraph"]
                         },
                         "required": {
-                          "type": "boolean",
-                          "default": true
+                          "default": true,
+                          "type": "boolean"
                         }
                       },
-                      "required": [
-                        "label"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "maxItems": 5,
-                    "nullable": true
+                      "required": ["label"]
+                    }
                   },
                   "slaMinutes": {
+                    "nullable": true,
                     "type": "integer",
-                    "exclusiveMinimum": true,
                     "minimum": 0,
-                    "nullable": true
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -3043,11 +2797,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "OPEN",
-                "CLOSED",
-                "ARCHIVED"
-              ]
+              "enum": ["OPEN", "CLOSED", "ARCHIVED"]
             },
             "in": "query",
             "name": "status",
@@ -3128,8 +2878,7 @@
                     "type": "string",
                     "maxLength": 1000
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -3171,15 +2920,12 @@
                 "type": "object",
                 "properties": {
                   "assigneeId": {
+                    "nullable": true,
                     "type": "string",
-                    "minLength": 1,
-                    "nullable": true
+                    "minLength": 1
                   }
                 },
-                "required": [
-                  "assigneeId"
-                ],
-                "additionalProperties": false
+                "required": ["assigneeId"]
               }
             }
           }
@@ -3216,12 +2962,9 @@
         "parameters": [
           {
             "schema": {
+              "default": "html",
               "type": "string",
-              "enum": [
-                "html",
-                "json"
-              ],
-              "default": "html"
+              "enum": ["html", "json"]
             },
             "in": "query",
             "name": "format",
@@ -3290,29 +3033,28 @@
                     "maxLength": 100
                   },
                   "description": {
+                    "nullable": true,
                     "type": "string",
-                    "maxLength": 2000,
-                    "nullable": true
+                    "maxLength": 2000
                   },
                   "style": {
                     "type": "string",
-                    "enum": [
-                      "BUTTONS",
-                      "SELECT",
-                      "REACTIONS"
-                    ]
+                    "enum": ["BUTTONS", "SELECT", "REACTIONS"]
                   },
                   "groupId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "maxSelections": {
+                    "nullable": true,
                     "type": "integer",
-                    "exclusiveMinimum": true,
                     "minimum": 0,
-                    "nullable": true
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
                   },
                   "options": {
+                    "minItems": 1,
+                    "maxItems": 25,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -3327,38 +3069,27 @@
                           "maxLength": 100
                         },
                         "emoji": {
+                          "nullable": true,
                           "type": "string",
-                          "maxLength": 64,
-                          "nullable": true
+                          "maxLength": 64
                         },
                         "description": {
+                          "nullable": true,
                           "type": "string",
-                          "maxLength": 200,
-                          "nullable": true
+                          "maxLength": 200
                         },
                         "position": {
+                          "default": 0,
                           "type": "integer",
                           "minimum": 0,
-                          "default": 0
+                          "maximum": 9007199254740991
                         }
                       },
-                      "required": [
-                        "roleId",
-                        "label"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "minItems": 1,
-                    "maxItems": 25
+                      "required": ["roleId", "label"]
+                    }
                   }
                 },
-                "required": [
-                  "channelId",
-                  "title",
-                  "style",
-                  "options"
-                ],
-                "additionalProperties": false
+                "required": ["channelId", "title", "style", "options"]
               }
             }
           }
@@ -3400,29 +3131,28 @@
                     "maxLength": 100
                   },
                   "description": {
+                    "nullable": true,
                     "type": "string",
-                    "maxLength": 2000,
-                    "nullable": true
+                    "maxLength": 2000
                   },
                   "style": {
                     "type": "string",
-                    "enum": [
-                      "BUTTONS",
-                      "SELECT",
-                      "REACTIONS"
-                    ]
+                    "enum": ["BUTTONS", "SELECT", "REACTIONS"]
                   },
                   "groupId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "maxSelections": {
+                    "nullable": true,
                     "type": "integer",
-                    "exclusiveMinimum": true,
                     "minimum": 0,
-                    "nullable": true
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
                   },
                   "options": {
+                    "minItems": 1,
+                    "maxItems": 25,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -3437,32 +3167,26 @@
                           "maxLength": 100
                         },
                         "emoji": {
+                          "nullable": true,
                           "type": "string",
-                          "maxLength": 64,
-                          "nullable": true
+                          "maxLength": 64
                         },
                         "description": {
+                          "nullable": true,
                           "type": "string",
-                          "maxLength": 200,
-                          "nullable": true
+                          "maxLength": 200
                         },
                         "position": {
+                          "default": 0,
                           "type": "integer",
                           "minimum": 0,
-                          "default": 0
+                          "maximum": 9007199254740991
                         }
                       },
-                      "required": [
-                        "roleId",
-                        "label"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "minItems": 1,
-                    "maxItems": 25
+                      "required": ["roleId", "label"]
+                    }
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -3583,31 +3307,28 @@
                     "maxLength": 100
                   },
                   "roleIds": {
+                    "default": [],
+                    "maxItems": 25,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1
-                    },
-                    "maxItems": 25,
-                    "default": []
+                    }
                   },
                   "exclusive": {
-                    "type": "boolean",
-                    "default": false
+                    "default": false,
+                    "type": "boolean"
                   },
                   "maxSelections": {
-                    "type": "integer",
-                    "exclusiveMinimum": true,
-                    "minimum": 0,
-                    "maximum": 25,
+                    "default": null,
                     "nullable": true,
-                    "default": null
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 25
                   }
                 },
-                "required": [
-                  "name"
-                ],
-                "additionalProperties": false
+                "required": ["name"]
               }
             }
           }
@@ -3645,28 +3366,24 @@
                     "maxLength": 100
                   },
                   "roleIds": {
+                    "maxItems": 25,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1
-                    },
-                    "maxItems": 25,
-                    "default": []
+                    }
                   },
                   "exclusive": {
-                    "type": "boolean",
-                    "default": false
+                    "type": "boolean"
                   },
                   "maxSelections": {
-                    "type": "integer",
-                    "exclusiveMinimum": true,
-                    "minimum": 0,
-                    "maximum": 25,
                     "nullable": true,
-                    "default": null
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 25
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -3756,24 +3473,23 @@
                     "type": "boolean"
                   },
                   "channelId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "message": {
+                    "nullable": true,
                     "type": "string",
-                    "maxLength": 2000,
-                    "nullable": true
+                    "maxLength": 2000
                   },
                   "embed": {
+                    "nullable": true,
                     "type": "object",
-                    "additionalProperties": {},
-                    "nullable": true
+                    "additionalProperties": {}
                   },
                   "dm": {
                     "type": "boolean"
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -3809,8 +3525,7 @@
                     "type": "string",
                     "minLength": 1
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -3864,24 +3579,23 @@
                     "type": "boolean"
                   },
                   "channelId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "message": {
+                    "nullable": true,
                     "type": "string",
-                    "maxLength": 2000,
-                    "nullable": true
+                    "maxLength": 2000
                   },
                   "embed": {
+                    "nullable": true,
                     "type": "object",
-                    "additionalProperties": {},
-                    "nullable": true
+                    "additionalProperties": {}
                   },
                   "dm": {
                     "type": "boolean"
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -3917,8 +3631,7 @@
                     "type": "string",
                     "minLength": 1
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -3970,28 +3683,24 @@
                 "properties": {
                   "mode": {
                     "type": "string",
-                    "enum": [
-                      "button",
-                      "modal",
-                      "captcha"
-                    ]
+                    "enum": ["button", "modal", "captcha"]
                   },
                   "questions": {
+                    "maxItems": 5,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 300
-                    },
-                    "maxItems": 5
+                    }
                   },
                   "verifiedRoleId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "staffChannelId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "minAccountAgeDays": {
                     "type": "integer",
@@ -4000,18 +3709,13 @@
                   },
                   "underageAction": {
                     "type": "string",
-                    "enum": [
-                      "none",
-                      "quarantine",
-                      "kick"
-                    ]
+                    "enum": ["none", "quarantine", "kick"]
                   },
                   "quarantineRoleId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -4127,10 +3831,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "approve"
-                ],
-                "additionalProperties": false
+                "required": ["approve"]
               }
             }
           }
@@ -4175,8 +3876,7 @@
                     "type": "string",
                     "maxLength": 1000
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -4221,8 +3921,7 @@
                     "type": "string",
                     "maxLength": 1000
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -4282,15 +3981,16 @@
                 "type": "object",
                 "properties": {
                   "rulesText": {
+                    "nullable": true,
                     "type": "string",
-                    "maxLength": 4000,
-                    "nullable": true
+                    "maxLength": 4000
                   },
                   "rulesRoleId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
                   },
                   "steps": {
+                    "maxItems": 20,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -4306,16 +4006,10 @@
                           "maxLength": 200
                         }
                       },
-                      "required": [
-                        "id",
-                        "label"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "maxItems": 20
+                      "required": ["id", "label"]
+                    }
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -4377,10 +4071,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "enabled"
-                ],
-                "additionalProperties": false
+                "required": ["enabled"]
               }
             }
           }
@@ -4434,28 +4125,27 @@
                     "type": "boolean"
                   },
                   "roleIds": {
+                    "maxItems": 5,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{17,20}$"
-                    },
-                    "maxItems": 5
+                    }
                   },
                   "botRoleIds": {
+                    "maxItems": 3,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{17,20}$"
-                    },
-                    "maxItems": 3
+                    }
                   },
                   "delaySeconds": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 604800
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -4602,11 +4292,7 @@
                     "pattern": "^\\d{17,20}$"
                   }
                 },
-                "required": [
-                  "level",
-                  "roleId"
-                ],
-                "additionalProperties": false
+                "required": ["level", "roleId"]
               }
             }
           }
@@ -4673,11 +4359,7 @@
                   },
                   "mode": {
                     "type": "string",
-                    "enum": [
-                      "give",
-                      "remove",
-                      "set"
-                    ]
+                    "enum": ["give", "remove", "set"]
                   },
                   "amount": {
                     "type": "integer",
@@ -4689,12 +4371,43 @@
                     "maxLength": 500
                   }
                 },
-                "required": [
-                  "userId",
-                  "mode",
-                  "amount"
-                ],
-                "additionalProperties": false
+                "required": ["userId", "mode", "amount"]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{17,20}$"
+            },
+            "in": "path",
+            "name": "guildId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/guilds/{guildId}/engagement/reset": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "pattern": "^\\d{17,20}$"
+                  }
+                }
               }
             }
           }
@@ -4884,13 +4597,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "PENDING",
-                "APPROVED",
-                "DENIED",
-                "IMPLEMENTED",
-                "CONSIDERING"
-              ]
+              "enum": ["PENDING", "APPROVED", "DENIED", "IMPLEMENTED", "CONSIDERING"]
             },
             "in": "query",
             "name": "status",
@@ -4924,23 +4631,14 @@
                 "properties": {
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "PENDING",
-                      "APPROVED",
-                      "DENIED",
-                      "IMPLEMENTED",
-                      "CONSIDERING"
-                    ]
+                    "enum": ["PENDING", "APPROVED", "DENIED", "IMPLEMENTED", "CONSIDERING"]
                   },
                   "staffNote": {
                     "type": "string",
                     "maxLength": 1000
                   }
                 },
-                "required": [
-                  "status"
-                ],
-                "additionalProperties": false
+                "required": ["status"]
               }
             }
           }
@@ -5137,76 +4835,68 @@
                     "maxLength": 32
                   },
                   "content": {
+                    "nullable": true,
                     "type": "string",
-                    "maxLength": 2000,
-                    "nullable": true
+                    "maxLength": 2000
                   },
                   "embed": {
+                    "nullable": true,
                     "type": "object",
                     "properties": {
                       "title": {
+                        "nullable": true,
                         "type": "string",
-                        "maxLength": 256,
-                        "nullable": true
+                        "maxLength": 256
                       },
                       "description": {
+                        "nullable": true,
                         "type": "string",
-                        "maxLength": 4096,
-                        "nullable": true
+                        "maxLength": 4096
                       },
                       "colorHex": {
+                        "nullable": true,
                         "type": "string",
-                        "pattern": "^#?[0-9a-fA-F]{6}$",
-                        "nullable": true
+                        "pattern": "^#?[0-9a-fA-F]{6}$"
                       },
                       "imageUrl": {
+                        "nullable": true,
                         "type": "string",
-                        "format": "uri",
                         "maxLength": 2048,
-                        "nullable": true
+                        "format": "uri"
                       },
                       "footer": {
+                        "nullable": true,
                         "type": "string",
-                        "maxLength": 2048,
-                        "nullable": true
+                        "maxLength": 2048
                       }
                     },
-                    "additionalProperties": false,
-                    "nullable": true
+                    "additionalProperties": false
                   },
                   "triggerMode": {
+                    "default": "NONE",
                     "type": "string",
-                    "enum": [
-                      "NONE",
-                      "EXACT",
-                      "CONTAINS",
-                      "STARTS_WITH"
-                    ],
-                    "default": "NONE"
+                    "enum": ["NONE", "EXACT", "CONTAINS", "STARTS_WITH"]
                   },
                   "trigger": {
+                    "nullable": true,
                     "type": "string",
-                    "maxLength": 100,
-                    "nullable": true
+                    "maxLength": 100
                   },
                   "triggerChannelIds": {
+                    "default": [],
+                    "maxItems": 50,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{5,25}$"
-                    },
-                    "maxItems": 50,
-                    "default": []
+                    }
                   },
                   "staffOnly": {
-                    "type": "boolean",
-                    "default": false
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
-                "required": [
-                  "name"
-                ],
-                "additionalProperties": false
+                "required": ["name"]
               }
             }
           }
@@ -5244,76 +4934,68 @@
                     "maxLength": 32
                   },
                   "content": {
+                    "nullable": true,
                     "type": "string",
-                    "maxLength": 2000,
-                    "nullable": true
+                    "maxLength": 2000
                   },
                   "embed": {
+                    "nullable": true,
                     "type": "object",
                     "properties": {
                       "title": {
+                        "nullable": true,
                         "type": "string",
-                        "maxLength": 256,
-                        "nullable": true
+                        "maxLength": 256
                       },
                       "description": {
+                        "nullable": true,
                         "type": "string",
-                        "maxLength": 4096,
-                        "nullable": true
+                        "maxLength": 4096
                       },
                       "colorHex": {
+                        "nullable": true,
                         "type": "string",
-                        "pattern": "^#?[0-9a-fA-F]{6}$",
-                        "nullable": true
+                        "pattern": "^#?[0-9a-fA-F]{6}$"
                       },
                       "imageUrl": {
+                        "nullable": true,
                         "type": "string",
-                        "format": "uri",
                         "maxLength": 2048,
-                        "nullable": true
+                        "format": "uri"
                       },
                       "footer": {
+                        "nullable": true,
                         "type": "string",
-                        "maxLength": 2048,
-                        "nullable": true
+                        "maxLength": 2048
                       }
                     },
-                    "additionalProperties": false,
-                    "nullable": true
+                    "additionalProperties": false
                   },
                   "triggerMode": {
+                    "default": "NONE",
                     "type": "string",
-                    "enum": [
-                      "NONE",
-                      "EXACT",
-                      "CONTAINS",
-                      "STARTS_WITH"
-                    ],
-                    "default": "NONE"
+                    "enum": ["NONE", "EXACT", "CONTAINS", "STARTS_WITH"]
                   },
                   "trigger": {
+                    "nullable": true,
                     "type": "string",
-                    "maxLength": 100,
-                    "nullable": true
+                    "maxLength": 100
                   },
                   "triggerChannelIds": {
+                    "default": [],
+                    "maxItems": 50,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{5,25}$"
-                    },
-                    "maxItems": 50,
-                    "default": []
+                    }
                   },
                   "staffOnly": {
-                    "type": "boolean",
-                    "default": false
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
-                "required": [
-                  "name"
-                ],
-                "additionalProperties": false
+                "required": ["name"]
               }
             }
           }
@@ -5454,9 +5136,9 @@
                     "type": "boolean"
                   },
                   "channelId": {
+                    "nullable": true,
                     "type": "string",
-                    "pattern": "^\\d{17,20}$",
-                    "nullable": true
+                    "pattern": "^\\d{17,20}$"
                   },
                   "message": {
                     "type": "string",
@@ -5469,9 +5151,9 @@
                     "maximum": 23
                   },
                   "roleId": {
+                    "nullable": true,
                     "type": "string",
-                    "pattern": "^\\d{17,20}$",
-                    "nullable": true
+                    "pattern": "^\\d{17,20}$"
                   },
                   "publicList": {
                     "type": "boolean"
@@ -5698,14 +5380,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "twitch",
-                "google",
-                "microsoft",
-                "instagram",
-                "reddit",
-                "generic_webhook"
-              ]
+              "enum": ["twitch", "google", "microsoft", "instagram", "reddit", "generic_webhook"]
             },
             "in": "path",
             "name": "provider",
@@ -5810,26 +5485,27 @@
                     "maxLength": 100
                   },
                   "provider": {
+                    "default": "generic",
                     "type": "string",
-                    "maxLength": 50,
-                    "default": "generic"
+                    "maxLength": 50
                   },
                   "events": {
+                    "default": [],
                     "type": "array",
                     "items": {
                       "type": "string"
-                    },
-                    "default": []
+                    }
                   },
                   "channelId": {
-                    "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "requireTimestamp": {
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
-                "required": [
-                  "name"
-                ],
-                "additionalProperties": false
+                "required": ["name"]
               }
             }
           }
@@ -5853,6 +5529,49 @@
       }
     },
     "/guilds/{guildId}/integrations/webhooks/{endpointId}": {
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "requireTimestamp": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["requireTimestamp"]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{17,20}$"
+            },
+            "in": "path",
+            "name": "guildId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "endpointId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
       "delete": {
         "parameters": [
           {
@@ -5907,12 +5626,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "twitch",
-                "youtube",
-                "reddit",
-                "steam"
-              ]
+              "enum": ["twitch", "youtube", "reddit", "steam"]
             },
             "in": "query",
             "name": "provider",
@@ -5944,12 +5658,7 @@
                 "properties": {
                   "provider": {
                     "type": "string",
-                    "enum": [
-                      "twitch",
-                      "youtube",
-                      "reddit",
-                      "steam"
-                    ]
+                    "enum": ["twitch", "youtube", "reddit", "steam"]
                   },
                   "target": {
                     "type": "string",
@@ -5961,22 +5670,17 @@
                     "pattern": "^\\d{17,20}$"
                   },
                   "roleId": {
+                    "nullable": true,
                     "type": "string",
-                    "pattern": "^\\d{17,20}$",
-                    "nullable": true
+                    "pattern": "^\\d{17,20}$"
                   },
                   "template": {
+                    "nullable": true,
                     "type": "string",
-                    "maxLength": 300,
-                    "nullable": true
+                    "maxLength": 300
                   }
                 },
-                "required": [
-                  "provider",
-                  "target",
-                  "channelId"
-                ],
-                "additionalProperties": false
+                "required": ["provider", "target", "channelId"]
               }
             }
           }
@@ -6065,6 +5769,7 @@
                     "format": "uri"
                   },
                   "events": {
+                    "minItems": 1,
                     "type": "array",
                     "items": {
                       "type": "string",
@@ -6077,16 +5782,10 @@
                         "automod.triggered",
                         "enforcer.decided"
                       ]
-                    },
-                    "minItems": 1
+                    }
                   }
                 },
-                "required": [
-                  "name",
-                  "url",
-                  "events"
-                ],
-                "additionalProperties": false
+                "required": ["name", "url", "events"]
               }
             }
           }
@@ -6234,785 +5933,8 @@
         }
       }
     },
-    "/guilds/{guildId}/integrations/twitch-chat/connect": {
-      "post": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
     "/guilds/{guildId}/integrations/twitch-chat/channels/{channelId}": {
-      "patch": {
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "enabled": {
-                    "type": "boolean"
-                  },
-                  "commandPrefix": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 1,
-                    "pattern": "^[^\\s/]$"
-                  },
-                  "rewardsEnabled": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "channelId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      },
       "delete": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "channelId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/guilds/{guildId}/integrations/twitch-chat/channels/{channelId}/commands": {
-      "get": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "channelId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      },
-      "post": {
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "pattern": "^[a-z0-9_]{1,32}$"
-                  },
-                  "response": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 400
-                  },
-                  "cooldownSeconds": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 3600
-                  },
-                  "minLevel": {
-                    "type": "string",
-                    "enum": [
-                      "everyone",
-                      "subscriber",
-                      "vip",
-                      "moderator",
-                      "broadcaster"
-                    ]
-                  }
-                },
-                "required": [
-                  "name",
-                  "response"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "channelId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/guilds/{guildId}/integrations/twitch-chat/commands/{commandId}": {
-      "patch": {
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "pattern": "^[a-z0-9_]{1,32}$"
-                  },
-                  "response": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 400
-                  },
-                  "cooldownSeconds": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 3600
-                  },
-                  "minLevel": {
-                    "type": "string",
-                    "enum": [
-                      "everyone",
-                      "subscriber",
-                      "vip",
-                      "moderator",
-                      "broadcaster"
-                    ]
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "commandId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      },
-      "delete": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "commandId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/guilds/{guildId}/integrations/twitch-chat/channels/{channelId}/timers": {
-      "get": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "channelId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      },
-      "post": {
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "pattern": "^[a-z0-9_]{1,32}$"
-                  },
-                  "message": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 400
-                  },
-                  "intervalMinutes": {
-                    "type": "integer",
-                    "minimum": 5,
-                    "maximum": 1440
-                  }
-                },
-                "required": [
-                  "name",
-                  "message",
-                  "intervalMinutes"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "channelId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/guilds/{guildId}/integrations/twitch-chat/timers/{timerId}": {
-      "patch": {
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "pattern": "^[a-z0-9_]{1,32}$"
-                  },
-                  "message": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 400
-                  },
-                  "intervalMinutes": {
-                    "type": "integer",
-                    "minimum": 5,
-                    "maximum": 1440
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "timerId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      },
-      "delete": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "timerId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/guilds/{guildId}/integrations/twitch-chat/channels/{channelId}/rewards": {
-      "get": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "channelId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      },
-      "post": {
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "rewardId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 64,
-                    "nullable": true
-                  },
-                  "rewardTitle": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100
-                  },
-                  "action": {
-                    "type": "string",
-                    "enum": [
-                      "sound",
-                      "tts",
-                      "chat",
-                      "discord"
-                    ]
-                  },
-                  "soundUrl": {
-                    "type": "string",
-                    "format": "uri"
-                  },
-                  "volume": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 100
-                  },
-                  "ttsTemplate": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 300
-                  },
-                  "chatTemplate": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 300
-                  },
-                  "discordChannelId": {
-                    "type": "string",
-                    "pattern": "^\\d{17,20}$"
-                  },
-                  "discordTemplate": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 300
-                  },
-                  "cooldownSeconds": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 3600
-                  }
-                },
-                "required": [
-                  "rewardTitle",
-                  "action"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "channelId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/guilds/{guildId}/integrations/twitch-chat/rewards/{rewardId}": {
-      "patch": {
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "rewardId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 64,
-                    "nullable": true
-                  },
-                  "rewardTitle": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  },
-                  "action": {
-                    "type": "string",
-                    "enum": [
-                      "sound",
-                      "tts",
-                      "chat",
-                      "discord"
-                    ]
-                  },
-                  "soundUrl": {
-                    "type": "string",
-                    "format": "uri"
-                  },
-                  "volume": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 100
-                  },
-                  "ttsTemplate": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 300
-                  },
-                  "chatTemplate": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 300
-                  },
-                  "discordChannelId": {
-                    "type": "string",
-                    "pattern": "^\\d{17,20}$"
-                  },
-                  "discordTemplate": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 300
-                  },
-                  "cooldownSeconds": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 3600
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "rewardId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      },
-      "delete": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "rewardId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/guilds/{guildId}/integrations/twitch-chat/channels/{channelId}/overlay": {
-      "get": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "channelId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/guilds/{guildId}/integrations/twitch-chat/channels/{channelId}/overlay/regenerate": {
-      "post": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{17,20}$"
-            },
-            "in": "path",
-            "name": "guildId",
-            "required": true
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "in": "path",
-            "name": "channelId",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/guilds/{guildId}/integrations/twitch-chat/channels/{channelId}/twitch-rewards": {
-      "get": {
         "parameters": [
           {
             "schema": {
@@ -7069,11 +5991,7 @@
                 "properties": {
                   "provider": {
                     "type": "string",
-                    "enum": [
-                      "openai",
-                      "anthropic",
-                      "compatible"
-                    ]
+                    "enum": ["openai", "anthropic", "compatible"]
                   },
                   "model": {
                     "type": "string",
@@ -7081,9 +5999,9 @@
                     "maxLength": 200
                   },
                   "baseUrl": {
+                    "nullable": true,
                     "type": "string",
-                    "format": "uri",
-                    "nullable": true
+                    "format": "uri"
                   },
                   "apiKey": {
                     "type": "string",
@@ -7097,12 +6015,12 @@
                     "type": "boolean"
                   },
                   "allowedChannelIds": {
+                    "maxItems": 50,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{17,20}$"
-                    },
-                    "maxItems": 50
+                    }
                   },
                   "userCooldownSeconds": {
                     "type": "integer",
@@ -7126,18 +6044,18 @@
                         "type": "boolean"
                       },
                       "channelIds": {
+                        "maxItems": 20,
                         "type": "array",
                         "items": {
                           "type": "string",
                           "pattern": "^\\d{17,20}$"
-                        },
-                        "maxItems": 20
+                        }
                       },
                       "persona": {
+                        "nullable": true,
                         "type": "string",
                         "minLength": 1,
-                        "maxLength": 1500,
-                        "nullable": true
+                        "maxLength": 1500
                       },
                       "historyMessages": {
                         "type": "integer",
@@ -7150,17 +6068,9 @@
                         "maximum": 2000
                       }
                     },
-                    "required": [
-                      "enabled",
-                      "channelIds",
-                      "persona",
-                      "historyMessages",
-                      "maxReplyChars"
-                    ],
-                    "additionalProperties": false
+                    "required": ["enabled", "channelIds", "persona", "historyMessages", "maxReplyChars"]
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -7238,13 +6148,9 @@
         "parameters": [
           {
             "schema": {
+              "default": "7d",
               "type": "string",
-              "enum": [
-                "7d",
-                "30d",
-                "90d"
-              ],
-              "default": "7d"
+              "enum": ["7d", "30d", "90d"]
             },
             "in": "query",
             "name": "range",
@@ -7305,10 +6211,10 @@
                     "maximum": 3650
                   },
                   "moderationRetentionDays": {
+                    "nullable": true,
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 3650,
-                    "nullable": true
+                    "maximum": 3650
                   },
                   "automodEventRetentionDays": {
                     "type": "integer",
@@ -7321,18 +6227,17 @@
                     "maximum": 3650
                   },
                   "levelInactivityRetentionDays": {
+                    "nullable": true,
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 3650,
-                    "nullable": true
+                    "maximum": 3650
                   },
                   "analyticsRetentionDays": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 3650
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -7389,10 +6294,7 @@
                     "minLength": 1
                   }
                 },
-                "required": [
-                  "confirm"
-                ],
-                "additionalProperties": false
+                "required": ["confirm"]
               }
             }
           }
@@ -7550,26 +6452,23 @@
                 "type": "object",
                 "properties": {
                   "ledgerChannelId": {
+                    "nullable": true,
                     "type": "string",
-                    "pattern": "^\\d{17,20}$",
-                    "nullable": true
+                    "pattern": "^\\d{17,20}$"
                   },
                   "ledgerVisibility": {
                     "type": "string",
-                    "enum": [
-                      "staff",
-                      "everyone"
-                    ]
+                    "enum": ["staff", "everyone"]
                   },
                   "flagChannelId": {
+                    "nullable": true,
                     "type": "string",
-                    "pattern": "^\\d{17,20}$",
-                    "nullable": true
+                    "pattern": "^\\d{17,20}$"
                   },
                   "muteRoleId": {
+                    "nullable": true,
                     "type": "string",
-                    "pattern": "^\\d{17,20}$",
-                    "nullable": true
+                    "pattern": "^\\d{17,20}$"
                   },
                   "captureContext": {
                     "type": "boolean"
@@ -7607,36 +6506,23 @@
                     "maximum": 40320
                   },
                   "defaultMuteMinutes": {
+                    "nullable": true,
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 40320,
-                    "nullable": true
+                    "maximum": 40320
                   },
                   "requireReasonOn": {
                     "type": "array",
                     "items": {
                       "type": "string",
-                      "enum": [
-                        "warn",
-                        "timeout",
-                        "mute",
-                        "kick",
-                        "ban"
-                      ]
+                      "enum": ["warn", "timeout", "mute", "kick", "ban"]
                     }
                   },
                   "allowedDecisions": {
                     "type": "array",
                     "items": {
                       "type": "string",
-                      "enum": [
-                        "warn",
-                        "timeout",
-                        "mute",
-                        "kick",
-                        "ban",
-                        "dismiss"
-                      ]
+                      "enum": ["warn", "timeout", "mute", "kick", "ban", "dismiss"]
                     }
                   },
                   "banDeleteMessageSeconds": {
@@ -7644,8 +6530,7 @@
                     "minimum": 0,
                     "maximum": 604800
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -7706,20 +6591,17 @@
                     "maxLength": 500
                   },
                   "enabled": {
-                    "type": "boolean",
-                    "default": true
+                    "default": true,
+                    "type": "boolean"
                   },
                   "severity": {
+                    "default": "MEDIUM",
                     "type": "string",
-                    "enum": [
-                      "LOW",
-                      "MEDIUM",
-                      "HIGH",
-                      "CRITICAL"
-                    ],
-                    "default": "MEDIUM"
+                    "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
                   },
                   "matchers": {
+                    "minItems": 1,
+                    "maxItems": 25,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -7744,12 +6626,12 @@
                               "maxLength": 256
                             },
                             {
+                              "maxItems": 50,
                               "type": "array",
                               "items": {
                                 "type": "string",
                                 "maxLength": 256
-                              },
-                              "maxItems": 50
+                              }
                             },
                             {
                               "type": "number"
@@ -7763,63 +6645,44 @@
                           "type": "boolean"
                         }
                       },
-                      "required": [
-                        "type",
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "minItems": 1,
-                    "maxItems": 25
+                      "required": ["type", "value"]
+                    }
                   },
                   "channelIds": {
+                    "default": [],
+                    "maxItems": 50,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{17,20}$"
-                    },
-                    "maxItems": 50,
-                    "default": []
+                    }
                   },
                   "exemptRoleIds": {
+                    "default": [],
+                    "maxItems": 50,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{17,20}$"
-                    },
-                    "maxItems": 50,
-                    "default": []
+                    }
                   },
                   "exemptChannelIds": {
+                    "default": [],
+                    "maxItems": 50,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{17,20}$"
-                    },
-                    "maxItems": 50,
-                    "default": []
+                    }
                   },
                   "suggestedAction": {
-                    "type": "string",
-                    "enum": [
-                      "WARN",
-                      "TIMEOUT",
-                      "MUTE",
-                      "UNMUTE",
-                      "KICK",
-                      "BAN",
-                      "DISMISS"
-                    ],
+                    "default": null,
                     "nullable": true,
-                    "default": null
+                    "type": "string",
+                    "enum": ["WARN", "TIMEOUT", "MUTE", "UNMUTE", "KICK", "BAN", "DISMISS"]
                   }
                 },
-                "required": [
-                  "name",
-                  "description",
-                  "matchers"
-                ],
-                "additionalProperties": false
+                "required": ["name", "description", "matchers"]
               }
             }
           }
@@ -7889,20 +6752,15 @@
                     "maxLength": 500
                   },
                   "enabled": {
-                    "type": "boolean",
-                    "default": true
+                    "type": "boolean"
                   },
                   "severity": {
                     "type": "string",
-                    "enum": [
-                      "LOW",
-                      "MEDIUM",
-                      "HIGH",
-                      "CRITICAL"
-                    ],
-                    "default": "MEDIUM"
+                    "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
                   },
                   "matchers": {
+                    "minItems": 1,
+                    "maxItems": 25,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -7927,12 +6785,12 @@
                               "maxLength": 256
                             },
                             {
+                              "maxItems": 50,
                               "type": "array",
                               "items": {
                                 "type": "string",
                                 "maxLength": 256
-                              },
-                              "maxItems": 50
+                              }
                             },
                             {
                               "type": "number"
@@ -7946,58 +6804,39 @@
                           "type": "boolean"
                         }
                       },
-                      "required": [
-                        "type",
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "minItems": 1,
-                    "maxItems": 25
+                      "required": ["type", "value"]
+                    }
                   },
                   "channelIds": {
+                    "maxItems": 50,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{17,20}$"
-                    },
-                    "maxItems": 50,
-                    "default": []
+                    }
                   },
                   "exemptRoleIds": {
+                    "maxItems": 50,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{17,20}$"
-                    },
-                    "maxItems": 50,
-                    "default": []
+                    }
                   },
                   "exemptChannelIds": {
+                    "maxItems": 50,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "pattern": "^\\d{17,20}$"
-                    },
-                    "maxItems": 50,
-                    "default": []
+                    }
                   },
                   "suggestedAction": {
-                    "type": "string",
-                    "enum": [
-                      "WARN",
-                      "TIMEOUT",
-                      "MUTE",
-                      "UNMUTE",
-                      "KICK",
-                      "BAN",
-                      "DISMISS"
-                    ],
                     "nullable": true,
-                    "default": null
+                    "type": "string",
+                    "enum": ["WARN", "TIMEOUT", "MUTE", "UNMUTE", "KICK", "BAN", "DISMISS"]
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -8071,10 +6910,7 @@
                     "maxLength": 4000
                   }
                 },
-                "required": [
-                  "text"
-                ],
-                "additionalProperties": false
+                "required": ["text"]
               }
             }
           }
@@ -8139,13 +6975,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "FLAG",
-                "DECISION",
-                "APPEAL_OPENED",
-                "APPEAL_DECIDED",
-                "NOTE"
-              ]
+              "enum": ["FLAG", "DECISION", "APPEAL_OPENED", "APPEAL_DECIDED", "NOTE"]
             },
             "in": "query",
             "name": "kind",
@@ -8154,15 +6984,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "WARN",
-                "TIMEOUT",
-                "MUTE",
-                "UNMUTE",
-                "KICK",
-                "BAN",
-                "DISMISS"
-              ]
+              "enum": ["WARN", "TIMEOUT", "MUTE", "UNMUTE", "KICK", "BAN", "DISMISS"]
             },
             "in": "query",
             "name": "decision",
@@ -8171,12 +6993,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "PENDING",
-                "ACTIONED",
-                "DISMISSED",
-                "EXPIRED"
-              ]
+              "enum": ["PENDING", "ACTIONED", "DISMISSED", "EXPIRED"]
             },
             "in": "query",
             "name": "status",
@@ -8248,13 +7065,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "FLAG",
-                "DECISION",
-                "APPEAL_OPENED",
-                "APPEAL_DECIDED",
-                "NOTE"
-              ]
+              "enum": ["FLAG", "DECISION", "APPEAL_OPENED", "APPEAL_DECIDED", "NOTE"]
             },
             "in": "query",
             "name": "kind",
@@ -8263,15 +7074,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "WARN",
-                "TIMEOUT",
-                "MUTE",
-                "UNMUTE",
-                "KICK",
-                "BAN",
-                "DISMISS"
-              ]
+              "enum": ["WARN", "TIMEOUT", "MUTE", "UNMUTE", "KICK", "BAN", "DISMISS"]
             },
             "in": "query",
             "name": "decision",
@@ -8280,12 +7083,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "PENDING",
-                "ACTIONED",
-                "DISMISSED",
-                "EXPIRED"
-              ]
+              "enum": ["PENDING", "ACTIONED", "DISMISSED", "EXPIRED"]
             },
             "in": "query",
             "name": "status",
@@ -8359,7 +7157,8 @@
           {
             "schema": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "maximum": 9007199254740991
             },
             "in": "path",
             "name": "recordNumber",
@@ -8384,15 +7183,7 @@
                 "properties": {
                   "decision": {
                     "type": "string",
-                    "enum": [
-                      "WARN",
-                      "TIMEOUT",
-                      "MUTE",
-                      "UNMUTE",
-                      "KICK",
-                      "BAN",
-                      "DISMISS"
-                    ]
+                    "enum": ["WARN", "TIMEOUT", "MUTE", "UNMUTE", "KICK", "BAN", "DISMISS"]
                   },
                   "reason": {
                     "type": "string",
@@ -8400,8 +7191,9 @@
                   },
                   "durationMs": {
                     "type": "integer",
+                    "minimum": 0,
                     "exclusiveMinimum": true,
-                    "minimum": 0
+                    "maximum": 9007199254740991
                   },
                   "banDeleteMessageSeconds": {
                     "type": "integer",
@@ -8409,10 +7201,7 @@
                     "maximum": 604800
                   }
                 },
-                "required": [
-                  "decision"
-                ],
-                "additionalProperties": false
+                "required": ["decision"]
               }
             }
           }
@@ -8430,7 +7219,8 @@
           {
             "schema": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "maximum": 9007199254740991
             },
             "in": "path",
             "name": "recordNumber",
@@ -8468,13 +7258,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "twitch",
-                "google",
-                "microsoft",
-                "instagram",
-                "reddit"
-              ]
+              "enum": ["twitch", "google", "microsoft", "instagram", "reddit"]
             },
             "in": "path",
             "name": "provider",
@@ -8578,10 +7362,7 @@
                     "minLength": 1
                   }
                 },
-                "required": [
-                  "response"
-                ],
-                "additionalProperties": false
+                "required": ["response"]
               }
             }
           }
@@ -8697,10 +7478,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "OPEN",
-                "HANDLED"
-              ]
+              "enum": ["OPEN", "HANDLED"]
             },
             "in": "query",
             "name": "status",
@@ -8709,11 +7487,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "BUG",
-                "FEEDBACK",
-                "QUESTION"
-              ]
+              "enum": ["BUG", "FEEDBACK", "QUESTION"]
             },
             "in": "query",
             "name": "kind",
@@ -8765,17 +7539,13 @@
                 "properties": {
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "OPEN",
-                      "HANDLED"
-                    ]
+                    "enum": ["OPEN", "HANDLED"]
                   },
                   "notes": {
                     "type": "string",
                     "maxLength": 4000
                   }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
@@ -8841,10 +7611,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
+              "enum": ["true", "false"]
             },
             "in": "query",
             "name": "botPresent",
@@ -8882,12 +7649,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "integration",
-                "job",
-                "webhook",
-                "data-request"
-              ]
+              "enum": ["integration", "job", "webhook", "data-request"]
             },
             "in": "query",
             "name": "source",
@@ -8915,7 +7677,30 @@
         "parameters": [
           {
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "in": "query",
+            "name": "days",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/owner/metrics/usage": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             "in": "query",
             "name": "days",
@@ -8946,6 +7731,890 @@
       }
     },
     "/owner/twitch-bot/connect": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/auth/twitch/login": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/me": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/logout": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/channel": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "commandPrefix": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1,
+                    "pattern": "^[^\\s/]$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/channel/connect": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/channel/commands": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]{1,32}$"
+                  },
+                  "response": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 400
+                  },
+                  "cooldownSeconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 3600
+                  },
+                  "minLevel": {
+                    "type": "string",
+                    "enum": ["everyone", "subscriber", "vip", "moderator", "broadcaster"]
+                  }
+                },
+                "required": ["name", "response"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/channel/commands/{commandId}": {
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]{1,32}$"
+                  },
+                  "response": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 400
+                  },
+                  "cooldownSeconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 3600
+                  },
+                  "minLevel": {
+                    "type": "string",
+                    "enum": ["everyone", "subscriber", "vip", "moderator", "broadcaster"]
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "commandId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "commandId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/channel/timers": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]{1,32}$"
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 400
+                  },
+                  "intervalMinutes": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 1440
+                  }
+                },
+                "required": ["name", "message", "intervalMinutes"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/channel/timers/{timerId}": {
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]{1,32}$"
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 400
+                  },
+                  "intervalMinutes": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 1440
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "timerId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "timerId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/economy/": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "currencyName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "currencySymbol": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8
+                  },
+                  "dailyMinAmount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "dailyMaxAmount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "streakBonusPerDay": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  "streakBonusMax": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  "giveMinAmount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000000
+                  },
+                  "giveMaxAmount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000000
+                  },
+                  "earnEnabled": {
+                    "type": "boolean"
+                  },
+                  "earnPerMessage": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "earnCooldownSeconds": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 3600
+                  },
+                  "earnDailyCap": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/economy/leaderboard": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/economy/adjust": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": ["add", "remove"]
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000000
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": ["login", "direction", "amount", "reason"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/discord/connect": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/discord/": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/discord/candidates": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/discord/link": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "guildId": {
+                    "type": "string",
+                    "pattern": "^\\d{17,20}$"
+                  }
+                },
+                "required": ["guildId"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/discord/channels": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/discord/bridge": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "discordChannelId": {
+                    "nullable": true,
+                    "type": "string",
+                    "pattern": "^\\d{17,20}$"
+                  },
+                  "discordToTwitch": {
+                    "type": "boolean"
+                  },
+                  "twitchToDiscord": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/rewards/": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rewardsEnabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["rewardsEnabled"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/rewards/authorize": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/rewards/items": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rewardId": {
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "rewardTitle": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": ["sound", "tts", "chat", "discord"]
+                  },
+                  "soundUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "volume": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "ttsTemplate": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "chatTemplate": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "discordChannelId": {
+                    "type": "string",
+                    "pattern": "^\\d{17,20}$"
+                  },
+                  "discordTemplate": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "cooldownSeconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 3600
+                  }
+                },
+                "required": ["rewardTitle", "action"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/rewards/items/{rewardId}": {
+      "patch": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rewardId": {
+                    "nullable": true,
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "rewardTitle": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": ["sound", "tts", "chat", "discord"]
+                  },
+                  "soundUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "volume": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "ttsTemplate": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "chatTemplate": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "discordChannelId": {
+                    "type": "string",
+                    "pattern": "^\\d{17,20}$"
+                  },
+                  "discordTemplate": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "cooldownSeconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 3600
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "rewardId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "rewardId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/rewards/overlay": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/rewards/overlay/regenerate": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/creator/twitch/rewards/tts-key": {
+      "put": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "apiKey": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 300,
+                    "pattern": "^sk-\\S+$"
+                  }
+                },
+                "required": ["apiKey"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/twitch-ext/summary": {
+      "options": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/twitch-ext/daily": {
+      "options": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
       "post": {
         "responses": {
           "200": {

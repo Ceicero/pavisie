@@ -26,6 +26,8 @@ pnpm --filter @pavisie/api lint
 pnpm --filter @pavisie/api openapi:export   # writes docs/openapi.json from a fake-backed app instance
 ```
 
+From the repo root, `pnpm docs:openapi` runs the export and formats the file with Prettier. Run it after adding, removing or changing a route: CI fails if `docs/openapi.json` is stale.
+
 ## Architecture
 
 - `src/index.ts` — process bootstrap: `loadEnv` → `requireEnv` → `buildApp()` → `listen(0.0.0.0:API_PORT)` →
