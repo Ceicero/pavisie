@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAt, parseSchedule, validateCron } from '../schedule';
+import { MAX_RELATIVE_DURATION_MS, parseAt, parseSchedule, validateCron } from '../schedule';
 
 describe('parseSchedule', () => {
   const now = new Date('2026-01-01T00:00:00Z');
@@ -32,6 +32,18 @@ describe('parseSchedule', () => {
   it('rejects garbage input', () => {
     const result = parseSchedule('not a real schedule', 'UTC', now);
     expect(result.kind).toBe('invalid');
+  });
+
+  it('rejects a duration past the largest JS Date instead of returning an Invalid Date', () => {
+    const result = parseSchedule('99999999999w', 'UTC', now);
+    expect(result).toEqual({ kind: 'invalid', reason: expect.stringContaining('too long') });
+  });
+
+  it('rejects a duration just over the cap and accepts one at it', () => {
+    expect(parseSchedule(`${MAX_RELATIVE_DURATION_MS / 1000 + 1}s`, 'UTC', now).kind).toBe('invalid');
+    const atCap = parseSchedule(`${MAX_RELATIVE_DURATION_MS / 1000}s`, 'UTC', now);
+    expect(atCap.kind).toBe('at');
+    if (atCap.kind === 'at') expect(atCap.runAt.getTime()).toBe(now.getTime() + MAX_RELATIVE_DURATION_MS);
   });
 
   it('rejects an empty string', () => {
@@ -77,6 +89,18 @@ describe('parseAt', () => {
 
   it('rejects garbage input', () => {
     expect(parseAt('whenever', 'UTC', now).ok).toBe(false);
+  });
+
+  it('rejects a duration past the largest JS Date instead of returning an Invalid Date', () => {
+    const result = parseAt('99999999999w', 'UTC', now);
+    expect(result).toEqual({ ok: false, reason: expect.stringContaining('too long') });
+  });
+
+  it('rejects a duration just over the cap and accepts one at it', () => {
+    expect(parseAt(`${MAX_RELATIVE_DURATION_MS / 1000 + 1}s`, 'UTC', now).ok).toBe(false);
+    const atCap = parseAt(`${MAX_RELATIVE_DURATION_MS / 1000}s`, 'UTC', now);
+    expect(atCap.ok).toBe(true);
+    if (atCap.ok) expect(atCap.date.getTime()).toBe(now.getTime() + MAX_RELATIVE_DURATION_MS);
   });
 
   it('interprets a zone-less ISO time in the guild timezone', () => {
