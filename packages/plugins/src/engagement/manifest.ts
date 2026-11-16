@@ -151,6 +151,12 @@ export const manifest = defineManifest({
       fallback: 'Falls back to plain text where possible.',
     },
     {
+      permission: PermissionFlagsBits.AttachFiles,
+      feature: '/level rank card image',
+      optional: true,
+      fallback: 'The text rank embed is sent instead, and the miss is logged once.',
+    },
+    {
       permission: PermissionFlagsBits.ReadMessageHistory,
       feature: 'starboard (reading reaction counts on older messages)',
       optional: true,
