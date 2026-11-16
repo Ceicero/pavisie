@@ -9,8 +9,20 @@ export type EngagementRewardMode = 'stack' | 'replace';
 /** `levelUpChannel`: `'current'` (the channel the message was sent in), `'dm'`, `'none'`, or a channel snowflake id. */
 export type EngagementLevelUpChannel = 'current' | 'dm' | 'none' | string;
 
+/**
+ * One role or channel XP multiplier. `multiplier` is clamped to 0.25–5 when the config is parsed.
+ * Several matching roles (or the thread channel and its parent) keep the highest value. The role
+ * result and the channel result are then combined by taking the max, not the product.
+ */
+export interface EngagementXpMultiplier {
+  id: string;
+  multiplier: number;
+}
+
 export interface EngagementLevelingConfig {
   enabled: boolean;
+  /** When true, the unauthenticated leaderboard and rank routes are available. Off by default. */
+  publicLeaderboard: boolean;
   xpPerMessageMin: number;
   xpPerMessageMax: number;
   xpCooldownSeconds: number;
@@ -18,6 +30,8 @@ export interface EngagementLevelingConfig {
   voiceXpPerMinute: number;
   ignoredChannelIds: string[];
   ignoredRoleIds: string[];
+  roleMultipliers: EngagementXpMultiplier[];
+  channelMultipliers: EngagementXpMultiplier[];
   levelUpChannel: EngagementLevelUpChannel;
   levelUpMessage: string;
   rewardMode: EngagementRewardMode;
@@ -58,8 +72,40 @@ export interface LevelProfileDto {
   level: number;
   messages: number;
   voiceMinutes: number;
-  /** 1-based leaderboard position within the guild, when known (omitted from plain list endpoints that don't compute it). */
+  /** 1-based position on a leaderboard page (`offset + index + 1`). Omitted by endpoints that don't compute it. */
   rank?: number;
+}
+
+/** One public leaderboard row. No message or voice counts, and no other member fields. */
+export interface PublicLeaderboardEntryDto {
+  rank: number;
+  userId: string;
+  username: string | null;
+  globalName: string | null;
+  avatarUrl: string | null;
+  xp: number;
+  level: number;
+}
+
+/** Unauthenticated leveling leaderboard. `404` when the toggle is off or the bot is not in the guild. */
+export interface PublicLeaderboardDto {
+  guildId: string;
+  items: PublicLeaderboardEntryDto[];
+  nextCursor: string | null;
+  total: number;
+}
+
+/** Unauthenticated `/level rank` payload. `404` when the toggle is off, the bot is absent, or there is no profile. */
+export interface PublicRankDto {
+  userId: string;
+  username: string | null;
+  globalName: string | null;
+  avatarUrl: string | null;
+  rank: number;
+  level: number;
+  xp: number;
+  intoLevel: number;
+  span: number;
 }
 
 export interface LevelRewardDto {
