@@ -3,16 +3,20 @@ import { createTestContext } from '../../sdk/testing';
 import type { PluginContext } from '../../sdk';
 import { rewardReconcileJob } from '../jobs/reward-reconcile';
 import { configSchema } from '../manifest';
-import { enqueueRewardReconcile, rewardReconcileListKey } from '../reward-queue';
+import {
+  enqueueRewardReconcile,
+  rewardReconcileBackoffMs,
+  rewardReconcileListKey,
+  REWARD_RECONCILE_MAX_ATTEMPTS,
+} from '../reward-queue';
 import { xpForLevel } from '../service';
 
 // The reconcile list key is global, not per guild. Each test deletes it first; that is safe because vitest
 // gives every test file its own module graph (so its own ioredis-mock keyspace) and tests in this file run
 // serially. Distinct guild ids only keep the role-write assertions readable.
 //
-// Several cases pin CURRENT behavior that a future change may deliberately alter: an entry whose reconcile
-// throws is dropped (no retry or re-queue), and malformed entries consume the per-tick budget. If retry or
-// backoff is added, update those assertions as an intended change rather than treating it as a regression.
+// A transient failure is requeued with `attempts` and `notBefore` (at most 3 tries). Malformed entries still
+// consume the per-tick budget. Permanent Discord errors (unknown member, missing permissions) are not requeued.
 
 const ROLE_5 = 'role-5';
 const ROLE_10 = 'role-10';
@@ -132,28 +136,28 @@ describe('reward reconcile job: error isolation', () => {
     return { ...h, key, removed, added };
   }
 
-  it('warns, keeps going, and does not re-queue when a profile lookup rejects for one member', async () => {
+  it('keeps going and requeues when a profile lookup rejects for one member', async () => {
     const { ctx, redis, warn, key, removed, added } = await run('profile');
     await rewardReconcileJob.processor(ctx, {} as never);
 
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({ guildId: expect.any(String), userId: 'bad' }),
-    );
+    expect(warn).not.toHaveBeenCalled();
     expect(removed.map((w) => w.userId)).toEqual(['good']);
     expect(removed[0]?.ids).toEqual([ROLE_10]);
     expect(added.map((w) => w.userId)).toEqual(['good']);
-    // Current behavior: the failed entry is dropped, not re-queued.
-    expect(await redis.llen(key)).toBe(0);
+    const queued = parsed(await redis.lrange(key, 0, -1));
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({ userId: 'bad', attempts: 1 });
   });
 
-  it('warns and does not re-queue when getConfig rejects (every later entry fails the same way, none crash the tick)', async () => {
+  it('requeues every entry when getConfig rejects, without failing the tick', async () => {
     const { ctx, redis, warn, key, removed } = await run('config');
     await rewardReconcileJob.processor(ctx, {} as never);
 
-    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn).not.toHaveBeenCalled();
     expect(removed).toEqual([]);
-    expect(await redis.llen(key)).toBe(0);
+    const queued = parsed(await redis.lrange(key, 0, -1));
+    expect(queued.map((entry) => (entry as { userId: string }).userId)).toEqual(['bad', 'good']);
+    expect(queued.every((entry) => (entry as { attempts: number }).attempts === 1)).toBe(true);
   });
 });
 
@@ -329,6 +333,192 @@ describe('reward reconcile job: replace mode', () => {
 
     expect(removed).toEqual([]);
     expect(added).toEqual([]);
+  });
+});
+
+describe('reward reconcile job: retry', () => {
+  function failingMember(guildId: string, userId: string, fail: () => unknown) {
+    const removed: RoleWrite[] = [];
+    const added: RoleWrite[] = [];
+    const member = memberWithRoles(userId, [ROLE_10], removed, added);
+    const originalAdd = member.roles.add;
+    const add = vi.fn(async (ids: string[]) => {
+      const thrown = fail();
+      if (thrown) throw thrown;
+      return originalAdd(ids);
+    });
+    member.roles.add = add;
+    const members = new Map<string, Member>([[`${guildId}:${userId}`, member]]);
+    return { members, removed, added, add };
+  }
+
+  it('requeues a thrown role sync, waits out the backoff, then succeeds', async () => {
+    expect(REWARD_RECONCILE_MAX_ATTEMPTS).toBe(3);
+    expect(rewardReconcileBackoffMs(1)).toBe(60_000);
+    expect(rewardReconcileBackoffMs(2)).toBe(120_000);
+
+    const guildId = 'g-retry-ok-20261116';
+    const userId = 'u1';
+    let throwSync = true;
+    const { members, removed, added, add } = failingMember(guildId, userId, () =>
+      throwSync ? new Error('role sync failed') : undefined,
+    );
+    const h = harness({ members, levels: { [`${guildId}:${userId}`]: 6 } });
+    const key = rewardReconcileListKey();
+    await h.redis.del(key);
+    await h.redis.rpush(key, entry(guildId, userId));
+
+    const started = Date.now();
+    await rewardReconcileJob.processor(h.ctx, {} as never);
+
+    const first = parsed(await h.redis.lrange(key, 0, -1));
+    expect(first).toHaveLength(1);
+    const retry = first[0] as { guildId: string; userId: string; attempts: number; notBefore: number };
+    expect(retry).toMatchObject({ guildId, userId, attempts: 1 });
+    expect(retry.notBefore).toBeGreaterThanOrEqual(started + rewardReconcileBackoffMs(1));
+    expect(retry.notBefore).toBeLessThanOrEqual(Date.now() + rewardReconcileBackoffMs(1));
+    expect(removed).toEqual([]);
+    expect(h.warn).not.toHaveBeenCalled();
+
+    await rewardReconcileJob.processor(h.ctx, {} as never);
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(parsed(await h.redis.lrange(key, 0, -1))).toEqual(first);
+
+    throwSync = false;
+    const now = vi.spyOn(Date, 'now').mockReturnValue(retry.notBefore + 1);
+    try {
+      await rewardReconcileJob.processor(h.ctx, {} as never);
+    } finally {
+      now.mockRestore();
+    }
+
+    expect(await h.redis.llen(key)).toBe(0);
+    expect(removed).toEqual([{ userId, ids: [ROLE_10] }]);
+    expect(added).toEqual([{ userId, ids: [ROLE_5] }]);
+    expect(h.warn).not.toHaveBeenCalled();
+  });
+
+  it('logs once and drops the entry when the attempt cap is reached', async () => {
+    const guildId = 'g-retry-cap-20261116';
+    const userId = 'u1';
+    const { members } = failingMember(guildId, userId, () =>
+      Object.assign(new Error('Service Unavailable'), { status: 503 }),
+    );
+    const h = harness({ members, levels: { [`${guildId}:${userId}`]: 6 } });
+    const key = rewardReconcileListKey();
+    await h.redis.del(key);
+    await h.redis.rpush(key, entry(guildId, userId));
+
+    let nowMs = 1_763_000_000_000;
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => nowMs);
+    try {
+      for (let attempt = 1; attempt <= REWARD_RECONCILE_MAX_ATTEMPTS; attempt += 1) {
+        await rewardReconcileJob.processor(h.ctx, {} as never);
+        if (attempt < REWARD_RECONCILE_MAX_ATTEMPTS) {
+          const queued = parsed(await h.redis.lrange(key, 0, -1));
+          expect(queued).toEqual([
+            {
+              guildId,
+              userId,
+              attempts: attempt,
+              notBefore: nowMs + rewardReconcileBackoffMs(attempt),
+            },
+          ]);
+          nowMs = (queued[0] as { notBefore: number }).notBefore + 1;
+        }
+      }
+    } finally {
+      now.mockRestore();
+    }
+
+    expect(await h.redis.llen(key)).toBe(0);
+    expect(h.warn).toHaveBeenCalledTimes(1);
+    expect(h.warn.mock.calls[0]?.[0]).toMatchObject({ guildId, userId, attempts: 3, err: 'Service Unavailable' });
+    expect(h.warn.mock.calls[0]?.[1]).toBe('engagement: dropping reward reconcile entry after retries');
+  });
+
+  it('does not requeue a missing-permissions role write or an unknown member', async () => {
+    const permGuild = 'g-retry-perm-20261116';
+    const goneGuild = 'g-retry-gone-20261116';
+    const { members } = failingMember(permGuild, 'u1', () =>
+      Object.assign(new Error('DiscordAPIError'), { code: 50013 }),
+    );
+    const h = harness({
+      members,
+      levels: { [`${permGuild}:u1`]: 6, [`${goneGuild}:gone`]: 6 },
+    });
+    h.guildFetch.mockImplementation(async (guildId: string) => {
+      if (guildId === goneGuild) {
+        return {
+          id: guildId,
+          members: {
+            fetch: async () => {
+              throw Object.assign(new Error('DiscordAPIError'), { code: 10007 });
+            },
+          },
+        };
+      }
+      const member = members.get(`${guildId}:u1`);
+      return {
+        id: guildId,
+        members: {
+          fetch: async () => {
+            if (!member) throw Object.assign(new Error('DiscordAPIError'), { code: 10007 });
+            return member;
+          },
+        },
+      };
+    });
+    const key = rewardReconcileListKey();
+    await h.redis.del(key);
+    await h.redis.rpush(key, entry(permGuild, 'u1'), entry(goneGuild, 'gone'));
+
+    await rewardReconcileJob.processor(h.ctx, {} as never);
+
+    expect(await h.redis.llen(key)).toBe(0);
+    expect(h.warn).toHaveBeenCalledTimes(1);
+    expect(h.warn.mock.calls[0]?.[0]).toMatchObject({ guildId: permGuild, userId: 'u1' });
+    expect(h.warn.mock.calls[0]?.[1]).toBe('engagement: reward reconcile skipped (missing permissions)');
+  });
+
+  it('does not sync an entry before its notBefore, and still syncs a ready entry behind it', async () => {
+    const guildId = 'g-notbefore-20261116';
+    const removed: RoleWrite[] = [];
+    const added: RoleWrite[] = [];
+    const members = new Map<string, Member>([
+      [`${guildId}:wait`, memberWithRoles('wait', [ROLE_10], removed, added)],
+      [`${guildId}:now`, memberWithRoles('now', [ROLE_10], removed, added)],
+    ]);
+    const h = harness({
+      members,
+      levels: { [`${guildId}:wait`]: 6, [`${guildId}:now`]: 6 },
+    });
+    const key = rewardReconcileListKey();
+    await h.redis.del(key);
+    const notBefore = Date.now() + 30_000;
+    await h.redis.rpush(
+      key,
+      JSON.stringify({ guildId, userId: 'wait', notBefore }),
+      entry(guildId, 'now'),
+    );
+
+    await rewardReconcileJob.processor(h.ctx, {} as never);
+
+    expect(h.memberFetch).not.toHaveBeenCalledWith(guildId, 'wait');
+    expect(h.memberFetch).toHaveBeenCalledWith(guildId, 'now');
+    expect(removed.map((write) => write.userId)).toEqual(['now']);
+    expect(parsed(await h.redis.lrange(key, 0, -1))).toEqual([{ guildId, userId: 'wait', notBefore }]);
+
+    const now = vi.spyOn(Date, 'now').mockReturnValue(notBefore + 1);
+    try {
+      await rewardReconcileJob.processor(h.ctx, {} as never);
+    } finally {
+      now.mockRestore();
+    }
+
+    expect(h.memberFetch).toHaveBeenCalledWith(guildId, 'wait');
+    expect(removed.map((write) => write.userId)).toEqual(['now', 'wait']);
+    expect(await h.redis.llen(key)).toBe(0);
   });
 });
 
