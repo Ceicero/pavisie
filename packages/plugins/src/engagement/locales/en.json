@@ -42,6 +42,12 @@
       "addedRole": "Members with {role} no longer earn XP.",
       "removedRole": "Members with {role} earn XP again."
     },
+    "multiplier": {
+      "setRole": "{role} now earns ×{multiplier} XP.",
+      "setChannel": "{channel} now awards ×{multiplier} XP.",
+      "clearedRole": "{role} no longer has an XP multiplier.",
+      "clearedChannel": "{channel} no longer has an XP multiplier."
+    },
     "announce": {
       "channelRequired": "Pick a channel with `channel:` when using the \"Specific channel\" mode.",
       "channelNotUsable": "I need View Channel and Send Messages permissions in that channel before I can announce there.",
@@ -52,8 +58,8 @@
     },
     "reset": {
       "confirmTitle": "Reset XP?",
-      "confirmDescriptionUser": "This clears {user}'s XP, level, message count, and voice minutes in this server. This can't be undone.",
-      "confirmDescriptionAll": "This clears **every member's** XP, level, message count, and voice minutes in this server. This can't be undone.",
+      "confirmDescriptionUser": "This clears {user}'s XP, level, message count, and voice minutes in this server and removes their level-reward roles. This can't be undone.",
+      "confirmDescriptionAll": "This clears **every member's** XP, level, message count, and voice minutes in this server and removes level-reward roles for up to 500 members. This can't be undone.",
       "doneUser": "Reset {user}'s leveling profile.",
       "doneAll": "Reset {count} member(s)' leveling profiles."
     }

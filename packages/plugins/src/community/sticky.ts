@@ -46,6 +46,7 @@ export type StickyErrorCode =
   | 'empty'
   | 'limit'
   | 'badChannel'
+  | 'channelGone'
   | 'notFound'
   | 'missingEmbedPermission'
   | 'autoPublishConflict'
@@ -461,7 +462,8 @@ export async function upsertSticky(ctx: PluginContext, input: UpsertStickyInput)
     // `repostSticky` prunes the row when Discord says the channel is gone. Anything else (missing permission,
     // a transient send failure) leaves the row so the next message in the channel tries again.
     const still = await ctx.prisma.stickyMessage.findUnique({ where });
-    if (!still) throw new StickyError('badChannel');
+    // Pruned row: Discord said the channel is gone. Commands map this code to `sticky.channelGone`.
+    if (!still) throw new StickyError('channelGone');
     await ctx.audit(auditEntry);
     throw new StickyError('postFailed');
   }

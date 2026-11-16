@@ -63,7 +63,7 @@ export default function AnalyticsPage() {
         description="Member growth, moderation volume, and message activity."
         actions={
           <Select value={range} onValueChange={(v) => setRange(v as AnalyticsRange)}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger aria-label="Time range" className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

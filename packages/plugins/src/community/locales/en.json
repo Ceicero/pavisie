@@ -111,6 +111,7 @@
     "emptyTrigger": "The trigger phrase can't be empty.",
     "badChannel": "I can't use that channel for a trigger — check that I can view it and send messages there.",
     "channelGone": "That channel was deleted.",
+    "infoChannelGone": "deleted",
     "cantPost": "I couldn't post that tag here. I'm missing permission to view the channel, send messages, or embed links there.",
     "staffOnlyNoTrigger": "`{name}` is staff-only, and staff-only tags cannot be auto-responders. Turn off staff-only first (dashboard), or leave this tag's trigger mode as none.",
     "triggerCleared": "Auto-responder removed from tag `{name}`.",

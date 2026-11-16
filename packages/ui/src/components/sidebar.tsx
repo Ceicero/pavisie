@@ -31,7 +31,7 @@ export function Sidebar({
     <>
       <aside
         className={cn(
-          'hidden shrink-0 flex-col border-r border-border bg-card lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-64',
+          'hidden shrink-0 flex-col border-r border-border bg-card lg:sticky lg:top-14 lg:z-20 lg:flex lg:h-[calc(100dvh-3.5rem)] lg:w-64',
           className,
         )}
       >
@@ -88,7 +88,7 @@ export const SidebarNavItem = React.forwardRef<HTMLAnchorElement, SidebarNavItem
         ref={ref}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0',
+          'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0',
           active
             ? 'border-l-2 border-gold-5 bg-gold-5/10 text-gold-5'
             : 'border-l-2 border-transparent text-muted-foreground hover:border-gold-5/40 hover:text-foreground',
@@ -96,7 +96,7 @@ export const SidebarNavItem = React.forwardRef<HTMLAnchorElement, SidebarNavItem
         )}
         {...props}
       >
-        {icon}
+        {icon ? <span aria-hidden="true">{icon}</span> : null}
         {asChild ? <Slottable>{children}</Slottable> : <span className="flex-1 truncate">{children}</span>}
         {suffix}
       </Comp>
