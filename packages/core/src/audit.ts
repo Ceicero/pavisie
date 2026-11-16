@@ -57,6 +57,7 @@ export const AuditAction = {
   RaidModeLockdownRestore: 'raidmode.lockdown.restore',
   RaidModeScoresRecord: 'raidmode.scores.record',
   RaidModeScoresPurge: 'raidmode.scores.purge',
+  RaidModeIncidentsPurge: 'raidmode.incidents.purge',
 } as const;
 
 /** Union of all `AuditAction` string values. */

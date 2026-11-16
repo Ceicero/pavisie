@@ -28,7 +28,11 @@ const MAX_INCIDENTS = 20;
 export const RAID_MODE_RULE_NAME = 'Raid mode';
 
 function lockdownStillOn(row: Pick<RaidModeIncident, 'lockdownState'>): boolean {
-  return row.lockdownState === 'LOCKED' || row.lockdownState === 'PARTIALLY_RESTORED';
+  return (
+    row.lockdownState === 'LOCKING' ||
+    row.lockdownState === 'LOCKED' ||
+    row.lockdownState === 'PARTIALLY_RESTORED'
+  );
 }
 
 /** Maps one raid mode incident to its `raid` DTO and, if a lockdown was applied, its `lockdown` DTO. */
@@ -69,7 +73,7 @@ async function raidModeSource(prisma: PrismaClient, guildId: string): Promise<Th
       guildId,
       OR: [
         { status: 'ACTIVE' },
-        { lockdownState: { in: ['LOCKED', 'PARTIALLY_RESTORED'] } },
+        { lockdownState: { in: ['LOCKING', 'LOCKED', 'PARTIALLY_RESTORED'] } },
         { startedAt: { gte: new Date(Date.now() - RECENT_MS) } },
       ],
     },

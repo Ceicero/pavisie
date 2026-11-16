@@ -33,7 +33,11 @@ const BOT_PERMISSIONS =
 
 /** A text channel whose overwrites behave like Discord's: per-flag allow / deny / unset. */
 export class FakeChannel {
-  readonly type = ChannelType.GuildText;
+  type: ChannelType = ChannelType.GuildText;
+  rawPosition = 0;
+  parent: { rawPosition: number } | null = null;
+  /** False = @everyone cannot see this channel at all. */
+  everyoneCanView = true;
   readonly overwrites = new Map<string, OverwriteBits>();
   readonly sent: unknown[] = [];
   readonly edits: unknown[] = [];
@@ -46,7 +50,8 @@ export class FakeChannel {
   isTextBased(): boolean {
     return true;
   }
-  permissionsFor(): PermissionsBitField {
+  permissionsFor(target: { id: string }): PermissionsBitField {
+    if (target.id !== BOT_ID && !this.everyoneCanView) return new PermissionsBitField(0n);
     return new PermissionsBitField(BOT_PERMISSIONS);
   }
   get permissionOverwrites() {
@@ -96,6 +101,10 @@ export class FakeDb {
   scores: Row[] = [];
   audits: Row[] = [];
   failAudit = false;
+  /** Simulates the process stopping part-way through a lockdown: the Nth change-row write throws. */
+  failChangeCreateAfter: number | null = null;
+  private changesCreated = 0;
+  retention: { auditLogDays: number } | null = null;
   private seq = 0;
 
   private matches(row: Row, where: Row): boolean {
@@ -106,6 +115,7 @@ export class FakeDb {
         if ('lt' in v) return (row[key] as Date | null) !== null && (row[key] as Date) < (v.lt as Date);
         if ('gte' in v) return (row[key] as number) >= (v.gte as number);
         if ('some' in v) return this.scores.some((s) => s.incidentId === row.id);
+        if ('none' in v) return !this.changes.some((c) => c.incidentId === row.id);
       }
       return row[key] === value;
     });
@@ -151,9 +161,29 @@ export class FakeDb {
           return rows.length ? { ...rows[rows.length - 1] } : null;
         },
         findMany: async ({ where }: { where: Row }) => t.incidents.filter((r) => this.matches(r, where)),
+        updateMany: async ({ where, data }: { where: Row; data: Row }) => {
+          const rows = t.incidents.filter((r) => this.matches(r, where));
+          for (const row of rows) Object.assign(row, data);
+          return { count: rows.length };
+        },
+        deleteMany: async ({ where }: { where: { id: { in: string[] } } }) => {
+          const before = t.incidents.length;
+          t.incidents = t.incidents.filter((r) => !where.id.in.includes(r.id as string));
+          return { count: before - t.incidents.length };
+        },
+      },
+      dataRetentionPolicy: {
+        findUnique: async () => this.retention,
       },
       raidModeLockdownChange: {
+        findFirst: async ({ where }: { where: Row }) => {
+          const rows = t.changes.filter((r) => this.matches(r, where));
+          return rows.length ? { ...rows[rows.length - 1] } : null;
+        },
         create: async ({ data }: { data: Row }) => {
+          if (this.failChangeCreateAfter !== null && this.changesCreated++ >= this.failChangeCreateAfter) {
+            throw new Error('process stopped');
+          }
           const row = { id: id('change'), restoreSkippedReason: null, ...data };
           t.changes.push(row);
           return { ...row };
@@ -243,6 +273,7 @@ export function harness(guildId: string, options: HarnessOptions = {}) {
   );
   const all = new Map<string, FakeChannel>([[alert.id, alert], ...channels.map((c) => [c.id, c] as const)]);
   const queued: UpdateJobData[] = [];
+  const jobs: { name: string; data: unknown }[] = [];
   const features: string[] = [];
 
   const guild = {
@@ -275,8 +306,9 @@ export function harness(guildId: string, options: HarnessOptions = {}) {
       } as never,
       queue: () =>
         ({
-          add: async (_name: string, data: UpdateJobData) => {
-            queued.push(data);
+          add: async (name: string, data: UpdateJobData) => {
+            jobs.push({ name, data });
+            if (name === 'update') queued.push(data);
           },
         }) as never,
     },
@@ -311,6 +343,7 @@ export function harness(guildId: string, options: HarnessOptions = {}) {
     alert,
     channels,
     queued,
+    jobs,
     member,
   };
 }

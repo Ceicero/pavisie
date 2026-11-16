@@ -1830,6 +1830,8 @@ enum RaidModeIncidentStatus {
 
 enum RaidModeLockdownState {
   NONE
+  /// Set before the first Discord edit, so a lockdown cut short by a restart can still be restored.
+  LOCKING
   LOCKED
   PARTIALLY_RESTORED
   RESTORED
@@ -1878,6 +1880,7 @@ model RaidModeIncident {
 
   @@index([guildId, status])
   @@index([guildId, startedAt])
+  @@index([status, endedAt])
 }
 
 /// Exactly what a lockdown changed, so restore can put back the previous state. Restored rows are deleted.

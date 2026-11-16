@@ -978,7 +978,7 @@
             {
               "name": "restore",
               "fullName": "/raidmode restore",
-              "description": "Put back exactly the permissions the last lockdown changed.",
+              "description": "Put back exactly the permissions a lockdown changed.",
               "options": []
             }
           ]

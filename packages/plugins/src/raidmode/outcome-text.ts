@@ -12,7 +12,11 @@ export function lockdownMessage(outcome: LockdownOutcome, t: Translate): { ok: b
         failures: outcome.failures,
       };
       const head = t(outcome.failures > 0 ? 'lockdown.lockedWithFailures' : 'lockdown.locked', vars);
-      return { ok: true, text: `${head} ${t('lockdown.restoreHint')}` };
+      const cap =
+        outcome.channelsNotCovered > 0
+          ? ` ${t('lockdown.notCovered', { count: outcome.channelsNotCovered })}`
+          : '';
+      return { ok: true, text: `${head}${cap} ${t('lockdown.restoreHint')}` };
     }
     case 'already_locked':
       return { ok: false, text: t('lockdown.alreadyLocked') };
@@ -28,6 +32,7 @@ export function lockdownMessage(outcome: LockdownOutcome, t: Translate): { ok: b
 const SKIP_KEY: Record<string, string> = {
   changed_by_admin: 'restore.skipChangedByAdmin',
   channel_deleted: 'restore.skipChannelDeleted',
+  not_applied: 'restore.skipNotApplied',
 };
 
 /** What staff are told after pressing "Restore permissions" or running `/raidmode restore`. */
