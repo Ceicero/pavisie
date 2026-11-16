@@ -19,9 +19,10 @@ import {
  * same cap as `/level rewards sync` — and leaves the rest of the list for the next minute.
  *
  * A thrown role sync, or any other error that is not permanent, is appended again with `attempts` and
- * `notBefore` (BullMQ exponential backoff, one minute then two). Unknown member / unknown guild are
- * dropped quietly. Missing permissions is logged once and dropped. The third failure is logged once
- * and dropped.
+ * `notBefore` (BullMQ exponential backoff, one minute then two). An entry whose `notBefore` is still
+ * ahead — including a reset entry held for 30s so the profile delete can finish — is put back without
+ * a role write. Unknown member / unknown guild are dropped quietly. Missing permissions is logged once
+ * and dropped. The third failure is logged once and dropped.
  */
 export const rewardReconcileJob: PluginJob = {
   name: 'reward-reconcile',

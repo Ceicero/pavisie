@@ -1,7 +1,10 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
 import { NotFoundError, ValidationError, buildPaginated, encodeCursor, paginate } from '@pavisie/core';
-import { enqueueRewardReconcile } from '@pavisie/plugins/engagement/reward-queue';
+import {
+  enqueueRewardReconcile,
+  REWARD_RECONCILE_RESET_DELAY_MS,
+} from '@pavisie/plugins/engagement/reward-queue';
 import { levelFromXp, levelProgress } from '@pavisie/plugins/engagement/service';
 import type {
   EngagementConfigDto,
@@ -391,8 +394,9 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
   /**
    * Deletes leveling profile rows only (one member, or every member when `userId` is omitted).
    * Reward roles are not edited here — each affected user is pushed onto the reward-reconcile list
-   * so the bot removes them. The list write happens first: if it fails, no row is deleted and nothing
-   * is audited. Requires the same dashboard admin session as the other writes.
+   * so the bot removes them. The list write happens first, with `notBefore` 30s ahead so a worker
+   * that is already draining the list cannot sync the old level. If the write fails, no row is
+   * deleted and nothing is audited. Requires the same dashboard admin session as the other writes.
    */
   app.post(
     '/:guildId/engagement/reset',
@@ -412,10 +416,12 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
           });
       const targets = [...new Set(profiles.map((row) => row.userId))];
 
-      // Enqueue before delete. A Redis failure must leave every level row in place and skip the audit.
+      // Enqueue before delete, but not eligible until the delete has landed. A Redis failure must
+      // leave every level row in place and skip the audit.
       await enqueueRewardReconcile(
         app.redis,
         targets.map((id) => ({ guildId, userId: id })),
+        Date.now() + REWARD_RECONCILE_RESET_DELAY_MS,
       );
       const result = await app.prisma.levelProfile.deleteMany({ where });
       await writeDashboardAudit(app.prisma, {

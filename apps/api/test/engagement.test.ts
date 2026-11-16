@@ -2,7 +2,10 @@ import RedisMock from 'ioredis-mock';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { encodeCursor, env, redisKey } from '@pavisie/core';
 import { levelProgress } from '@pavisie/plugins/engagement/service';
-import { rewardReconcileListKey } from '@pavisie/plugins/engagement/reward-queue';
+import {
+  rewardReconcileListKey,
+  REWARD_RECONCILE_RESET_DELAY_MS,
+} from '@pavisie/plugins/engagement/reward-queue';
 import {
   DISCORD_USER_CACHE_TTL_SECONDS,
   DISCORD_USER_FAILURE_TTL_SECONDS,
@@ -438,8 +441,13 @@ describe('engagement reset', () => {
   ) {
     const raw = await redis.lrange(rewardReconcileListKey(), 0, -1);
     return raw
-      .map((item) => JSON.parse(item) as { guildId: string; userId: string })
+      .map((item) => JSON.parse(item) as { guildId: string; userId: string; notBefore?: number })
       .filter((entry) => entry.guildId === guildId);
+  }
+
+  function expectHeldForReset(notBefore: number | undefined, started: number) {
+    expect(notBefore).toBeGreaterThanOrEqual(started + REWARD_RECONCILE_RESET_DELAY_MS);
+    expect(notBefore).toBeLessThanOrEqual(Date.now() + REWARD_RECONCILE_RESET_DELAY_MS);
   }
 
   it('rejects an unauthenticated request', async () => {
@@ -502,6 +510,7 @@ describe('engagement reset', () => {
     const { cookieHeader, session } = await loginAs(app, redis, { userId: ACTOR });
     await seedUserGuilds(redis, ACTOR, [{ id: GUILD, owner: true, permissions: '8' }]);
 
+    const started = Date.now();
     const res = await app.inject({
       method: 'POST',
       url: `/guilds/${GUILD}/engagement/reset`,
@@ -533,6 +542,8 @@ describe('engagement reset', () => {
 
     const queued = await listedFor(redis, GUILD);
     expect(queued.map((entry) => entry.userId).sort()).toEqual([MEMBER_A, MEMBER_B].sort());
+    expect(new Set(queued.map((entry) => entry.notBefore)).size).toBe(1);
+    for (const entry of queued) expectHeldForReset(entry.notBefore, started);
     await app.close();
   });
 
@@ -548,6 +559,7 @@ describe('engagement reset', () => {
       { id: SINGLE_GUILD, owner: false, permissions: String(0x20n) },
     ]);
 
+    const started = Date.now();
     const res = await app.inject({
       method: 'POST',
       url: `/guilds/${SINGLE_GUILD}/engagement/reset`,
@@ -564,7 +576,11 @@ describe('engagement reset', () => {
     expect(audit?.args[0]).toMatchObject({
       data: { action: 'engagement.level.reset', targetId: SINGLE_MEMBER, actorId: SINGLE_ACTOR },
     });
-    expect(await listedFor(redis, SINGLE_GUILD)).toEqual([{ guildId: SINGLE_GUILD, userId: SINGLE_MEMBER }]);
+    const queued = await listedFor(redis, SINGLE_GUILD);
+    expect(queued.map((entry) => ({ guildId: entry.guildId, userId: entry.userId }))).toEqual([
+      { guildId: SINGLE_GUILD, userId: SINGLE_MEMBER },
+    ]);
+    expectHeldForReset(queued[0]?.notBefore, started);
     await app.close();
   });
 

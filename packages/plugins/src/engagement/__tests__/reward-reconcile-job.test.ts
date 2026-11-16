@@ -480,6 +480,46 @@ describe('reward reconcile job: retry', () => {
     expect(h.warn.mock.calls[0]?.[0]).toMatchObject({ guildId: permGuild, userId: 'u1' });
     expect(h.warn.mock.calls[0]?.[1]).toBe('engagement: reward reconcile skipped (missing permissions)');
   });
+
+  it('does not sync an entry before its notBefore, and still syncs a ready entry behind it', async () => {
+    const guildId = 'g-notbefore-20261116';
+    const removed: RoleWrite[] = [];
+    const added: RoleWrite[] = [];
+    const members = new Map<string, Member>([
+      [`${guildId}:wait`, memberWithRoles('wait', [ROLE_10], removed, added)],
+      [`${guildId}:now`, memberWithRoles('now', [ROLE_10], removed, added)],
+    ]);
+    const h = harness({
+      members,
+      levels: { [`${guildId}:wait`]: 6, [`${guildId}:now`]: 6 },
+    });
+    const key = rewardReconcileListKey();
+    await h.redis.del(key);
+    const notBefore = Date.now() + 30_000;
+    await h.redis.rpush(
+      key,
+      JSON.stringify({ guildId, userId: 'wait', notBefore }),
+      entry(guildId, 'now'),
+    );
+
+    await rewardReconcileJob.processor(h.ctx, {} as never);
+
+    expect(h.memberFetch).not.toHaveBeenCalledWith(guildId, 'wait');
+    expect(h.memberFetch).toHaveBeenCalledWith(guildId, 'now');
+    expect(removed.map((write) => write.userId)).toEqual(['now']);
+    expect(parsed(await h.redis.lrange(key, 0, -1))).toEqual([{ guildId, userId: 'wait', notBefore }]);
+
+    const now = vi.spyOn(Date, 'now').mockReturnValue(notBefore + 1);
+    try {
+      await rewardReconcileJob.processor(h.ctx, {} as never);
+    } finally {
+      now.mockRestore();
+    }
+
+    expect(h.memberFetch).toHaveBeenCalledWith(guildId, 'wait');
+    expect(removed.map((write) => write.userId)).toEqual(['now', 'wait']);
+    expect(await h.redis.llen(key)).toBe(0);
+  });
 });
 
 describe('enqueueRewardReconcile', () => {
