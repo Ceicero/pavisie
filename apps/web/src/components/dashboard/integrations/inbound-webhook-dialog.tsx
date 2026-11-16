@@ -18,8 +18,12 @@ import {
   useToast,
 } from '@pavisie/ui';
 import { ApiClientError } from '@/lib/dashboard/api';
-import { useCreateInboundWebhook, type CreateInboundWebhookResult } from '@/lib/dashboard/integrations-queries';
+import {
+  useCreateInboundWebhook,
+  type CreateInboundWebhookResult,
+} from '@/lib/dashboard/integrations-queries';
 import { DiscordChannelSelect } from '../discord-selects';
+import { INBOUND_CREATE_REQUIRE_TIMESTAMP_HELP_ID, RequireTimestampField } from './require-timestamp-setting';
 
 export interface InboundWebhookDialogProps {
   guildId: string;
@@ -33,6 +37,7 @@ export function InboundWebhookDialog({ guildId, open, onOpenChange, onCreated }:
   const [provider, setProvider] = React.useState<'generic' | 'github'>('generic');
   const [channelId, setChannelId] = React.useState<string | null>(null);
   const [template, setTemplate] = React.useState('');
+  const [requireTimestamp, setRequireTimestamp] = React.useState(false);
   const create = useCreateInboundWebhook(guildId);
   const { toast } = useToast();
 
@@ -42,6 +47,7 @@ export function InboundWebhookDialog({ guildId, open, onOpenChange, onCreated }:
     setProvider('generic');
     setChannelId(null);
     setTemplate('');
+    setRequireTimestamp(false);
   }, [open]);
 
   const valid = name.trim().length > 0;
@@ -54,6 +60,8 @@ export function InboundWebhookDialog({ guildId, open, onOpenChange, onCreated }:
         provider,
         channelId,
         events: provider === 'generic' && template.trim() ? [template.trim()] : [],
+        // Sent as submitted. The 201 body omits requireTimestamp; the list reload (GET) shows the saved value.
+        requireTimestamp,
       },
       {
         onSuccess: (result) => {
@@ -111,6 +119,13 @@ export function InboundWebhookDialog({ guildId, open, onOpenChange, onCreated }:
               disabled={create.isPending}
             />
           </FormField>
+
+          <RequireTimestampField
+            checked={requireTimestamp}
+            disabled={create.isPending}
+            helpId={INBOUND_CREATE_REQUIRE_TIMESTAMP_HELP_ID}
+            onCheckedChange={setRequireTimestamp}
+          />
 
           {provider === 'generic' ? (
             <FormField

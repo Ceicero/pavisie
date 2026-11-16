@@ -36,7 +36,7 @@ export function PluginSwitcher({
             href={toHref(plugin.id)}
             aria-current={isActive ? 'page' : undefined}
             className={clsx(
-              'rounded-full border px-3 py-1.5 text-xs transition-colors',
+              'rounded-full border px-3 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-5',
               isActive
                 ? 'border-transparent bg-grey-7 text-ink-0'
                 : 'border-white/10 text-grey-3 hover:border-white/25 hover:text-grey-7',

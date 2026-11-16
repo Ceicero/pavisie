@@ -6,7 +6,9 @@ import { messageCreateHandler } from './events/message-create';
 import { messageUpdateHandler } from './events/message-update';
 import { memberAddHandler } from './events/member-add';
 import { eventsRetentionJob } from './jobs/events-retention';
-import { createAutomodService } from './service';
+import { messageAlertJob } from './message-alert';
+import { raidAlertJob } from './raid-alert';
+import { createAutomodService, startRuleSync } from './service';
 import * as ruleSchemas from './schemas';
 import en from './locales/en.json';
 
@@ -27,9 +29,17 @@ export const plugin = definePlugin({
   commands: [automodCommand],
   events: [messageCreateHandler, messageUpdateHandler, memberAddHandler],
   components: automodComponents,
-  jobs: [eventsRetentionJob],
+  jobs: [eventsRetentionJob, raidAlertJob, messageAlertJob],
   async onLoad(ctx) {
     ctx.services.register('automod', createAutomodService(ctx));
+    // Dashboard rule edits reach this process over Redis. If the subscription cannot be set up the plugin still
+    // works: edits then take effect when the short-lived rule cache expires, as they did before.
+    await startRuleSync(ctx).catch((err: unknown) => {
+      ctx.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'automod: could not subscribe to rule changes; dashboard edits will apply within a few seconds instead of at once',
+      );
+    });
   },
   async health(ctx) {
     // A meaningful health signal beyond "the plugin loaded": are there any *enabled* rules that are currently
