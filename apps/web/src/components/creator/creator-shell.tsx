@@ -12,7 +12,7 @@ import { CreatorSessionProvider } from '@/lib/creator/session';
 export function CreatorShell({ children }: { children: React.ReactNode }) {
   return (
     <CreatorSessionProvider>
-      <div className="min-h-dvh bg-background text-foreground">{children}</div>
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-background text-foreground">{children}</div>
     </CreatorSessionProvider>
   );
 }

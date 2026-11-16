@@ -102,7 +102,13 @@ function buildHarness() {
     },
   };
 
-  const prisma = { moderationAppeal, moderationCase } as unknown as PluginContext['prisma'];
+  const auditLog = { create: async () => ({}) };
+  const prisma = {
+    moderationAppeal,
+    moderationCase,
+    auditLog,
+    $transaction: async (cb: (tx: unknown) => unknown) => cb({ moderationAppeal, moderationCase, auditLog }),
+  } as unknown as PluginContext['prisma'];
 
   const member = { timeout: timeoutFn };
   const guild = { name: 'Test Guild', members: { fetch: vi.fn(async () => member) } };

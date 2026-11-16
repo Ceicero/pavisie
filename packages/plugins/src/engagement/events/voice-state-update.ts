@@ -8,15 +8,17 @@ import {
   type VoiceState,
 } from 'discord.js';
 import { fetchMemberSafe, type PluginContext, type PluginEventHandler } from '../../sdk';
-import type { EngagementConfig, EngagementTempVoiceConfig } from '../manifest';
+import type { EngagementConfig, EngagementLevelingConfig, EngagementTempVoiceConfig } from '../manifest';
 import { applyLevelUp } from '../level-actions';
 import {
   channelQualifiesForVoiceXp,
   hasVoiceSession,
   isEligibleVoiceMember,
   isOrphanTempVoiceChannel,
+  isXpIgnored,
   levelFromXp,
   renderTempVoiceName,
+  resolveXpMultiplier,
   startVoiceSession,
   stopVoiceSession,
   voiceXpForMinutes,
@@ -34,18 +36,29 @@ function toVoiceMemberLike(member: GuildMember): VoiceMemberLike {
   };
 }
 
-/** Stops `userId`'s voice-XP session (if any), persists the earned XP/minutes, and handles a level-up. */
+/**
+ * Stops `userId`'s voice-XP session (if any), persists the earned XP/minutes, and handles a level-up.
+ *
+ * The multiplier is resolved at settle time from `subject` (the channel the minutes were earned in,
+ * and the member's roles now). A voice channel has no thread parent; do not pass a category id.
+ * Voice XP is not part of the message hourly cap.
+ */
 async function settleVoiceSession(
   ctx: PluginContext,
   guild: Guild,
   guildId: string,
   userId: string,
-  xpPerMinute: number,
+  leveling: EngagementLevelingConfig,
+  subject: { channelId?: string; roleIds?: readonly string[] },
 ): Promise<void> {
   const minutes = await stopVoiceSession(ctx.redis, guildId, userId);
   if (minutes <= 0) return;
 
-  const xpGained = voiceXpForMinutes(minutes, xpPerMinute);
+  const xpGained = voiceXpForMinutes(
+    minutes,
+    leveling.voiceXpPerMinute,
+    resolveXpMultiplier(leveling, subject),
+  );
   const profile = await ctx.prisma.levelProfile.upsert({
     where: { guildId_userId: { guildId, userId } },
     create: { guildId, userId, xp: xpGained, voiceMinutes: minutes },
@@ -62,25 +75,48 @@ async function settleVoiceSession(
   await applyLevelUp({ ctx, guild, member, guildId, userId, newLevel, config: config.leveling });
 }
 
-/** Starts/stops voice-XP sessions for every member of `channel` so its tracked state matches "does this channel currently qualify, and is each member eligible". */
+/**
+ * Starts or stops voice-XP sessions so each member's tracked state matches the channel now.
+ *
+ * An ignored voice channel qualifies for nobody. An ignored-role member earns no voice XP and does
+ * not count toward the two-human minimum, so one earning member plus a no-XP account is not a
+ * qualifying channel. Mute, deafen, and bot rules are unchanged.
+ *
+ * Ignored time is not tracked. On a voiceStateUpdate that shows the channel is ignored, or that the
+ * member now holds an ignored role, an open session is settled — minutes already on the clock are
+ * paid — and not restarted. Role and ignore-list edits show up on the next voiceStateUpdate, not at
+ * the moment of the edit. Moving into an ignored channel settles the previous channel first (that
+ * time was eligible) and does not start a session in the ignored one. Moving back into a qualifying
+ * channel, or losing the ignored role, starts a new session from that event.
+ */
 async function reconcileChannelVoiceXp(
   ctx: PluginContext,
   guild: Guild,
   guildId: string,
   channel: VoiceBasedChannel,
-  xpPerMinute: number,
+  leveling: EngagementLevelingConfig,
 ): Promise<void> {
   const members = [...channel.members.values()];
-  const qualifies = channelQualifiesForVoiceXp(members.map(toVoiceMemberLike));
+  const channelIgnored = isXpIgnored(leveling, { channelId: channel.id });
+  const countsTowardQuorum = members
+    .filter((member) => !isXpIgnored(leveling, { roleIds: [...member.roles.cache.keys()] }))
+    .map(toVoiceMemberLike);
+  const qualifies = !channelIgnored && channelQualifiesForVoiceXp(countsTowardQuorum);
 
   for (const member of members) {
-    const eligible = isEligibleVoiceMember(toVoiceMemberLike(member));
+    const earns =
+      qualifies &&
+      isEligibleVoiceMember(toVoiceMemberLike(member)) &&
+      !isXpIgnored(leveling, { channelId: channel.id, roleIds: [...member.roles.cache.keys()] });
     const tracking = await hasVoiceSession(ctx.redis, guildId, member.id);
 
-    if (qualifies && eligible && !tracking) {
+    if (earns && !tracking) {
       await startVoiceSession(ctx.redis, guildId, member.id);
-    } else if ((!qualifies || !eligible) && tracking) {
-      await settleVoiceSession(ctx, guild, guildId, member.id, xpPerMinute);
+    } else if (!earns && tracking) {
+      await settleVoiceSession(ctx, guild, guildId, member.id, leveling, {
+        channelId: channel.id,
+        roleIds: [...member.roles.cache.keys()],
+      });
     }
   }
 }
@@ -190,8 +226,7 @@ async function cleanupIfOrphaned(ctx: PluginContext, guild: Guild, channelId: st
   const memberCount = channel && channel.isVoiceBased() ? channel.members.size : 0;
   if (!isOrphanTempVoiceChannel(memberCount)) return;
 
-  if (channel)
-    await channel.delete('Pavisie engagement: temp voice channel is empty').catch(() => undefined);
+  if (channel) await channel.delete('Pavisie engagement: temp voice channel is empty').catch(() => undefined);
   await ctx.prisma.tempVoiceChannel.delete({ where: { id: row.id } }).catch(() => undefined);
 }
 
@@ -236,7 +271,11 @@ export const voiceStateUpdateHandler: PluginEventHandler<'voiceStateUpdate'> = {
     // settle their session directly first so it isn't silently dropped.
     if (oldState.channelId && oldState.channelId !== newState.channelId) {
       if (await hasVoiceSession(ctx.redis, guildId, userId)) {
-        await settleVoiceSession(ctx, guild, guildId, userId, config.leveling.voiceXpPerMinute);
+        const member = newState.member ?? oldState.member;
+        await settleVoiceSession(ctx, guild, guildId, userId, config.leveling, {
+          channelId: oldState.channelId,
+          roleIds: member ? [...member.roles.cache.keys()] : [],
+        });
       }
     }
 
@@ -250,7 +289,7 @@ export const voiceStateUpdateHandler: PluginEventHandler<'voiceStateUpdate'> = {
       for (const channelId of affectedChannelIds) {
         const channel = guild.channels.cache.get(channelId);
         if (channel && channel.isVoiceBased()) {
-          await reconcileChannelVoiceXp(ctx, guild, guildId, channel, config.leveling.voiceXpPerMinute);
+          await reconcileChannelVoiceXp(ctx, guild, guildId, channel, config.leveling);
         }
       }
     }

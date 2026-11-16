@@ -10,5 +10,6 @@ export * from './embeds';
 export * from './pagination';
 export * from './guards';
 export * from './discord-utils';
+export * from './discord-errors';
 export * from './locales';
 export * from './help-hint';
