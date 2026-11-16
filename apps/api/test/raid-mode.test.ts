@@ -143,6 +143,39 @@ describe('raid mode incidents on the Threat overview (ThreatIncidentDto, unchang
     await app.close();
   });
 
+  it('keeps an older lockdown that is still on when more than 20 incidents started recently', async () => {
+    const recent = Array.from({ length: 20 }, (_, i) =>
+      incident({
+        id: `recent-${i}`,
+        status: 'ENDED',
+        endedAt: later,
+        startedAt: new Date(later.getTime() - i),
+      }),
+    );
+    const stillLocked = incident({
+      id: 'old-locked',
+      status: 'ENDED',
+      endedAt: started,
+      startedAt: new Date(started.getTime() - 3 * 60 * 60_000),
+      lockdownState: 'LOCKED',
+      lockdownAppliedAt: started,
+      lockdownActions: ['channel-send-deny'],
+    });
+    // Each query returns what the database would: the "ongoing" one only matches the locked row.
+    const findMany = async (...args: unknown[]) =>
+      (args[0] as { where: { OR?: unknown } }).where.OR ? [stillLocked] : recent;
+    const { app, cookieHeader } = await authed({ raidModeIncident: { findMany } });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/guilds/${GUILD_ID}/threats/incidents`,
+      headers: { cookie: cookieHeader },
+    });
+    const items = res.json() as ThreatIncidentDto[];
+    expect(items).toHaveLength(MAX_THREAT_ROWS);
+    expect(items[0]).toMatchObject({ id: 'old-locked:lockdown', status: 'active' });
+    await app.close();
+  });
+
   it('serves them from GET /threats/incidents, scoped to the guild', async () => {
     const { app, cookieHeader, prismaCalls } = await authed({
       raidModeIncident: { findMany: async () => [incident()] },
