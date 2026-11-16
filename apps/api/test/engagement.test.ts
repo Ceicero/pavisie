@@ -2,7 +2,10 @@ import RedisMock from 'ioredis-mock';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { encodeCursor, env, redisKey } from '@pavisie/core';
 import { levelProgress } from '@pavisie/plugins/engagement/service';
-import { rewardReconcileListKey } from '@pavisie/plugins/engagement/reward-queue';
+import {
+  rewardReconcileListKey,
+  REWARD_RECONCILE_RESET_DELAY_MS,
+} from '@pavisie/plugins/engagement/reward-queue';
 import {
   DISCORD_USER_CACHE_TTL_SECONDS,
   DISCORD_USER_FAILURE_TTL_SECONDS,
@@ -438,8 +441,13 @@ describe('engagement reset', () => {
   ) {
     const raw = await redis.lrange(rewardReconcileListKey(), 0, -1);
     return raw
-      .map((item) => JSON.parse(item) as { guildId: string; userId: string })
+      .map((item) => JSON.parse(item) as { guildId: string; userId: string; notBefore?: number })
       .filter((entry) => entry.guildId === guildId);
+  }
+
+  function expectHeldForReset(notBefore: number | undefined, started: number) {
+    expect(notBefore).toBeGreaterThanOrEqual(started + REWARD_RECONCILE_RESET_DELAY_MS);
+    expect(notBefore).toBeLessThanOrEqual(Date.now() + REWARD_RECONCILE_RESET_DELAY_MS);
   }
 
   it('rejects an unauthenticated request', async () => {
@@ -482,16 +490,27 @@ describe('engagement reset', () => {
       { userId: MEMBER_A, xp: 50, level: 2 },
       { userId: MEMBER_B, xp: 10, level: 1 },
     ];
+    const redisHolder: {
+      redis?: { lrange: (key: string, start: number, stop: number) => Promise<string[]> };
+    } = {};
+    let queuedBeforeDelete = false;
     const { app, redis, prismaCalls } = await buildTestApp({
       guild: { findUnique: async () => ({ id: GUILD, botPresent: true }) },
       levelProfile: {
         findMany: async () => rows,
-        deleteMany: async () => ({ count: rows.length }),
+        deleteMany: async () => {
+          const raw = await redisHolder.redis?.lrange(rewardReconcileListKey(), 0, -1);
+          queuedBeforeDelete =
+            raw?.some((item) => (JSON.parse(item) as { guildId: string }).guildId === GUILD) ?? false;
+          return { count: rows.length };
+        },
       },
     });
+    redisHolder.redis = redis;
     const { cookieHeader, session } = await loginAs(app, redis, { userId: ACTOR });
     await seedUserGuilds(redis, ACTOR, [{ id: GUILD, owner: true, permissions: '8' }]);
 
+    const started = Date.now();
     const res = await app.inject({
       method: 'POST',
       url: `/guilds/${GUILD}/engagement/reset`,
@@ -501,6 +520,7 @@ describe('engagement reset', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ count: 2 });
+    expect(queuedBeforeDelete).toBe(true);
 
     const levelCalls = prismaCalls.filter((call) => call.model === 'levelProfile');
     expect(levelCalls.map((call) => call.method)).toEqual(['findMany', 'deleteMany']);
@@ -522,6 +542,8 @@ describe('engagement reset', () => {
 
     const queued = await listedFor(redis, GUILD);
     expect(queued.map((entry) => entry.userId).sort()).toEqual([MEMBER_A, MEMBER_B].sort());
+    expect(new Set(queued.map((entry) => entry.notBefore)).size).toBe(1);
+    for (const entry of queued) expectHeldForReset(entry.notBefore, started);
     await app.close();
   });
 
@@ -537,6 +559,7 @@ describe('engagement reset', () => {
       { id: SINGLE_GUILD, owner: false, permissions: String(0x20n) },
     ]);
 
+    const started = Date.now();
     const res = await app.inject({
       method: 'POST',
       url: `/guilds/${SINGLE_GUILD}/engagement/reset`,
@@ -553,8 +576,50 @@ describe('engagement reset', () => {
     expect(audit?.args[0]).toMatchObject({
       data: { action: 'engagement.level.reset', targetId: SINGLE_MEMBER, actorId: SINGLE_ACTOR },
     });
-    expect(await listedFor(redis, SINGLE_GUILD)).toEqual([{ guildId: SINGLE_GUILD, userId: SINGLE_MEMBER }]);
+    const queued = await listedFor(redis, SINGLE_GUILD);
+    expect(queued.map((entry) => ({ guildId: entry.guildId, userId: entry.userId }))).toEqual([
+      { guildId: SINGLE_GUILD, userId: SINGLE_MEMBER },
+    ]);
+    expectHeldForReset(queued[0]?.notBefore, started);
     await app.close();
+  });
+
+  it('returns 500, deletes nothing, and writes no audit when reconcile enqueue fails', async () => {
+    const guildId = '202611160000000301';
+    const actorId = '202611160000000302';
+    const memberId = '202611160000000303';
+    const { app, redis, prismaCalls } = await buildTestApp({
+      guild: { findUnique: async () => ({ id: guildId, botPresent: true }) },
+      levelProfile: {
+        findMany: async () => [{ userId: memberId, xp: 10, level: 1 }],
+        deleteMany: async () => ({ count: 1 }),
+      },
+    });
+    const { cookieHeader, session } = await loginAs(app, redis, { userId: actorId });
+    await seedUserGuilds(redis, actorId, [{ id: guildId, owner: true, permissions: '8' }]);
+    const rpush = vi.spyOn(redis, 'rpush').mockRejectedValue(new Error('redis unavailable'));
+
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/guilds/${guildId}/engagement/reset`,
+        headers: { cookie: cookieHeader, origin: 'http://localhost:3000', 'x-csrf-token': session.csrfToken },
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(500);
+      expect(res.json()).toEqual({
+        error: { code: 'internal_error', message: 'An unexpected error occurred.' },
+      });
+      expect(prismaCalls.filter((call) => call.model === 'levelProfile').map((call) => call.method)).toEqual([
+        'findMany',
+      ]);
+      expect(prismaCalls.some((call) => call.model === 'auditLog')).toBe(false);
+      expect(await listedFor(redis, guildId)).toEqual([]);
+    } finally {
+      rpush.mockRestore();
+      await app.close();
+    }
   });
 });
 
