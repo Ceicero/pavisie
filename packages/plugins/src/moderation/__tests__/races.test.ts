@@ -131,14 +131,12 @@ describe('race: a decision made in Discord while the appeal-sync job runs', () =
     const h = appealHarness('appeal-sync-race', { dmGate: dm.wait });
 
     // The bot's own Deny button: the decision is saved, then its DM is in flight (held by the gate)...
-    const decision = h
-      .service()
-      .decideAppeal({
-        guildId: 'g-appeal',
-        appealId: 'appeal-sync-race',
-        reviewerId: 'mod-a',
-        accept: false,
-      });
+    const decision = h.service().decideAppeal({
+      guildId: 'g-appeal',
+      appealId: 'appeal-sync-race',
+      reviewerId: 'mod-a',
+      accept: false,
+    });
     await vi.waitFor(() => expect(h.appeals[0]?.status).toBe('DENIED'));
 
     // ...when the once-a-minute sync job ticks. It sees a decided appeal whose effects are not marked applied.
@@ -300,5 +298,148 @@ describe('race: an enforcer mute expires while a new mute is applied', () => {
 
     // The new mute is still in force, so the member must still have the role.
     expect(roles.has(ROLE)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// Follow-ups from Dio's review of #35
+// ---------------------------------------------------------------------------------------------------------
+
+describe('review follow-ups', () => {
+  it('a failed role re-add is repaired by the retry instead of being skipped', async () => {
+    const ROLE = 'mute-role';
+    const oldMute = {
+      id: 'old',
+      guildId: 'g-repair',
+      targetId: 'member',
+      metadata: { enforcerMute: true, roleId: ROLE },
+    };
+    const cases: Row[] = [];
+    const roles = new Set([ROLE]);
+    let failAdd = true;
+    const member = {
+      roles: {
+        cache: { has: (id: string) => roles.has(id) },
+        remove: async (id: string) => {
+          roles.delete(id);
+        },
+        add: async (id: string) => {
+          if (failAdd) throw new Error('rate limited');
+          roles.add(id);
+        },
+      },
+    };
+    const newMute = {
+      id: 'new',
+      guildId: 'g-repair',
+      targetId: 'member',
+      type: 'ROLE_ADD',
+      expiredAt: null,
+      deletedAt: null,
+      expiresAt: new Date(Date.now() + 3_600_000),
+      metadata: { enforcerMute: true, roleId: ROLE },
+    };
+    // The new mute starts while the old one is being lifted: its case appears after the first "no other mute"
+    // check, so only the second check (after the removal) sees it.
+    let checks = 0;
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findMany: async () => {
+            checks += 1;
+            if (checks === 2) cases.push(newMute);
+            return cases.map((c) => ({ ...c }));
+          },
+        },
+      },
+      overrides: {
+        client: {
+          guilds: { fetch: async () => ({ members: { fetch: async () => member } }) },
+        } as never,
+      },
+    });
+
+    await expect(liftEnforcerMute(ctx, oldMute, 'Mute expired (case #1)')).rejects.toThrow('rate limited');
+    expect(roles.has(ROLE)).toBe(false); // removed, and putting it back failed
+
+    failAdd = false;
+    await liftEnforcerMute(ctx, oldMute, 'Mute expired (case #1)'); // the job's retry
+
+    expect(roles.has(ROLE)).toBe(true);
+  });
+
+  it('a newer timeout lifted in the gap is put back until its own end', async () => {
+    const now = Date.now();
+    const timeouts: (number | null)[] = [];
+    const member = {
+      communicationDisabledUntilTimestamp: now,
+      timeout: async (ms: number | null) => {
+        timeouts.push(ms);
+      },
+    };
+    const row = {
+      id: 'old-timeout',
+      guildId: 'g-reapply',
+      targetId: 'member',
+      caseNumber: 4,
+      type: 'TIMEOUT',
+      expiresAt: new Date(now),
+      expiredAt: null as Date | null,
+      deletedAt: null,
+      metadata: {},
+    };
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findUnique: async () => row,
+          // A moderator gave a new 30-minute timeout between the member fetch and the lift.
+          findFirst: async () => ({
+            id: 'new-timeout',
+            caseNumber: 5,
+            expiresAt: new Date(now + 30 * 60_000),
+          }),
+          update: async () => {
+            row.expiredAt = new Date();
+            return row;
+          },
+        },
+      },
+      overrides: {
+        client: {
+          guilds: { fetch: async () => ({ members: { fetch: async () => member } }) },
+          user: { id: 'bot' },
+        } as never,
+      },
+    });
+
+    await expireJob.processor(ctx, { data: { caseId: row.id } } as Job);
+
+    expect(timeouts[0]).toBeNull();
+    expect(timeouts[1]).toBeGreaterThan(29 * 60_000);
+    expect(timeouts[1]).toBeLessThanOrEqual(30 * 60_000);
+  });
+
+  it("an expired appeal lease never deletes the next holder's lease", async () => {
+    const dm = gate();
+    const h = appealHarness('appeal-lease-token', { dmGate: dm.wait });
+    const key = 'pavisie:moderation:appeal-sync-lock:appeal-lease-token';
+    const { redis } = createTestContext();
+    const decision = h
+      .service()
+      .decideAppeal({
+        guildId: 'g-appeal',
+        appealId: 'appeal-lease-token',
+        reviewerId: 'mod-a',
+        accept: false,
+      });
+    // Wait until the first holder has the lease and is stuck on its DM.
+    await vi.waitFor(async () => expect(await redis.get(key)).not.toBeNull());
+
+    // It stalls past the lease's lifetime; the lease expires and another worker takes it.
+    await redis.set(key, 'second-holder');
+    dm.open();
+    await decision;
+
+    expect(await redis.get(key)).toBe('second-holder');
   });
 });
