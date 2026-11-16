@@ -1,6 +1,8 @@
 import type Redis from 'ioredis';
-import { redisKey } from '@pavisie/core';
-import { fetchWithBotToken } from './discord';
+import { RateLimiter, env, redisKey } from '@pavisie/core';
+import { hasBotToken } from './discord';
+
+const DISCORD_API_BASE = 'https://discord.com/api/v10';
 
 /**
  * Successful lookups stay fresh long enough that a public leaderboard page does not refetch every member
@@ -9,6 +11,14 @@ import { fetchWithBotToken } from './discord';
 export const DISCORD_USER_CACHE_TTL_SECONDS = 600;
 export const DISCORD_USER_MISS_TTL_SECONDS = 60;
 export const DISCORD_USER_FAILURE_TTL_SECONDS = 15;
+
+/** Shared Redis budget for public leaderboard lookups, across every API replica. */
+export const PUBLIC_DISCORD_LOOKUP_LIMIT = 5;
+export const PUBLIC_DISCORD_LOOKUP_WINDOW_MS = 1000;
+/** In-process cap so one page cannot open more than this many Discord user requests at once. */
+export const PUBLIC_DISCORD_LOOKUP_CONCURRENCY = 5;
+
+const PUBLIC_LOOKUP_BUDGET_KEY = 'engagement:public-discord-user';
 
 /** The only Discord profile fields the public leaderboard is allowed to return. */
 export interface PublicDiscordIdentity {
@@ -30,7 +40,41 @@ type CachedDiscordUser =
   | { status: 'miss' }
   | { status: 'error' };
 
+type FetchOutcome = { kind: 'ok'; user: DiscordApiUser } | { kind: 'miss' } | { kind: 'error' };
+
 const inflight = new Map<string, Promise<PublicDiscordIdentity>>();
+
+let activeLookups = 0;
+const lookupWaiters: Array<() => void> = [];
+
+function acquireLookupSlot(): Promise<void> {
+  if (activeLookups < PUBLIC_DISCORD_LOOKUP_CONCURRENCY) {
+    activeLookups += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    lookupWaiters.push(resolve);
+  });
+}
+
+function releaseLookupSlot(): void {
+  const next = lookupWaiters.shift();
+  if (next) {
+    next();
+    return;
+  }
+  activeLookups -= 1;
+}
+
+/** Runs `task` with at most {@link PUBLIC_DISCORD_LOOKUP_CONCURRENCY} lookups in flight in this process. */
+export async function withPublicDiscordLookupConcurrency<T>(task: () => Promise<T>): Promise<T> {
+  await acquireLookupSlot();
+  try {
+    return await task();
+  } finally {
+    releaseLookupSlot();
+  }
+}
 
 /** CDN avatar URL. A null hash uses Discord's default embed avatar (`(user_id >> 22) % 6`). */
 export function discordAvatarUrl(userId: string, avatarHash: string | null | undefined): string {
@@ -52,12 +96,6 @@ function cacheKey(userId: string): string {
   return redisKey('discorduser', userId);
 }
 
-function discordErrorStatus(err: unknown): number | null {
-  if (!(err instanceof Error)) return null;
-  const match = /Discord API request failed \((\d+)\)/.exec(err.message);
-  return match ? Number(match[1]) : null;
-}
-
 function decodeCachedDiscordUser(raw: string): PublicDiscordIdentity | null {
   try {
     const parsed = JSON.parse(raw) as Partial<CachedDiscordUser>;
@@ -73,27 +111,92 @@ function decodeCachedDiscordUser(raw: string): PublicDiscordIdentity | null {
   }
 }
 
+async function readCachedIdentity(redis: Redis, userId: string): Promise<PublicDiscordIdentity | null> {
+  const cached = await redis.get(cacheKey(userId));
+  if (cached === null) return null;
+  return decodeCachedDiscordUser(cached);
+}
+
+/** Cache writes must not fail the request. A missed write just means the next call fetches again. */
 async function remember(
   redis: Redis,
-  key: string,
+  userId: string,
   record: CachedDiscordUser,
   ttlSeconds: number,
 ): Promise<void> {
-  await redis.set(key, JSON.stringify(record), 'EX', ttlSeconds);
+  try {
+    await redis.set(cacheKey(userId), JSON.stringify(record), 'EX', ttlSeconds);
+  } catch {
+    // The identity is still returned to the caller.
+  }
 }
 
-async function loadDiscordUser(redis: Redis, userId: string): Promise<PublicDiscordIdentity> {
-  const key = cacheKey(userId);
+/**
+ * One `GET /users/:id` with the bot token. A 429 is cached as a failure and is not retried.
+ * `fetchWithBotToken` retries 429s, so this path does not use it.
+ */
+async function fetchDiscordUserOnce(userId: string): Promise<FetchOutcome> {
+  if (!hasBotToken() || !env.DISCORD_TOKEN) return { kind: 'error' };
+  let res: Response;
   try {
-    const user = await fetchWithBotToken<DiscordApiUser>(`/users/${encodeURIComponent(userId)}`);
+    res = await fetch(`${DISCORD_API_BASE}/users/${encodeURIComponent(userId)}`, {
+      headers: { Authorization: `Bot ${env.DISCORD_TOKEN}` },
+    });
+  } catch {
+    return { kind: 'error' };
+  }
+  if (res.status === 404) return { kind: 'miss' };
+  if (res.status === 429 || !res.ok) return { kind: 'error' };
+  try {
+    const user = (await res.json()) as DiscordApiUser;
+    return { kind: 'ok', user };
+  } catch {
+    return { kind: 'error' };
+  }
+}
+
+async function takePublicLookupBudget(redis: Redis): Promise<boolean> {
+  try {
+    const result = await new RateLimiter(redis).consume(
+      PUBLIC_LOOKUP_BUDGET_KEY,
+      PUBLIC_DISCORD_LOOKUP_LIMIT,
+      PUBLIC_DISCORD_LOOKUP_WINDOW_MS,
+    );
+    return result.allowed;
+  } catch {
+    return false;
+  }
+}
+
+async function loadPublicDiscordUser(redis: Redis, userId: string): Promise<PublicDiscordIdentity> {
+  const cached = await readCachedIdentity(redis, userId);
+  if (cached) return cached;
+
+  const allowed = await takePublicLookupBudget(redis);
+  if (!allowed) return EMPTY_IDENTITY;
+
+  return withPublicDiscordLookupConcurrency(async () => {
+    const again = await readCachedIdentity(redis, userId);
+    if (again) return again;
+
+    const fetched = await fetchDiscordUserOnce(userId);
+    if (fetched.kind === 'miss') {
+      await remember(redis, userId, { status: 'miss' }, DISCORD_USER_MISS_TTL_SECONDS);
+      return EMPTY_IDENTITY;
+    }
+    if (fetched.kind === 'error') {
+      await remember(redis, userId, { status: 'error' }, DISCORD_USER_FAILURE_TTL_SECONDS);
+      return EMPTY_IDENTITY;
+    }
+
     const identity: PublicDiscordIdentity = {
-      username: typeof user.username === 'string' ? user.username : null,
-      globalName: typeof user.global_name === 'string' ? user.global_name : null,
-      avatarUrl: discordAvatarUrl(userId, user.avatar ?? null),
+      username: typeof fetched.user.username === 'string' ? fetched.user.username : null,
+      globalName: typeof fetched.user.global_name === 'string' ? fetched.user.global_name : null,
+      avatarUrl: discordAvatarUrl(userId, fetched.user.avatar ?? null),
     };
     await remember(
       redis,
-      key,
+      userId,
       {
         status: 'ok',
         username: identity.username,
@@ -103,33 +206,22 @@ async function loadDiscordUser(redis: Redis, userId: string): Promise<PublicDisc
       DISCORD_USER_CACHE_TTL_SECONDS,
     );
     return identity;
-  } catch (err) {
-    const miss = discordErrorStatus(err) === 404;
-    await remember(
-      redis,
-      key,
-      { status: miss ? 'miss' : 'error' },
-      miss ? DISCORD_USER_MISS_TTL_SECONDS : DISCORD_USER_FAILURE_TTL_SECONDS,
-    );
-    return EMPTY_IDENTITY;
-  }
+  });
 }
 
 /**
- * `GET /users/:id` with the bot token, cached in Redis. A failed lookup (including a missing bot token)
- * resolves to null name and avatar fields so a public leaderboard row can still be returned.
+ * `GET /users/:id` with the bot token, cached in Redis. A failed lookup, a 429, or an exhausted shared
+ * budget resolves to null name and avatar fields and does not call Discord again for that outcome
+ * (a budget miss is not cached, so a later request can try once the window moves).
  */
 export async function getCachedDiscordUser(redis: Redis, userId: string): Promise<PublicDiscordIdentity> {
-  const cached = await redis.get(cacheKey(userId));
-  if (cached !== null) {
-    const hit = decodeCachedDiscordUser(cached);
-    if (hit) return hit;
-  }
+  const cached = await readCachedIdentity(redis, userId);
+  if (cached) return cached;
 
   const pending = inflight.get(userId);
   if (pending) return pending;
 
-  const promise = loadDiscordUser(redis, userId).finally(() => {
+  const promise = loadPublicDiscordUser(redis, userId).finally(() => {
     inflight.delete(userId);
   });
   inflight.set(userId, promise);

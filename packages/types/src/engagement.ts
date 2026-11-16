@@ -76,7 +76,7 @@ export interface LevelProfileDto {
   rank?: number;
 }
 
-/** One public leaderboard row. No other member fields are included. */
+/** One public leaderboard row. No message or voice counts, and no other member fields. */
 export interface PublicLeaderboardEntryDto {
   rank: number;
   userId: string;
@@ -85,8 +85,6 @@ export interface PublicLeaderboardEntryDto {
   avatarUrl: string | null;
   xp: number;
   level: number;
-  messages: number;
-  voiceMinutes: number;
 }
 
 /** Unauthenticated leveling leaderboard. `404` when the toggle is off or the bot is not in the guild. */
@@ -108,8 +106,6 @@ export interface PublicRankDto {
   xp: number;
   intoLevel: number;
   span: number;
-  messages: number;
-  voiceMinutes: number;
 }
 
 export interface LevelRewardDto {

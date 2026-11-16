@@ -1,6 +1,6 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { NotFoundError, ValidationError, buildPaginated, encodeCursor, paginate } from '@pavisie/core';
+import { NotFoundError, ValidationError, buildPaginated, encodeCursor, env, paginate } from '@pavisie/core';
 import { enqueueRewardReconcile } from '@pavisie/plugins/engagement/reward-queue';
 import { levelFromXp, levelProgress } from '@pavisie/plugins/engagement/service';
 import type {
@@ -25,6 +25,41 @@ const userRankParamSchema = guildIdParamSchema.extend({ userId: snowflakeSchema 
 
 /** Tighter than the global 300/minute. Applies only to the two unauthenticated leaderboard routes. */
 const PUBLIC_LEADERBOARD_RATE_LIMIT = { max: 30, timeWindow: '1 minute' } as const;
+const PUBLIC_PAGE_MAX = 25;
+const STAFF_PAGE_MAX = 100;
+/** Past this offset a cursor is rejected instead of being handed to Prisma as `skip`. */
+const MAX_LEADERBOARD_OFFSET = 10_000;
+const PUBLIC_CACHE_CONTROL = 'public, max-age=60';
+
+/**
+ * Public routes stay closed unless the deployment names an exact proxy hop count. `false` (the unset
+ * default) and a bare `true` both make `request.ip` useless for the per-IP limit.
+ */
+function publicProxyIsHopCount(): boolean {
+  return typeof env.TRUST_PROXY === 'number';
+}
+
+/**
+ * Cursor offsets are whole numbers only. Fractions, exponents, and values above
+ * {@link MAX_LEADERBOARD_OFFSET} are a 400, not a Prisma 500.
+ */
+function leaderboardOffset(cursor: string | undefined): number {
+  if (!cursor) return 0;
+  let decoded: string;
+  try {
+    decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+  } catch {
+    throw new ValidationError('Invalid pagination cursor.');
+  }
+  if (!/^\d+$/.test(decoded)) {
+    throw new ValidationError('Invalid pagination cursor.');
+  }
+  const offset = Number(decoded);
+  if (!Number.isSafeInteger(offset) || offset > MAX_LEADERBOARD_OFFSET) {
+    throw new ValidationError('Invalid pagination cursor.');
+  }
+  return offset;
+}
 
 const xpAdjustBodySchema = z.object({
   userId: snowflakeSchema,
@@ -69,13 +104,17 @@ function toLevelRewardDto(row: {
   };
 }
 
-/** 404 for both "toggle off" and "bot not in this guild" so the public routes don't reveal which one it is. */
+/** 404 for every closed public leaderboard, including a missing profile, so the body does not say which check failed. */
 async function assertPublicLeaderboardOpen(app: ZodFastifyInstance, guildId: string): Promise<void> {
-  const [guild, config] = await Promise.all([
-    app.prisma.guild.findUnique({ where: { id: guildId }, select: { botPresent: true } }),
-    app.configStore.getConfig<EngagementConfigDto>(guildId, ENGAGEMENT_PLUGIN_ID),
-  ]);
-  if (!guild?.botPresent || config.leveling.publicLeaderboard !== true) {
+  if (!publicProxyIsHopCount()) {
+    throw new NotFoundError('Leaderboard not found.');
+  }
+  const guild = await app.prisma.guild.findUnique({ where: { id: guildId }, select: { botPresent: true } });
+  if (!guild?.botPresent) {
+    throw new NotFoundError('Leaderboard not found.');
+  }
+  const config = await app.configStore.getConfig<EngagementConfigDto>(guildId, ENGAGEMENT_PLUGIN_ID);
+  if (config.leveling.publicLeaderboard !== true) {
     throw new NotFoundError('Leaderboard not found.');
   }
 }
@@ -91,6 +130,12 @@ async function assertPublicLeaderboardOpen(app: ZodFastifyInstance, guildId: str
  * `leveling.publicLeaderboard` is on and the bot is in the guild.
  */
 export default async function engagementRoutes(app: ZodFastifyInstance): Promise<void> {
+  if (!publicProxyIsHopCount()) {
+    app.log.warn(
+      'Public leveling leaderboard routes are closed because TRUST_PROXY is not a numeric hop count.',
+    );
+  }
+
   app.get(
     '/:guildId/engagement/config',
     { schema: { params: guildIdParamSchema }, preHandler: requireGuildAccess() },
@@ -132,7 +177,8 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
     async (request) => {
       const guildId = request.guildId!;
       const { cursor, limit: rawLimit } = request.query;
-      const { limit, offset } = paginate({ cursor, limit: rawLimit });
+      const offset = leaderboardOffset(cursor);
+      const { limit } = paginate({ limit: rawLimit, maxLimit: STAFF_PAGE_MAX });
       const [rows, total] = await Promise.all([
         app.prisma.levelProfile.findMany({
           where: { guildId },
@@ -156,11 +202,17 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
       schema: { params: guildIdParamSchema, querystring: paginationQuerySchema },
       config: { rateLimit: PUBLIC_LEADERBOARD_RATE_LIMIT },
     },
-    async (request): Promise<PublicLeaderboardDto> => {
+    async (request, reply): Promise<PublicLeaderboardDto> => {
       const { guildId } = request.params;
       await assertPublicLeaderboardOpen(app, guildId);
       const { cursor, limit: rawLimit } = request.query;
-      const { limit, offset } = paginate({ cursor, limit: rawLimit });
+      const offset = leaderboardOffset(cursor);
+      const { limit } = paginate({
+        limit: rawLimit,
+        maxLimit: PUBLIC_PAGE_MAX,
+        defaultLimit: PUBLIC_PAGE_MAX,
+      });
+      reply.header('Cache-Control', PUBLIC_CACHE_CONTROL);
       const [rows, total] = await Promise.all([
         app.prisma.levelProfile.findMany({
           where: { guildId },
@@ -181,8 +233,6 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
         avatarUrl: identities[index]?.avatarUrl ?? null,
         xp: row.xp,
         level: row.level,
-        messages: row.messages,
-        voiceMinutes: row.voiceMinutes,
       }));
       return {
         guildId,
@@ -199,13 +249,14 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
       schema: { params: userRankParamSchema },
       config: { rateLimit: PUBLIC_LEADERBOARD_RATE_LIMIT },
     },
-    async (request): Promise<PublicRankDto> => {
+    async (request, reply): Promise<PublicRankDto> => {
       const { guildId, userId } = request.params;
       await assertPublicLeaderboardOpen(app, guildId);
+      reply.header('Cache-Control', PUBLIC_CACHE_CONTROL);
       const profile = await app.prisma.levelProfile.findUnique({
         where: { guildId_userId: { guildId, userId } },
       });
-      if (!profile) throw new NotFoundError('Level profile not found.');
+      if (!profile) throw new NotFoundError('Leaderboard not found.');
 
       const [higher, identity] = await Promise.all([
         app.prisma.levelProfile.count({ where: { guildId, xp: { gt: profile.xp } } }),
@@ -222,8 +273,6 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
         xp: profile.xp,
         intoLevel,
         span,
-        messages: profile.messages,
-        voiceMinutes: profile.voiceMinutes,
       };
     },
   );

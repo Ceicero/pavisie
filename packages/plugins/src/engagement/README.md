@@ -39,9 +39,9 @@ temporary voice channels (SPEC.md §G subset; ARCHITECTURE.md §7.1 row `engagem
 - Emits the platform `level.up` event on every level-up (message or voice).
 - **Public leaderboard** (`config.leveling.publicLeaderboard`, default **off**): when a guild turns this
   on, `GET /guilds/:guildId/engagement/leaderboard/public` and `GET /guilds/:guildId/engagement/rank/:userId`
-  answer without a session. Both stay 404 while the toggle is off or the bot is not in the guild. A row
-  exposes rank, XP, level, message count, voice minutes, and that member's Discord username, global name,
-  and avatar — nothing else.
+  answer without a session. Both stay 404 while the toggle is off, the bot is not in the guild, or
+  `TRUST_PROXY` is not a numeric hop count. A row exposes rank, XP, level, and that member's Discord
+  username, global name, and avatar — nothing else. The rank route also includes level progress.
 
 ### Reputation
 

@@ -1,12 +1,16 @@
+import RedisMock from 'ioredis-mock';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { encodeCursor, env } from '@pavisie/core';
+import { encodeCursor, env, redisKey } from '@pavisie/core';
 import { levelProgress } from '@pavisie/plugins/engagement/service';
 import { rewardReconcileListKey } from '@pavisie/plugins/engagement/reward-queue';
 import {
   DISCORD_USER_CACHE_TTL_SECONDS,
   DISCORD_USER_FAILURE_TTL_SECONDS,
   DISCORD_USER_MISS_TTL_SECONDS,
+  PUBLIC_DISCORD_LOOKUP_CONCURRENCY,
+  PUBLIC_DISCORD_LOOKUP_LIMIT,
   getCachedDiscordUser,
+  withPublicDiscordLookupConcurrency,
 } from '../src/lib/discord-users';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
@@ -182,6 +186,25 @@ describe('engagement leaderboard', () => {
     ]);
     expect(body.nextCursor).toBe(encodeCursor(2));
     expect(body.total).toBe(3);
+
+    await app.close();
+  });
+
+  it('rejects a leaderboard cursor that is not a whole offset', async () => {
+    const { app, redis } = await buildTestApp({
+      guild: { findUnique: async () => ({ id: GUILD_ID, botPresent: true }) },
+    });
+    const { cookieHeader } = await loginAs(app, redis, { userId: USER_ID });
+    await seedUserGuilds(redis, USER_ID, [{ id: GUILD_ID, owner: true, permissions: '8' }]);
+
+    for (const raw of ['1.5', '1e2', '10001', '99999999999999999999', 'nope']) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/guilds/${GUILD_ID}/engagement/leaderboard?cursor=${cursorOf(raw)}`,
+        headers: { cookie: cookieHeader },
+      });
+      expect(res.statusCode, raw).toBe(400);
+    }
 
     await app.close();
   });
@@ -601,6 +624,11 @@ const PUBLIC_LIST_GUILD = '910000000000000013';
 const PUBLIC_RANK_GUILD = '910000000000000014';
 const PUBLIC_FAIL_GUILD = '910000000000000016';
 const PUBLIC_CACHE_GUILD = '910000000000000017';
+const PUBLIC_PAGE_CAP_GUILD = '910000000000000018';
+const PUBLIC_CURSOR_GUILD = '910000000000000019';
+const PUBLIC_PROXY_UNSET_GUILD = '910000000000000031';
+const PUBLIC_PROXY_TRUE_GUILD = '910000000000000032';
+const PUBLIC_PROXY_HOP_GUILD = '910000000000000033';
 
 const PUBLIC_USER_A = '920000000000000021';
 const PUBLIC_USER_B = '920000000000000022';
@@ -611,12 +639,20 @@ const PUBLIC_MISS_USER = '920000000000000026';
 const PUBLIC_NO_PROFILE_USER = '920000000000000027';
 
 const originalDiscordToken = env.DISCORD_TOKEN;
+const originalTrustProxy = env.TRUST_PROXY;
 
-afterEach(() => {
+afterEach(async () => {
   env.DISCORD_TOKEN = originalDiscordToken;
+  env.TRUST_PROXY = originalTrustProxy;
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  const redis = new RedisMock();
+  await redis.del(redisKey('ratelimit', 'engagement:public-discord-user'));
 });
+
+function cursorOf(raw: string): string {
+  return Buffer.from(raw, 'utf8').toString('base64url');
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -631,6 +667,7 @@ function enabledConfig() {
 
 describe('public leveling leaderboard', () => {
   it('returns 404 when the public leaderboard is off', async () => {
+    env.TRUST_PROXY = 1;
     const { app } = await buildTestApp({
       guild: { findUnique: async () => ({ id: PUBLIC_DISABLED_GUILD, botPresent: true }) },
     });
@@ -652,9 +689,16 @@ describe('public leveling leaderboard', () => {
   });
 
   it('returns 404 when the bot is not in the guild', async () => {
+    env.TRUST_PROXY = 1;
+    let configReads = 0;
     const { app } = await buildTestApp({
       guild: { findUnique: async () => ({ id: PUBLIC_ABSENT_GUILD, botPresent: false }) },
-      pluginConfig: { findUnique: async () => enabledConfig() },
+      pluginConfig: {
+        findUnique: async () => {
+          configReads += 1;
+          return enabledConfig();
+        },
+      },
     });
 
     const list = await app.inject({
@@ -670,10 +714,12 @@ describe('public leveling leaderboard', () => {
     expect(list.json().error.message).toBe('Leaderboard not found.');
     expect(rank.statusCode).toBe(404);
     expect(rank.json().error.message).toBe('Leaderboard not found.');
+    expect(configReads).toBe(0);
     await app.close();
   });
 
   it('returns the public page shape and paginates by xp desc', async () => {
+    env.TRUST_PROXY = 1;
     env.DISCORD_TOKEN = 'test-bot-token';
     const rows = [
       { userId: PUBLIC_USER_A, xp: 500, level: 4, messages: 50, voiceMinutes: 10, lastXpAt: new Date() },
@@ -710,6 +756,7 @@ describe('public leveling leaderboard', () => {
       url: `/guilds/${PUBLIC_LIST_GUILD}/engagement/leaderboard/public?limit=1`,
     });
     expect(first.statusCode).toBe(200);
+    expect(first.headers['cache-control']).toBe('public, max-age=60');
     const page = first.json();
     expect(Object.keys(page).sort()).toEqual(['guildId', 'items', 'nextCursor', 'total']);
     expect(page.guildId).toBe(PUBLIC_LIST_GUILD);
@@ -717,17 +764,7 @@ describe('public leveling leaderboard', () => {
     expect(page.nextCursor).toBe(encodeCursor(1));
     expect(page.items).toHaveLength(1);
     expect(Object.keys(page.items[0]).sort()).toEqual(
-      [
-        'avatarUrl',
-        'globalName',
-        'level',
-        'messages',
-        'rank',
-        'userId',
-        'username',
-        'voiceMinutes',
-        'xp',
-      ].sort(),
+      ['avatarUrl', 'globalName', 'level', 'rank', 'userId', 'username', 'xp'].sort(),
     );
     expect(page.items[0]).toEqual({
       rank: 1,
@@ -737,9 +774,9 @@ describe('public leveling leaderboard', () => {
       avatarUrl: `https://cdn.discordapp.com/avatars/${PUBLIC_USER_A}/deadbeef.png`,
       xp: 500,
       level: 4,
-      messages: 50,
-      voiceMinutes: 10,
     });
+    expect(page.items[0].messages).toBeUndefined();
+    expect(page.items[0].voiceMinutes).toBeUndefined();
 
     const second = await app.inject({
       method: 'GET',
@@ -756,8 +793,6 @@ describe('public leveling leaderboard', () => {
         avatarUrl: `https://cdn.discordapp.com/embed/avatars/${defaultIndex}.png`,
         xp: 300,
         level: 3,
-        messages: 30,
-        voiceMinutes: 5,
       },
     ]);
     expect(second.json().nextCursor).toBeNull();
@@ -765,6 +800,7 @@ describe('public leveling leaderboard', () => {
   });
 
   it('returns rank progress and 404 when the member has no profile', async () => {
+    env.TRUST_PROXY = 1;
     env.DISCORD_TOKEN = 'test-bot-token';
     const xp = 150;
     const progress = levelProgress(xp);
@@ -803,21 +839,10 @@ describe('public leveling leaderboard', () => {
       url: `/guilds/${PUBLIC_RANK_GUILD}/engagement/rank/${PUBLIC_RANK_USER}`,
     });
     expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('public, max-age=60');
     const body = res.json();
     expect(Object.keys(body).sort()).toEqual(
-      [
-        'avatarUrl',
-        'globalName',
-        'intoLevel',
-        'level',
-        'messages',
-        'rank',
-        'span',
-        'userId',
-        'username',
-        'voiceMinutes',
-        'xp',
-      ].sort(),
+      ['avatarUrl', 'globalName', 'intoLevel', 'level', 'rank', 'span', 'userId', 'username', 'xp'].sort(),
     );
     expect(body).toEqual({
       userId: PUBLIC_RANK_USER,
@@ -829,20 +854,21 @@ describe('public leveling leaderboard', () => {
       xp,
       intoLevel: progress.intoLevel,
       span: progress.span,
-      messages: 12,
-      voiceMinutes: 7,
     });
+    expect(body.messages).toBeUndefined();
+    expect(body.voiceMinutes).toBeUndefined();
 
     const missing = await app.inject({
       method: 'GET',
       url: `/guilds/${PUBLIC_RANK_GUILD}/engagement/rank/${PUBLIC_NO_PROFILE_USER}`,
     });
     expect(missing.statusCode).toBe(404);
-    expect(missing.json().error.message).toBe('Level profile not found.');
+    expect(missing.json().error.message).toBe('Leaderboard not found.');
     await app.close();
   });
 
   it('returns null names when the Discord lookup fails', async () => {
+    env.TRUST_PROXY = 1;
     env.DISCORD_TOKEN = 'test-bot-token';
     const fetchMock = vi.fn(async () => jsonResponse({ message: 'upstream' }, 500));
     vi.stubGlobal('fetch', fetchMock);
@@ -873,14 +899,15 @@ describe('public leveling leaderboard', () => {
       avatarUrl: null,
       rank: 1,
       xp: 10,
-      messages: 1,
-      voiceMinutes: 0,
     });
+    expect(res.json().messages).toBeUndefined();
+    expect(res.json().voiceMinutes).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await app.close();
   });
 
   it('serves a cached Discord user without a second fetch', async () => {
+    env.TRUST_PROXY = 1;
     env.DISCORD_TOKEN = 'test-bot-token';
     const fetchMock = vi.fn(async () =>
       jsonResponse({ id: PUBLIC_CACHE_USER, username: 'cached', global_name: 'Cached', avatar: 'cafebabe' }),
@@ -919,6 +946,105 @@ describe('public leveling leaderboard', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await app.close();
   });
+
+  it('caps a public page at 25 rows', async () => {
+    env.TRUST_PROXY = 1;
+    env.DISCORD_TOKEN = 'test-bot-token';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ username: 'member', global_name: null, avatar: null })),
+    );
+    const rows = Array.from({ length: 30 }, (_, index) => ({
+      userId: `930000000000000${String(index).padStart(3, '0')}`,
+      xp: 1000 - index,
+      level: 1,
+      messages: 9,
+      voiceMinutes: 8,
+    }));
+    const { app } = await buildTestApp({
+      guild: { findUnique: async () => ({ id: PUBLIC_PAGE_CAP_GUILD, botPresent: true }) },
+      pluginConfig: { findUnique: async () => enabledConfig() },
+      levelProfile: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test fake
+        findMany: async (args: any) =>
+          rows.slice(args.skip ?? 0, (args.skip ?? 0) + (args.take ?? rows.length)),
+        count: async () => rows.length,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/guilds/${PUBLIC_PAGE_CAP_GUILD}/engagement/leaderboard/public?limit=100`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.items).toHaveLength(25);
+    expect(body.total).toBe(30);
+    expect(body.nextCursor).toBe(encodeCursor(25));
+    expect(body.items[0].messages).toBeUndefined();
+    expect(body.items[0].voiceMinutes).toBeUndefined();
+    expect(body.items[0].rank).toBe(1);
+    await app.close();
+  });
+
+  it('returns 400 for a fraction, exponent, huge, or garbage cursor', async () => {
+    env.TRUST_PROXY = 1;
+    const { app } = await buildTestApp({
+      guild: { findUnique: async () => ({ id: PUBLIC_CURSOR_GUILD, botPresent: true }) },
+      pluginConfig: { findUnique: async () => enabledConfig() },
+    });
+
+    for (const raw of ['1.5', '1e2', '10001', '99999999999999999999', 'nope']) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/guilds/${PUBLIC_CURSOR_GUILD}/engagement/leaderboard/public?cursor=${cursorOf(raw)}`,
+      });
+      expect(res.statusCode, raw).toBe(400);
+    }
+
+    await app.close();
+  });
+
+  it('returns 404 unless TRUST_PROXY is a numeric hop count', async () => {
+    const cases = [
+      { guildId: PUBLIC_PROXY_UNSET_GUILD, trust: false as const },
+      { guildId: PUBLIC_PROXY_TRUE_GUILD, trust: true as const },
+    ];
+    for (const item of cases) {
+      env.TRUST_PROXY = item.trust;
+      const { app } = await buildTestApp({
+        guild: { findUnique: async () => ({ id: item.guildId, botPresent: true }) },
+        pluginConfig: { findUnique: async () => enabledConfig() },
+      });
+      const list = await app.inject({
+        method: 'GET',
+        url: `/guilds/${item.guildId}/engagement/leaderboard/public`,
+      });
+      const rank = await app.inject({
+        method: 'GET',
+        url: `/guilds/${item.guildId}/engagement/rank/${PUBLIC_RANK_USER}`,
+      });
+      expect(list.statusCode).toBe(404);
+      expect(list.json().error.message).toBe('Leaderboard not found.');
+      expect(rank.statusCode).toBe(404);
+      expect(rank.json().error.message).toBe('Leaderboard not found.');
+      await app.close();
+    }
+
+    env.TRUST_PROXY = 1;
+    const { app } = await buildTestApp({
+      guild: { findUnique: async () => ({ id: PUBLIC_PROXY_HOP_GUILD, botPresent: true }) },
+      pluginConfig: { findUnique: async () => enabledConfig() },
+      levelProfile: { findMany: async () => [], count: async () => 0 },
+    });
+    const open = await app.inject({
+      method: 'GET',
+      url: `/guilds/${PUBLIC_PROXY_HOP_GUILD}/engagement/leaderboard/public`,
+    });
+    expect(open.statusCode).toBe(200);
+    expect(open.json().items).toEqual([]);
+    await app.close();
+  });
 });
 
 describe('getCachedDiscordUser', () => {
@@ -952,5 +1078,61 @@ describe('getCachedDiscordUser', () => {
     expect(failTtl).toBeLessThanOrEqual(DISCORD_USER_FAILURE_TTL_SECONDS);
     expect(DISCORD_USER_CACHE_TTL_SECONDS).toBeGreaterThan(DISCORD_USER_MISS_TTL_SECONDS);
     await app.close();
+  });
+
+  it('does not retry a 429 and caches the failure', async () => {
+    env.DISCORD_TOKEN = 'test-bot-token';
+    const userId = '920000000000000040';
+    const fetchMock = vi.fn(async () => jsonResponse({ retry_after: 1, message: 'rate limited' }, 429));
+    vi.stubGlobal('fetch', fetchMock);
+    const { app, redis } = await buildTestApp();
+
+    const first = await getCachedDiscordUser(redis, userId);
+    const second = await getCachedDiscordUser(redis, userId);
+    expect(first).toEqual({ username: null, globalName: null, avatarUrl: null });
+    expect(second).toEqual(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('returns null names and does not fetch once the shared budget is spent', async () => {
+    env.DISCORD_TOKEN = 'test-bot-token';
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ username: 'budget', global_name: null, avatar: null }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { app, redis } = await buildTestApp();
+
+    const identities = [];
+    for (let index = 0; index < PUBLIC_DISCORD_LOOKUP_LIMIT + 1; index += 1) {
+      const userId = `920000000000000${String(50 + index).padStart(3, '0')}`;
+      identities.push(await getCachedDiscordUser(redis, userId));
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(PUBLIC_DISCORD_LOOKUP_LIMIT);
+    expect(identities[PUBLIC_DISCORD_LOOKUP_LIMIT]).toEqual({
+      username: null,
+      globalName: null,
+      avatarUrl: null,
+    });
+    expect(identities[0]?.username).toBe('budget');
+    await app.close();
+  });
+
+  it('keeps public Discord lookups at or under 5 at a time', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    await Promise.all(
+      Array.from({ length: PUBLIC_DISCORD_LOOKUP_CONCURRENCY * 2 }, () =>
+        withPublicDiscordLookupConcurrency(async () => {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          inFlight -= 1;
+        }),
+      ),
+    );
+    expect(peak).toBe(PUBLIC_DISCORD_LOOKUP_CONCURRENCY);
+    expect(peak).toBeLessThanOrEqual(5);
   });
 });
