@@ -36,6 +36,27 @@
       "badFlag": "Unsupported regex flag \"{flag}\". Allowed flags are g, i, m, s, u.",
       "unsafe": "Pattern is not safe (risk of catastrophic backtracking).",
       "compileFailed": "Pattern failed to compile: {detail}"
+    },
+    "line": {
+      "enabled": "🟢 enabled",
+      "disabled": "⚪ disabled",
+      "dryRun": "🧪 dry-run",
+      "inactive": "⚠️ inactive: requires {intent} intent",
+      "status": "Status: {status}",
+      "type": "Type: **{type}**",
+      "priority": "Priority: {priority} · Cooldown: {cooldown}s",
+      "config": "Config: {config}",
+      "actions": "Actions: {actions}",
+      "exemptRoles": "Exempt roles: {roles}",
+      "exemptChannels": "Exempt channels: {channels}",
+      "exemptUsers": "Exempt users: {users}",
+      "trustedDomains": "Trusted domains: {domains}",
+      "none": "_none_",
+      "invalidStoredConfig": "_invalid stored config_",
+      "noFields": "_no fields_",
+      "invalidStoredActions": "_invalid stored actions_",
+      "timeout": "timeout ({minutes}m)",
+      "list": "**{name}** (`{id}`) — {type} — {status}"
     }
   },
   "exempt": {
@@ -50,14 +71,40 @@
     "empty": "Nothing pending review right now.",
     "eventTitle": "Automod event #{id}",
     "marked": "Marked as **{label}** by {user}.",
+    "placeholder": "Pick an event to review",
+    "yes": "Yes",
+    "no": "No",
+    "summary": "#{id} · {rule} · <@{userId}>{dryRun}{excerpt}",
+    "dryRunMark": " · [dry run]",
+    "excerpt": " — \"{excerpt}\"",
     "label": {
       "confirmViolation": "Confirm violation",
       "falsePositive": "False positive",
-      "confirmedViolation": "Confirmed violation"
+      "confirmedViolation": "Confirmed violation",
+      "user": "User",
+      "rule": "Rule",
+      "channel": "Channel",
+      "actions": "Actions",
+      "dryRun": "Dry run",
+      "reviewStatus": "Review status",
+      "matchedContent": "Matched content"
     }
   },
   "status": {
-    "title": "Automod status"
+    "title": "Automod status",
+    "dryRun": "Guild-wide dry-run: {state}",
+    "dryRunOn": "🧪 **On** (no real actions are taken)",
+    "dryRunOff": "🟢 **Off** (actions are live)",
+    "rules": "Rules: {total} total, {enabled} enabled",
+    "rulesInactive": ", {count} inactive (missing intent)",
+    "alertChannel": "Alert channel: {channel}",
+    "quarantineRole": "Quarantine role: {role}",
+    "notSet": "_not set_",
+    "raidLockdown": "Raid lockdown: {mode}",
+    "raidDuration": " ({minutes}m)",
+    "eventsLast24h": "Events in the last 24h: {count}",
+    "pendingReview": "Pending review: {count}",
+    "inactive": "Inactive: {rules} — enable the required privileged intent to activate them."
   },
   "dryrun": {
     "enabled": "Guild-wide dry-run is now **on**. Rules log matches but take no real action.",
