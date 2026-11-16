@@ -1,5 +1,13 @@
 import type { ApiError } from '@pavisie/types';
-import { apiUrl } from '../site';
+
+/**
+ * Same base URL as `apiUrl()` in `lib/site.ts`, kept local so Playwright can import this
+ * module. `site.ts` statically imports `invite.json` without `with { type: 'json' }`, which
+ * native ESM (the e2e runner) rejects.
+ */
+function publicApiBaseUrl(): string {
+  return (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/+$/, '');
+}
 
 /**
  * Local copies of the public leaderboard DTOs from PR #46 (`packages/types/src/engagement.ts`).
@@ -82,7 +90,7 @@ export async function fetchPublicLeaderboard(
   const qs = new URLSearchParams();
   if (cursor) qs.set('cursor', cursor);
   qs.set('limit', String(PUBLIC_LEADERBOARD_LIMIT));
-  const url = `${apiUrl()}/guilds/${guildId}/engagement/leaderboard/public?${qs.toString()}`;
+  const url = `${publicApiBaseUrl()}/guilds/${guildId}/engagement/leaderboard/public?${qs.toString()}`;
 
   let response: Response;
   try {
