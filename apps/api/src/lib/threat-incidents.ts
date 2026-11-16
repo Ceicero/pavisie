@@ -81,18 +81,25 @@ export function raidModeIncidentToThreatDtos(row: RaidModeIncident): ThreatIncid
 }
 
 async function raidModeSource(prisma: PrismaClient, guildId: string): Promise<ThreatIncidentDto[]> {
-  const rows = await prisma.raidModeIncident.findMany({
-    where: {
-      guildId,
-      OR: [
-        { status: 'ACTIVE' },
-        { lockdownState: { in: ['LOCKING', 'LOCKED', 'PARTIALLY_RESTORED'] } },
-        { startedAt: { gte: new Date(Date.now() - RECENT_MS) } },
-      ],
-    },
-    orderBy: { startedAt: 'desc' },
-    take: MAX_INCIDENTS,
-  });
+  // Two queries so ongoing items can never be crowded out: a busy day with more than MAX_INCIDENTS recent
+  // incidents would otherwise let `take` drop an older raid that is still active or a lockdown that is still on.
+  const [ongoing, recent] = await Promise.all([
+    prisma.raidModeIncident.findMany({
+      where: {
+        guildId,
+        OR: [{ status: 'ACTIVE' }, { lockdownState: { in: ['LOCKING', 'LOCKED', 'PARTIALLY_RESTORED'] } }],
+      },
+      orderBy: { startedAt: 'desc' },
+      take: MAX_INCIDENTS,
+    }),
+    prisma.raidModeIncident.findMany({
+      where: { guildId, startedAt: { gte: new Date(Date.now() - RECENT_MS) } },
+      orderBy: { startedAt: 'desc' },
+      take: MAX_INCIDENTS,
+    }),
+  ]);
+  const seen = new Set<string>();
+  const rows = [...ongoing, ...recent].filter((row) => !seen.has(row.id) && seen.add(row.id));
   return capThreatRows(rows.flatMap(raidModeIncidentToThreatDtos));
 }
 
