@@ -17,7 +17,8 @@ export type ParsedSchedule =
   | { kind: 'invalid'; reason: string };
 
 const EXPLICIT_OFFSET = /(?:[zZ]|[+-]\d{2}(?::?\d{2})?)$/;
-const CIVIL_TIME = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/;
+const CIVIL_TIME =
+  /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/;
 
 interface CivilParts {
   year: number;
@@ -77,7 +78,10 @@ function parseZonedDateTime(
     minute: match[5] !== undefined ? Number(match[5]) : 0,
     second: match[6] !== undefined ? Number(match[6]) : 0,
   };
-  const dt = DateTime.fromObject({ ...parts, millisecond: 0 }, { zone: timezone });
+  const dt = DateTime.fromObject(
+    { ...parts, millisecond: 0 },
+    { zone: timezone },
+  );
   if (!dt.isValid) return null;
   if (!sameCivilTime(dt, parts)) {
     return {
@@ -101,8 +105,9 @@ function parseZonedDateTime(
 
 /**
  * Longest relative duration (`10m`, `2h30m`, `52w`) accepted for a one-off time. `parseDuration` has no upper
- * bound, so without this cap `99999999999w` lands past the largest JS Date and yields an Invalid Date (NaN),
- * which slips past `isInThePast` and fails later in Prisma or Discord with a generic error instead of a reply.
+ * bound: without a cap, `99999999999w` yields an Invalid Date (NaN) that slips past `isInThePast` and fails later
+ * in Prisma or Discord with a generic error, and smaller huge values queue a job that never fires. ISO date/times
+ * are not capped here; they are bounded by their four-digit year.
  */
 export const MAX_RELATIVE_DURATION_MS = 10 * 365 * 86_400_000;
 
