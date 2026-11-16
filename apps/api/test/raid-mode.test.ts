@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { PrismaStubOverrides } from '@pavisie/plugins/sdk/testing';
 import type { Paginated, RaidModeRiskMemberDto, ThreatIncidentDto } from '@pavisie/types';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
-import { RAID_MODE_RULE_NAME, raidModeIncidentToThreatDtos } from '../src/lib/threat-incidents';
+import {
+  MAX_THREAT_ROWS,
+  RAID_MODE_RULE_NAME,
+  raidModeIncidentToThreatDtos,
+} from '../src/lib/threat-incidents';
 
 const GUILD_ID = '111111111111111111';
 const OTHER_GUILD = '999999999999999999';
@@ -89,12 +93,54 @@ describe('raid mode incidents on the Threat overview (ThreatIncidentDto, unchang
       startedAt: started.toISOString(),
       lastActivityAt: started.toISOString(),
       lockdownAction: 'channel-send-deny, raise-verification',
+      lockdownActions: ['channel-send-deny', 'raise-verification'],
     });
 
     const restored = raidModeIncidentToThreatDtos(
       incident({ lockdownState: 'RESTORED', lockdownAppliedAt: started, lockdownRestoredAt: later }),
     );
     expect(restored[1]).toMatchObject({ status: 'ended', endedAt: later.toISOString() });
+  });
+
+  it('always sets endedAt on ended items, even when the row lacks the matching timestamp', () => {
+    // An ENDED raid row without endedAt, and a lockdown that is off but has no restore time.
+    const [raid, lockdown] = raidModeIncidentToThreatDtos(
+      incident({ status: 'ENDED', endedAt: null, lockdownState: 'NONE', lockdownAppliedAt: started }),
+    );
+    expect(raid).toMatchObject({ status: 'ended', endedAt: later.toISOString() });
+    expect(lockdown).toMatchObject({ kind: 'lockdown', status: 'ended', endedAt: started.toISOString() });
+    // Active items never carry endedAt.
+    expect(raidModeIncidentToThreatDtos(incident())[0]).not.toHaveProperty('endedAt');
+  });
+
+  it('caps GET /threats/incidents at the panel row count, keeping active items first', async () => {
+    // 20 incidents (the DB take), each with a lockdown, map to 40 items. Only the oldest still has its lockdown on.
+    const rows = Array.from({ length: 20 }, (_, i) =>
+      incident({
+        id: `inc-${i}`,
+        status: 'ENDED',
+        startedAt: new Date(started.getTime() - i * 60_000),
+        endedAt: later,
+        lockdownAppliedAt: new Date(started.getTime() - i * 60_000),
+        lockdownState: i === 19 ? 'LOCKED' : 'RESTORED',
+        lockdownRestoredAt: i === 19 ? null : later,
+        lockdownActions: ['channel-send-deny'],
+      }),
+    );
+    const { app, cookieHeader } = await authed({ raidModeIncident: { findMany: async () => rows } });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/guilds/${GUILD_ID}/threats/incidents`,
+      headers: { cookie: cookieHeader },
+    });
+    expect(res.statusCode).toBe(200);
+    const items = res.json() as ThreatIncidentDto[];
+    expect(items).toHaveLength(MAX_THREAT_ROWS);
+    expect(items[0]).toMatchObject({ id: 'inc-19:lockdown', status: 'active' });
+    expect(items.slice(1).map((i) => i.startedAt)).toEqual(
+      [...items.slice(1).map((i) => i.startedAt)].sort().reverse(),
+    );
+    await app.close();
   });
 
   it('serves them from GET /threats/incidents, scoped to the guild', async () => {

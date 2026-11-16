@@ -23,6 +23,12 @@ let injectedSource: ThreatIncidentSource | undefined;
 /** Ended incidents stay on the overview this long; active ones and unrestored lockdowns always show. */
 const RECENT_MS = 24 * 60 * 60 * 1000;
 const MAX_INCIDENTS = 20;
+/**
+ * The overview panel shows at most this many rows. One incident can map to two DTOs (raid + lockdown), so the
+ * mapped list is capped again after `flatMap`, keeping active items first so an ongoing raid or a lockdown that
+ * is still on is never pushed off the panel by ended ones.
+ */
+export const MAX_THREAT_ROWS = 20;
 
 /** The name shown for raid mode incidents. Raid mode has no automod rule, so `ruleId` is left out. */
 export const RAID_MODE_RULE_NAME = 'Raid mode';
@@ -46,7 +52,9 @@ export function raidModeIncidentToThreatDtos(row: RaidModeIncident): ThreatIncid
     dryRun: row.dryRun,
     startedAt: row.startedAt.toISOString(),
     lastActivityAt: (row.endedAt ?? row.lastJoinAt).toISOString(),
-    ...(row.endedAt ? { endedAt: row.endedAt.toISOString() } : {}),
+    // The DTO contract: `endedAt` is always set when `status` is `ended`. An ENDED row should carry `endedAt`;
+    // fall back to the last join rather than ever sending an ended incident without one.
+    ...(row.status === 'ACTIVE' ? {} : { endedAt: (row.endedAt ?? row.lastJoinAt).toISOString() }),
     joinsFlagged: row.joinsFlagged,
   };
   if (!row.lockdownAppliedAt) return [raid];
@@ -61,8 +69,13 @@ export function raidModeIncidentToThreatDtos(row: RaidModeIncident): ThreatIncid
     dryRun: false,
     startedAt: row.lockdownAppliedAt.toISOString(),
     lastActivityAt: (row.lockdownRestoredAt ?? row.lockdownAppliedAt).toISOString(),
-    ...(!on && row.lockdownRestoredAt ? { endedAt: row.lockdownRestoredAt.toISOString() } : {}),
+    // Always set once the lockdown is off. Without a restore time (an old or hand-edited row), use the raid's end,
+    // then the time the lockdown was applied, so the contract holds.
+    ...(on
+      ? {}
+      : { endedAt: (row.lockdownRestoredAt ?? row.endedAt ?? row.lockdownAppliedAt).toISOString() }),
     lockdownAction: row.lockdownActions.join(', '),
+    lockdownActions: [...row.lockdownActions],
   };
   return [raid, lockdown];
 }
@@ -80,7 +93,21 @@ async function raidModeSource(prisma: PrismaClient, guildId: string): Promise<Th
     orderBy: { startedAt: 'desc' },
     take: MAX_INCIDENTS,
   });
-  return rows.flatMap(raidModeIncidentToThreatDtos);
+  return capThreatRows(rows.flatMap(raidModeIncidentToThreatDtos));
+}
+
+/** Active items first, then newest first; at most `MAX_THREAT_ROWS`. Stable for equal keys. */
+export function capThreatRows(items: ThreatIncidentDto[]): ThreatIncidentDto[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort(
+      (a, b) =>
+        Number(b.item.status === 'active') - Number(a.item.status === 'active') ||
+        b.item.startedAt.localeCompare(a.item.startedAt) ||
+        a.index - b.index,
+    )
+    .slice(0, MAX_THREAT_ROWS)
+    .map(({ item }) => item);
 }
 
 /** Returns the current threat incidents for `guildId`. */
