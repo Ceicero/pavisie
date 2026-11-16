@@ -20,17 +20,29 @@ export class RedisWindowStore implements WindowStore {
     const fullKey = this.fullKey(key);
     const cutoff = nowMs - windowMs;
 
-    // Sequential (not pipelined via `.multi()`) — deliberately simple and correct over micro-optimized; this
-    // runs once per rule match check, not in a hot loop, so the extra round trips are not a concern.
-    await this.redis.zremrangebyscore(fullKey, 0, cutoff);
-    // Member must be unique per entry (ZADD dedupes by member) — suffix with a monotonic-ish token so repeated
-    // identical `value`s (e.g. the same duplicate message content twice) each still occupy their own slot.
-    await this.redis.zadd(fullKey, nowMs, `${value}:${nowMs}:${Math.random().toString(36).slice(2, 8)}`);
-    // Cap unbounded growth from pathological cases (e.g. a windowMs so large a burst never prunes) so one hot key
-    // can't grow forever between prunes.
-    await this.redis.zremrangebyrank(fullKey, 0, -1 - MAX_WINDOW_MEMBERS);
-    await this.redis.pexpire(fullKey, windowMs);
-    const count = await this.redis.zcard(fullKey);
+    // One MULTI/EXEC, so the whole prune-add-cap-expire-count sequence is a single round trip. It runs for every
+    // window-backed rule on every message and join, which during a raid made five sequential round trips per
+    // rule per event the busiest thing the bot did on Redis. The transaction also makes the sequence atomic: the
+    // count each caller gets back now always includes exactly the entries added up to its own.
+    const results = await this.redis
+      .multi()
+      .zremrangebyscore(fullKey, 0, cutoff)
+      // Member must be unique per entry (ZADD dedupes by member) — suffix with a monotonic-ish token so repeated
+      // identical `value`s (e.g. the same duplicate message content twice) each still occupy their own slot.
+      .zadd(fullKey, nowMs, `${value}:${nowMs}:${Math.random().toString(36).slice(2, 8)}`)
+      // Cap unbounded growth from pathological cases (e.g. a windowMs so large a burst never prunes) so one hot
+      // key can't grow forever between prunes.
+      .zremrangebyrank(fullKey, 0, -1 - MAX_WINDOW_MEMBERS)
+      .pexpire(fullKey, windowMs)
+      .zcard(fullKey)
+      .exec();
+
+    // `exec` resolves with one `[error, reply]` pair per queued command, or null if the transaction was discarded.
+    if (!results) throw new Error('automod: window transaction was discarded by Redis');
+    for (const [error] of results) {
+      if (error) throw error;
+    }
+    const count = Number(results[results.length - 1]?.[1] ?? 0);
 
     return Math.min(count, MAX_WINDOW_MEMBERS);
   }

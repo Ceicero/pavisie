@@ -469,7 +469,7 @@ Helper `definePlugin(p: Plugin): Plugin` (identity, for typing) and `defineManif
 
 ### 7.8 Discord permission model
 
-- Bot invite permission set `INVITE_PERMISSIONS` (core): ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles, ReadMessageHistory, AddReactions, UseExternalEmojis, ManageMessages, ManageChannels, ManageRoles, ManageNicknames, ModerateMembers, KickMembers, BanMembers, ManageThreads, CreatePublicThreads, CreatePrivateThreads, ManageWebhooks, ViewAuditLog, Connect, Speak, MoveMembers, ManageEvents, MuteMembers, DeafenMembers. **Never Administrator.**
+- Bot invite permission set `INVITE_PERMISSIONS` (core): ViewChannel, SendMessages, SendMessagesInThreads, EmbedLinks, AttachFiles, ReadMessageHistory, AddReactions, UseExternalEmojis, ManageMessages, ManageChannels, ManageRoles, ManageNicknames, ModerateMembers, KickMembers, BanMembers, ManageThreads, CreatePublicThreads, CreatePrivateThreads, ManageWebhooks, Connect, Speak, MoveMembers, ManageEvents, MuteMembers, DeafenMembers. **Never Administrator.** Manage Server is deliberately not in the set: it is a manual grant for the optional features that use it (raid lockdown's raise-verification, invite-use attribution in logging, and automod's invite-link rule recognising the server's own invites). View Audit Log is not requested; no feature reads the audit log. `docs/invite.json`, `apps/web/src/data/invite.json` and `docs/PERMISSIONS.md` are generated from this list, and CI fails if they are stale.
 - Each plugin lists its permissions in `manifest.permissions`; `/permissions audit` diffs against `guild.members.me.permissions` and reports missing ones per feature with the fallback text.
 
 ## 8. Database (`@pavisie/database`)
@@ -541,6 +541,7 @@ with a configurable prefix, default `+`. For example: `/mod ban @user spam` can 
   - `routes/plugins.ts` — `GET /:guildId/plugins` (manifest summary + enabled + availability + health), `POST /:guildId/plugins/:pluginId/enable|disable`, `GET/PUT /:guildId/plugins/:pluginId/config` (validated with the plugin's zod configSchema; `PUT` also rejects any top-level body key that isn't one of that plugin's own `configSchema` keys with a 400 `validation_error` naming the offending + valid keys — via `assertKnownConfigKeys`, also enforced as a backstop inside `GuildConfigStore.setConfig` itself — so a wrongly-shaped write, e.g. `{ config: {...} }` instead of the bare config object, fails loudly instead of a silent no-op 200 with the extra key persisted into the stored raw JSON, since zod objects strip unknown keys by default)
   - `routes/audit.ts` — `GET /:guildId/audit?cursor&limit&action&actorId`, `GET /:guildId/audit/export.csv`
   - `routes/moderation.ts` — cases list/get/update reason/export.csv, warnings, notes, appeals
+  - `routes/threats.ts` — `GET /:guildId/threats/audit?cursor&limit&action&actorId` (read-only `moderation.*` audit trail), `GET /:guildId/threats/incidents` (live raid/threat incidents; served from the stub in `lib/threat-incidents.ts` until the raid-mode API lands)
   - `routes/automod.ts` — rules CRUD, events (review queue) list/resolve, dry-run toggle
   - `routes/enforcer.ts` — settings get/put, policies CRUD + test, records list/get/decide/export.csv, queue (pending flags) — see §19
   - `routes/donations.ts` (NOT under `/guilds`) — `GET /donations/config` — see §18
@@ -1698,7 +1699,7 @@ same origin (`https://pavisie.com`) post-merge, so this allowlist has one effect
 
 ## 22. Brand assets (logo = bot avatar)
 
-The Pavisie logo and bot avatar is a grey skull under a gold laurel wreath, on a transparent background, square,
+The Pavisie logo and bot avatar is a black shield with gold trim and a gold star gem, on a transparent background, square,
 1024×1024, used everywhere: website, dashboard, bot embed icon, and Discord avatar. Canonical file:
 `assets/brand/pavisie-skull.png` (present in the repo, PNG; takes precedence over the `.jpg` when both
 exist). `assets/brand/pavisie-skull.jpg` is the same art re-encoded as JPEG on black, kept only so any URL or cached

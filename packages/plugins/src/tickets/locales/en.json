@@ -11,14 +11,24 @@
     "maxOpenMany": "You already have {count} open tickets (limit {limit}). Close one before opening another.",
     "formExpired": "This form expired. Click the ticket button again.",
     "panelFormExpired": "This form expired. Run `/ticket panel create` again.",
-    "noUserIdFound": "Could not find a user id in that input. Paste a user ID or @mention."
+    "noUserIdFound": "Could not find a user id in that input. Paste a user ID or @mention.",
+    "ticketNoLongerExists": "This ticket no longer exists.",
+    "ticketNumberNotFound": "No ticket #{number} found.",
+    "threadModeChannel": "Thread-mode panels need a text or announcement channel.",
+    "panelPostFailed": "Panel \"{title}\" was created, but I couldn't post it. Check that I can view {channel}, send messages, and embed links there, then post it from the Panels tab on the dashboard's Tickets page.",
+    "panelPostMissingPermission": "Panel \"{title}\" was created, but I couldn't post it. I'm missing permission to view {channel}, send messages, or embed links there. Fix that, then post it from the Panels tab on the dashboard's Tickets page.",
+    "panelPostChannelGone": "Panel \"{title}\" was created, but I couldn't post it because its channel was deleted. Pick a new channel for it on the dashboard's Tickets page, then post it."
   },
   "open": {
     "success": "Opened ticket #{number} in {location}."
   },
   "close": {
     "confirmTitle": "Close this ticket?",
-    "confirming": "Closing this ticket…"
+    "confirming": "Closing this ticket…",
+    "reason": "Reason: {reason}",
+    "noReason": "No reason given.",
+    "confirmPrompt": "You will be asked to confirm.",
+    "closedNotice": "This ticket is now closed."
   },
   "reopen": {
     "success": "Reopened ticket #{number} in {location}."
@@ -29,5 +39,27 @@
   },
   "config": {
     "title": "Ticket settings"
+  },
+  "claim": {
+    "claimed": "{user} claimed this ticket."
+  },
+  "members": {
+    "added": "Added {user} to this ticket.",
+    "removed": "Removed {user} from this ticket.",
+    "addModalTitle": "Add a user to this ticket",
+    "addModalLabel": "User ID or @mention"
+  },
+  "tags": {
+    "updated": "Tags: {tags}",
+    "none": "_none_"
+  },
+  "panel": {
+    "created": "Created and posted the \"{title}\" ticket panel in {channel}.",
+    "modalTitle": "Create a ticket panel",
+    "defaultOpenTitle": "Open a ticket"
+  },
+  "sla": {
+    "title": "SLA breached",
+    "description": "Ticket #{number} has had no staff response since it opened."
   }
 }

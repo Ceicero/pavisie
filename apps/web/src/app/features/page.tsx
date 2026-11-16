@@ -77,7 +77,7 @@ export default function FeaturesPage() {
                 <div className="mt-6">
                   <a
                     href={`/features/${plugin.id}`}
-                    className="text-sm text-grey-4 underline decoration-white/20 underline-offset-4 hover:text-grey-7"
+                    className="rounded-sm text-sm text-grey-4 underline decoration-white/20 underline-offset-4 hover:text-grey-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-5"
                   >
                     Full detail page for {plugin.name} →
                   </a>

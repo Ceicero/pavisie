@@ -1,8 +1,25 @@
 import type { PluginContext, PluginJob } from '../../sdk';
-import { closePoll, finalizeGiveaway, fireEventReminder } from '../actions';
+import {
+  RetryableDelivery,
+  closePoll,
+  finalizeGiveaway,
+  fireEventReminder,
+  giveawayAnnouncedKey,
+  giveawayMessageClosedKey,
+  giveawayPendingKey,
+} from '../actions';
 
 /** How long after a reminder's fire time a restart may still send it. Later than this, the ping would be stale. */
 const REMINDER_GRACE_MS = 15 * 60_000;
+
+/**
+ * How long an ended giveaway stays in the catch-up scan. Shorter than the 30-day `giveaway-announced` redis
+ * TTL, so a key expiring cannot select the row again and post a second winner message. Ids that threw
+ * `RetryableDelivery` also live in the pending set and are not limited to this window.
+ */
+const GIVEAWAY_CATCHUP_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+const GIVEAWAY_CATCHUP_SCAN = 200;
+const GIVEAWAY_CATCHUP_LIMIT = 50;
 
 export interface CommunityCatchupResult {
   giveaways: number;
@@ -12,7 +29,8 @@ export interface CommunityCatchupResult {
 
 /**
  * Ends giveaways and polls whose delayed job was lost, and sends event reminders that came due during a restart.
- * Drawing and closing are idempotent; event reminders are deduped inside `fireEventReminder`.
+ * An ended giveaway whose winner post or ended-message edit did not finish is included too. Drawing and closing
+ * are idempotent; event reminders are deduped inside `fireEventReminder`.
  */
 export async function catchUpCommunitySchedules(
   ctx: PluginContext,
@@ -20,17 +38,53 @@ export async function catchUpCommunitySchedules(
 ): Promise<CommunityCatchupResult> {
   const result: CommunityCatchupResult = { giveaways: 0, polls: 0, eventReminders: 0 };
 
+  const windowStart = new Date(now.getTime() - GIVEAWAY_CATCHUP_WINDOW_MS);
   const giveaways = await ctx.prisma.giveaway.findMany({
-    where: { ended: false, endsAt: { lte: now } },
+    where: {
+      OR: [
+        // Never drawn — including rows whose end time is older than the announcement window.
+        { ended: false, endsAt: { lte: now } },
+        // Drawn, but the winner post or the edit that drops the Enter button may have failed.
+        { ended: true, endsAt: { lte: now, gte: windowStart } },
+        // Ended early (endsAt still in the future) or updated by a draw the process didn't finish posting.
+        { ended: true, updatedAt: { gte: windowStart } },
+      ],
+    },
     select: { id: true },
-    take: 50,
+    orderBy: [{ ended: 'asc' }, { endsAt: 'desc' }],
+    take: GIVEAWAY_CATCHUP_SCAN,
   });
-  for (const giveaway of giveaways) {
+
+  const pendingKey = giveawayPendingKey();
+  const pending = await ctx.redis.smembers(pendingKey);
+  const ordered = [...pending, ...giveaways.map((giveaway) => giveaway.id)];
+  const seen = new Set<string>();
+  let attempted = 0;
+
+  for (const giveawayId of ordered) {
+    if (seen.has(giveawayId)) continue;
+    seen.add(giveawayId);
+
+    const [announced, closed] = await Promise.all([
+      ctx.redis.get(giveawayAnnouncedKey(giveawayId)),
+      ctx.redis.get(giveawayMessageClosedKey(giveawayId)),
+    ]);
+    if (announced && closed) {
+      await ctx.redis.srem(pendingKey, giveawayId);
+      continue;
+    }
+    if (attempted >= GIVEAWAY_CATCHUP_LIMIT) break;
+    attempted += 1;
+
     try {
-      await finalizeGiveaway(ctx, giveaway.id);
+      await finalizeGiveaway(ctx, giveawayId);
       result.giveaways += 1;
     } catch (err) {
-      ctx.logger.error({ err, giveawayId: giveaway.id }, 'community: catch-up could not end a giveaway');
+      if (err instanceof RetryableDelivery) {
+        ctx.logger.warn({ err, giveawayId }, 'community: giveaway announcement will be retried');
+      } else {
+        ctx.logger.error({ err, giveawayId }, 'community: catch-up could not end a giveaway');
+      }
     }
   }
 

@@ -226,6 +226,7 @@ export function TicketDetailDrawer({ guildId, ticketId, onOpenChange }: TicketDe
                 <div className="space-y-2 text-left">
                   <p>A transcript will be generated and the channel/thread will be locked.</p>
                   <Input
+                    aria-label="Close reason"
                     placeholder="Reason (optional)"
                     value={closeReason}
                     onChange={(e) => setCloseReason(e.target.value)}

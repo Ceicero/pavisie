@@ -8,7 +8,8 @@
     "noChannel": "I couldn't determine which channel to use.",
     "invalidSlowmode": "Slowmode must be \"off\" or a number of seconds between 0 and 21600 (6 hours).",
     "roleTooHigh": "I can't manage that role — it's above (or equal to) my highest role.",
-    "caseNotFound": "Case #{number} was not found."
+    "caseNotFound": "Case #{number} was not found.",
+    "appealNotFound": "Appeal not found."
   },
   "confirm": {
     "title": "Confirm this action",
@@ -23,7 +24,11 @@
     "success": "Cleared {count} warning(s)."
   },
   "purge": {
-    "success": "Deleted {count} message(s)."
+    "success": "Deleted {count} message(s).",
+    "failed": "I couldn't delete those messages. Please try again in a moment.",
+    "failedMissingPermission": "I couldn't delete those messages. I need Manage Messages and Read Message History in this channel.",
+    "failedChannelGone": "I couldn't delete those messages because this channel was deleted.",
+    "failedMessagesGone": "Some of those messages were already deleted, so I couldn't finish the purge. Run it again to clear the rest."
   },
   "slowmode": {
     "success": "Slowmode set to {seconds}s."
@@ -39,5 +44,37 @@
     "submitted": "Your appeal has been submitted. Staff will review it soon.",
     "notRoutedTitle": "Appeal saved — but staff weren't notified",
     "notRouted": "Your appeal was recorded, but this server has no appeals channel set up (or I can't post in the one it has), so no one has been alerted. Contact a moderator directly if you need it looked at."
+  },
+  "warnings": {
+    "activeTitle": "Active warnings",
+    "userTitle": "Warnings — {user}",
+    "noReason": "_No reason_",
+    "active": "active",
+    "cleared": "cleared",
+    "empty": "No active warnings.",
+    "emptyUser": "{user} has no warnings."
+  },
+  "appealStatus": {
+    "accepted": "✅ Appeal accepted by {user}.",
+    "denied": "❌ Appeal denied by {user}.",
+    "unbanned": "✅ Unbanned by {user}."
+  },
+  "embeds": {
+    "caseTitle": "Case #{number} — {type}",
+    "caseFooter": "{brand} · Case #{number}",
+    "noReasonGiven": "_No reason given_",
+    "noticeTitle": "Moderation notice from {server}",
+    "noticeAction": "**Action:** {action}",
+    "noticeReason": "**Reason:** {reason}",
+    "noticeCase": "**Case:** #{number}",
+    "noticeAppealHint": "If you believe this was a mistake, you can appeal with `/appeal {number}` in the server.",
+    "appealOpenedTitle": "Appeal opened",
+    "appealOpenedTitleWithCase": "Appeal opened — Case #{number}",
+    "appealFooter": "Appeal {id}",
+    "appealAcceptedTitle": "Appeal accepted",
+    "appealDeniedTitle": "Appeal denied",
+    "appealDecisionCase": "Case #{number}",
+    "appealDecisionNote": "**Staff note:** {note}",
+    "appealDecisionNoNote": "_No additional note._"
   }
 }

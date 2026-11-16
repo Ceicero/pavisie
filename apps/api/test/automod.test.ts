@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { AUTOMOD_RULES_CHANGED_CHANNEL } from '@pavisie/plugins/automod/rule-sync';
 import { buildTestApp, loginAs, seedUserGuilds } from './helpers/build-test-app';
 
 const GUILD_ID = '111111111111111111';
@@ -127,7 +128,7 @@ async function authedContext() {
     origin: 'http://localhost:3000',
     'x-csrf-token': session.csrfToken,
   };
-  return { app, cookieHeader, mutHeaders, store };
+  return { app, cookieHeader, mutHeaders, store, redis };
 }
 
 describe('automod rules CRUD', () => {
@@ -367,5 +368,132 @@ describe('automod events review', () => {
       payload: { reviewStatus: 'CONFIRMED' },
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// The bot caches each guild's rules. Every route that writes a rule must announce the change on Redis, or a
+// dashboard edit (including disabling or deleting a rule) keeps being ignored until the bot's cache expires.
+describe('automod rule writes announce the change to the bot', () => {
+  async function announcingContext() {
+    const context = await authedContext();
+    const announced: string[] = [];
+    const publish = context.redis.publish.bind(context.redis);
+    vi.spyOn(context.redis, 'publish').mockImplementation(((channel: string, message: string) => {
+      if (channel === AUTOMOD_RULES_CHANGED_CHANNEL) {
+        announced.push((JSON.parse(message) as { guildId: string }).guildId);
+      }
+      return publish(channel, message);
+    }) as never);
+    const createRule = async () => {
+      const created = await context.app.inject({
+        method: 'POST',
+        url: `/guilds/${GUILD_ID}/automod/rules`,
+        headers: context.mutHeaders,
+        payload: { name: 'Rule', config: { type: 'CAPS' }, actions: [{ type: 'warn' }] },
+      });
+      return created.json().id as string;
+    };
+    return { ...context, announced, createRule };
+  }
+
+  it('announces a created rule', async () => {
+    const { app, announced, createRule } = await announcingContext();
+    await createRule();
+    expect(announced).toEqual([GUILD_ID]);
+    await app.close();
+  });
+
+  it('announces an edited rule', async () => {
+    const { app, mutHeaders, announced, createRule } = await announcingContext();
+    const ruleId = await createRule();
+    announced.length = 0;
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/guilds/${GUILD_ID}/automod/rules/${ruleId}`,
+      headers: mutHeaders,
+      payload: { enabled: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(announced).toEqual([GUILD_ID]);
+    await app.close();
+  });
+
+  it('announces a deleted rule', async () => {
+    const { app, mutHeaders, announced, createRule } = await announcingContext();
+    const ruleId = await createRule();
+    announced.length = 0;
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/guilds/${GUILD_ID}/automod/rules/${ruleId}`,
+      headers: mutHeaders,
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(announced).toEqual([GUILD_ID]);
+    await app.close();
+  });
+
+  it('announces a dry-run toggle, for one rule and for every rule', async () => {
+    const { app, mutHeaders, announced, createRule } = await announcingContext();
+    const ruleId = await createRule();
+    announced.length = 0;
+
+    await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/automod/rules/${ruleId}/dry-run`,
+      headers: mutHeaders,
+      payload: { dryRun: false },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/automod/dry-run`,
+      headers: mutHeaders,
+      payload: { dryRun: true },
+    });
+
+    expect(announced).toEqual([GUILD_ID, GUILD_ID]);
+    await app.close();
+  });
+
+  it('announces nothing for reads, rejected writes, or unknown rules', async () => {
+    const { app, mutHeaders, cookieHeader, announced } = await announcingContext();
+
+    await app.inject({
+      method: 'GET',
+      url: `/guilds/${GUILD_ID}/automod/rules`,
+      headers: { cookie: cookieHeader },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/automod/rules`,
+      headers: mutHeaders,
+      payload: { name: 'Bad', config: { type: 'CAPS', maxCapsPercent: 500 }, actions: [{ type: 'warn' }] },
+    });
+    await app.inject({
+      method: 'DELETE',
+      url: `/guilds/${GUILD_ID}/automod/rules/does-not-exist`,
+      headers: mutHeaders,
+    });
+
+    expect(announced).toEqual([]);
+    await app.close();
+  });
+
+  it('still saves the rule when Redis cannot publish', async () => {
+    const { app, mutHeaders, redis } = await authedContext();
+    vi.spyOn(redis, 'publish').mockRejectedValue(new Error('redis unavailable'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/guilds/${GUILD_ID}/automod/rules`,
+      headers: mutHeaders,
+      payload: { name: 'Rule', config: { type: 'CAPS' }, actions: [{ type: 'warn' }] },
+    });
+
+    expect(res.statusCode).toBe(201);
+    await app.close();
   });
 });
