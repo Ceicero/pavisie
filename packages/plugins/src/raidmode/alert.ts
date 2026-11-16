@@ -9,6 +9,7 @@ const seconds = (date: Date) => Math.floor(date.getTime() / 1000);
 
 const LOCKDOWN_TEXT: Record<RaidModeIncident['lockdownState'], string> = {
   NONE: 'Not locked down.',
+  LOCKING: 'Locking down now. **Restore permissions** undoes whatever has been changed so far.',
   LOCKED: 'Locked down. Press **Restore permissions** to put back exactly what changed.',
   PARTIALLY_RESTORED:
     'Partly restored: some changes could not be put back yet. Press **Restore permissions** again to retry.',
@@ -41,7 +42,10 @@ export function incidentEmbed(incident: RaidModeIncident): EmbedBuilder {
 
 /** "Lock down now" while not locked; "Restore permissions" while anything is still locked. */
 export function incidentButtons(incident: RaidModeIncident): ActionRowBuilder<ButtonBuilder>[] {
-  const locked = incident.lockdownState === 'LOCKED' || incident.lockdownState === 'PARTIALLY_RESTORED';
+  const locked =
+    incident.lockdownState === 'LOCKING' ||
+    incident.lockdownState === 'LOCKED' ||
+    incident.lockdownState === 'PARTIALLY_RESTORED';
   if (locked) {
     return [
       new ActionRowBuilder<ButtonBuilder>().addComponents(

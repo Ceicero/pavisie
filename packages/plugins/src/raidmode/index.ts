@@ -1,7 +1,7 @@
 import { definePlugin, registerPluginLocales, type PluginEventHandler } from '../sdk';
 import { command as raidModeCommand } from './commands/raidmode';
 import { raidModeComponents } from './components';
-import { handleJoin, purgeJob, updateJob } from './incident';
+import { handleJoin, lockdownJob, maintenanceJob, updateJob } from './incident';
 import { manifest } from './manifest';
 import en from './locales/en.json';
 
@@ -21,7 +21,7 @@ export const plugin = definePlugin({
   commands: [raidModeCommand],
   events: [memberAddHandler],
   components: raidModeComponents,
-  jobs: [updateJob, purgeJob],
+  jobs: [updateJob, lockdownJob, maintenanceJob],
 });
 
 export { handleJoin } from './incident';

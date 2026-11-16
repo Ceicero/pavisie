@@ -2,12 +2,11 @@
 -- (deleted once restored), and medium/high risk scores for joins during a raid (member id, score, reason codes;
 -- purged 30 days after the incident ends). Additive only.
 
-
 -- CreateEnum
 CREATE TYPE "RaidModeIncidentStatus" AS ENUM ('ACTIVE', 'ENDED');
 
 -- CreateEnum
-CREATE TYPE "RaidModeLockdownState" AS ENUM ('NONE', 'LOCKED', 'PARTIALLY_RESTORED', 'RESTORED');
+CREATE TYPE "RaidModeLockdownState" AS ENUM ('NONE', 'LOCKING', 'LOCKED', 'PARTIALLY_RESTORED', 'RESTORED');
 
 -- CreateEnum
 CREATE TYPE "RaidModeLockdownChangeKind" AS ENUM ('CHANNEL_OVERWRITE', 'VERIFICATION_LEVEL', 'INVITES_PAUSED');
@@ -38,6 +37,7 @@ CREATE TABLE "RaidModeIncident" (
     "alertMessageId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+
     CONSTRAINT "RaidModeIncident_pkey" PRIMARY KEY ("id")
 );
 
@@ -55,6 +55,7 @@ CREATE TABLE "RaidModeLockdownChange" (
     "appliedVerificationLevel" INTEGER,
     "restoreSkippedReason" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     CONSTRAINT "RaidModeLockdownChange_pkey" PRIMARY KEY ("id")
 );
 
@@ -68,6 +69,7 @@ CREATE TABLE "RaidModeRiskScore" (
     "reasons" TEXT[],
     "joinedAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     CONSTRAINT "RaidModeRiskScore_pkey" PRIMARY KEY ("id")
 );
 
@@ -78,7 +80,13 @@ CREATE INDEX "RaidModeIncident_guildId_status_idx" ON "RaidModeIncident"("guildI
 CREATE INDEX "RaidModeIncident_guildId_startedAt_idx" ON "RaidModeIncident"("guildId", "startedAt");
 
 -- CreateIndex
+CREATE INDEX "RaidModeIncident_status_endedAt_idx" ON "RaidModeIncident"("status", "endedAt");
+
+-- CreateIndex
 CREATE INDEX "RaidModeLockdownChange_incidentId_idx" ON "RaidModeLockdownChange"("incidentId");
+
+-- CreateIndex
+CREATE INDEX "RaidModeLockdownChange_guildId_idx" ON "RaidModeLockdownChange"("guildId");
 
 -- CreateIndex
 CREATE INDEX "RaidModeRiskScore_incidentId_score_idx" ON "RaidModeRiskScore"("incidentId", "score");
@@ -98,5 +106,3 @@ ALTER TABLE "RaidModeLockdownChange" ADD CONSTRAINT "RaidModeLockdownChange_inci
 -- AddForeignKey
 ALTER TABLE "RaidModeRiskScore" ADD CONSTRAINT "RaidModeRiskScore_incidentId_fkey" FOREIGN KEY ("incidentId") REFERENCES "RaidModeIncident"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- CreateIndex
-CREATE INDEX "RaidModeLockdownChange_guildId_idx" ON "RaidModeLockdownChange"("guildId");

@@ -3,26 +3,55 @@
 // Every state change and its audit row are written in one transaction (the #34 pattern), so neither can exist
 // without the other. Discord calls happen outside the transaction: lockdown and restore act on Discord first and
 // record what actually happened.
+//
+// Crash safety for lockdown: the incident is marked LOCKING *before* the first Discord edit, and each change row
+// is saved before its edit. Restore works from the outstanding change rows whatever the incident's state says,
+// so a restart (or a failed final write) part-way through a lockdown never strands locked channels.
 import { randomUUID } from 'node:crypto';
 import type { Guild, GuildMember } from 'discord.js';
 import { AuditAction } from '@pavisie/core';
-import { writeAudit, type Prisma, type RaidModeIncident } from '@pavisie/database';
+import {
+  writeAudit,
+  type Prisma,
+  type RaidModeIncident,
+  type RaidModeLockdownState,
+} from '@pavisie/database';
 import { resolveTextChannel, type PluginContext, type PluginJob } from '../sdk';
 import { incidentButtons, incidentEmbed, reminderText } from './alert';
 import { applyLockdown, restoreChanges } from './lockdown';
 import type { RaidModeConfig } from './manifest';
 import { HIGH_RISK_SCORE, scoreJoin, type RiskReason } from './scoring';
-import { claimIncident, drainIncident, recordJoin, releaseIncident, withIncidentLease } from './state';
+import {
+  STATE_TTL_SECONDS,
+  claimIncident,
+  commitDrain,
+  drainIncident,
+  inCooldown,
+  recordJoin,
+  releaseIncident,
+  startCooldown,
+  withGuildLease,
+} from './state';
 
 const HOUR = 3_600_000;
 export const UPDATE_INTERVAL_MS = 5_000;
 export const UPDATE_JOB_NAME = 'update';
+export const LOCKDOWN_JOB_NAME = 'auto-lockdown';
 export const UPDATE_JOB_ATTEMPTS = 5;
+export const SCORE_RETENTION_DAYS = 30;
+
+/** States in which some channels may still be locked by raid mode. */
+const LOCKED_STATES: readonly RaidModeLockdownState[] = ['LOCKING', 'LOCKED', 'PARTIALLY_RESTORED'];
 
 export interface UpdateJobData {
   guildId: string;
   incidentId: string;
   tick: number;
+}
+
+export interface LockdownJobData {
+  guildId: string;
+  incidentId: string;
 }
 
 /** A queued score, as pushed to Redis by the join path. Member id, score and reason codes only. */
@@ -35,6 +64,10 @@ interface QueuedScore {
 
 function botId(ctx: PluginContext): string {
   return ctx.client.user?.id ?? 'raidmode';
+}
+
+async function fetchGuild(ctx: PluginContext, guildId: string): Promise<Guild | null> {
+  return ctx.client.guilds.cache.get(guildId) ?? (await ctx.client.guilds.fetch(guildId).catch(() => null));
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -51,11 +84,10 @@ export async function handleJoin(ctx: PluginContext, member: GuildMember): Promi
   if (member.user.bot) return;
   const config = await ctx.getConfig<RaidModeConfig>(member.guild.id);
   const now = Date.now();
-  const joinedAt = new Date(now);
   const accountCreatedAt = member.user.createdAt;
   const risk = scoreJoin({
     accountCreatedAt,
-    joinedAt,
+    joinedAt: new Date(now),
     hasCustomAvatar: member.user.avatar !== null,
     username: member.user.username,
     flaggedSpammer: member.user.flags?.has('Spammer') ?? false,
@@ -65,6 +97,7 @@ export async function handleJoin(ctx: PluginContext, member: GuildMember): Promi
     risk.level === 'low' ? null : { u: member.id, s: risk.score, r: risk.reasons, j: now };
 
   const record = await recordJoin(ctx, member.guild.id, {
+    userId: member.id,
     now,
     windowMs: config.windowSeconds * 1000,
     isNewAccount,
@@ -101,6 +134,8 @@ async function startIncident(
     accountAgeHours: config.newAccountMaxAgeHours,
     newAccountSharePct: config.newAccountSharePct,
   };
+  // Right after a raid ended or was restored, a new one only alerts; an admin can still lock down by hand.
+  const cooldown = !config.dryRun && (await inCooldown(ctx, guild.id));
   let incident: RaidModeIncident;
   try {
     incident = await ctx.prisma.$transaction(async (tx) => {
@@ -128,6 +163,7 @@ async function startIncident(
           joinsInWindow: windowTotal,
           newAccountsInWindow: windowNew,
           dryRun: config.dryRun,
+          autoLockdownSuppressedByCooldown: cooldown,
         },
         source: 'system',
       });
@@ -142,12 +178,32 @@ async function startIncident(
   await scheduleUpdate(ctx, { guildId: guild.id, incidentId, tick: 1 }).catch((err: unknown) =>
     ctx.logger.error(
       { guildId: guild.id, incidentId, err: err instanceof Error ? err.message : String(err) },
-      'raidmode: could not schedule incident updates',
+      'raidmode: could not schedule incident updates; the hourly maintenance job will close it',
     ),
   );
   await postAlert(ctx, guild, config, incident);
-  if (!config.dryRun) {
-    await lockdownIncident(ctx, guild, incidentId, 'auto');
+  if (!config.dryRun && !cooldown) {
+    // Queued, not inline: up to 100 channel edits must not run inside the guildMemberAdd handler, and a queued
+    // job retries if the bot restarts part-way.
+    await ctx
+      .queue(LOCKDOWN_JOB_NAME)
+      .add(
+        LOCKDOWN_JOB_NAME,
+        { guildId: guild.id, incidentId },
+        {
+          jobId: `raidmode-lockdown-${incidentId}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5_000 },
+          removeOnComplete: true,
+          removeOnFail: 100,
+        },
+      )
+      .catch((err: unknown) =>
+        ctx.logger.error(
+          { guildId: guild.id, incidentId, err: err instanceof Error ? err.message : String(err) },
+          'raidmode: could not queue the automatic lockdown; staff can still press "Lock down now"',
+        ),
+      );
   }
 }
 
@@ -243,93 +299,125 @@ function parseQueuedScores(payloads: string[]): QueuedScore[] {
 }
 
 /**
- * Moves the incident's Redis counters and queued scores into the database, ends the incident once it has gone
- * quiet, and keeps the alert current. Re-queues itself until the incident ends.
+ * Moves an incident's Redis counters and queued scores into the database and, once it has gone quiet (or
+ * `forceEnd`), ends it. Redis is only trimmed after the database committed, so a failed transaction loses
+ * nothing: the job's retry reads the same counters and scores again. Returns the updated row, or null when the
+ * incident is already ended or gone.
  */
+async function flushIncident(
+  ctx: PluginContext,
+  guildId: string,
+  incidentId: string,
+  quietMs: number,
+  forceEnd = false,
+): Promise<{ incident: RaidModeIncident; ending: boolean } | null> {
+  const existing = await ctx.prisma.raidModeIncident.findUnique({ where: { id: incidentId } });
+  if (!existing || existing.status === 'ENDED') return null;
+  const now = Date.now();
+  const drain = await drainIncident(ctx, guildId, incidentId, now, forceEnd ? 1 : quietMs);
+  const ending = forceEnd || !drain.stillActive;
+  const scores = parseQueuedScores(drain.scorePayloads);
+
+  const incident = await ctx.prisma.$transaction(async (tx) => {
+    const data: Prisma.RaidModeIncidentUpdateInput = {};
+    if (drain.hasState) {
+      data.joinsTotal = drain.counters.joins;
+      data.joinsFlagged = drain.counters.flagged;
+      data.riskLow = drain.counters.low;
+      data.riskMedium = drain.counters.medium;
+      data.riskHigh = drain.counters.high;
+      if (drain.counters.lastJoinAt > 0) data.lastJoinAt = new Date(drain.counters.lastJoinAt);
+    }
+    if (ending) {
+      data.status = 'ENDED';
+      data.endedAt = new Date(now);
+    }
+    if (scores.length > 0) {
+      await tx.raidModeRiskScore.createMany({
+        data: scores.map((s) => ({
+          incidentId,
+          guildId,
+          userId: s.u,
+          score: s.s,
+          reasons: s.r,
+          joinedAt: new Date(s.j),
+        })),
+        skipDuplicates: true,
+      });
+      await writeAudit(tx, {
+        guildId,
+        actorId: botId(ctx),
+        actorType: 'system',
+        action: AuditAction.RaidModeScoresRecord,
+        targetType: 'raidmode_incident',
+        targetId: incidentId,
+        // Counts only: the audit log never lists the scored members.
+        after: {
+          recorded: scores.length,
+          high: scores.filter((s) => s.s >= HIGH_RISK_SCORE).length,
+          medium: scores.filter((s) => s.s < HIGH_RISK_SCORE).length,
+        },
+        source: 'system',
+      });
+    }
+    const updated = await tx.raidModeIncident.update({ where: { id: incidentId }, data });
+    if (ending) {
+      await writeAudit(tx, {
+        guildId,
+        actorId: botId(ctx),
+        actorType: 'system',
+        action: AuditAction.RaidModeIncidentEnd,
+        targetType: 'raidmode_incident',
+        targetId: incidentId,
+        after: {
+          joins: updated.joinsTotal,
+          flagged: updated.joinsFlagged,
+          risk: { low: updated.riskLow, medium: updated.riskMedium, high: updated.riskHigh },
+          lockdownState: updated.lockdownState,
+          ...(forceEnd ? { reason: 'stale' } : {}),
+        },
+        source: 'system',
+      });
+    }
+    return updated;
+  });
+  await commitDrain(ctx, incidentId, scores.length, ending).catch(() => undefined);
+  return { incident, ending };
+}
+
+/** Every few seconds while an incident is active. Re-queues itself until the incident ends. */
 export const updateJob: PluginJob<UpdateJobData> = {
   name: UPDATE_JOB_NAME,
   concurrency: 5,
   async processor(ctx, job) {
     const { guildId, incidentId, tick } = job.data;
-    const existing = await ctx.prisma.raidModeIncident.findUnique({ where: { id: incidentId } });
-    if (!existing || existing.status === 'ENDED') return;
     const config = await ctx.getConfig<RaidModeConfig>(guildId);
-    const now = Date.now();
-    const drain = await drainIncident(ctx, guildId, incidentId, now, config.quietMinutes * 60_000);
-    // Redis lost the incident (expired, flushed): end it with what the database already has.
-    const ending = drain.closed || !drain.current;
-    const scores = parseQueuedScores(drain.scorePayloads);
+    const result = await flushIncident(ctx, guildId, incidentId, config.quietMinutes * 60_000);
+    if (!result) return;
 
-    const incident = await ctx.prisma.$transaction(async (tx) => {
-      const data: Prisma.RaidModeIncidentUpdateInput = {};
-      if (drain.current) {
-        data.joinsTotal = drain.counters.joins;
-        data.joinsFlagged = drain.counters.flagged;
-        data.riskLow = drain.counters.low;
-        data.riskMedium = drain.counters.medium;
-        data.riskHigh = drain.counters.high;
-        if (drain.counters.lastJoinAt > 0) data.lastJoinAt = new Date(drain.counters.lastJoinAt);
-      }
-      if (ending) {
-        data.status = 'ENDED';
-        data.endedAt = new Date(now);
-      }
-      if (scores.length > 0) {
-        await tx.raidModeRiskScore.createMany({
-          data: scores.map((s) => ({
-            incidentId,
-            guildId,
-            userId: s.u,
-            score: s.s,
-            reasons: s.r,
-            joinedAt: new Date(s.j),
-          })),
-          skipDuplicates: true,
-        });
-        await writeAudit(tx, {
-          guildId,
-          actorId: botId(ctx),
-          actorType: 'system',
-          action: AuditAction.RaidModeScoresRecord,
-          targetType: 'raidmode_incident',
-          targetId: incidentId,
-          // Counts only: the audit log never lists the scored members.
-          after: {
-            recorded: scores.length,
-            high: scores.filter((s) => s.s >= HIGH_RISK_SCORE).length,
-            medium: scores.filter((s) => s.s < HIGH_RISK_SCORE).length,
-          },
-          source: 'system',
-        });
-      }
-      const updated = await tx.raidModeIncident.update({ where: { id: incidentId }, data });
-      if (ending) {
-        await writeAudit(tx, {
-          guildId,
-          actorId: botId(ctx),
-          actorType: 'system',
-          action: AuditAction.RaidModeIncidentEnd,
-          targetType: 'raidmode_incident',
-          targetId: incidentId,
-          after: {
-            joins: updated.joinsTotal,
-            flagged: updated.joinsFlagged,
-            risk: { low: updated.riskLow, medium: updated.riskMedium, high: updated.riskHigh },
-            lockdownState: updated.lockdownState,
-          },
-          source: 'system',
-        });
-      }
-      return updated;
-    });
-
-    const guild =
-      ctx.client.guilds.cache.get(guildId) ?? (await ctx.client.guilds.fetch(guildId).catch(() => null));
+    const guild = await fetchGuild(ctx, guildId);
     if (guild) {
-      await refreshAlert(ctx, guild, incident);
-      if (ending) await remindIfStillLocked(ctx, guild, config, incident);
+      await refreshAlert(ctx, guild, result.incident);
+      if (result.ending) await remindIfStillLocked(ctx, guild, config, result.incident);
     }
-    if (!ending) await scheduleUpdate(ctx, { guildId, incidentId, tick: tick + 1 });
+    if (result.ending) {
+      await startCooldown(ctx, guildId, config.autoLockdownCooldownMinutes).catch(() => undefined);
+    } else {
+      await scheduleUpdate(ctx, { guildId, incidentId, tick: tick + 1 });
+    }
+  },
+};
+
+/** The automatic lockdown, queued by `startIncident`. Throws on "busy" so the queue retries it. */
+export const lockdownJob: PluginJob<LockdownJobData> = {
+  name: LOCKDOWN_JOB_NAME,
+  concurrency: 2,
+  async processor(ctx, job) {
+    const { guildId, incidentId } = job.data;
+    const guild = await fetchGuild(ctx, guildId);
+    if (!guild) return;
+    const outcome = await lockdownIncident(ctx, guild, incidentId, 'auto');
+    if (outcome.status === 'busy') throw new Error('raidmode: lockdown or restore already running; retrying');
   },
 };
 
@@ -340,8 +428,7 @@ async function remindIfStillLocked(
   config: RaidModeConfig,
   incident: RaidModeIncident,
 ): Promise<void> {
-  const locked = incident.lockdownState === 'LOCKED' || incident.lockdownState === 'PARTIALLY_RESTORED';
-  if (!locked || incident.reminderSentAt) return;
+  if (!LOCKED_STATES.includes(incident.lockdownState) || incident.reminderSentAt) return;
   const channelId = incident.alertChannelId ?? config.alertChannelId;
   if (!channelId) return;
   const channel = await resolveTextChannel(guild, channelId);
@@ -369,8 +456,17 @@ async function remindIfStillLocked(
 // ---------------------------------------------------------------------------------------------------------
 
 export type LockdownOutcome =
-  | { status: 'locked'; incident: RaidModeIncident; channelsLocked: number; failures: number }
+  | {
+      status: 'locked';
+      incident: RaidModeIncident;
+      channelsLocked: number;
+      channelsNotCovered: number;
+      failures: number;
+    }
   | { status: 'already_locked' | 'nothing_to_lock' | 'busy' | 'not_found' };
+
+/** A fenced final write found the incident in an unexpected state: another run got there first. */
+class StateConflict extends Error {}
 
 export async function lockdownIncident(
   ctx: PluginContext,
@@ -378,30 +474,47 @@ export async function lockdownIncident(
   incidentId: string,
   actor: 'auto' | string,
 ): Promise<LockdownOutcome> {
-  const outcome = await withIncidentLease(ctx, incidentId, async (): Promise<LockdownOutcome> => {
+  const outcome = await withGuildLease(ctx, guild.id, async (): Promise<LockdownOutcome> => {
     const incident = await ctx.prisma.raidModeIncident.findUnique({ where: { id: incidentId } });
     if (!incident || incident.guildId !== guild.id) return { status: 'not_found' };
-    if (incident.lockdownState === 'LOCKED' || incident.lockdownState === 'PARTIALLY_RESTORED') {
-      return { status: 'already_locked' };
-    }
+    if (LOCKED_STATES.includes(incident.lockdownState)) return { status: 'already_locked' };
+    const before = incident.lockdownState;
+
+    // Marked LOCKING before the first Discord edit, so restore can find this lockdown even if the process stops
+    // half-way. Conditional on the state just read: a concurrent run cannot also claim it.
+    const claimed = await ctx.prisma.raidModeIncident.updateMany({
+      where: { id: incidentId, lockdownState: before },
+      data: { lockdownState: 'LOCKING', lockdownAppliedAt: new Date(), lockdownAppliedBy: actor },
+    });
+    if (claimed.count === 0) return { status: 'already_locked' };
+
     const config = await ctx.getConfig<RaidModeConfig>(guild.id);
     const reason = `Raid mode lockdown (${actor === 'auto' ? 'automatic' : `by ${actor}`})`;
     const result = await applyLockdown(ctx, guild, config, incidentId, reason);
-    if (result.actions.length === 0) return { status: 'nothing_to_lock' };
+    if (result.actions.length === 0) {
+      await ctx.prisma.raidModeIncident.update({
+        where: { id: incidentId },
+        data: {
+          lockdownState: before,
+          lockdownAppliedAt: incident.lockdownAppliedAt,
+          lockdownAppliedBy: incident.lockdownAppliedBy,
+        },
+      });
+      return { status: 'nothing_to_lock' };
+    }
 
     const updated = await ctx.prisma.$transaction(async (tx) => {
-      const row = await tx.raidModeIncident.update({
-        where: { id: incidentId },
+      const fenced = await tx.raidModeIncident.updateMany({
+        where: { id: incidentId, lockdownState: 'LOCKING' },
         data: {
           lockdownState: 'LOCKED',
           lockdownActions: result.actions,
-          lockdownAppliedAt: new Date(),
-          lockdownAppliedBy: actor,
           lockdownRestoredAt: null,
           lockdownRestoredBy: null,
           reminderSentAt: null,
         },
       });
+      if (fenced.count === 0) throw new StateConflict('raidmode: incident changed during lockdown');
       await writeAudit(tx, {
         guildId: guild.id,
         actorId: actor === 'auto' ? botId(ctx) : actor,
@@ -413,10 +526,13 @@ export async function lockdownIncident(
           actions: result.actions,
           channelsLocked: result.channelsLocked,
           channelsAlreadyClosed: result.channelsAlreadyClosed,
+          channelsNotCovered: result.channelsNotCovered,
           failures: result.failures,
         },
         source: actor === 'auto' ? 'system' : 'bot',
       });
+      const row = await tx.raidModeIncident.findUnique({ where: { id: incidentId } });
+      if (!row) throw new StateConflict('raidmode: incident disappeared during lockdown');
       return row;
     });
     await refreshAlert(ctx, guild, updated);
@@ -424,6 +540,7 @@ export async function lockdownIncident(
       status: 'locked',
       incident: updated,
       channelsLocked: result.channelsLocked,
+      channelsNotCovered: result.channelsNotCovered,
       failures: result.failures,
     };
   });
@@ -446,17 +563,19 @@ export async function restoreIncident(
   incidentId: string,
   actorId: string,
 ): Promise<RestoreOutcome> {
-  const outcome = await withIncidentLease(ctx, incidentId, async (): Promise<RestoreOutcome> => {
+  const outcome = await withGuildLease(ctx, guild.id, async (): Promise<RestoreOutcome> => {
     const incident = await ctx.prisma.raidModeIncident.findUnique({ where: { id: incidentId } });
     if (!incident || incident.guildId !== guild.id) return { status: 'not_found' };
-    if (incident.lockdownState !== 'LOCKED' && incident.lockdownState !== 'PARTIALLY_RESTORED') {
-      return { status: 'not_locked' };
-    }
+    // Acts on what is actually outstanding, whatever the state says: a lockdown cut short by a restart is still
+    // LOCKING (or even NONE, if it stopped before that write) but its change rows are here.
     const changes = await ctx.prisma.raidModeLockdownChange.findMany({
       where: { incidentId, restoreSkippedReason: null },
     });
+    if (changes.length === 0 && !LOCKED_STATES.includes(incident.lockdownState))
+      return { status: 'not_locked' };
+
     const result = await restoreChanges(ctx, guild, changes, `Raid mode restore by ${actorId}`);
-    const state = result.failedIds.length > 0 ? 'PARTIALLY_RESTORED' : 'RESTORED';
+    const state: RaidModeLockdownState = result.failedIds.length > 0 ? 'PARTIALLY_RESTORED' : 'RESTORED';
     const skipped = result.skipped.map(({ channelId, kind, reason }) => ({ channelId, kind, reason }));
 
     const updated = await ctx.prisma.$transaction(async (tx) => {
@@ -469,10 +588,11 @@ export async function restoreIncident(
           data: { restoreSkippedReason: s.reason },
         });
       }
-      const row = await tx.raidModeIncident.update({
-        where: { id: incidentId },
+      const fenced = await tx.raidModeIncident.updateMany({
+        where: { id: incidentId, lockdownState: incident.lockdownState },
         data: { lockdownState: state, lockdownRestoredAt: new Date(), lockdownRestoredBy: actorId },
       });
+      if (fenced.count === 0) throw new StateConflict('raidmode: incident changed during restore');
       await writeAudit(tx, {
         guildId: guild.id,
         actorId,
@@ -483,8 +603,14 @@ export async function restoreIncident(
         after: { restored: result.restoredIds.length, skipped, failed: result.failedIds.length, state },
         source: 'bot',
       });
+      const row = await tx.raidModeIncident.findUnique({ where: { id: incidentId } });
+      if (!row) throw new StateConflict('raidmode: incident disappeared during restore');
       return row;
     });
+    if (state === 'RESTORED') {
+      const config = await ctx.getConfig<RaidModeConfig>(guild.id);
+      await startCooldown(ctx, guild.id, config.autoLockdownCooldownMinutes).catch(() => undefined);
+    }
     await refreshAlert(ctx, guild, updated);
     return {
       status: state === 'RESTORED' ? 'restored' : 'partially_restored',
@@ -498,25 +624,44 @@ export async function restoreIncident(
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// Retention
+// Maintenance and retention
 // ---------------------------------------------------------------------------------------------------------
 
-export const SCORE_RETENTION_DAYS = 30;
-
-/** Daily: deletes risk scores from incidents that ended more than 30 days ago, one audit row per server. */
-export const purgeJob: PluginJob<Record<string, never>> = {
-  name: 'purge-scores',
-  repeat: { pattern: '23 4 * * *' },
+/**
+ * Hourly:
+ * 1. Ends any incident still ACTIVE long after its last join (its update job was lost), so the overview never
+ *    shows a raid in progress forever.
+ * 2. Deletes risk scores 30 days after their incident ended.
+ * 3. Deletes ended incidents older than the server's audit-log retention, once nothing is left locked.
+ * Each purge writes one audit row of counts per server.
+ */
+export const maintenanceJob: PluginJob<Record<string, never>> = {
+  name: 'maintenance',
+  repeat: { pattern: '23 * * * *' },
   async processor(ctx) {
-    const cutoff = new Date(Date.now() - SCORE_RETENTION_DAYS * 24 * HOUR);
-    const old = await ctx.prisma.raidModeIncident.findMany({
-      where: { status: 'ENDED', endedAt: { lt: cutoff }, scores: { some: {} } },
+    const now = Date.now();
+
+    const stale = await ctx.prisma.raidModeIncident.findMany({
+      where: { status: 'ACTIVE', lastJoinAt: { lt: new Date(now - STATE_TTL_SECONDS * 1000) } },
+      select: { id: true, guildId: true },
+      take: 100,
+    });
+    for (const row of stale) {
+      await flushIncident(ctx, row.guildId, row.id, 0, true).catch((err: unknown) =>
+        ctx.logger.error(
+          { guildId: row.guildId, incidentId: row.id, err: err instanceof Error ? err.message : String(err) },
+          'raidmode: could not close a stale incident',
+        ),
+      );
+    }
+
+    const scoreCutoff = new Date(now - SCORE_RETENTION_DAYS * 24 * HOUR);
+    const withOldScores = await ctx.prisma.raidModeIncident.findMany({
+      where: { status: 'ENDED', endedAt: { lt: scoreCutoff }, scores: { some: {} } },
       select: { id: true, guildId: true },
       take: 500,
     });
-    const byGuild = new Map<string, string[]>();
-    for (const row of old) byGuild.set(row.guildId, [...(byGuild.get(row.guildId) ?? []), row.id]);
-    for (const [guildId, incidentIds] of byGuild) {
+    for (const [guildId, incidentIds] of groupByGuild(withOldScores)) {
       await ctx.prisma.$transaction(async (tx) => {
         const deleted = await tx.raidModeRiskScore.deleteMany({ where: { incidentId: { in: incidentIds } } });
         await writeAudit(tx, {
@@ -534,10 +679,66 @@ export const purgeJob: PluginJob<Record<string, never>> = {
         });
       });
     }
+
+    const ended = await ctx.prisma.raidModeIncident.findMany({
+      where: { status: 'ENDED', lockdownState: { in: ['NONE', 'RESTORED'] }, changes: { none: {} } },
+      select: { id: true, guildId: true, endedAt: true },
+      orderBy: { endedAt: 'asc' },
+      take: 500,
+    });
+    for (const [guildId, rows] of groupRowsByGuild(ended)) {
+      const policy = await ctx.prisma.dataRetentionPolicy.findUnique({ where: { guildId } });
+      const days = policy?.auditLogDays ?? 365;
+      const cutoff = new Date(now - days * 24 * HOUR);
+      const expired = rows.filter((r) => r.endedAt && r.endedAt < cutoff).map((r) => r.id);
+      if (expired.length === 0) continue;
+      await ctx.prisma.$transaction(async (tx) => {
+        const deleted = await tx.raidModeIncident.deleteMany({ where: { id: { in: expired } } });
+        await writeAudit(tx, {
+          guildId,
+          actorId: botId(ctx),
+          actorType: 'system',
+          action: AuditAction.RaidModeIncidentsPurge,
+          targetType: 'raidmode_incident',
+          after: { deleted: deleted.count, retentionDays: days },
+          source: 'system',
+        });
+      });
+    }
   },
 };
 
-/** The guild's most recent incident, for `/raidmode`. */
+function groupByGuild(rows: { id: string; guildId: string }[]): Map<string, string[]> {
+  const byGuild = new Map<string, string[]>();
+  for (const row of rows) byGuild.set(row.guildId, [...(byGuild.get(row.guildId) ?? []), row.id]);
+  return byGuild;
+}
+
+function groupRowsByGuild<T extends { guildId: string }>(rows: T[]): Map<string, T[]> {
+  const byGuild = new Map<string, T[]>();
+  for (const row of rows) byGuild.set(row.guildId, [...(byGuild.get(row.guildId) ?? []), row]);
+  return byGuild;
+}
+
+/** The guild's most recent incident, for `/raidmode status`. */
 export function latestIncident(ctx: PluginContext, guildId: string): Promise<RaidModeIncident | null> {
   return ctx.prisma.raidModeIncident.findFirst({ where: { guildId }, orderBy: { startedAt: 'desc' } });
+}
+
+/** The newest incident with anything still locked, for `/raidmode restore` (not just the latest incident). */
+export async function latestLockedIncident(
+  ctx: PluginContext,
+  guildId: string,
+): Promise<RaidModeIncident | null> {
+  const byState = await ctx.prisma.raidModeIncident.findFirst({
+    where: { guildId, lockdownState: { in: [...LOCKED_STATES] } },
+    orderBy: { startedAt: 'desc' },
+  });
+  if (byState) return byState;
+  // A lockdown that stopped before even marking LOCKING still has change rows; find it through them.
+  const change = await ctx.prisma.raidModeLockdownChange.findFirst({
+    where: { guildId, restoreSkippedReason: null },
+    orderBy: { createdAt: 'desc' },
+  });
+  return change ? ctx.prisma.raidModeIncident.findUnique({ where: { id: change.incidentId } }) : null;
 }

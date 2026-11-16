@@ -58,6 +58,8 @@ interface Options {
   allowRemote: boolean;
   /** Also run raid mode's join handler on every join (the regression gate for raid mode). */
   raidMode: boolean;
+  /** With raid mode: automatic lockdown on (dry run off), so the queued lockdown runs during the raid. */
+  raidModeLockdown: boolean;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -74,6 +76,7 @@ function parseOptions(argv: string[]): Options {
     json: null,
     allowRemote: false,
     raidMode: false,
+    raidModeLockdown: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -119,6 +122,10 @@ function parseOptions(argv: string[]): Options {
         break;
       case '--raid-mode':
         options.raidMode = true;
+        break;
+      case '--raid-mode-lockdown':
+        options.raidMode = true;
+        options.raidModeLockdown = true;
         break;
       case '--manage-guild':
         options.manageGuild = true;
@@ -264,6 +271,7 @@ const GUILD_ID = 'bench-raid-guild';
 const BOT_ID = 'bench-raid-bot';
 const OWNER_ID = 'bench-raid-owner';
 const ALERT_CHANNEL_ID = 'bench-raid-alerts';
+const RAID_MODE_ALERT_CHANNEL_ID = '100000000000000001';
 const QUARANTINE_ROLE_ID = 'bench-raid-quarantine';
 const MOD_ROLE_ID = 'bench-raid-mods';
 const CHANNEL_IDS = Array.from({ length: 40 }, (_, i) => `bench-raid-channel-${i}`);
@@ -427,6 +435,26 @@ function createFakeDiscord(options: Options, recorder: Recorder): FakeDiscord {
       },
     },
     channels: {
+      // The server's text channels, for raid mode's lockdown. Each overwrite edit is one counted REST call.
+      cache: new Map(
+        CHANNEL_IDS.map((channelId, position) => [
+          channelId,
+          {
+            id: channelId,
+            type: 0,
+            rawPosition: position,
+            parent: null,
+            isThread: () => false,
+            isTextBased: () => true,
+            permissionsFor: () => ({ has: () => true }),
+            permissionOverwrites: {
+              cache: new Map<string, unknown>(),
+              edit: async () => rest('channel.overwrite', channelId),
+              delete: async () => rest('channel.overwrite', channelId),
+            },
+          },
+        ]),
+      ),
       fetch: async (channelId: string) => ({
         id: channelId,
         type: 0,
@@ -646,9 +674,16 @@ async function seed(redis: Redis, options: Options): Promise<void> {
       data: {
         guildId: GUILD_ID,
         pluginId: 'raidmode',
-        // Dry run: detection, scoring and the alert run on every join; lockdown is a one-off and not part of the
-        // per-join cost this gate measures.
-        config: { dryRun: true, alertChannelId: ALERT_CHANNEL_ID, joinThreshold: 10, windowSeconds: 30 },
+        // Detection, scoring and the alert run on every join. With --raid-mode-lockdown, dry run is off and the
+        // queued automatic lockdown also runs during the raid. Raid mode only accepts Discord ids for channels.
+        config: {
+          dryRun: !options.raidModeLockdown,
+          alertChannelId: RAID_MODE_ALERT_CHANNEL_ID,
+          joinThreshold: 10,
+          windowSeconds: 30,
+          // Short, so the run settles soon after the raid; it does not change the per-join cost.
+          quietMinutes: 1,
+        },
       },
     });
   }
@@ -668,6 +703,8 @@ type JobProcessor = (ctx: PluginContext, job: { data: unknown }) => Promise<void
  */
 class JobRunner {
   private readonly processors = new Map<string, JobProcessor>();
+  /** A plugin's jobs run with that plugin's own context (its own config), as the host does. */
+  private readonly contexts = new Map<string, PluginContext>();
   private outstanding = 0;
   private waiters: (() => void)[] = [];
   private ctx: PluginContext | null = null;
@@ -675,8 +712,9 @@ class JobRunner {
 
   constructor(private readonly enabled: boolean) {}
 
-  register(name: string, processor: JobProcessor): void {
+  register(name: string, processor: JobProcessor, ctx?: PluginContext): void {
     this.processors.set(name, processor);
+    if (ctx) this.contexts.set(name, ctx);
   }
 
   attach(ctx: PluginContext): void {
@@ -687,13 +725,13 @@ class JobRunner {
     return {
       add: async (_jobName, data, opts) => {
         const processor = this.processors.get(name);
-        const ctx = this.ctx;
+        const ctx = this.contexts.get(name) ?? this.ctx;
         if (!this.enabled || !processor || !ctx) return;
         this.outstanding += 1;
         setTimeout(() => {
           void processor(ctx, { data })
             .catch((err: unknown) => {
-              this.failures.push(String(err));
+              this.failures.push(err instanceof Error ? `${err.message}\n${err.stack}` : String(err));
             })
             .finally(() => {
               this.outstanding -= 1;
@@ -833,11 +871,18 @@ async function main(): Promise<void> {
         queue: (name: string) => jobs.queue(`raidmode.${name}`) as never,
       }
     : null;
-  if (raidModeModule)
+  if (raidModeModule) {
     jobs.register(
       `raidmode.${raidModeModule.UPDATE_JOB_NAME}`,
       raidModeModule.updateJob.processor as JobProcessor,
+      raidCtx ?? undefined,
     );
+    jobs.register(
+      `raidmode.${raidModeModule.LOCKDOWN_JOB_NAME}`,
+      raidModeModule.lockdownJob.processor as JobProcessor,
+      raidCtx ?? undefined,
+    );
+  }
 
   const workload = buildWorkload(options);
   // Message/join timestamps feed the sliding windows, so they are anchored to one fixed instant per run.

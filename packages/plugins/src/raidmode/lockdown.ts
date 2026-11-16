@@ -14,7 +14,6 @@ import {
   type Guild,
   type GuildBasedChannel,
   type PermissionOverwrites,
-  type TextChannel,
 } from 'discord.js';
 import type { Prisma, RaidModeLockdownChange } from '@pavisie/database';
 import type { PluginContext } from '../sdk';
@@ -59,6 +58,10 @@ export function stillAsLocked(states: FlagStates): boolean {
   return alreadyLocked(states);
 }
 
+export function sameFlags(a: FlagStates, b: FlagStates): boolean {
+  return LOCK_FLAGS.every((flag) => a[flag] === b[flag]);
+}
+
 /** Parses a stored `previousFlags` value; anything malformed reads as "not set", the safest restore. */
 export function parseFlagStates(value: Prisma.JsonValue | null): FlagStates {
   const states = {} as FlagStates;
@@ -70,39 +73,75 @@ export function parseFlagStates(value: Prisma.JsonValue | null): FlagStates {
   return states;
 }
 
-type OverwriteChannel = TextChannel;
+/**
+ * Channel types a raider can post in: text and announcement channels, forum and media channels (new posts are
+ * threads), and the text chat inside voice and stage channels. The same five flags close all of them.
+ */
+const LOCKABLE_TYPES: ReadonlySet<ChannelType> = new Set([
+  ChannelType.GuildText,
+  ChannelType.GuildAnnouncement,
+  ChannelType.GuildForum,
+  ChannelType.GuildMedia,
+  ChannelType.GuildVoice,
+  ChannelType.GuildStageVoice,
+]);
 
-function lockableChannel(
-  guild: Guild,
-  channel: GuildBasedChannel | null | undefined,
-): OverwriteChannel | null {
-  if (!channel || channel.isThread() || !channel.isTextBased()) return null;
-  if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) return null;
-  const me = guild.members.me;
-  if (!me || !channel.permissionsFor(me)?.has(OVERWRITE_PERMISSIONS)) return null;
+type OverwriteChannel = Extract<GuildBasedChannel, { permissionOverwrites: unknown }>;
+
+function overwriteChannel(channel: GuildBasedChannel | null | undefined): OverwriteChannel | null {
+  if (!channel || channel.isThread() || !LOCKABLE_TYPES.has(channel.type)) return null;
+  if (!('permissionOverwrites' in channel)) return null;
   return channel as OverwriteChannel;
 }
 
-/** The channels a lockdown would close: the configured list, or every text channel the bot can manage. */
-export function lockdownTargets(guild: Guild, config: RaidModeConfig): OverwriteChannel[] {
-  const ids =
+/** Where a channel sits in the sidebar: its category's position first, then its own. */
+function sidebarOrder(channel: OverwriteChannel): [number, number] {
+  return [channel.parent?.rawPosition ?? -1, channel.rawPosition ?? 0];
+}
+
+export interface LockdownTargets {
+  channels: OverwriteChannel[];
+  /** Eligible channels past the 100-channel cap: reported, never silently dropped. */
+  notCovered: number;
+}
+
+/**
+ * The channels a lockdown would close: the configured list, or every lockable channel the bot can manage, in
+ * sidebar order. Skips the alert channel (staff keep it), channels the bot cannot manage, and channels @everyone
+ * cannot see anyway (nothing to close there).
+ */
+export function lockdownTargets(guild: Guild, config: RaidModeConfig): LockdownTargets {
+  const me = guild.members.me;
+  const everyone = guild.roles.everyone;
+  const candidates =
     config.lockdownChannelIds.length > 0
-      ? config.lockdownChannelIds
-      : [...guild.channels.cache.values()].map((c) => c.id);
-  const targets: OverwriteChannel[] = [];
-  for (const id of ids) {
-    if (id === config.alertChannelId) continue; // staff keep their alert channel
-    const channel = lockableChannel(guild, guild.channels.cache.get(id));
-    if (channel) targets.push(channel);
-    if (targets.length >= MAX_LOCKDOWN_CHANNELS) break;
+      ? config.lockdownChannelIds.map((id) => guild.channels.cache.get(id))
+      : [...guild.channels.cache.values()];
+  const eligible: OverwriteChannel[] = [];
+  for (const raw of candidates) {
+    const channel = overwriteChannel(raw);
+    if (!channel || channel.id === config.alertChannelId || !me) continue;
+    if (!channel.permissionsFor(me)?.has(OVERWRITE_PERMISSIONS)) continue;
+    if (!channel.permissionsFor(everyone)?.has(PermissionFlagsBits.ViewChannel)) continue;
+    eligible.push(channel);
   }
-  return targets;
+  eligible.sort((a, b) => {
+    const [ap, ar] = sidebarOrder(a);
+    const [bp, br] = sidebarOrder(b);
+    return ap - bp || ar - br;
+  });
+  return {
+    channels: eligible.slice(0, MAX_LOCKDOWN_CHANNELS),
+    notCovered: Math.max(0, eligible.length - MAX_LOCKDOWN_CHANNELS),
+  };
 }
 
 export interface LockdownResult {
   actions: string[];
   channelsLocked: number;
   channelsAlreadyClosed: number;
+  /** Eligible channels left open because of the 100-channel cap. */
+  channelsNotCovered: number;
   failures: number;
   verificationRaised: boolean;
   invitesPaused: boolean;
@@ -124,13 +163,16 @@ export async function applyLockdown(
     actions: [],
     channelsLocked: 0,
     channelsAlreadyClosed: 0,
+    channelsNotCovered: 0,
     failures: 0,
     verificationRaised: false,
     invitesPaused: false,
   };
   const everyone = guild.roles.everyone;
 
-  for (const channel of lockdownTargets(guild, config)) {
+  const targets = lockdownTargets(guild, config);
+  result.channelsNotCovered = targets.notCovered;
+  for (const channel of targets.channels) {
     const existing = channel.permissionOverwrites.cache.get(everyone.id);
     const previous = flagStatesOf(existing);
     if (alreadyLocked(previous)) {
@@ -207,7 +249,7 @@ export async function applyLockdown(
   return result;
 }
 
-export type RestoreSkipReason = 'changed_by_admin' | 'channel_deleted';
+export type RestoreSkipReason = 'changed_by_admin' | 'channel_deleted' | 'not_applied';
 
 export interface RestoreResult {
   /** Rows put back; the caller deletes them. */
@@ -240,12 +282,13 @@ export async function restoreChanges(
           continue;
         }
         const targetId = change.targetId ?? guild.roles.everyone.id;
-        const current = channel.permissionOverwrites.cache.get(targetId);
-        if (!stillAsLocked(flagStatesOf(current))) {
-          skip(change, 'changed_by_admin');
+        const current = flagStatesOf(channel.permissionOverwrites.cache.get(targetId));
+        const previous = parseFlagStates(change.previousFlags);
+        if (!stillAsLocked(current)) {
+          // Unchanged from before the lockdown: the edit never landed (a crash or a refused call). Nothing to undo.
+          skip(change, sameFlags(current, previous) ? 'not_applied' : 'changed_by_admin');
           continue;
         }
-        const previous = parseFlagStates(change.previousFlags);
         await channel.permissionOverwrites.edit(targetId, previous, { reason });
         // The lockdown created this overwrite and nothing else lives on it now: remove it, as it was before.
         if (change.previousOverwriteExisted === false) {
