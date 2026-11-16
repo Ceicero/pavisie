@@ -161,7 +161,15 @@ export function PanelsTab({ guildId, groups }: { guildId: string; groups: RoleGr
   }
 
   function handleDelete(panelId: string) {
-    deletePanel.mutate(panelId, { onSuccess: () => toast({ title: 'Panel deleted', variant: 'success' }) });
+    deletePanel.mutate(panelId, {
+      onSuccess: () => toast({ title: 'Panel deleted', variant: 'success' }),
+      onError: (err) =>
+        toast({
+          title: 'Could not delete the panel',
+          description: err instanceof ApiClientError ? err.message : 'Please try again.',
+          variant: 'destructive',
+        }),
+    });
   }
 
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;

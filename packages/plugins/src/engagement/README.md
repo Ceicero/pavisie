@@ -37,6 +37,12 @@ temporary voice channels (SPEC.md §G subset; ARCHITECTURE.md §7.1 row `engagem
   `engagement.reward-reconcile` job drains that list once a minute, 500 members per tick, and applies
   the same role sync. Roles update shortly after, not in the HTTP request.
 - Emits the platform `level.up` event on every level-up (message or voice).
+- **Public leaderboard** (`config.leveling.publicLeaderboard`, default **off**): when a guild turns this
+  on, `GET /guilds/:guildId/engagement/leaderboard/public` and `GET /guilds/:guildId/engagement/rank/:userId`
+  answer without a session. Both stay 404 while the toggle is off, the bot is not in the guild, or
+  `TRUST_PROXY` is not a numeric hop count. A row exposes rank, XP, level, and that member's Discord
+  username, global name, and avatar — nothing else. The rank route also includes level progress.
+  Former members stay listed until a later update.
 
 ### Reputation
 
@@ -119,6 +125,8 @@ only upgrades the starboard embed to include a content excerpt when the guild ha
 built on `GET/PUT /guilds/:guildId/engagement/config` (one JSON blob covering every sub-feature's
 settings) plus dedicated endpoints for the leaderboard, level-role rewards CRUD, an audited XP
 adjustment, an audited guild-wide or per-member leveling reset, and the reputation leaderboard.
+The Leveling tab includes the public-leaderboard toggle (off by default) and the rank returned by the
+staff leaderboard.
 XP changes that move the stored level, and resets, enqueue reward-role reconciliation; the dashboard
 tells admins that roles update shortly after, not instantly.
 
