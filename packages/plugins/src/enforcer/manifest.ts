@@ -76,6 +76,13 @@ export const manifest = defineManifest({
       fallback: 'The Mute decision is unavailable; you must create/assign a mute role manually.',
     },
     {
+      permission: PermissionFlagsBits.Speak,
+      feature: 'denying Speak to the mute role in voice channels (part of the mute-role overwrite)',
+      optional: true,
+      fallback:
+        'Discord rejects the mute-role overwrite on a channel when the bot does not itself hold a permission it denies; `/enforcer setup` and repair report those channels as failed.',
+    },
+    {
       permission: PermissionFlagsBits.ModerateMembers,
       feature: 'the Timeout decision (routed through the moderation plugin)',
       optional: true,

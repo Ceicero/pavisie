@@ -175,11 +175,19 @@ your slash commands never appear, even once registered). Permission integer is t
 set in `docs/invite.json` / `packages/core/src/permissions/discord.ts` — **never Administrator**.
 
 ```
-https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot%20applications.commands&permissions=1504210971862
+https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot%20applications.commands&permissions=1504210971734
 ```
 
 Replace `YOUR_CLIENT_ID` with your `DISCORD_CLIENT_ID`. The exact permission list and why each one
 is requested is in `docs/PERMISSIONS.md` → "Invite permissions".
+
+Two permissions are left out of the invite on purpose:
+
+- **Manage Server** is a manual grant. Only optional features use it: the "raise-verification" raid
+  lockdown, showing which invite a new member used, and letting the invite-link rule recognise your own
+  server's invites automatically. Give the bot's role Manage Server yourself if you want those; without it
+  they are skipped (the invite-link rule still honours its configured allow list) and everything else works.
+- **View Audit Log** is not requested. No feature reads the audit log.
 
 ## Local setup — with Docker
 

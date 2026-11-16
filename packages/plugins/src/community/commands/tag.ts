@@ -515,7 +515,7 @@ async function handleInfo(c: CommandContext): Promise<void> {
   const channelBits: string[] = [];
   for (const id of tag.triggerChannelIds) {
     const presence = await channelPresence(c.interaction.guild, id);
-    channelBits.push(presence === 'gone' ? `<#${id}> (${c.t('tag.channelGone')})` : `<#${id}>`);
+    channelBits.push(presence === 'gone' ? `<#${id}> (${c.t('tag.infoChannelGone')})` : `<#${id}>`);
   }
   const channels = channelBits.length > 0 ? channelBits.join(', ') : c.t('tag.infoAllChannels');
   const preview = tag.content

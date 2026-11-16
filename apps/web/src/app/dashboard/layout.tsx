@@ -26,8 +26,8 @@ export default function DashboardRootLayout({ children }: { children: React.Reac
 
   if (status === 'loading') {
     return (
-      <div className="min-h-dvh bg-background text-foreground">
-        <div className="mx-auto max-w-5xl space-y-4 p-6">
+      <div className="min-h-[calc(100dvh-3.5rem)] bg-background text-foreground">
+        <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:px-6 lg:px-8">
           <Skeleton className="h-8 w-48" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -47,5 +47,5 @@ export default function DashboardRootLayout({ children }: { children: React.Reac
   // `/dashboard` — including the guild-picker root page, which this layout also wraps — gets the
   // dashboard's shadcn-token surface instead of the marketing root layout's dark `ink-0` body
   // showing through in the (light-theme) case.
-  return <div className="min-h-dvh bg-background text-foreground">{children}</div>;
+  return <div className="min-h-[calc(100dvh-3.5rem)] bg-background text-foreground">{children}</div>;
 }

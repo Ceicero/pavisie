@@ -120,7 +120,7 @@ export function SuggestionsTab({ guildId }: { guildId: string }) {
       <CardContent className="space-y-4 p-4">
         <div className="flex items-center justify-between gap-2">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger aria-label="Filter by status" className="w-full sm:w-48">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>

@@ -1,5 +1,6 @@
 import { AuditAction, NotFoundError, ValidationError } from '@pavisie/core';
 import { assertStaffLevel, errorEmbed, infoEmbed, successEmbed, type CommandContext } from '../../sdk';
+import { invalidateRuleCache } from '../service';
 
 type ExemptKind = 'role' | 'channel' | 'user' | 'domain';
 
@@ -64,6 +65,7 @@ export async function handleExemptAdd(c: CommandContext): Promise<void> {
     data: { [field]: [...current, value] },
   });
 
+  invalidateRuleCache(c.ctx, c.guildId);
   await c.ctx.audit({
     guildId: c.guildId,
     actorId: c.interaction.user.id,
@@ -98,6 +100,7 @@ export async function handleExemptRemove(c: CommandContext): Promise<void> {
 
   const updated = await c.ctx.prisma.automodRule.update({ where: { id: rule.id }, data: { [field]: next } });
 
+  invalidateRuleCache(c.ctx, c.guildId);
   await c.ctx.audit({
     guildId: c.guildId,
     actorId: c.interaction.user.id,

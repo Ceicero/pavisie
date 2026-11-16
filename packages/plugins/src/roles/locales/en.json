@@ -2,7 +2,24 @@
   "errors": {
     "panelNotFound": "Role panel not found.",
     "groupNotFound": "Role group not found.",
-    "roleUnsafe": "That role can't be used here right now — it may be elevated, managed, or above my own top role."
+    "roleUnsafe": "That role can't be used here right now — it may be elevated, managed, or above my own top role.",
+    "serviceUnavailable": "The roles service is not available right now.",
+    "panelNoLongerExists": "This panel no longer exists.",
+    "panelOptionNoLongerExists": "This panel option no longer exists.",
+    "roleNoLongerExists": "That role no longer exists in this server.",
+    "roleUnassignableNow": "I can't assign that role right now. Please tell staff — it may have become elevated, managed, or above my top role.",
+    "roleAboveActor": "That role is at or above your own highest role, so you can't make it assignable.",
+    "notAnOption": "That role is not an option on this panel.",
+    "reactionNeedsEmoji": "Reaction-style panels need an emoji for every option.",
+    "tooManyOptions": "A panel can have at most {max} options.",
+    "panelPostFailed": "I couldn't post the panel. Check that I can view the channel, send messages, and embed links there, then run `/roles panel post` again.",
+    "panelPostMissingPermission": "I couldn't post the panel. I'm missing permission to view the channel, send messages, or embed links there.",
+    "panelPostChannelGone": "I couldn't post the panel because its channel was deleted. Pick a new channel with `/roles panel edit`, then run `/roles panel post` again.",
+    "assignable": {
+      "elevated": "That role grants an elevated permission (Administrator, Manage Server/Roles/Channels/Webhooks, Kick/Ban/Timeout Members, or Mention Everyone). Enable `allowElevatedRoles` in this plugin's config to allow it anyway.",
+      "managed": "That role is managed by an integration or bot and cannot be self-assigned.",
+      "hierarchy": "That role is at or above my own highest role, so I can't grant or remove it. Move my role above it in Server Settings → Roles."
+    }
   },
   "success": {
     "panelPosted": "Panel posted.",
@@ -32,5 +49,116 @@
       "hierarchy": "That role is at or above my own highest role, so I can't grant it. Move my role above it in Server Settings → Roles."
     },
     "safetyNote": "Roles are re-checked at assignment time; elevated/managed/higher-than-bot roles are skipped and logged."
+  },
+  "panel": {
+    "modalTitle": "New role panel",
+    "modalTitleLabel": "Title",
+    "modalDescriptionLabel": "Description (optional)",
+    "createExpired": "That panel-creation session expired. Run `/roles panel create` again.",
+    "created": "Created **{title}**. Add options with `/roles panel option-add`, then `/roles panel post`.",
+    "updated": "Panel updated. Run `/roles panel post` to push the change to Discord.",
+    "deleted": "Deleted **{title}**. The posted message (if any) was left as-is.",
+    "listTitle": "Role panels",
+    "listEmpty": "No role panels yet. Create one with `/roles panel create`.",
+    "notPostedYet": "not posted yet",
+    "optionAdded": "Added **{label}** → {role}. Run `/roles panel post` to update the posted message.",
+    "optionRemoved": "Removed. Run `/roles panel post` to update the posted message."
+  },
+  "selection": {
+    "added": "Added: {roles}",
+    "removed": "Removed: {roles}",
+    "skippedUnsafe": "Skipped some roles. I can't assign them right now — ask staff.",
+    "noChanges": "No changes."
+  },
+  "group": {
+    "created": "Created role group **{name}** with {count} role(s).",
+    "updated": "Role group updated.",
+    "deleted": "Deleted role group **{name}**.",
+    "listTitle": "Role groups",
+    "listEmpty": "No role groups yet. Create one with `/roles group create`."
+  },
+  "persist": {
+    "title": "Role persistence",
+    "status": "Status: {status}",
+    "restoreWindow": "Restore window: {days} day(s)",
+    "nowOn": "Role persistence is now **on**.",
+    "nowOff": "Role persistence is now **off**.",
+    "restoreWindowNote": "(Restore window: {days} day(s).)",
+    "disclosure": "When on, Pavisie stores a snapshot of a leaving member's roles (excluding elevated-permission and integration-managed roles) for up to the configured number of days, and restores them automatically if that member rejoins within that window. This is stored per-member in the database until it expires or is restored."
+  },
+  "onboarding": {
+    "checklistTitle": "Your onboarding checklist",
+    "configMissingInput": "Provide rules-text and/or rules-role.",
+    "configUpdated": "Onboarding configuration updated.",
+    "rulesTextMissing": "Set the rules text first with `/onboarding config rules-text:...`.",
+    "rulesChannelUnusable": "I can't send messages in that channel.",
+    "rulesTitle": "Server rules",
+    "rulesAgreeButton": "I agree",
+    "rulesPosted": "Posted the rules in {channel}.",
+    "rulesPostFailed": "I couldn't post the rules. Check that I can send messages and embed links in that channel, then try again.",
+    "rulesPostChannelGone": "I couldn't post the rules because that channel was deleted. Pick another channel and try again.",
+    "stepExists": "A step with id `{id}` already exists.",
+    "tooManySteps": "At most {max} custom steps are supported.",
+    "stepAdded": "Added step **{label}**.",
+    "stepNotFound": "No step with that id.",
+    "stepRemoved": "Removed the step."
+  },
+  "rules": {
+    "alreadyAgreed": "You've already agreed to the rules.",
+    "agreed": "Thanks — you have agreed to the server rules."
+  },
+  "verify": {
+    "alreadyVerified": "You're already verified.",
+    "unavailable": "Verification is not available right now. Please try again shortly.",
+    "verified": "You're verified! Welcome in.",
+    "modalNoQuestions": "Verification is set to modal mode but has no questions configured yet. Ask staff to run `/verification setup`.",
+    "modalTitle": "Verification",
+    "captchaNotConfigured": "CAPTCHA verification is not configured on this bot instance. Ask staff to switch verification mode.",
+    "captchaMissingApiUrl": "CAPTCHA verification is not fully configured (missing API base URL). Ask staff to switch verification mode.",
+    "captchaTitle": "Verify",
+    "captchaPrompt": "Complete the CAPTCHA here (link expires in {minutes} minutes):\n{url}",
+    "alreadyPending": "You already have a verification request pending staff review.",
+    "submitted": "Submitted — staff will review your answers shortly.",
+    "requestTitle": "Verification request",
+    "approveButton": "Approve",
+    "denyButton": "Deny",
+    "blankAnswer": "_(blank)_"
+  },
+  "verification": {
+    "captchaProviderRequired": "CAPTCHA mode requires `CAPTCHA_PROVIDER` to be set to `hcaptcha` or `turnstile` on the bot host.",
+    "queueTitle": "Verification queue",
+    "queueEmpty": "No verification requests are waiting for review.",
+    "requestNotFound": "That request was not found or has already been decided.",
+    "approved": "Request approved.",
+    "denied": "Request denied.",
+    "alreadyDecided": "This request was already decided by another moderator.",
+    "approvedBy": "Approved by {user}.",
+    "deniedBy": "Denied by {user}.",
+    "markedApproved": "Marked approved.",
+    "markedDenied": "Marked denied."
+  },
+  "welcomeGoodbye": {
+    "setMissingInput": "Provide at least one of channel, message, or dm.",
+    "updated": "Updated the {section} configuration.",
+    "welcomeEmbedTitle": "Welcome embed",
+    "goodbyeEmbedTitle": "Goodbye embed",
+    "embedTitleLabel": "Title",
+    "embedDescriptionLabel": "Description",
+    "embedDescriptionPlaceholder": "Vars: {user} {user.tag} {server} {memberCount} {mention}",
+    "embedColorLabel": "Color (hex, e.g. #e5e5e5)",
+    "embedFooterLabel": "Footer text",
+    "previewSent": "Sent a preview.",
+    "previewFailed": "I couldn't send the preview. Check that I can send messages and embed links in that channel, then try again.",
+    "previewChannelGone": "I couldn't send the preview because that channel was deleted. Pick another channel and try again.",
+    "welcomeDisabled": "Welcome messages are now off.",
+    "goodbyeDisabled": "Goodbye messages are now off.",
+    "previewPlaceholder": "_No {section} message or embed is configured yet — this is a placeholder preview._",
+    "previewPrefix": "**[Preview]** {content}",
+    "embedBadColor": "Color must be a hex code like #e5e5e5.",
+    "embedEmpty": "Set at least a title or a description.",
+    "embedSaved": "Saved the {section} embed. Run `/{section} test` to preview it."
+  },
+  "memberJoin": {
+    "accountTooNewDm": "You were removed from **{server}** because your Discord account is too new to join yet. You're welcome to rejoin once it meets the minimum age."
   }
 }
