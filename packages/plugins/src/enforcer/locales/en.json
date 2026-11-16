@@ -19,7 +19,11 @@
       "muteRole": "Mute role: {role}",
       "captureOn": "Capture context: On",
       "captureOff": "Capture context: Off",
-      "nextSteps": "Enable Enforcer with `/plugin enable enforcer`, then create your first policy with `/enforcer policy import` or `/enforcer policy create`."
+      "nextSteps": "Enable Enforcer with `/plugin enable enforcer`, then create your first policy with `/enforcer policy import` or `/enforcer policy create`.",
+      "unchanged": "unchanged",
+      "notSet": "not set",
+      "staffOnly": "staff only",
+      "serverWide": "server-wide"
     }
   },
   "policy": {
@@ -51,6 +55,21 @@
         "unsafe": "Pattern is not safe (risk of catastrophic backtracking).",
         "compileFailed": "Pattern failed to compile: {detail}"
       }
+    },
+    "detail": {
+      "enabled": "Enabled",
+      "severity": "Severity",
+      "suggestedAction": "Suggested action",
+      "scope": "Scope",
+      "exemptRoles": "Exempt roles",
+      "exemptChannels": "Exempt channels",
+      "yes": "Yes",
+      "no": "No",
+      "none": "_None_",
+      "allChannels": "All channels",
+      "matchers": "**Matchers**",
+      "matcher": "• {type}: {value}",
+      "summary": "{mark} **{name}** ({severity}) — {count} matcher(s) — `{id}`"
     }
   },
   "flag": {
@@ -60,7 +79,9 @@
     "noContentWarning": "-# This message has no readable content here (the Message Content intent may be off). The flag will carry only a jump link unless your note adds context.",
     "sessionExpired": "This flag session has expired. Run \"Flag for review\" again.",
     "modalTitle": "Flag for review",
-    "noteLabel": "Note for the moderator queue (optional)"
+    "noteLabel": "Note for the moderator queue (optional)",
+    "selectPolicy": "Select a policy (optional)",
+    "noSpecificPolicy": "No specific policy"
   },
   "record": {
     "notFound": "No record found with that number.",
@@ -68,7 +89,11 @@
     "notFoundTitle": "Not found"
   },
   "history": {
-    "title": "History for <@{userId}>"
+    "title": "History for <@{userId}>",
+    "totalFlags": "Total flags: **{count}**",
+    "totalDecisions": "Total decisions: **{count}**",
+    "totals": "Total flags: **{flags}** · Total decisions: **{decisions}**",
+    "lastRecords": "**Last 5 records**"
   },
   "export": {
     "empty": "No records to export for the given filters.",
