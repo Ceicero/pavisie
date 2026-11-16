@@ -103,7 +103,15 @@ export function GroupsTab({
   }
 
   function handleDelete(groupId: string) {
-    deleteGroup.mutate(groupId, { onSuccess: () => toast({ title: 'Group deleted', variant: 'success' }) });
+    deleteGroup.mutate(groupId, {
+      onSuccess: () => toast({ title: 'Group deleted', variant: 'success' }),
+      onError: (err) =>
+        toast({
+          title: 'Could not delete the group',
+          description: err instanceof ApiClientError ? err.message : 'Please try again.',
+          variant: 'destructive',
+        }),
+    });
   }
 
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
