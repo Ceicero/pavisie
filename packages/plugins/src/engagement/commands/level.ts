@@ -1,13 +1,17 @@
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
+  PermissionFlagsBits,
   SlashCommandBuilder,
   userMention,
   type ButtonInteraction,
+  type ChatInputCommandInteraction,
   type EmbedBuilder,
   type Guild,
+  type User,
 } from 'discord.js';
 import {
   assertStaffLevel,
@@ -21,12 +25,14 @@ import {
   requestConfirmation,
   resolveTextChannel,
   successEmbed,
+  type CommandContext,
   type ComponentHandler,
   type PluginCommand,
   type PluginContext,
 } from '../../sdk';
 import { clampXpMultiplier, type EngagementConfig } from '../manifest';
 import { applyLevelUp, REWARD_ROLE_SYNC_LIMIT, syncMemberRewardRoles } from '../level-actions';
+import { renderRankCard } from '../rank-card';
 import { formatProgressBar, levelFromXp, levelProgress } from '../service';
 
 const LEADERBOARD_PAGE_SIZE = 10;
@@ -229,6 +235,151 @@ const data = new SlashCommandBuilder()
 function xpBar(xp: number): { level: number; intoLevel: number; span: number; bar: string } {
   const { level, intoLevel, span } = levelProgress(xp);
   return { level, intoLevel, span, bar: formatProgressBar(intoLevel, span) };
+}
+
+/** Channel permission for this interaction. Missing data is treated as "cannot attach". */
+function botHasAttachFiles(interaction: ChatInputCommandInteraction<'cached'>): boolean {
+  try {
+    return Boolean(interaction.appPermissions?.has(PermissionFlagsBits.AttachFiles));
+  } catch {
+    return false;
+  }
+}
+
+function rankSubject(interaction: ChatInputCommandInteraction<'cached'>): {
+  user: User;
+  member: { displayName?: string; displayAvatarURL?: User['displayAvatarURL'] } | null;
+} {
+  const user = interaction.options.getUser('user') ?? interaction.user;
+  let member: { displayName?: string; displayAvatarURL?: User['displayAvatarURL'] } | null = null;
+  try {
+    const chosen = interaction.options.getMember('user');
+    const self = user.id === interaction.user.id ? interaction.member : null;
+    const resolved = chosen ?? self;
+    if (resolved) member = resolved;
+  } catch {
+    member = null;
+  }
+  return { user, member };
+}
+
+function rankDisplayName(user: User, member: { displayName?: string } | null): string {
+  const name = (member?.displayName || user.displayName || user.username).trim();
+  return name || user.username;
+}
+
+function avatarUrl(
+  user: User,
+  member: { displayAvatarURL?: User['displayAvatarURL'] } | null,
+): string | null {
+  try {
+    const url =
+      member?.displayAvatarURL?.({ extension: 'png', size: 256 }) ??
+      user.displayAvatarURL({ extension: 'png', size: 256 });
+    return typeof url === 'string' && url.length > 0 ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadAvatar(url: string | null): Promise<Uint8Array | null> {
+  if (!url) return null;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(1_500) });
+    if (!response.ok) return null;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > 1_500_000) return null;
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+const rankCardWarnings = new Set<string>();
+
+/** One warning per distinct failure for the life of the process, so a broken card cannot flood the log. */
+function warnRankCardOnce(
+  logger: PluginContext['logger'],
+  key: string,
+  fields: object,
+  message: string,
+): void {
+  if (rankCardWarnings.has(key)) return;
+  rankCardWarnings.add(key);
+  logger.warn(fields, message);
+}
+
+/**
+ * Public rank reply. Attaches a PNG when it can be rendered and the bot may upload files in this
+ * channel. Any render failure, and a missing Attach Files permission, log once and send the text embed.
+ */
+async function replyRank(c: CommandContext): Promise<void> {
+  const { user, member } = rankSubject(c.interaction);
+  const profile = await c.ctx.prisma.levelProfile.findUnique({
+    where: { guildId_userId: { guildId: c.guildId, userId: user.id } },
+  });
+  if (!profile) {
+    await c.interaction.reply({
+      embeds: [brandEmbed().setDescription(c.t('level.rank.notRanked', { name: user.username }))],
+      ephemeral: false,
+    });
+    return;
+  }
+
+  const rank =
+    1 + (await c.ctx.prisma.levelProfile.count({ where: { guildId: c.guildId, xp: { gt: profile.xp } } }));
+  const { level, intoLevel, span, bar } = xpBar(profile.xp);
+  const embed = brandEmbed()
+    .setTitle(c.t('level.rank.title', { name: user.username }))
+    .addFields(
+      { name: 'Rank', value: `#${rank}`, inline: true },
+      { name: 'Level', value: String(level), inline: true },
+      { name: 'Total XP', value: profile.xp.toLocaleString(), inline: true },
+      {
+        name: 'Progress',
+        value: `${bar}\n${intoLevel.toLocaleString()} / ${span.toLocaleString()} XP to next level`,
+        inline: false,
+      },
+      { name: 'Messages', value: profile.messages.toLocaleString(), inline: true },
+      { name: 'Voice minutes', value: profile.voiceMinutes.toLocaleString(), inline: true },
+    );
+  const portrait = avatarUrl(user, member);
+  if (portrait) embed.setThumbnail(portrait);
+  const textReply = { embeds: [embed], ephemeral: false as const };
+
+  if (!botHasAttachFiles(c.interaction)) {
+    warnRankCardOnce(
+      c.ctx.logger,
+      'attach',
+      {},
+      'engagement: /level rank card skipped; the bot lacks Attach Files in this channel',
+    );
+    await c.interaction.reply(textReply);
+    return;
+  }
+
+  try {
+    const png = await renderRankCard({
+      displayName: rankDisplayName(user, member),
+      rank,
+      xp: profile.xp,
+      avatar: await loadAvatar(portrait),
+    });
+    await c.interaction.reply({
+      ...textReply,
+      files: [new AttachmentBuilder(png, { name: 'rank.png' })],
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    warnRankCardOnce(
+      c.ctx.logger,
+      `render:${message}`,
+      { err },
+      'engagement: /level rank card failed; sending the text rank instead',
+    );
+    if (c.interaction.replied || c.interaction.deferred) return;
+    await c.interaction.reply(textReply);
+  }
 }
 
 function formatXpMultiplier(value: number): string {
@@ -621,37 +772,7 @@ export const command: PluginCommand = {
 
     // Top-level subcommands.
     if (sub === 'rank') {
-      const target = c.interaction.options.getUser('user') ?? c.interaction.user;
-      const profile = await c.ctx.prisma.levelProfile.findUnique({
-        where: { guildId_userId: { guildId: c.guildId, userId: target.id } },
-      });
-      if (!profile) {
-        await c.interaction.reply({
-          embeds: [brandEmbed().setDescription(c.t('level.rank.notRanked', { name: target.username }))],
-          ephemeral: false,
-        });
-        return;
-      }
-      const rank =
-        1 +
-        (await c.ctx.prisma.levelProfile.count({ where: { guildId: c.guildId, xp: { gt: profile.xp } } }));
-      const { level, intoLevel, span, bar } = xpBar(profile.xp);
-      const embed = brandEmbed()
-        .setTitle(c.t('level.rank.title', { name: target.username }))
-        .setThumbnail(target.displayAvatarURL())
-        .addFields(
-          { name: 'Rank', value: `#${rank}`, inline: true },
-          { name: 'Level', value: String(level), inline: true },
-          { name: 'Total XP', value: profile.xp.toLocaleString(), inline: true },
-          {
-            name: 'Progress',
-            value: `${bar}\n${intoLevel.toLocaleString()} / ${span.toLocaleString()} XP to next level`,
-            inline: false,
-          },
-          { name: 'Messages', value: profile.messages.toLocaleString(), inline: true },
-          { name: 'Voice minutes', value: profile.voiceMinutes.toLocaleString(), inline: true },
-        );
-      await c.interaction.reply({ embeds: [embed], ephemeral: false });
+      await replyRank(c);
       return;
     }
 
