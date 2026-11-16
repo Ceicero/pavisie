@@ -2,18 +2,16 @@
 # Runs from TypeScript source via tsx; no build step (see ARCHITECTURE.md §3, §14).
 FROM node:22-alpine
 
-# Keep corepack's pnpm cache outside /root: the container runs as `pavisie` (below) and starts
-# through `pnpm`, so a cache under root's home is invisible at runtime and corepack would
-# re-download pnpm from registry.npmjs.org on every start (and fail to boot without it).
-# /opt/corepack is chowned to `pavisie` below so that, if package.json's packageManager is ever
-# bumped without updating the version here, corepack can still fetch it instead of crash-looping.
-ENV COREPACK_HOME=/opt/corepack
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
-
 WORKDIR /app
 
 # Root manifests first so `pnpm install` layers cache independently of source changes.
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml .npmrc tsconfig.base.json ./
+
+# pnpm comes from package.json's `packageManager`, cached root-owned in /opt/corepack so the
+# non-root runtime user can use it offline (ARCHITECTURE.md §14).
+ENV COREPACK_HOME=/opt/corepack
+RUN corepack enable && corepack install
+ENV COREPACK_ENABLE_NETWORK=0
 
 # Every workspace's package.json, explicitly, so pnpm can resolve the workspace graph
 # before any source is copied in.
@@ -27,13 +25,13 @@ COPY packages/database/package.json ./packages/database/package.json
 COPY packages/plugins/package.json ./packages/plugins/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
 
-RUN pnpm install --frozen-lockfile || pnpm install
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
 RUN pnpm db:generate
 
-RUN addgroup -S pavisie && adduser -S pavisie -G pavisie && chown -R pavisie:pavisie /app /opt/corepack
+RUN addgroup -S pavisie && adduser -S pavisie -G pavisie
 USER pavisie
 
 EXPOSE 3001
