@@ -1,4 +1,7 @@
 import type { ApiError } from '@pavisie/types';
+import type { PublicLeaderboardDto, PublicLeaderboardEntryDto } from '@pavisie/types/engagement';
+
+export type { PublicLeaderboardDto, PublicLeaderboardEntryDto };
 
 /**
  * Same base URL as `apiUrl()` in `lib/site.ts`, kept local so Playwright can import this
@@ -7,28 +10,6 @@ import type { ApiError } from '@pavisie/types';
  */
 function publicApiBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001').replace(/\/+$/, '');
-}
-
-/**
- * Local copies of the public leaderboard DTOs from PR #46 (`packages/types/src/engagement.ts`).
- * Kept here so this page can land on main before #46 merges; swap these for
- * `@pavisie/types/engagement` in this file only once that PR is in.
- */
-export interface PublicLeaderboardEntryDto {
-  rank: number;
-  userId: string;
-  username: string | null;
-  globalName: string | null;
-  avatarUrl: string | null;
-  xp: number;
-  level: number;
-}
-
-export interface PublicLeaderboardDto {
-  guildId: string;
-  items: PublicLeaderboardEntryDto[];
-  nextCursor: string | null;
-  total: number;
 }
 
 /** Matches the API snowflake param (`17–20` decimal digits). */
@@ -40,6 +21,12 @@ export const NOT_PUBLIC_MESSAGE = "This leaderboard isn't public.";
 export const EMPTY_LEADERBOARD_MESSAGE = 'No ranked members yet.';
 export const INVALID_GUILD_MESSAGE = "This isn't a valid leaderboard link.";
 export const UNKNOWN_USER_NAME = 'Unknown user';
+
+/**
+ * Override the root QueryClient default of 30s. A 404 must not be treated as fresh, so a
+ * guild that later turns public is re-requested on remount or reload.
+ */
+export const PUBLIC_LEADERBOARD_STALE_TIME = 0;
 
 export function isGuildSnowflake(guildId: string): boolean {
   return GUILD_ID_PATTERN.test(guildId);
@@ -75,6 +62,12 @@ export class PublicLeaderboardError extends Error {
 
 export function isNotPublicError(error: unknown): boolean {
   return error instanceof PublicLeaderboardError && error.status === 404;
+}
+
+/** Never retry a 404: the board is off or the bot is absent. Other failures get one retry. */
+export function shouldRetryPublicLeaderboard(failureCount: number, error: unknown): boolean {
+  if (isNotPublicError(error)) return false;
+  return failureCount < 1;
 }
 
 export const publicLeaderboardQueryKeys = {
@@ -125,4 +118,15 @@ export async function fetchPublicLeaderboard(
   }
 
   return payload as PublicLeaderboardDto;
+}
+
+export function publicLeaderboardQueryOptions(guildId: string, cursor?: string) {
+  return {
+    queryKey: publicLeaderboardQueryKeys.page(guildId, cursor),
+    queryFn: () => fetchPublicLeaderboard(guildId, cursor),
+    retry: shouldRetryPublicLeaderboard,
+    staleTime: PUBLIC_LEADERBOARD_STALE_TIME,
+    refetchOnMount: 'always' as const,
+    retryOnMount: true,
+  };
 }

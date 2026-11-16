@@ -8,6 +8,10 @@ interface PageProps {
   params: Promise<{ guildId: string }>;
 }
 
+// This page does not fetch the leaderboard on the server, but stay dynamic so a
+// later server fetch cannot be statically cached (API 404s have no Cache-Control).
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'XP Leaderboard',
   description: 'Public XP leaderboard for a Discord server that has opted in.',

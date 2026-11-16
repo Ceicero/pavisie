@@ -6,6 +6,7 @@ import {
   INVALID_GUILD_MESSAGE,
   NOT_PUBLIC_MESSAGE,
   PUBLIC_LEADERBOARD_LIMIT,
+  PUBLIC_LEADERBOARD_STALE_TIME,
   PublicLeaderboardError,
   UNKNOWN_USER_NAME,
   fetchPublicLeaderboard,
@@ -14,6 +15,8 @@ import {
   leaderboardAvatarInitial,
   leaderboardDisplayName,
   publicLeaderboardQueryKeys,
+  publicLeaderboardQueryOptions,
+  shouldRetryPublicLeaderboard,
 } from '../src/lib/public/leaderboard';
 
 function sourceOf(relativeFromTest: string): string {
@@ -64,6 +67,23 @@ describe('public leaderboard helpers', () => {
       false,
     );
     expect(isNotPublicError(new Error('nope'))).toBe(false);
+  });
+
+  it('does not retry a 404 and does not cache one as fresh data', () => {
+    const notPublic = new PublicLeaderboardError('missing', { status: 404, code: 'not_found' });
+    const serverError = new PublicLeaderboardError('oops', { status: 500, code: 'internal' });
+    expect(shouldRetryPublicLeaderboard(0, notPublic)).toBe(false);
+    expect(shouldRetryPublicLeaderboard(0, serverError)).toBe(true);
+    expect(shouldRetryPublicLeaderboard(1, serverError)).toBe(false);
+
+    const options = publicLeaderboardQueryOptions('000000000000000000');
+    expect(PUBLIC_LEADERBOARD_STALE_TIME).toBe(0);
+    expect(options.staleTime).toBe(0);
+    expect(options.refetchOnMount).toBe('always');
+    expect(options.retryOnMount).toBe(true);
+    expect(options.retry(0, notPublic)).toBe(false);
+    expect(options.retry(0, serverError)).toBe(true);
+    expect(options.queryKey).toEqual(publicLeaderboardQueryKeys.page('000000000000000000'));
   });
 });
 
@@ -122,23 +142,25 @@ describe('fetchPublicLeaderboard', () => {
 
   it('throws a 404 PublicLeaderboardError when the route is not public', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.pavisie.com');
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() =>
-        Promise.resolve(
-          new Response(JSON.stringify({ error: { code: 'not_found', message: 'Leaderboard not found.' } }), {
-            status: 404,
-            headers: { 'content-type': 'application/json' },
-          }),
-        ),
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: { code: 'not_found', message: 'Leaderboard not found.' } }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        }),
       ),
     );
+    vi.stubGlobal('fetch', fetchMock);
 
     const err = await fetchPublicLeaderboard('000000000000000000').catch((error: unknown) => error);
     expect(err).toBeInstanceOf(PublicLeaderboardError);
     expect(isNotPublicError(err)).toBe(true);
     expect((err as PublicLeaderboardError).status).toBe(404);
     expect((err as PublicLeaderboardError).message).toBe('Leaderboard not found.');
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ credentials: 'omit', cache: 'no-store' }),
+    );
   });
 
   it('throws a network error when the API is unreachable', async () => {
@@ -167,6 +189,8 @@ describe('public leaderboard page conventions', () => {
     expect(page).not.toContain('apiFetch');
     expect(page).not.toContain('leveling-tab');
     expect(page).not.toContain('/engagement/rank/');
+    expect(page).toContain("dynamic = 'force-dynamic'");
+    expect(page).not.toContain('fetchPublicLeaderboard');
   });
 
   it('uses cursorStack pagination, the 404 copy, and a session-less fetch', () => {
@@ -176,13 +200,17 @@ describe('public leaderboard page conventions', () => {
     expect(panel).toContain('NOT_PUBLIC_MESSAGE');
     expect(panel).toContain('EMPTY_LEADERBOARD_MESSAGE');
     expect(panel).toContain('isNotPublicError');
-    expect(panel).toContain('fetchPublicLeaderboard');
+    expect(panel).toContain('publicLeaderboardQueryOptions');
     expect(panel).not.toContain('apiFetch');
     expect(panel).not.toContain("credentials: 'include'");
     expect(panel).not.toContain('/engagement/rank/');
     expect(lib).toContain("credentials: 'omit'");
     expect(lib).toContain("cache: 'no-store'");
     expect(lib).toContain('/engagement/leaderboard/public');
+    expect(lib).toContain("from '@pavisie/types/engagement'");
+    expect(lib).not.toContain('export interface PublicLeaderboard');
+    expect(lib).toContain('PUBLIC_LEADERBOARD_STALE_TIME');
+    expect(lib).toContain("refetchOnMount: 'always'");
     expect(lib).not.toContain('apiFetch');
     expect(lib).not.toContain("credentials: 'include'");
     expect(lib).not.toContain('messages');

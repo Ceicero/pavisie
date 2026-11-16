@@ -9,20 +9,15 @@ import {
   EMPTY_LEADERBOARD_MESSAGE,
   NOT_PUBLIC_MESSAGE,
   PUBLIC_LEADERBOARD_LIMIT,
-  fetchPublicLeaderboard,
   isNotPublicError,
   leaderboardAvatarInitial,
   leaderboardDisplayName,
-  publicLeaderboardQueryKeys,
+  publicLeaderboardQueryOptions,
   type PublicLeaderboardEntryDto,
 } from '@/lib/public/leaderboard';
 
 function usePublicLeaderboard(guildId: string, cursor?: string) {
-  return useQuery({
-    queryKey: publicLeaderboardQueryKeys.page(guildId, cursor),
-    queryFn: () => fetchPublicLeaderboard(guildId, cursor),
-    retry: (failureCount, error) => (isNotPublicError(error) ? false : failureCount < 1),
-  });
+  return useQuery(publicLeaderboardQueryOptions(guildId, cursor));
 }
 
 function MemberAvatar({ entry, name }: { entry: PublicLeaderboardEntryDto; name: string }) {
