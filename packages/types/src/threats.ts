@@ -84,9 +84,16 @@ export interface ThreatIncidentDto {
   channelId?: string;
   /**
    * `lockdown`: the lockdown action applied (e.g. `raise-verification`,
-   * `quarantine`).
+   * `quarantine`). Raid mode can apply several, so it sends them joined
+   * with `, `. Kept for existing clients; prefer `lockdownActions`.
    */
   lockdownAction?: string;
+  /**
+   * `lockdown`: every lockdown action applied, in order (raid mode sends
+   * e.g. `['channel-send-deny']`). Same content as `lockdownAction`, as a
+   * list a client can render or localize per action.
+   */
+  lockdownActions?: string[];
 }
 
 // ---------------------------------------------------------------------------
