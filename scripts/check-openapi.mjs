@@ -45,30 +45,67 @@ function resolveRef(ref) {
     );
 }
 
-/** Collects every property name reachable from a schema (nested objects, arrays, combinators, $refs). */
+/**
+ * Field names that match SECRET_NAME but are known to be harmless counts or flags. Add a name here, with a
+ * comment saying why, rather than loosening the pattern.
+ */
+const ALLOWED_FIELDS = new Set([]);
+
+/** Values under these keys are data, not schemas, so their keys are never field names. */
+const DATA_KEYS = new Set(['default', 'enum', 'const', 'example', 'examples']);
+
+/**
+ * Walks a schema generically: every keyword's sub-schemas (items, prefixItems, allOf/anyOf/oneOf, not, if/then/else,
+ * additionalProperties, $defs, …) and $refs, checking the field names in `properties` and `patternProperties`.
+ */
 function findSecretFields(schema, at, seen = new Set()) {
+  if (Array.isArray(schema)) {
+    schema.forEach((sub, i) => findSecretFields(sub, `${at}[${i}]`, seen));
+    return;
+  }
   if (schema === null || typeof schema !== 'object') return;
-  if (typeof schema.$ref === 'string') {
-    if (seen.has(schema.$ref)) return;
+  if (typeof schema.$ref === 'string' && !seen.has(schema.$ref)) {
     seen.add(schema.$ref);
     findSecretFields(resolveRef(schema.$ref), `${at}->${schema.$ref}`, seen);
   }
-  for (const [name, sub] of Object.entries(schema.properties ?? {})) {
-    if (SECRET_NAME.test(name)) problems.push(`secret-named response field "${name}" at ${at}`);
-    findSecretFields(sub, `${at}.${name}`, seen);
-  }
-  for (const key of ['items', 'additionalProperties', 'not'])
-    findSecretFields(schema[key], `${at}.${key}`, seen);
-  for (const key of ['allOf', 'anyOf', 'oneOf']) {
-    (schema[key] ?? []).forEach((sub, i) => findSecretFields(sub, `${at}.${key}[${i}]`, seen));
+  for (const [key, value] of Object.entries(schema)) {
+    if (DATA_KEYS.has(key)) continue;
+    if ((key === 'properties' || key === 'patternProperties') && value && typeof value === 'object') {
+      for (const [name, sub] of Object.entries(value)) {
+        if (SECRET_NAME.test(name) && !ALLOWED_FIELDS.has(name)) {
+          problems.push(`secret-named response field "${name}" at ${at}`);
+        }
+        findSecretFields(sub, `${at}.${name}`, seen);
+      }
+    } else {
+      findSecretFields(value, `${at}.${key}`, seen);
+    }
   }
 }
 
+/** Follows `$ref`s on response, header and media objects (e.g. `#/components/responses/…`). */
+function deref(node) {
+  const seen = new Set();
+  while (node && typeof node.$ref === 'string' && !seen.has(node.$ref)) {
+    seen.add(node.$ref);
+    node = resolveRef(node.$ref);
+  }
+  return node;
+}
+
 for (const [route, methods] of Object.entries(spec.paths ?? {})) {
-  for (const [method, op] of Object.entries(methods)) {
-    for (const [status, response] of Object.entries(op?.responses ?? {})) {
+  for (const [method, op] of Object.entries(methods ?? {})) {
+    if (!op || typeof op !== 'object') continue;
+    for (const [status, rawResponse] of Object.entries(op.responses ?? {})) {
+      const response = deref(rawResponse);
+      const at = `${method.toUpperCase()} ${route} ${status}`;
       for (const [type, media] of Object.entries(response?.content ?? {})) {
-        findSecretFields(media.schema, `${method.toUpperCase()} ${route} ${status} ${type}`);
+        findSecretFields(deref(media)?.schema, `${at} ${type}`);
+      }
+      for (const [name, header] of Object.entries(response?.headers ?? {})) {
+        if (SECRET_NAME.test(name) && !ALLOWED_FIELDS.has(name))
+          problems.push(`secret-named response header "${name}" at ${at}`);
+        findSecretFields(deref(header)?.schema, `${at} header ${name}`);
       }
     }
   }
