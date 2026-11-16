@@ -32,6 +32,7 @@ import { describeFastifyClientError, isFastifyRateLimitError } from './lib/fasti
 import type { ZodFastifyInstance } from './lib/http';
 import { dispatchOverlayMessage } from './lib/overlay-registry';
 import { QueueRegistry, type QueueRegistryLike } from './lib/queues';
+import { serializeRequest } from './lib/request-log';
 import { getSession, SESSION_COOKIE_NAME } from './lib/session';
 import { CREATOR_SESSION_COOKIE_NAME, getCreatorSession } from './lib/creator/session';
 
@@ -132,7 +133,12 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   });
 
   const app = Fastify({
-    loggerInstance: deps.logger ?? createLogger('api'),
+    // Fastify logs every request with its `req` serializer. Its default writes the full URL, which would put the
+    // overlay/verify capability tokens and the OAuth `code`/`state` query into the logs (lib/request-log.ts).
+    loggerInstance: (deps.logger ?? createLogger('api')).child(
+      {},
+      { serializers: { req: serializeRequest } },
+    ),
     genReqId: () => randomUUID(),
     // fastify >=5.12 types omit the numeric hop-count form, but lib/request.js still handles `typeof tp === 'number'`.
     trustProxy: env.TRUST_PROXY as boolean | string,
@@ -197,7 +203,6 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
     redis,
     // per-route overrides (auth routes: 20/min) are set via each route's `config.rateLimit`.
   });
-
 
   await app.register(sensible);
 
