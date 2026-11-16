@@ -391,7 +391,8 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
   /**
    * Deletes leveling profile rows only (one member, or every member when `userId` is omitted).
    * Reward roles are not edited here — each affected user is pushed onto the reward-reconcile list
-   * so the bot removes them. Requires the same dashboard admin session as the other writes.
+   * so the bot removes them. The list write happens first: if it fails, no row is deleted and nothing
+   * is audited. Requires the same dashboard admin session as the other writes.
    */
   app.post(
     '/:guildId/engagement/reset',
@@ -411,11 +412,12 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
           });
       const targets = [...new Set(profiles.map((row) => row.userId))];
 
-      const result = await app.prisma.levelProfile.deleteMany({ where });
+      // Enqueue before delete. A Redis failure must leave every level row in place and skip the audit.
       await enqueueRewardReconcile(
         app.redis,
         targets.map((id) => ({ guildId, userId: id })),
       );
+      const result = await app.prisma.levelProfile.deleteMany({ where });
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,

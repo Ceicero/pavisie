@@ -34,7 +34,7 @@ temporary voice channels (SPEC.md §G subset; ARCHITECTURE.md §7.1 row `engagem
 - Dashboard XP adjustments enqueue `{guildId, userId}` on the Redis list `pavisie:engagement:reward-reconcile`
   when the stored level changes. `POST /guilds/:guildId/engagement/reset` only deletes profile rows and
   pushes the same entries (one member when `userId` is set, otherwise everyone who had a profile). The
-  `engagement.reward-reconcile` job drains that list once a minute, 500 members per tick, and applies
+  `engagement.reward-reconcile` job drains that list once a minute, 500 members per tick, retries transient failures up to 3 times, and applies
   the same role sync. Roles update shortly after, not in the HTTP request.
 - Emits the platform `level.up` event on every level-up (message or voice).
 - **Public leaderboard** (`config.leveling.publicLeaderboard`, default **off**): when a guild turns this
