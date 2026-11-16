@@ -1,4 +1,4 @@
-import { AuditAction, NotFoundError } from '@pavisie/core';
+import { AuditAction, NotFoundError, ValidationError } from '@pavisie/core';
 import type { Prisma } from '@pavisie/database';
 import {
   PendingStore,
@@ -34,16 +34,69 @@ import { parseRuleFieldValues } from './rule-fields';
 
 const MAX_RULES_LISTED = 25;
 
+type Translate = CommandContext['t'];
+
 /** Shared Discord-failure sentence, or `errors.generic` for any other numeric Discord code. Never reads `err.message`. */
-function discordRestReply(t: CommandContext['t'], err: unknown): string | null {
+function discordRestReply(t: Translate, err: unknown): string | null {
   const key = discordFailureKey(err);
   if (key) return t(key);
   if (classifyDiscordFailure(err) !== null || discordErrorCode(err) !== null) return t('errors.generic');
   return null;
 }
 
-/** Modal config parse failed. Field-level sentences have no locale key, so this fallback stays literal. */
-const INVALID_CONFIG_VALUES = 'Invalid configuration values.';
+/** Maps a `validateUserRegex` sentence onto `rule.pattern.*`. Returns null when the text is some other error. */
+function localizePatternMessage(
+  t: Translate,
+  message: string,
+  keys: {
+    empty: string;
+    tooLong: string;
+    badFlag: string;
+    unsafe: string;
+    compileFailed: string;
+  },
+): string | null {
+  if (message === 'Pattern must not be empty.') return t(keys.empty);
+  const tooLong = /^Pattern must be (\d+) characters or fewer\.$/.exec(message);
+  if (tooLong?.[1]) return t(keys.tooLong, { max: Number(tooLong[1]) });
+  const badFlag = /^Unsupported regex flag "([^"]+)"\. Allowed flags are g, i, m, s, u\.$/.exec(message);
+  if (badFlag?.[1]) return t(keys.badFlag, { flag: badFlag[1] });
+  if (message === 'Pattern is not safe (risk of catastrophic backtracking).') return t(keys.unsafe);
+  const failed = /^Pattern failed to compile: ([\s\S]*)$/.exec(message);
+  if (failed) return t(keys.compileFailed, { detail: failed[1] ?? '' });
+  return null;
+}
+
+const RULE_PATTERN_KEYS = {
+  empty: 'automod.rule.pattern.empty',
+  tooLong: 'automod.rule.pattern.tooLong',
+  badFlag: 'automod.rule.pattern.badFlag',
+  unsafe: 'automod.rule.pattern.unsafe',
+  compileFailed: 'automod.rule.pattern.compileFailed',
+} as const;
+
+/**
+ * Field and regex sentences are thrown as `ValidationError` from the modal parser. Only the known sentences
+ * are shown, via locale keys. Anything else — including a Zod default — stays on `rule.invalidConfig`, so a
+ * raw error field never becomes the reply.
+ */
+function localizeRuleConfigError(t: Translate, message: string): string {
+  const wholeNumber = /^(.*) must be a whole number\.$/.exec(message);
+  if (wholeNumber?.[1]) return t('automod.rule.field.wholeNumber', { label: wholeNumber[1] });
+  const range = /^(.*) must be between (\d+) and (\d+)\.$/.exec(message);
+  if (range?.[1] && range[2] && range[3]) {
+    return t('automod.rule.field.range', { label: range[1], min: Number(range[2]), max: Number(range[3]) });
+  }
+  if (message === 'Expected "true" or "false".') return t('automod.rule.field.expectedBoolean');
+  return localizePatternMessage(t, message, RULE_PATTERN_KEYS) ?? t('automod.rule.invalidConfig');
+}
+
+function ruleConfigFailureReply(t: Translate, err: unknown): string {
+  const discord = discordRestReply(t, err);
+  if (discord) return discord;
+  if (err instanceof ValidationError) return localizeRuleConfigError(t, err.message);
+  return t('automod.rule.invalidConfig');
+}
 
 interface CreatePendingPayload {
   type: AutomodRuleTypeValue;
@@ -109,8 +162,7 @@ export async function handleRuleCreateModalSubmit(c: ComponentContext, pendingId
   try {
     config = parseRuleFieldValues(payload.type, rawValues);
   } catch (err) {
-    const message = discordRestReply(c.t, err) ?? INVALID_CONFIG_VALUES;
-    await c.interaction.reply({ embeds: [errorEmbed(message)], ephemeral: true });
+    await c.interaction.reply({ embeds: [errorEmbed(ruleConfigFailureReply(c.t, err))], ephemeral: true });
     return;
   }
 
@@ -303,8 +355,7 @@ export async function handleRuleEditModalSubmit(c: ComponentContext, ruleId: str
   try {
     config = parseRuleFieldValues(rule.type as AutomodRuleTypeValue, rawValues);
   } catch (err) {
-    const message = discordRestReply(c.t, err) ?? INVALID_CONFIG_VALUES;
-    await c.interaction.reply({ embeds: [errorEmbed(message)], ephemeral: true });
+    await c.interaction.reply({ embeds: [errorEmbed(ruleConfigFailureReply(c.t, err))], ephemeral: true });
     return;
   }
 

@@ -85,16 +85,16 @@ async function eventDetailEmbed(c: ComponentContext, eventId: string) {
   };
 }
 
-function reviewButtonsRow(eventId: string): ActionRowBuilder<ButtonBuilder>[] {
+function reviewButtonsRow(eventId: string, t: CommandContext['t']): ActionRowBuilder<ButtonBuilder>[] {
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(buildCustomId('automod', 'review-confirm', eventId))
-        .setLabel('Confirm violation')
+        .setLabel(t('automod.review.label.confirmViolation'))
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
         .setCustomId(buildCustomId('automod', 'review-false-positive', eventId))
-        .setLabel('False positive')
+        .setLabel(t('automod.review.label.falsePositive'))
         .setStyle(ButtonStyle.Secondary),
     ),
   ];
@@ -120,12 +120,12 @@ export const reviewSelectHandler: ComponentHandler = {
       payload.event.reviewStatus === 'CONFIRMED' || payload.event.reviewStatus === 'FALSE_POSITIVE';
     await interaction.update({
       embeds: [payload.embed],
-      components: resolved ? [] : reviewButtonsRow(payload.event.id),
+      components: resolved ? [] : reviewButtonsRow(payload.event.id, c.t),
     });
   },
 };
 
-function makeReviewResolveHandler(status: 'CONFIRMED' | 'FALSE_POSITIVE', label: string): ComponentHandler {
+function makeReviewResolveHandler(status: 'CONFIRMED' | 'FALSE_POSITIVE', labelKey: string): ComponentHandler {
   return {
     action: status === 'CONFIRMED' ? 'review-confirm' : 'review-false-positive',
     kind: 'button',
@@ -157,7 +157,7 @@ function makeReviewResolveHandler(status: 'CONFIRMED' | 'FALSE_POSITIVE', label:
 
       const interaction = c.interaction as unknown as ButtonInteraction<'cached'>;
       const confirmationEmbed = successEmbed(
-        c.t('automod.review.marked', { label, user: `<@${c.interaction.user.id}>` }),
+        c.t('automod.review.marked', { label: c.t(labelKey), user: `<@${c.interaction.user.id}>` }),
       );
       await interaction.update({
         embeds: [...interaction.message.embeds, confirmationEmbed],
@@ -167,5 +167,11 @@ function makeReviewResolveHandler(status: 'CONFIRMED' | 'FALSE_POSITIVE', label:
   };
 }
 
-export const reviewConfirmHandler = makeReviewResolveHandler('CONFIRMED', 'Confirmed violation');
-export const reviewFalsePositiveHandler = makeReviewResolveHandler('FALSE_POSITIVE', 'False positive');
+export const reviewConfirmHandler = makeReviewResolveHandler(
+  'CONFIRMED',
+  'automod.review.label.confirmedViolation',
+);
+export const reviewFalsePositiveHandler = makeReviewResolveHandler(
+  'FALSE_POSITIVE',
+  'automod.review.label.falsePositive',
+);

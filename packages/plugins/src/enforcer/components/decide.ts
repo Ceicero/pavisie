@@ -26,15 +26,48 @@ import type { EnforcerConfig } from '../manifest';
 
 type Decision = EnforcerDecideInput['decision'];
 
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
 /** Shared Discord-failure sentence, or `errors.generic` for any other numeric Discord code. Never reads `err.message`. */
-function discordRestReply(
-  t: (key: string, vars?: Record<string, string | number>) => string,
-  err: unknown,
-): string | null {
+function discordRestReply(t: Translate, err: unknown): string | null {
   const key = discordFailureKey(err);
   if (key) return t(key);
   if (classifyDiscordFailure(err) !== null || discordErrorCode(err) !== null) return t('errors.generic');
   return null;
+}
+
+/**
+ * `parseTimeoutDuration` / `parseMuteDuration` return the English sentences in `moderation/duration.ts`.
+ * Those sentences are recognized here and replaced with `decide.duration.*` so the reply itself is a locale
+ * string. An unrecognized result uses `errors.generic` rather than the raw parser text.
+ */
+function localizeDurationError(t: Translate, decision: 'TIMEOUT' | 'MUTE', input: string, error: string): string {
+  if (
+    error ===
+    `"${input}" isn't a valid duration. Use a combination like \`10m\`, \`2h\`, or \`1h30m\`.`
+  ) {
+    return t('decide.duration.invalid', { input });
+  }
+  if (decision === 'TIMEOUT' && error === 'Timeout duration must be at least 5 seconds.') {
+    return t('decide.duration.timeoutMin');
+  }
+  if (
+    decision === 'TIMEOUT' &&
+    error ===
+      'Timeouts cannot exceed 28 days — Discord enforces this limit. Use `/mod ban` with a duration for longer removals.'
+  ) {
+    return t('decide.duration.timeoutMax');
+  }
+  if (decision === 'MUTE' && error === 'Mute duration must be at least 5 seconds.') {
+    return t('decide.duration.muteMin');
+  }
+  if (
+    decision === 'MUTE' &&
+    error === 'Mute duration cannot exceed 1 year. Leave the duration off for an indefinite mute.'
+  ) {
+    return t('decide.duration.muteMax');
+  }
+  return t('errors.generic');
 }
 
 const REQUIRE_REASON_KEY: Partial<Record<Decision, 'warn' | 'timeout' | 'mute' | 'kick' | 'ban'>> = {
@@ -194,7 +227,10 @@ const decideModalHandler: ComponentHandler = {
         // modal used to skip validation entirely and pass the raw parse straight through).
         const parsed = decision === 'TIMEOUT' ? parseTimeoutDuration(raw) : parseMuteDuration(raw);
         if (!parsed.ok) {
-          await interaction.reply({ embeds: [errorEmbed(parsed.error)], ephemeral: true });
+          await interaction.reply({
+            embeds: [errorEmbed(localizeDurationError(c.t, decision, raw, parsed.error))],
+            ephemeral: true,
+          });
           return;
         }
         durationMs = parsed.ms;

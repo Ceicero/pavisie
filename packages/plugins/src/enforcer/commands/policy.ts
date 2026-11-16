@@ -219,6 +219,54 @@ export function addPolicyGroup(builder: SlashCommandBuilder): SlashCommandBuilde
   ) as SlashCommandBuilder;
 }
 
+type Translate = CommandContext['t'];
+
+/** Maps a `validateUserRegex` sentence onto `policy.matcher.pattern.*`. Returns null for any other text. */
+function localizePatternMessage(
+  t: Translate,
+  message: string,
+  keys: {
+    empty: string;
+    tooLong: string;
+    badFlag: string;
+    unsafe: string;
+    compileFailed: string;
+  },
+): string | null {
+  if (message === 'Pattern must not be empty.') return t(keys.empty);
+  const tooLong = /^Pattern must be (\d+) characters or fewer\.$/.exec(message);
+  if (tooLong?.[1]) return t(keys.tooLong, { max: Number(tooLong[1]) });
+  const badFlag = /^Unsupported regex flag "([^"]+)"\. Allowed flags are g, i, m, s, u\.$/.exec(message);
+  if (badFlag?.[1]) return t(keys.badFlag, { flag: badFlag[1] });
+  if (message === 'Pattern is not safe (risk of catastrophic backtracking).') return t(keys.unsafe);
+  const failed = /^Pattern failed to compile: ([\s\S]*)$/.exec(message);
+  if (failed) return t(keys.compileFailed, { detail: failed[1] ?? '' });
+  return null;
+}
+
+const MATCHER_PATTERN_KEYS = {
+  empty: 'policy.matcher.pattern.empty',
+  tooLong: 'policy.matcher.pattern.tooLong',
+  badFlag: 'policy.matcher.pattern.badFlag',
+  unsafe: 'policy.matcher.pattern.unsafe',
+  compileFailed: 'policy.matcher.pattern.compileFailed',
+} as const;
+
+/**
+ * `matcherSchema` still emits the English sentences the API path shows. Slash-command replies translate the
+ * known ones. A Zod default that has no key falls back to the generic matcher error instead of the raw issue.
+ */
+function localizeMatcherMessage(t: Translate, message: string | undefined): string {
+  if (!message) return t('policy.invalidMatcherValueGeneric');
+  if (message === 'mention_count matchers need an integer value >= 1.') return t('policy.matcher.mentionCount');
+  if (message === 'regex matchers need a single pattern string.') return t('policy.matcher.regexSingle');
+  if (message === 'link_domain matchers need a string or list of domains.') return t('policy.matcher.linkDomain');
+  if (message === 'ai_category matchers need a category name.') return t('policy.matcher.aiCategory');
+  const needsValue = /^([a-z_]+) matchers need at least one non-empty value\.$/.exec(message);
+  if (needsValue?.[1]) return t('policy.matcher.needsValue', { type: needsValue[1] });
+  return localizePatternMessage(t, message, MATCHER_PATTERN_KEYS) ?? t('policy.invalidMatcherValueGeneric');
+}
+
 /** `undefined` on a non-numeric `mention_count` value (e.g. a typo like "5 mentions") — the caller must treat
  * that as a validation failure, NOT silently fall back to a threshold that matches everything. Exported for
  * direct unit testing. */
@@ -259,7 +307,7 @@ function buildMatcherFromOptions(
   if (!parsed.success) {
     return {
       matcher: null,
-      error: parsed.error.issues[0]?.message ?? c.t('policy.invalidMatcherValueGeneric'),
+      error: localizeMatcherMessage(c.t, parsed.error.issues[0]?.message),
     };
   }
 
@@ -522,7 +570,7 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
       const parsed = matcherSchema.safeParse({ type: matcherType, value });
       if (!parsed.success) {
         await c.interaction.reply({
-          embeds: [errorEmbed(parsed.error.issues[0]?.message ?? c.t('policy.invalidMatcherValueGeneric'))],
+          embeds: [errorEmbed(localizeMatcherMessage(c.t, parsed.error.issues[0]?.message))],
           ephemeral: true,
         });
         return;

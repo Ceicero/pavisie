@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { EmbedBuilder, ModalSubmitInteraction } from 'discord.js';
-import type { ComponentContext } from '../../sdk';
+import { registerPluginLocales, type ComponentContext } from '../../sdk';
 import { createTestContext } from '../../sdk/testing';
 import { decideComponents } from '../components/decide';
 import type { EnforcerService } from '../../sdk/services';
+import en from '../locales/en.json';
+
+const enforcerT = registerPluginLocales('enforcer', { en });
 
 const decideModalHandler = decideComponents.find((h) => h.action === 'decide-modal')!;
 
@@ -37,7 +40,7 @@ function buildContext(
     guildId: 'g1',
     staffLevel: 'admin',
     locale: 'en-US' as never,
-    t: (key: string) => key,
+    t: enforcerT,
     config: async <T,>() => ({}) as T,
     args,
   };
