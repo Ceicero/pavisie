@@ -1,6 +1,5 @@
 // Discord gateway bot process bootstrap (ARCHITECTURE.md §9).
-import type { Client } from 'discord.js';
-import { GatewayIntentBits } from 'discord.js';
+import { Events, GatewayIntentBits, type Client } from 'discord.js';
 import { createLogger, createRedis, loadEnv, listFromCsv, requireEnv, env } from '@pavisie/core';
 import { ensureGuild, markGuildLeft, prisma } from '@pavisie/database';
 import { allPlugins, PluginRegistry, type PrivilegedIntentsEnabled } from '@pavisie/plugins';
@@ -43,6 +42,9 @@ async function main(): Promise<void> {
   // build/wire everything before calling `client.login()` below (standard discord.js bootstrap ordering — the
   // client is only actually used once `ready` fires, by which point it genuinely is `<true>`).
   const client = createClient(intents) as unknown as Client<true>;
+  // 11 messageCreate listeners is expected: 10 plugin handlers registered by host/loader.ts
+  // plus the prefix listener in this file. 20 leaves a small headroom above that without unbounding.
+  client.setMaxListeners(20);
   // unhandledRejection stays at error. uncaughtException logs fatal (level name, for Railway) and exits.
   installCrashHandlers({ client, logger, channelId: env.ALERT_CHANNEL_ID });
 
@@ -73,7 +75,7 @@ async function main(): Promise<void> {
     });
   }
 
-  client.once('ready', (readyClient) => {
+  client.once(Events.ClientReady, (readyClient) => {
     logger.info({ guilds: readyClient.guilds.cache.size, tag: readyClient.user.tag }, 'bot ready');
 
     // Always report the prefix layer's resolved state, working or not. A `+` command that silently does
