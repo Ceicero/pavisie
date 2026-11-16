@@ -26,7 +26,7 @@ pnpm --filter @pavisie/api lint
 pnpm --filter @pavisie/api openapi:export   # writes docs/openapi.json from a fake-backed app instance
 ```
 
-From the repo root, `pnpm docs:openapi` runs the export and formats the file with Prettier. Run it after adding, removing or changing a route: CI fails if `docs/openapi.json` is stale.
+From the repo root, `pnpm docs:openapi` runs the export, formats the file with Prettier and runs `scripts/check-openapi.mjs`. Run it after adding, removing or changing a route: CI fails if `docs/openapi.json` is stale. The export pins `NODE_ENV`, `E2E_TEST_MODE` and `servers`, so a local `.env` can't leak into the spec. The check fails on `example`/`examples` keywords, a non-placeholder server URL, or a response field named like a secret (`token`, `secret`, `apiKey`, `password`).
 
 ## Architecture
 

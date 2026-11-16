@@ -83,7 +83,7 @@ jobs:
           pnpm docs:permissions
           git diff --exit-code -- docs/PERMISSIONS.md
 
-      - name: Export OpenAPI spec (fails if docs/openapi.json is stale)
+      - name: Export OpenAPI spec (fails if docs/openapi.json is stale, has examples, a real server URL or secret-named response fields)
         run: |
           pnpm docs:openapi
           git diff --exit-code -- docs/openapi.json
