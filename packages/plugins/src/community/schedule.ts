@@ -17,8 +17,7 @@ export type ParsedSchedule =
   | { kind: 'invalid'; reason: string };
 
 const EXPLICIT_OFFSET = /(?:[zZ]|[+-]\d{2}(?::?\d{2})?)$/;
-const CIVIL_TIME =
-  /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/;
+const CIVIL_TIME = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/;
 
 interface CivilParts {
   year: number;
@@ -78,10 +77,7 @@ function parseZonedDateTime(
     minute: match[5] !== undefined ? Number(match[5]) : 0,
     second: match[6] !== undefined ? Number(match[6]) : 0,
   };
-  const dt = DateTime.fromObject(
-    { ...parts, millisecond: 0 },
-    { zone: timezone },
-  );
+  const dt = DateTime.fromObject({ ...parts, millisecond: 0 }, { zone: timezone });
   if (!dt.isValid) return null;
   if (!sameCivilTime(dt, parts)) {
     return {
@@ -102,6 +98,15 @@ function parseZonedDateTime(
 
   return { ok: true, date: dt.toJSDate() };
 }
+
+/**
+ * Longest relative duration (`10m`, `2h30m`, `52w`) accepted for a one-off time. `parseDuration` has no upper
+ * bound, so without this cap `99999999999w` lands past the largest JS Date and yields an Invalid Date (NaN),
+ * which slips past `isInThePast` and fails later in Prisma or Discord with a generic error instead of a reply.
+ */
+export const MAX_RELATIVE_DURATION_MS = 10 * 365 * 86_400_000;
+
+const DURATION_TOO_LONG = 'That duration is too long. Use a time within 10 years.';
 
 /** True if `expr` validates as a cron-parser expression under `timezone`. */
 export function validateCron(
@@ -146,6 +151,7 @@ export function parseSchedule(input: string, timezone: string, now: Date = new D
 
   const durationMs = parseDuration(trimmed);
   if (durationMs !== null && durationMs > 0) {
+    if (durationMs > MAX_RELATIVE_DURATION_MS) return { kind: 'invalid', reason: DURATION_TOO_LONG };
     return { kind: 'at', runAt: new Date(now.getTime() + durationMs) };
   }
 
@@ -174,6 +180,7 @@ export function parseAt(
 
   const durationMs = parseDuration(trimmed);
   if (durationMs !== null && durationMs > 0) {
+    if (durationMs > MAX_RELATIVE_DURATION_MS) return { ok: false, reason: DURATION_TOO_LONG };
     return { ok: true, date: new Date(now.getTime() + durationMs) };
   }
 

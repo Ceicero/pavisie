@@ -343,6 +343,14 @@ describe('community command quality of life', () => {
     expect(deleted(failed.prismaCalls, 'reminder')).toBe(true);
   });
 
+  it('rejects a reminder duration too large for a date instead of saving an Invalid Date', async () => {
+    const huge = harness({ sub: 'set', values: { when: '99999999999w', message: 'ping' } });
+    await remindCommand.execute(huge.c);
+    expect(replyText(huge.replies)).toContain('too long');
+    expect(huge.replies[0]?.ephemeral).toBe(true);
+    expect(created(huge.prismaCalls, 'reminder')).toBe(false);
+  });
+
   it('uses a helpful empty state for /remind list', async () => {
     const { c, replies } = harness({ sub: 'list' });
     await remindCommand.execute(c);
