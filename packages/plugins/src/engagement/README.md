@@ -42,6 +42,7 @@ temporary voice channels (SPEC.md §G subset; ARCHITECTURE.md §7.1 row `engagem
   answer without a session. Both stay 404 while the toggle is off, the bot is not in the guild, or
   `TRUST_PROXY` is not a numeric hop count. A row exposes rank, XP, level, and that member's Discord
   username, global name, and avatar — nothing else. The rank route also includes level progress.
+  Former members stay listed until a later update.
 
 ### Reputation
 

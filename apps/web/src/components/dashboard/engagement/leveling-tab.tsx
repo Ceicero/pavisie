@@ -286,7 +286,7 @@ export function LevelingTab({ guildId }: { guildId: string }) {
               <p className="text-sm font-medium">Public leaderboard</p>
               <p className="text-xs text-muted-foreground">
                 Anyone can view the XP leaderboard and a member&apos;s rank without signing in. Off by
-                default.
+                default. Former members stay listed until a later update.
               </p>
             </div>
             <Switch

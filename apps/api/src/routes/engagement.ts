@@ -1,6 +1,6 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { NotFoundError, ValidationError, buildPaginated, encodeCursor, env, paginate } from '@pavisie/core';
+import { NotFoundError, ValidationError, buildPaginated, encodeCursor, paginate } from '@pavisie/core';
 import { enqueueRewardReconcile } from '@pavisie/plugins/engagement/reward-queue';
 import { levelFromXp, levelProgress } from '@pavisie/plugins/engagement/service';
 import type {
@@ -32,18 +32,22 @@ const MAX_LEADERBOARD_OFFSET = 10_000;
 const PUBLIC_CACHE_CONTROL = 'public, max-age=60';
 
 /**
- * Public routes stay closed unless the deployment names an exact proxy hop count. `false` (the unset
- * default) and a bare `true` both make `request.ip` useless for the per-IP limit.
+ * Public routes stay closed unless the raw `TRUST_PROXY` value is an integer hop count of at least 1.
+ * The parsed env value is not used: `parseInt` would turn `1abc` and `1.5` into `1`, and `0` trusts no
+ * proxy so every client shares one address.
  */
 function publicProxyIsHopCount(): boolean {
-  return typeof env.TRUST_PROXY === 'number';
+  const raw = process.env.TRUST_PROXY;
+  if (raw === undefined || !/^[0-9]+$/.test(raw)) return false;
+  const hops = Number(raw);
+  return Number.isSafeInteger(hops) && hops >= 1;
 }
 
 /**
- * Cursor offsets are whole numbers only. Fractions, exponents, and values above
- * {@link MAX_LEADERBOARD_OFFSET} are a 400, not a Prisma 500.
+ * Cursor offsets are whole numbers only. Fractions, exponents, and unsafe integers are a 400, not a
+ * Prisma 500. The public route also rejects offsets above {@link MAX_LEADERBOARD_OFFSET}.
  */
-function leaderboardOffset(cursor: string | undefined): number {
+function leaderboardOffset(cursor: string | undefined, maxOffset?: number): number {
   if (!cursor) return 0;
   let decoded: string;
   try {
@@ -55,7 +59,7 @@ function leaderboardOffset(cursor: string | undefined): number {
     throw new ValidationError('Invalid pagination cursor.');
   }
   const offset = Number(decoded);
-  if (!Number.isSafeInteger(offset) || offset > MAX_LEADERBOARD_OFFSET) {
+  if (!Number.isSafeInteger(offset) || (maxOffset !== undefined && offset > maxOffset)) {
     throw new ValidationError('Invalid pagination cursor.');
   }
   return offset;
@@ -206,13 +210,12 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
       const { guildId } = request.params;
       await assertPublicLeaderboardOpen(app, guildId);
       const { cursor, limit: rawLimit } = request.query;
-      const offset = leaderboardOffset(cursor);
+      const offset = leaderboardOffset(cursor, MAX_LEADERBOARD_OFFSET);
       const { limit } = paginate({
         limit: rawLimit,
         maxLimit: PUBLIC_PAGE_MAX,
         defaultLimit: PUBLIC_PAGE_MAX,
       });
-      reply.header('Cache-Control', PUBLIC_CACHE_CONTROL);
       const [rows, total] = await Promise.all([
         app.prisma.levelProfile.findMany({
           where: { guildId },
@@ -234,6 +237,7 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
         xp: row.xp,
         level: row.level,
       }));
+      reply.header('Cache-Control', PUBLIC_CACHE_CONTROL);
       return {
         guildId,
         items,
@@ -252,7 +256,6 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
     async (request, reply): Promise<PublicRankDto> => {
       const { guildId, userId } = request.params;
       await assertPublicLeaderboardOpen(app, guildId);
-      reply.header('Cache-Control', PUBLIC_CACHE_CONTROL);
       const profile = await app.prisma.levelProfile.findUnique({
         where: { guildId_userId: { guildId, userId } },
       });
@@ -263,6 +266,7 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
         getCachedDiscordUser(app.redis, userId),
       ]);
       const { level, intoLevel, span } = levelProgress(profile.xp);
+      reply.header('Cache-Control', PUBLIC_CACHE_CONTROL);
       return {
         userId,
         username: identity.username,

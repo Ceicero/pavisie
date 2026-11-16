@@ -1,5 +1,5 @@
 import type Redis from 'ioredis';
-import { RateLimiter, env, redisKey } from '@pavisie/core';
+import { env, redisKey } from '@pavisie/core';
 import { hasBotToken } from './discord';
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
@@ -15,6 +15,8 @@ export const DISCORD_USER_FAILURE_TTL_SECONDS = 15;
 /** Shared Redis budget for public leaderboard lookups, across every API replica. */
 export const PUBLIC_DISCORD_LOOKUP_LIMIT = 5;
 export const PUBLIC_DISCORD_LOOKUP_WINDOW_MS = 1000;
+/** A hung Discord call must not hold a concurrency slot indefinitely. */
+export const PUBLIC_DISCORD_LOOKUP_TIMEOUT_MS = 3000;
 /** In-process cap so one page cannot open more than this many Discord user requests at once. */
 export const PUBLIC_DISCORD_LOOKUP_CONCURRENCY = 5;
 
@@ -141,6 +143,7 @@ async function fetchDiscordUserOnce(userId: string): Promise<FetchOutcome> {
   try {
     res = await fetch(`${DISCORD_API_BASE}/users/${encodeURIComponent(userId)}`, {
       headers: { Authorization: `Bot ${env.DISCORD_TOKEN}` },
+      signal: AbortSignal.timeout(PUBLIC_DISCORD_LOOKUP_TIMEOUT_MS),
     });
   } catch {
     return { kind: 'error' };
@@ -155,14 +158,21 @@ async function fetchDiscordUserOnce(userId: string): Promise<FetchOutcome> {
   }
 }
 
+/**
+ * Opens the one-second window with `SET key 0 PX window NX` (count and expiry in one command), then
+ * `INCR`. If the key is already there with no TTL, `PEXPIRE` puts the expiry back. A Redis error
+ * refuses the lookup.
+ */
 async function takePublicLookupBudget(redis: Redis): Promise<boolean> {
+  const key = redisKey('ratelimit', PUBLIC_LOOKUP_BUDGET_KEY);
   try {
-    const result = await new RateLimiter(redis).consume(
-      PUBLIC_LOOKUP_BUDGET_KEY,
-      PUBLIC_DISCORD_LOOKUP_LIMIT,
-      PUBLIC_DISCORD_LOOKUP_WINDOW_MS,
-    );
-    return result.allowed;
+    await redis.set(key, '0', 'PX', PUBLIC_DISCORD_LOOKUP_WINDOW_MS, 'NX');
+    const count = await redis.incr(key);
+    const ttl = await redis.pttl(key);
+    if (ttl < 0) {
+      await redis.pexpire(key, PUBLIC_DISCORD_LOOKUP_WINDOW_MS);
+    }
+    return count <= PUBLIC_DISCORD_LOOKUP_LIMIT;
   } catch {
     return false;
   }
