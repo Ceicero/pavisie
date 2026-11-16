@@ -24,7 +24,7 @@ const CENSOR = '[REDACTED]';
  * `/webhooks/:id/:token[/…]`), and discord.js REST errors carry that path as `err.url`. Mask only the token segment
  * so the route stays readable in the logs. Webhook tokens never expire, so this matters most for them.
  */
-const DISCORD_TOKEN_PATH = /(\/(?:webhooks|interactions)\/\d{5,25}\/)[A-Za-z0-9._~%-]{8,}/g;
+const DISCORD_TOKEN_PATH = /(\/(?:webhooks|interactions)\/\d+\/)[A-Za-z0-9._~%-]{8,}/g;
 
 /** Masks Discord interaction and webhook tokens inside a URL or any string that contains one. */
 export function redactDiscordTokens(text: string): string {
@@ -36,50 +36,58 @@ export function redactDiscordTokens(text: string): string {
 /** How deep `scrubLogValue` follows nested objects. Deeper values are replaced, never written unchecked. */
 const MAX_SCRUB_DEPTH = 8;
 
-/** pino's standard `err` serializer returns objects with its own prototype, at every level of a nested error. */
-const SERIALIZED_ERROR_PROTO: unknown = Object.getPrototypeOf(pino.stdSerializers.err(new Error('probe')));
-
-/** Plain data and pino-serialized errors are walked. Other class instances (Date, Buffer, …) are left alone. */
-function isWalkable(value: object): value is Record<string, unknown> {
-  const proto: unknown = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null || proto === SERIALIZED_ERROR_PROTO;
-}
-
 /**
  * Cleans one logged value at any depth, which pino's path-based `redact` can't do (its `*.requestBody` wildcard
  * matches exactly one level):
  * - every `Error` becomes pino's standard serialized form (which also expands `AggregateError.errors` and nested
  *   error properties, and folds `cause` into the stack), then is cleaned like any other object;
  * - a `requestBody` key (the outgoing message a discord.js REST error carries) is censored wherever it sits;
- * - strings have Discord interaction and webhook tokens masked.
+ * - strings have Discord interaction and webhook tokens masked;
+ * - a `toJSON()` method is called here, so what it returns is cleaned too (a `URL` logs as its full href);
+ * - class instances are walked like plain objects, since JSON writes their own enumerable properties the same way.
  * Copy-on-write: the caller's objects are never mutated, and an untouched value is returned as is.
  */
 export function scrubLogValue(value: unknown, depth = 0, seen: WeakSet<object> = new WeakSet()): unknown {
   if (typeof value === 'string') return redactDiscordTokens(value);
   if (value === null || typeof value !== 'object') return value;
+  // Binary data can't hold a readable token and can be huge.
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return value;
   if (depth > MAX_SCRUB_DEPTH) return '[Truncated]';
   if (seen.has(value)) return '[Circular]';
 
-  if (value instanceof Error) {
-    seen.add(value);
-    const serialized = scrubLogValue(pino.stdSerializers.err(value), depth, seen);
-    seen.delete(value);
-    return serialized;
-  }
-  const isArray = Array.isArray(value);
-  if (!isArray && !isWalkable(value)) return value;
-
   seen.add(value);
+  try {
+    if (value instanceof Error) return scrubObject(pino.stdSerializers.err(value), depth, seen);
+    const toJSON = (value as { toJSON?: unknown }).toJSON;
+    if (typeof toJSON === 'function') {
+      // A Date gives a string and comes back unchanged in the output; anything else is cleaned as data.
+      return scrubLogValue((toJSON as () => unknown).call(value), depth + 1, seen);
+    }
+    return scrubObject(value, depth, seen);
+  } catch {
+    // A throwing getter or toJSON must never take the log line (or the caller) down with it.
+    return '[Unserializable]';
+  } finally {
+    seen.delete(value);
+  }
+}
+
+function scrubObject(value: object, depth: number, seen: WeakSet<object>): unknown {
+  const isArray = Array.isArray(value);
   let copy: Record<string, unknown> | unknown[] | undefined;
   for (const key of Object.keys(value)) {
     const before = (value as Record<string, unknown>)[key];
-    const after = !isArray && key === 'requestBody' ? CENSOR : scrubLogValue(before, depth + 1, seen);
+    let after: unknown;
+    if (isArray) after = scrubLogValue(before, depth + 1, seen);
+    else if (key.toLowerCase() === 'requestbody') after = CENSOR;
+    // A `toJSON` own property (set on an error, then copied by the serializer) would replace the cleaned object.
+    else if (key === 'toJSON' && typeof before === 'function') after = undefined;
+    else after = scrubLogValue(before, depth + 1, seen);
     if (after !== before) {
       copy ??= isArray ? [...value] : { ...value };
       (copy as Record<string, unknown>)[key] = after;
     }
   }
-  seen.delete(value);
   return copy ?? value;
 }
 
@@ -106,6 +114,20 @@ export const LOGGER_OPTIONS: LoggerOptions = {
     // names, so with numbers every warn/error line showed up (and filtered) as info.
     level: (label) => ({ level: label }),
     log: (object) => scrubLogValue(object) as Record<string, unknown>,
+  },
+  hooks: {
+    // The message text is not part of the object the formatter sees. pino takes it from the string arguments, or
+    // from `err.message` when an error is logged on its own, and an error message can quote the request URL.
+    logMethod(args, method) {
+      const [first, ...rest] = args as unknown[];
+      const cleaned = rest.map((arg) => (typeof arg === 'string' ? redactDiscordTokens(arg) : arg));
+      if (typeof first === 'string')
+        return method.apply(this, [redactDiscordTokens(first), ...cleaned] as never);
+      if (first instanceof Error && cleaned.length === 0) {
+        return method.apply(this, [first, redactDiscordTokens(first.message)] as never);
+      }
+      return method.apply(this, [first, ...cleaned] as never);
+    },
   },
   ...(usePretty
     ? { transport: { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:standard' } } }

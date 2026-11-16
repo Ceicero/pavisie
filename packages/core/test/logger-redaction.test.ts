@@ -147,6 +147,57 @@ describe('logger redaction', () => {
     });
   });
 
+  it('masks a token quoted in the message text, as a string argument or taken from err.message', () => {
+    const url = `https://discord.com/api/v10/webhooks/123456789012345678/${WEBHOOK_TOKEN}`;
+    const { log, lines } = capture();
+    log.warn(`POST ${url} failed`);
+    log.warn({ attempt: 2 }, `POST ${url} failed`);
+    log.warn({ attempt: 2 }, 'POST %s failed', url);
+    log.error(new Error(`request to ${url} failed`));
+    log.error({ err: new Error('x') }, new Error(`request to ${url} failed`).message);
+    expect(lines()).not.toContain(WEBHOOK_TOKEN);
+    expect(lines().match(/webhooks\/123456789012345678\/\[REDACTED\]/g)!.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('cleans what toJSON returns, class instances that hold an error, and URL objects', () => {
+    const url = `https://discord.com/api/v10/webhooks/123456789012345678/${WEBHOOK_TOKEN}`;
+    class Job {
+      readonly err = restError(url, 'class body');
+      readonly name = 'send';
+    }
+    const withToJson = Object.assign(restError(url, 'tojson body'), {
+      toJSON: () => ({ url, requestBody: 'tojson body' }),
+    });
+    const { log, lines } = capture();
+    log.error({ job: new Job() }, 'a');
+    log.error({ err: withToJson }, 'b');
+    log.error({ plain: { toJSON: () => ({ url }) } }, 'c');
+    log.error({ target: new URL(url) }, 'd');
+    log.error({ err: Object.assign(new Error('y'), { rawError: { requestbody: 'lowercase body' } }) }, 'e');
+    const out = lines();
+    for (const leaked of [WEBHOOK_TOKEN, 'class body', 'tojson body', 'lowercase body']) {
+      expect(out).not.toContain(leaked);
+    }
+    expect(out).toContain('"name":"send"');
+    expect(out.split('\n').filter(Boolean)).toHaveLength(5);
+  });
+
+  it('writes dates and plain data as before, and survives a throwing getter', () => {
+    const { log, lines } = capture();
+    const when = new Date('2026-11-16T00:00:00.000Z');
+    const hostile = Object.defineProperty({}, 'boom', {
+      enumerable: true,
+      get: () => {
+        throw new Error('getter');
+      },
+    });
+    log.info({ when, hostile, nested: { list: [1, 'two', null] } }, 'x');
+    const line = JSON.parse(lines()) as Record<string, unknown>;
+    expect(line.when).toBe('2026-11-16T00:00:00.000Z');
+    expect(line.hostile).toBe('[Unserializable]');
+    expect(line.nested).toEqual({ list: [1, 'two', null] });
+  });
+
   it('leaves ordinary Discord API paths and non-token strings alone', () => {
     expect(redactDiscordTokens('https://discord.com/api/v10/guilds/123456789012345678/webhooks')).toBe(
       'https://discord.com/api/v10/guilds/123456789012345678/webhooks',

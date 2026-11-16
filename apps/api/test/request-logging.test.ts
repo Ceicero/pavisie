@@ -91,6 +91,16 @@ describe('API request logging', () => {
     expect(raw()).not.toContain(TOKEN);
     const [missing, cases] = incoming();
     expect(missing!.url).toBe('/overlay/[REDACTED]/no/such/route');
+    for (const url of [
+      `//overlay/${TOKEN}`,
+      `/Overlay/${TOKEN}`,
+      `/VERIFY/${TOKEN}/x`,
+      `/overlay//${TOKEN}`,
+    ]) {
+      await app.inject({ method: 'GET', url });
+    }
+    expect(raw()).not.toContain(TOKEN);
+    expect(raw()).not.toContain('not found');
     expect(cases).toMatchObject({
       url: '/guilds/123456789012345678/moderation/cases',
       route: '/guilds/:guildId/moderation/cases',

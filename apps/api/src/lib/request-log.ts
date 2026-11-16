@@ -15,10 +15,11 @@ const CENSOR = '[REDACTED]';
 const SECRET_PARAM = /token|secret|password|api[-_]?key/i;
 
 /**
- * Path prefixes whose next segment is a capability token. Used when no route matched (a 404 such as
- * `/overlay/<real token>/typo`), where there are no parsed params to go by.
+ * When no route matched (a 404 such as `/overlay/<real token>/typo`) there are no parsed params to go by, so mask
+ * the segment after a capability prefix. Case-insensitive and tolerant of doubled slashes, since a 404 path is
+ * whatever the client sent.
  */
-const CAPABILITY_PREFIXES = ['/overlay/', '/verify/'];
+const UNMATCHED_CAPABILITY_PATH = /^(\/+(?:overlay|verify)\/+)[^/]+/i;
 
 /** The fields of a Fastify request this serializer reads; a structural type so it is easy to test. */
 export interface LoggableRequest {
@@ -46,16 +47,7 @@ function maskSegment(path: string, value: string): string | undefined {
 export function loggablePath(req: LoggableRequest): string {
   let path = (req.url ?? '').split('?', 1)[0] ?? '';
   const route = req.routeOptions?.url;
-  if (route === undefined) {
-    for (const prefix of CAPABILITY_PREFIXES) {
-      if (path.startsWith(prefix)) {
-        const rest = path.slice(prefix.length);
-        const end = rest.indexOf('/');
-        path = `${prefix}${CENSOR}${end === -1 ? '' : rest.slice(end)}`;
-      }
-    }
-    return path;
-  }
+  if (route === undefined) return path.replace(UNMATCHED_CAPABILITY_PATH, `$1${CENSOR}`);
   const params = req.params && typeof req.params === 'object' ? (req.params as Record<string, unknown>) : {};
   for (const [name, value] of Object.entries(params)) {
     if (!SECRET_PARAM.test(name) || typeof value !== 'string' || value === '') continue;
