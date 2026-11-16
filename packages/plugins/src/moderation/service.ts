@@ -49,7 +49,17 @@ import { filterMessagesForPurge, type PurgeCandidateMessage } from './purge';
 
 // In-flight lock only (not the "already applied" record — that's the durable `effectsAppliedAt` DB column) —
 // just long enough to keep two overlapping `appeal-sync` ticks from racing on the same appeal.
-const APPEAL_SYNC_LOCK_TTL_MS = 30_000;
+/**
+ * Long enough for a DM, a member fetch and a timeout lift even when discord.js is queueing behind a 429. The
+ * lease also carries an owner token, so an expired holder can never delete the next holder's lease.
+ */
+const APPEAL_SYNC_LOCK_TTL_MS = 5 * 60_000;
+
+/** Deletes a lease only if it still holds the caller's token. */
+const RELEASE_LEASE_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
+return 0
+`;
 
 // `warn()` serializes insert-then-count-then-escalate per (guildId, targetId) — see `acquireWarnEscalationLock`'s
 // doc comment. Unlike the enforcer decide lock (`enforcer/service.ts`), which rejects a second concurrent decider
@@ -1325,8 +1335,9 @@ export class ModerationServiceImpl implements ModerationService {
    */
   private async applyAppealEffectsOnce(appealId: string): Promise<boolean> {
     const lockKey = this.appealSyncLockKey(appealId);
+    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const acquired = await this.ctx.redis
-      .set(lockKey, '1', 'PX', APPEAL_SYNC_LOCK_TTL_MS, 'NX')
+      .set(lockKey, token, 'PX', APPEAL_SYNC_LOCK_TTL_MS, 'NX')
       .catch((err: unknown) => {
         // Without Redis this degrades to the previous, unserialized behaviour rather than skipping effects.
         this.ctx.logger.warn({ err: String(err), appealId }, 'moderation: appeal effects lease unavailable');
@@ -1340,7 +1351,7 @@ export class ModerationServiceImpl implements ModerationService {
       await this.markAppealEffectsApplied(appealId);
       return true;
     } finally {
-      await this.ctx.redis.del(lockKey).catch(() => undefined);
+      await this.ctx.redis.eval(RELEASE_LEASE_SCRIPT, 1, lockKey, token).catch(() => undefined);
     }
   }
 

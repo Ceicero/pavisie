@@ -110,14 +110,17 @@ whose `expiresAt` has passed but `expiredAt` is still null.
 
 Expiry never undoes a newer punishment:
 
-- A `TIMEOUT` case lifts the member's timeout only if it is the one that case set. If the member's Discord
-  timeout ends more than a minute after the case expires, a moderator gave them a newer timeout since, and that
-  one is left alone (the case is still marked expired).
-- An enforcer timed mute keeps the role while another mute on the same member is still running. A new mute
-  that starts while an old one is being lifted gets its role put back straight after the removal. The remaining
-  window is tiny: the enforcer adds the role before it writes its case, so a case written in the few
-  milliseconds after the lift's second check is still missed. Closing it needs the enforcer to write the case
-  first.
+- A `TIMEOUT` case lifts the member's timeout only if it is the one that case set. The bot applies a timeout
+  before writing its case, so a member whose timeout ends more than a few seconds after the case expires has been
+  given a newer timeout since, and that one is left alone (the case is still marked expired). If a newer timeout
+  lands in the moment between reading the member and lifting, the lift puts it back until that newer case's end.
+- An enforcer timed mute keeps the role while another mute on the same member is still running, and makes sure
+  the role is actually on in that case, so an earlier attempt that removed it and failed to put it back is
+  repaired on the retry. A new mute that starts while an old one is being lifted gets its role put back straight
+  after the removal.
+- The enforcer records a mute's case *before* adding the role (and closes that case at once if the role add
+  fails), and a manual unmute closes the open mute cases *before* removing the role. So the expiry jobs only ever
+  see mutes that are recorded, and never re-add a role after a manual unmute.
 
 ## Appeals
 

@@ -14,16 +14,31 @@ import {
   TableRow,
   useToast,
 } from '@pavisie/ui';
-import { useDeleteInboundWebhook, useInboundWebhooks } from '@/lib/dashboard/integrations-queries';
+import {
+  useDeleteInboundWebhook,
+  useInboundWebhooks,
+  useSetInboundWebhookRequireTimestamp,
+} from '@/lib/dashboard/integrations-queries';
 import { ApiClientError } from '@/lib/dashboard/api';
+import {
+  readRequireTimestamp,
+  requireTimestampErrorMessage,
+} from '@/lib/dashboard/webhook-require-timestamp';
 import { ConfirmDialog } from '../confirm-dialog';
 import { ErrorState } from '../error-state';
+import {
+  INBOUND_LIST_REQUIRE_TIMESTAMP_HELP_ID,
+  RequireTimestampHelp,
+  RequireTimestampSwitch,
+} from './require-timestamp-setting';
 
 export function InboundWebhooksList({ guildId }: { guildId: string }) {
   const { data, isLoading, error, refetch } = useInboundWebhooks(guildId);
   const del = useDeleteInboundWebhook(guildId);
+  const setRequireTimestamp = useSetInboundWebhookRequireTimestamp(guildId);
   const { toast } = useToast();
   const [pendingDelete, setPendingDelete] = React.useState<string | null>(null);
+  const [savingTimestampIds, setSavingTimestampIds] = React.useState<ReadonlySet<string>>(() => new Set());
 
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
   if (isLoading) {
@@ -60,46 +75,95 @@ export function InboundWebhooksList({ guildId }: { guildId: string }) {
     });
   }
 
+  function handleRequireTimestamp(endpointId: string, requireTimestamp: boolean) {
+    setSavingTimestampIds((current) => {
+      const next = new Set(current);
+      next.add(endpointId);
+      return next;
+    });
+    setRequireTimestamp.mutate(
+      { endpointId, requireTimestamp },
+      {
+        onSuccess: () =>
+          toast({
+            title: `Require timestamp is now ${requireTimestamp ? 'on' : 'off'}`,
+            variant: 'success',
+          }),
+        onError: (err) =>
+          toast({
+            title: 'Could not update require timestamp',
+            description: requireTimestampErrorMessage(err),
+            variant: 'destructive',
+          }),
+        onSettled: () =>
+          setSavingTimestampIds((current) => {
+            const next = new Set(current);
+            next.delete(endpointId);
+            return next;
+          }),
+      },
+    );
+  }
+
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Source</TableHead>
-            <TableHead>Channel</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Last event</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.map((hook) => (
-            <TableRow key={hook.id}>
-              <TableCell className="font-medium">{hook.name}</TableCell>
-              <TableCell className="text-xs text-muted-foreground">{hook.provider}</TableCell>
-              <TableCell className="text-xs text-muted-foreground">
-                {hook.channelId ? `#${hook.channelId}` : '—'}
-              </TableCell>
-              <TableCell>
-                {hook.active ? (
-                  <Badge variant="success">Enabled</Badge>
-                ) : (
-                  <Badge variant="secondary">Disabled</Badge>
-                )}
-              </TableCell>
-              <TableCell className="text-xs text-muted-foreground">
-                {hook.lastDeliveryAt ? new Date(hook.lastDeliveryAt).toLocaleString() : 'never'}
-              </TableCell>
-              <TableCell>
-                <Button size="sm" variant="ghost" onClick={() => setPendingDelete(hook.id)}>
-                  Delete
-                </Button>
-              </TableCell>
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Require timestamp</p>
+          <RequireTimestampHelp id={INBOUND_LIST_REQUIRE_TIMESTAMP_HELP_ID} />
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Channel</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Last event</TableHead>
+              <TableHead>Require timestamp</TableHead>
+              <TableHead />
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {data.map((hook) => {
+              const savingTimestamp = savingTimestampIds.has(hook.id);
+              return (
+                <TableRow key={hook.id}>
+                  <TableCell className="font-medium">{hook.name}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{hook.provider}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {hook.channelId ? `#${hook.channelId}` : '—'}
+                  </TableCell>
+                  <TableCell>
+                    {hook.active ? (
+                      <Badge variant="success">Enabled</Badge>
+                    ) : (
+                      <Badge variant="secondary">Disabled</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {hook.lastDeliveryAt ? new Date(hook.lastDeliveryAt).toLocaleString() : 'never'}
+                  </TableCell>
+                  <TableCell>
+                    <RequireTimestampSwitch
+                      checked={readRequireTimestamp(hook)}
+                      pending={savingTimestamp}
+                      helpId={INBOUND_LIST_REQUIRE_TIMESTAMP_HELP_ID}
+                      label={`Require timestamp for ${hook.name}`}
+                      onCheckedChange={(next) => handleRequireTimestamp(hook.id, next)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Button size="sm" variant="ghost" onClick={() => setPendingDelete(hook.id)}>
+                      Delete
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
 
       <ConfirmDialog
         open={pendingDelete !== null}

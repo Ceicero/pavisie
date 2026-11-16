@@ -1,4 +1,10 @@
-import { ChannelType, PermissionFlagsBits, type Guild } from 'discord.js';
+import {
+  ChannelType,
+  DiscordAPIError,
+  PermissionFlagsBits,
+  RESTJSONErrorCodes,
+  type Guild,
+} from 'discord.js';
 import type { Queue } from 'bullmq';
 import RedisMock from 'ioredis-mock';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -540,6 +546,79 @@ describe('upsertSticky', () => {
         actorId: MEMBER_ID,
       }),
     ).rejects.toMatchObject({ code: 'badChannel' });
+  });
+
+  it('rejects with channelGone when the repost prunes a channel Discord deleted', async () => {
+    // Own guild, channel, and timestamp so the repost lock cannot leak into another test's Redis keys.
+    const guildId = '100000000000000099';
+    const channelId = '200000000000000099';
+    const deletedAt = new Date('2026-11-13T21:43:00Z');
+    const channel = fakeChannel({ id: channelId });
+    let fetches = 0;
+    const guild = {
+      id: guildId,
+      members: { me: {} },
+      channels: {
+        fetch: vi.fn(async () => {
+          fetches += 1;
+          if (fetches === 1) return channel;
+          throw new DiscordAPIError(
+            { message: 'Unknown Channel', code: RESTJSONErrorCodes.UnknownChannel },
+            RESTJSONErrorCodes.UnknownChannel,
+            404,
+            'GET',
+            `/channels/${channelId}`,
+            {},
+          );
+        }),
+      },
+    } as unknown as Guild;
+    let pruned = false;
+    let lookedUp = false;
+    const row = {
+      ...stickyRow,
+      guildId,
+      channelId,
+      lastMessageId: null,
+      lastPostedAt: null,
+      createdAt: deletedAt,
+      updatedAt: deletedAt,
+    };
+    const { ctx, prismaCalls } = buildCtx(guild, {
+      prismaOverrides: {
+        stickyMessage: {
+          // First lookup is "no existing sticky". After that, the row stays until deleteMany prunes it.
+          findUnique: async () => {
+            if (!lookedUp) {
+              lookedUp = true;
+              return null;
+            }
+            return pruned ? null : row;
+          },
+          count: async () => 0,
+          upsert: async () => row,
+          deleteMany: async () => {
+            pruned = true;
+            return { count: 1 };
+          },
+        },
+      },
+    });
+
+    await expect(
+      upsertSticky(ctx, {
+        guild,
+        guildId,
+        channelId,
+        content: 'hello',
+        cooldownSeconds: 10,
+        actorId: MEMBER_ID,
+      }),
+    ).rejects.toMatchObject({ code: 'channelGone' });
+    expect(prismaCalls.some((call) => call.model === 'stickyMessage' && call.method === 'deleteMany')).toBe(
+      true,
+    );
+    expect(channel.send).not.toHaveBeenCalled();
   });
 
   it('refuses a channel that is currently on the auto-publish list (B5)', async () => {

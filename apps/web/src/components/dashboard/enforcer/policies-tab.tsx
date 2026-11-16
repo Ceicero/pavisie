@@ -167,6 +167,7 @@ export function PoliciesTab({ guildId }: PoliciesTabProps) {
           {testPolicyId ? (
             <div className="flex gap-2">
               <Input
+                aria-label="Sample message text"
                 placeholder="Sample message text…"
                 value={testText}
                 onChange={(e) => setTestText(e.target.value)}

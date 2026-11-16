@@ -69,7 +69,9 @@ describe('sweepJob — overdue enforcer timed MUTE (ROLE_ADD)', () => {
   });
 
   it('leaves the case active when the role removal fails, so the next sweep retries', async () => {
-    const remove = vi.fn().mockRejectedValue(Object.assign(new Error('Missing Permissions'), { code: 50013 }));
+    const remove = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('Missing Permissions'), { code: 50013 }));
     const { ctx, expiredIds } = build([muteCase('case-1', 'user-1')], { 'user-1': remove });
 
     await expect(sweepJob.processor(ctx, job)).resolves.toBeUndefined();

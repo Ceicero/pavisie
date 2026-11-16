@@ -1,6 +1,7 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
 import { NotFoundError, ValidationError, buildPaginated, paginate } from '@pavisie/core';
+import { enqueueRewardReconcile } from '@pavisie/plugins/engagement/reward-queue';
 import { levelFromXp } from '@pavisie/plugins/engagement/service';
 import type {
   LevelProfileDto,
@@ -21,6 +22,10 @@ const xpAdjustBodySchema = z.object({
   mode: z.enum(['give', 'remove', 'set']),
   amount: z.number().int().min(0).max(1_000_000_000),
   reason: z.string().trim().max(500).optional(),
+});
+
+const resetBodySchema = z.object({
+  userId: snowflakeSchema.optional(),
 });
 
 function toLevelProfileDto(row: {
@@ -59,7 +64,9 @@ function toLevelRewardDto(row: {
  * `/guilds/:guildId/engagement` — leveling/reputation/starboard/temp-voice settings (all live in one
  * `PluginConfig` JSON blob, so a single get/put config endpoint covers every sub-feature's settings —
  * ARCHITECTURE.md §7.4), the leaderboard, level-role rewards CRUD, an audited XP adjustment endpoint,
- * and the reputation leaderboard (ARCHITECTURE.md §10).
+ * an audited leveling reset, and the reputation leaderboard (ARCHITECTURE.md §10).
+ * XP adjustments that change the stored level, and resets, push `{guildId, userId}` onto the
+ * reward-reconcile Redis list so the bot updates roles. This process only writes or deletes rows.
  */
 export default async function engagementRoutes(app: ZodFastifyInstance): Promise<void> {
   app.get(
@@ -174,7 +181,7 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
     },
   );
 
-  /** Dashboard-issued XP adjustment. Writes `LevelProfile` directly (no Discord round-trip needed for the number itself); role-reward reconciliation for the new level happens next time the member is active, or via `/level rewards sync` in Discord. */
+  /** Dashboard-issued XP adjustment. Writes `LevelProfile` directly. When the stored level changes, enqueues `{guildId, userId}` so the bot recomputes reward roles. */
   app.post(
     '/:guildId/engagement/xp-adjust',
     { schema: { params: guildIdParamSchema, body: xpAdjustBodySchema }, preHandler: requireGuildAccess() },
@@ -187,6 +194,7 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
         where: { guildId_userId: { guildId, userId } },
       });
       const currentXp = existing?.xp ?? 0;
+      const previousLevel = existing?.level ?? 0;
       const nextXp =
         mode === 'give'
           ? currentXp + amount
@@ -201,6 +209,10 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
         update: { xp: nextXp, level: nextLevel },
       });
 
+      if (nextLevel !== previousLevel) {
+        await enqueueRewardReconcile(app.redis, [{ guildId, userId }]);
+      }
+
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,
@@ -213,6 +225,47 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
       });
 
       return toLevelProfileDto(row);
+    },
+  );
+
+  /**
+   * Deletes leveling profile rows only (one member, or every member when `userId` is omitted).
+   * Reward roles are not edited here — each affected user is pushed onto the reward-reconcile list
+   * so the bot removes them. Requires the same dashboard admin session as the other writes.
+   */
+  app.post(
+    '/:guildId/engagement/reset',
+    { schema: { params: guildIdParamSchema, body: resetBodySchema }, preHandler: requireGuildAccess() },
+    async (request) => {
+      const guildId = request.guildId!;
+      const session = request.session!;
+      const userId = request.body.userId;
+      const where = userId ? { guildId, userId } : { guildId };
+
+      const profiles = userId
+        ? [{ userId }]
+        : await app.prisma.levelProfile.findMany({
+            where: { guildId },
+            orderBy: { xp: 'desc' },
+            select: { userId: true },
+          });
+      const targets = [...new Set(profiles.map((row) => row.userId))];
+
+      const result = await app.prisma.levelProfile.deleteMany({ where });
+      await enqueueRewardReconcile(
+        app.redis,
+        targets.map((id) => ({ guildId, userId: id })),
+      );
+      await writeDashboardAudit(app.prisma, {
+        guildId,
+        actorId: session.userId,
+        action: 'engagement.level.reset',
+        targetType: 'level_profile',
+        targetId: userId ?? 'all',
+        after: { count: result.count },
+      });
+
+      return { count: result.count };
     },
   );
 
