@@ -1,6 +1,10 @@
 node_modules
 .git
-.env
+# Never bake secrets into an image: exclude every .env* file except the committed examples.
+.env*
+!.env*.example
+**/.env*
+!**/.env*.example
 **/.next
 **/dist
 coverage
