@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   ChannelType,
   PermissionFlagsBits,
@@ -1335,7 +1336,7 @@ export class ModerationServiceImpl implements ModerationService {
    */
   private async applyAppealEffectsOnce(appealId: string): Promise<boolean> {
     const lockKey = this.appealSyncLockKey(appealId);
-    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const token = randomUUID();
     const acquired = await this.ctx.redis
       .set(lockKey, token, 'PX', APPEAL_SYNC_LOCK_TTL_MS, 'NX')
       .catch((err: unknown) => {
