@@ -219,6 +219,56 @@ export function addPolicyGroup(builder: SlashCommandBuilder): SlashCommandBuilde
   ) as SlashCommandBuilder;
 }
 
+type Translate = CommandContext['t'];
+
+/** Maps a `validateUserRegex` sentence onto `policy.matcher.pattern.*`. Returns null for any other text. */
+function localizePatternMessage(
+  t: Translate,
+  message: string,
+  keys: {
+    empty: string;
+    tooLong: string;
+    badFlag: string;
+    unsafe: string;
+    compileFailed: string;
+  },
+): string | null {
+  if (message === 'Pattern must not be empty.') return t(keys.empty);
+  const tooLong = /^Pattern must be (\d+) characters or fewer\.$/.exec(message);
+  if (tooLong?.[1]) return t(keys.tooLong, { max: Number(tooLong[1]) });
+  const badFlag = /^Unsupported regex flag "([^"]+)"\. Allowed flags are g, i, m, s, u\.$/.exec(message);
+  if (badFlag?.[1]) return t(keys.badFlag, { flag: badFlag[1] });
+  if (message === 'Pattern is not safe (risk of catastrophic backtracking).') return t(keys.unsafe);
+  const failed = /^Pattern failed to compile: ([\s\S]*)$/.exec(message);
+  if (failed) return t(keys.compileFailed, { detail: failed[1] ?? '' });
+  return null;
+}
+
+const MATCHER_PATTERN_KEYS = {
+  empty: 'policy.matcher.pattern.empty',
+  tooLong: 'policy.matcher.pattern.tooLong',
+  badFlag: 'policy.matcher.pattern.badFlag',
+  unsafe: 'policy.matcher.pattern.unsafe',
+  compileFailed: 'policy.matcher.pattern.compileFailed',
+} as const;
+
+/**
+ * `matcherSchema` still emits the English sentences the API path shows. Slash-command replies translate the
+ * known ones. A Zod default that has no key falls back to the generic matcher error instead of the raw issue.
+ */
+function localizeMatcherMessage(t: Translate, message: string | undefined): string {
+  if (!message) return t('policy.invalidMatcherValueGeneric');
+  if (message === 'mention_count matchers need an integer value >= 1.')
+    return t('policy.matcher.mentionCount');
+  if (message === 'regex matchers need a single pattern string.') return t('policy.matcher.regexSingle');
+  if (message === 'link_domain matchers need a string or list of domains.')
+    return t('policy.matcher.linkDomain');
+  if (message === 'ai_category matchers need a category name.') return t('policy.matcher.aiCategory');
+  const needsValue = /^([a-z_]+) matchers need at least one non-empty value\.$/.exec(message);
+  if (needsValue?.[1]) return t('policy.matcher.needsValue', { type: needsValue[1] });
+  return localizePatternMessage(t, message, MATCHER_PATTERN_KEYS) ?? t('policy.invalidMatcherValueGeneric');
+}
+
 /** `undefined` on a non-numeric `mention_count` value (e.g. a typo like "5 mentions") — the caller must treat
  * that as a validation failure, NOT silently fall back to a threshold that matches everything. Exported for
  * direct unit testing. */
@@ -246,7 +296,10 @@ function buildMatcherFromOptions(
 
   const value = parseMatcherValue(type, rawValue);
   if (value === undefined) {
-    return { matcher: null, error: `"${rawValue}" is not a valid value for a ${type} matcher.` };
+    return {
+      matcher: null,
+      error: c.t('policy.invalidMatcherValue', { value: rawValue, type }),
+    };
   }
 
   // Validate through the same `matcherSchema` the API/dashboard path uses (policyMatchersSchema) — a slash
@@ -254,51 +307,79 @@ function buildMatcherFromOptions(
   // threshold that matches every message.
   const parsed = matcherSchema.safeParse({ type, value, caseSensitive, wholeWord });
   if (!parsed.success) {
-    return { matcher: null, error: parsed.error.issues[0]?.message ?? 'Invalid matcher value.' };
+    return {
+      matcher: null,
+      error: localizeMatcherMessage(c.t, parsed.error.issues[0]?.message),
+    };
   }
 
   return { matcher: parsed.data };
 }
 
-function policySummaryLine(policy: {
-  id: string;
-  name: string;
-  enabled: boolean;
-  severity: string;
-  matchers: unknown;
-}): string {
+function policySummaryLine(
+  policy: {
+    id: string;
+    name: string;
+    enabled: boolean;
+    severity: string;
+    matchers: unknown;
+  },
+  t: Translate,
+): string {
   const matcherCount = Array.isArray(policy.matchers) ? policy.matchers.length : 0;
-  return `${policy.enabled ? '🟢' : '⚪'} **${policy.name}** (${policy.severity}) — ${matcherCount} matcher(s) — \`${policy.id}\``;
+  return t('policy.detail.summary', {
+    mark: policy.enabled ? '🟢' : '⚪',
+    name: policy.name,
+    severity: policy.severity,
+    count: matcherCount,
+    id: policy.id,
+  });
 }
 
-function policyDetailEmbed(policy: {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  severity: string;
-  matchers: MatcherInput[];
-  channelIds: string[];
-  exemptRoleIds: string[];
-  exemptChannelIds: string[];
-  suggestedAction: string | null;
-}) {
+function policyDetailEmbed(
+  policy: {
+    id: string;
+    name: string;
+    description: string;
+    enabled: boolean;
+    severity: string;
+    matchers: MatcherInput[];
+    channelIds: string[];
+    exemptRoleIds: string[];
+    exemptChannelIds: string[];
+    suggestedAction: string | null;
+  },
+  title: string,
+  t: Translate,
+) {
+  const none = t('policy.detail.none');
   const lines = [
     policy.description,
     '',
-    `Enabled: ${policy.enabled ? 'Yes' : 'No'}`,
-    `Severity: ${policy.severity}`,
-    `Suggested action: ${policy.suggestedAction ?? '_None_'}`,
-    `Scope: ${policy.channelIds.length > 0 ? policy.channelIds.map((id) => `<#${id}>`).join(', ') : 'All channels'}`,
-    `Exempt roles: ${policy.exemptRoleIds.length > 0 ? policy.exemptRoleIds.map((id) => `<@&${id}>`).join(', ') : '_None_'}`,
-    `Exempt channels: ${policy.exemptChannelIds.length > 0 ? policy.exemptChannelIds.map((id) => `<#${id}>`).join(', ') : '_None_'}`,
+    `${t('policy.detail.enabled')}: ${policy.enabled ? t('policy.detail.yes') : t('policy.detail.no')}`,
+    `${t('policy.detail.severity')}: ${policy.severity}`,
+    `${t('policy.detail.suggestedAction')}: ${policy.suggestedAction ?? none}`,
+    `${t('policy.detail.scope')}: ${
+      policy.channelIds.length > 0
+        ? policy.channelIds.map((id) => `<#${id}>`).join(', ')
+        : t('policy.detail.allChannels')
+    }`,
+    `${t('policy.detail.exemptRoles')}: ${
+      policy.exemptRoleIds.length > 0 ? policy.exemptRoleIds.map((id) => `<@&${id}>`).join(', ') : none
+    }`,
+    `${t('policy.detail.exemptChannels')}: ${
+      policy.exemptChannelIds.length > 0 ? policy.exemptChannelIds.map((id) => `<#${id}>`).join(', ') : none
+    }`,
     '',
-    '**Matchers**',
-    ...policy.matchers.map(
-      (m) => `• ${m.type}: ${Array.isArray(m.value) ? m.value.join(', ') : String(m.value)}`,
+    t('policy.detail.matchers'),
+    ...policy.matchers.map((m) =>
+      t('policy.detail.matcher', {
+        type: m.type,
+        value: Array.isArray(m.value) ? m.value.join(', ') : String(m.value),
+      }),
     ),
   ];
-  return infoEmbed(`Policy: ${policy.name}`, lines.join('\n'));
+  return infoEmbed(title, lines.join('\n'));
 }
 
 async function findPolicyOrReply(c: CommandContext, policyId: string) {
@@ -410,8 +491,20 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
       where: { guildId: c.guildId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
+    if (policies.length === 0) {
+      await c.interaction.reply({
+        embeds: [infoEmbed(c.t('policy.listTitle'), c.t('policy.listEmpty'))],
+        ephemeral: true,
+      });
+      return;
+    }
     await c.interaction.reply({
-      embeds: [listEmbed(c.t('policy.listTitle'), policies.map(policySummaryLine))],
+      embeds: [
+        listEmbed(
+          c.t('policy.listTitle'),
+          policies.map((policy) => policySummaryLine(policy, c.t)),
+        ),
+      ],
       ephemeral: true,
     });
     return;
@@ -421,7 +514,13 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
     const policy = await findPolicyOrReply(c, c.interaction.options.getString('policy', true));
     if (!policy) return;
     await c.interaction.reply({
-      embeds: [policyDetailEmbed({ ...policy, matchers: policy.matchers as MatcherInput[] })],
+      embeds: [
+        policyDetailEmbed(
+          { ...policy, matchers: policy.matchers as MatcherInput[] },
+          c.t('policy.viewTitle', { name: policy.name }),
+          c.t,
+        ),
+      ],
       ephemeral: true,
     });
     return;
@@ -491,7 +590,9 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
       const value = parseMatcherValue(matcherType, matcherValueRaw);
       if (value === undefined) {
         await c.interaction.reply({
-          embeds: [errorEmbed(`"${matcherValueRaw}" is not a valid value for a ${matcherType} matcher.`)],
+          embeds: [
+            errorEmbed(c.t('policy.invalidMatcherValue', { value: matcherValueRaw, type: matcherType })),
+          ],
           ephemeral: true,
         });
         return;
@@ -499,7 +600,7 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
       const parsed = matcherSchema.safeParse({ type: matcherType, value });
       if (!parsed.success) {
         await c.interaction.reply({
-          embeds: [errorEmbed(parsed.error.issues[0]?.message ?? 'Invalid matcher value.')],
+          embeds: [errorEmbed(localizeMatcherMessage(c.t, parsed.error.issues[0]?.message))],
           ephemeral: true,
         });
         return;
@@ -575,7 +676,7 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
     const matches = evaluate(message, policies);
     if (matches.length === 0) {
       await c.interaction.reply({
-        embeds: [infoEmbed('No matches', 'This text did not match any of the tested policies.')],
+        embeds: [infoEmbed(c.t('policy.testNoMatchTitle'), c.t('policy.testNoMatch'))],
         ephemeral: true,
       });
       return;
@@ -584,7 +685,7 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
     await c.interaction.reply({
       embeds: [
         listEmbed(
-          'Test matches',
+          c.t('policy.testMatchesTitle'),
           matches.map((m) => `**${m.policyName}** (${m.severity}) — ${m.matcherSummary}`),
         ),
       ],
