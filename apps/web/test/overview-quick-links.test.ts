@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { PluginSummary } from '@pavisie/types';
-import { QUICK_LINKS, visibleQuickLinks } from '../src/app/dashboard/[guildId]/page';
+import { QUICK_LINKS, visibleQuickLinks } from '../src/components/dashboard/overview-quick-links';
 
 function makePlugin(overrides: Partial<PluginSummary> = {}): PluginSummary {
   return {
@@ -82,10 +82,15 @@ describe('overview quick links', () => {
       fileURLToPath(new URL('../src/app/dashboard/[guildId]/page.tsx', import.meta.url)),
       'utf8',
     );
+    const helper = readFileSync(
+      fileURLToPath(new URL('../src/components/dashboard/overview-quick-links.ts', import.meta.url)),
+      'utf8',
+    );
     const nav = readFileSync(fileURLToPath(new URL('../src/components/dashboard/nav.ts', import.meta.url)), 'utf8');
-    expect(page).toContain('isNavItemDisabled');
-    expect(page).toContain("from '@/components/dashboard/nav'");
+    expect(helper).toContain('isNavItemDisabled');
+    expect(helper).toContain("from './nav'");
     expect(page).toContain('visibleQuickLinks(plugins)');
+    expect(page).toContain("from '@/components/dashboard/overview-quick-links'");
     expect(nav).not.toContain('QUICK_LINKS');
     expect(nav).not.toContain('visibleQuickLinks');
   });

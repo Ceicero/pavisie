@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { AlertTriangle, Gavel, LifeBuoy, Puzzle, ScrollText, ShieldAlert, Users } from 'lucide-react';
+import { AlertTriangle, Gavel, LifeBuoy, Puzzle, ScrollText, Users } from 'lucide-react';
 import {
   Alert,
   AlertDescription,
@@ -16,31 +16,9 @@ import {
   Skeleton,
   StatCard,
 } from '@pavisie/ui';
-import type { PluginId, PluginSummary } from '@pavisie/types';
 import { useGuild } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
-import { isNavItemDisabled, type NavItem } from '@/components/dashboard/nav';
-
-export const QUICK_LINKS: {
-  href: string;
-  label: string;
-  icon: typeof Puzzle;
-  pluginId?: PluginId;
-}[] = [
-  { href: 'plugins', label: 'Manage plugins', icon: Puzzle },
-  { href: 'moderation', label: 'Moderation cases', icon: Gavel, pluginId: 'moderation' },
-  { href: 'automod', label: 'Automod rules', icon: ShieldAlert, pluginId: 'automod' },
-  { href: 'tickets', label: 'Ticket queue', icon: LifeBuoy, pluginId: 'tickets' },
-];
-
-function pluginNavItem(pluginId: PluginId | undefined): NavItem {
-  return { href: () => '', label: '', icon: Puzzle, pluginId };
-}
-
-/** Quick links minus plugin-gated entries whose plugin is disabled. "Manage plugins" has no pluginId and always stays. */
-export function visibleQuickLinks(plugins: PluginSummary[] | undefined) {
-  return QUICK_LINKS.filter((link) => !isNavItemDisabled(pluginNavItem(link.pluginId), plugins));
-}
+import { visibleQuickLinks } from '@/components/dashboard/overview-quick-links';
 
 export default function GuildOverviewPage() {
   const { guildId } = useParams<{ guildId: string }>();
