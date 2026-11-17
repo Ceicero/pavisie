@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ChannelType, type ChatInputCommandInteraction, type EmbedBuilder } from 'discord.js';
+import { registerPluginLocales, type CommandContext } from '../../sdk';
 import { createTestContext } from '../../sdk/testing';
-import type { CommandContext } from '../../sdk';
 import type { HostService } from '../../sdk/services';
 import { executeSetup } from '../commands/setup';
 import type { EnforcerConfig } from '../manifest';
+import en from '../locales/en.json';
+
+const enforcerT = registerPluginLocales('enforcer', { en });
 
 const MUTE_DENY = { SendMessages: false, SendMessagesInThreads: false, Speak: false, AddReactions: false };
 
@@ -161,7 +164,7 @@ function buildContext(opts: SetupOpts = {}) {
     guildId: 'g1',
     staffLevel: 'admin',
     locale: 'en-US' as never,
-    t: (key: string) => key,
+    t: enforcerT,
     config: async <T>() => cfg as T,
   };
 

@@ -20,7 +20,7 @@ const appealModalHandler: ComponentHandler = {
     const pending = pendingId ? await pendingStore.take<PendingAppeal>(pendingId) : null;
     if (!pending) {
       await interaction.reply({
-        embeds: [errorEmbed('This appeal session has expired — run `/enforcer appeal` again.')],
+        embeds: [errorEmbed(c.t('appeal.sessionExpired'))],
         ephemeral: true,
       });
       return;
@@ -29,9 +29,7 @@ const appealModalHandler: ComponentHandler = {
     const moderation = c.ctx.services.get('moderation');
     if (!moderation) {
       await interaction.reply({
-        embeds: [
-          errorEmbed('The moderation plugin is unavailable right now — please contact staff directly.'),
-        ],
+        embeds: [errorEmbed(c.t('appeal.moderationUnavailable'))],
         ephemeral: true,
       });
       return;
