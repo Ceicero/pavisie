@@ -198,12 +198,12 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
     // per-route overrides (auth routes: 20/min) are set via each route's `config.rateLimit`.
   });
 
-
   await app.register(sensible);
 
-  // Publicly documenting the exact request/response shape of every endpoint (including public, unauthenticated
-  // ones) is a gift to anyone probing for abuse — keep `/docs` out of production entirely (404, via the default
-  // not-found handler) rather than trying to lock it behind auth. Still available in development and test.
+  // Don't serve the interactive explorer on the live host: keep `/docs` out of production entirely (404, via the
+  // default not-found handler) rather than trying to lock it behind auth. Still available in development and test.
+  // The spec document itself is committed as `docs/openapi.json` (`pnpm docs:openapi`), since every route is already
+  // readable in this public repo and a reviewed, CI-checked spec makes API surface changes visible in PR diffs.
   if (env.NODE_ENV !== 'production') {
     await app.register(swagger, {
       openapi: {
