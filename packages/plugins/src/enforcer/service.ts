@@ -738,9 +738,12 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
                 'They are no longer in this server, so the mute role could not be applied.',
               );
             }
-            await targetMember.roles.add(config.muteRoleId, input.reason);
             durationMs =
               durationMs ?? (config.defaultMuteMinutes ? config.defaultMuteMinutes * 60_000 : undefined);
+            // Case first, then the role. If the process stopped between the two the other way round, the member
+            // would be muted with no case, no expiry and no record; and a mute expiring in that gap would see no
+            // running mute and lift the role. With the case written first, both can only ever see a mute that
+            // is recorded.
             const created = await moderation.createCase({
               guildId: input.guildId,
               type: 'ROLE_ADD',
@@ -752,6 +755,17 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
               dmUser: false,
               metadata: { enforcerMute: true, roleId: config.muteRoleId },
             });
+            try {
+              await targetMember.roles.add(config.muteRoleId, input.reason);
+            } catch (err) {
+              // The mute never took effect: close its case at once (conditional, so a case something else
+              // already closed keeps its timestamp). Its expiry job then finds it closed and does nothing, and
+              // a closed case never counts as a running mute for the lift's checks.
+              await ctx.prisma.moderationCase
+                .updateMany({ where: { id: created.id, expiredAt: null }, data: { expiredAt: new Date() } })
+                .catch(() => undefined);
+              throw err;
+            }
             caseId = created.id;
             caseNumber = created.caseNumber;
             break;
@@ -759,11 +773,9 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
           case 'UNMUTE': {
             if (!config.muteRoleId)
               throw new ValidationError('No mute role is configured. Run `/enforcer setup` first.');
-            if (targetMember)
-              await targetMember.roles.remove(config.muteRoleId, input.reason).catch(() => undefined);
-            // Mark the original timed-mute case (if any) as expired now that it was manually lifted, so the
-            // moderation expire/sweep jobs (which also enforce enforcer mutes — see moderation/service.ts) don't
-            // try to remove the role again later.
+            // Close the open timed-mute cases (if any) BEFORE removing the role, so the moderation expire/sweep
+            // jobs neither try to remove the role again later nor, mid-lift, see a mute still running and put
+            // the role back after this manual unmute.
             await ctx.prisma.moderationCase.updateMany({
               where: {
                 guildId: input.guildId,
@@ -774,6 +786,8 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
               },
               data: { expiredAt: new Date() },
             });
+            if (targetMember)
+              await targetMember.roles.remove(config.muteRoleId, input.reason).catch(() => undefined);
             const created = await moderation.createCase({
               guildId: input.guildId,
               type: 'ROLE_REMOVE',
