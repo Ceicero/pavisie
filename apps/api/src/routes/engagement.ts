@@ -1,12 +1,21 @@
 import type { ZodFastifyInstance } from '../lib/http';
 import { z } from 'zod';
-import { NotFoundError, ValidationError, buildPaginated, paginate } from '@pavisie/core';
-import { levelFromXp } from '@pavisie/plugins/engagement/service';
+import { NotFoundError, ValidationError, buildPaginated, encodeCursor, paginate } from '@pavisie/core';
+import {
+  enqueueRewardReconcile,
+  REWARD_RECONCILE_RESET_DELAY_MS,
+} from '@pavisie/plugins/engagement/reward-queue';
+import { levelFromXp, levelProgress } from '@pavisie/plugins/engagement/service';
 import type {
+  EngagementConfigDto,
   LevelProfileDto,
   LevelRewardDto,
+  PublicLeaderboardDto,
+  PublicLeaderboardEntryDto,
+  PublicRankDto,
   ReputationLeaderboardEntryDto,
 } from '@pavisie/types/engagement';
+import { getCachedDiscordUser } from '../lib/discord-users';
 import { requireGuildAccess } from '../lib/guild-access';
 import { guildIdParamSchema, paginationQuerySchema, snowflakeSchema } from '../lib/schemas';
 import { writeDashboardAudit } from '../lib/audit';
@@ -15,12 +24,59 @@ const ENGAGEMENT_PLUGIN_ID = 'engagement' as const;
 
 const rewardBodySchema = z.object({ level: z.number().int().min(1).max(1000), roleId: snowflakeSchema });
 const rewardParamSchema = guildIdParamSchema.extend({ rewardId: z.string().min(1) });
+const userRankParamSchema = guildIdParamSchema.extend({ userId: snowflakeSchema });
+
+/** Tighter than the global 300/minute. Applies only to the two unauthenticated leaderboard routes. */
+const PUBLIC_LEADERBOARD_RATE_LIMIT = { max: 30, timeWindow: '1 minute' } as const;
+const PUBLIC_PAGE_MAX = 25;
+const STAFF_PAGE_MAX = 100;
+/** Past this offset a cursor is rejected instead of being handed to Prisma as `skip`. */
+const MAX_LEADERBOARD_OFFSET = 10_000;
+const PUBLIC_CACHE_CONTROL = 'public, max-age=60';
+
+/**
+ * Public routes stay closed unless the raw `TRUST_PROXY` value is an integer hop count of at least 1.
+ * The parsed env value is not used: `parseInt` would turn `1abc` and `1.5` into `1`, and `0` trusts no
+ * proxy so every client shares one address.
+ */
+function publicProxyIsHopCount(): boolean {
+  const raw = process.env.TRUST_PROXY;
+  if (raw === undefined || !/^[0-9]+$/.test(raw)) return false;
+  const hops = Number(raw);
+  return Number.isSafeInteger(hops) && hops >= 1;
+}
+
+/**
+ * Cursor offsets are whole numbers only. Fractions, exponents, and unsafe integers are a 400, not a
+ * Prisma 500. The public route also rejects offsets above {@link MAX_LEADERBOARD_OFFSET}.
+ */
+function leaderboardOffset(cursor: string | undefined, maxOffset?: number): number {
+  if (!cursor) return 0;
+  let decoded: string;
+  try {
+    decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+  } catch {
+    throw new ValidationError('Invalid pagination cursor.');
+  }
+  if (!/^\d+$/.test(decoded)) {
+    throw new ValidationError('Invalid pagination cursor.');
+  }
+  const offset = Number(decoded);
+  if (!Number.isSafeInteger(offset) || (maxOffset !== undefined && offset > maxOffset)) {
+    throw new ValidationError('Invalid pagination cursor.');
+  }
+  return offset;
+}
 
 const xpAdjustBodySchema = z.object({
   userId: snowflakeSchema,
   mode: z.enum(['give', 'remove', 'set']),
   amount: z.number().int().min(0).max(1_000_000_000),
   reason: z.string().trim().max(500).optional(),
+});
+
+const resetBodySchema = z.object({
+  userId: snowflakeSchema.optional(),
 });
 
 function toLevelProfileDto(row: {
@@ -55,13 +111,38 @@ function toLevelRewardDto(row: {
   };
 }
 
+/** 404 for every closed public leaderboard, including a missing profile, so the body does not say which check failed. */
+async function assertPublicLeaderboardOpen(app: ZodFastifyInstance, guildId: string): Promise<void> {
+  if (!publicProxyIsHopCount()) {
+    throw new NotFoundError('Leaderboard not found.');
+  }
+  const guild = await app.prisma.guild.findUnique({ where: { id: guildId }, select: { botPresent: true } });
+  if (!guild?.botPresent) {
+    throw new NotFoundError('Leaderboard not found.');
+  }
+  const config = await app.configStore.getConfig<EngagementConfigDto>(guildId, ENGAGEMENT_PLUGIN_ID);
+  if (config.leveling.publicLeaderboard !== true) {
+    throw new NotFoundError('Leaderboard not found.');
+  }
+}
+
 /**
  * `/guilds/:guildId/engagement` — leveling/reputation/starboard/temp-voice settings (all live in one
  * `PluginConfig` JSON blob, so a single get/put config endpoint covers every sub-feature's settings —
  * ARCHITECTURE.md §7.4), the leaderboard, level-role rewards CRUD, an audited XP adjustment endpoint,
- * and the reputation leaderboard (ARCHITECTURE.md §10).
+ * an audited leveling reset, and the reputation leaderboard (ARCHITECTURE.md §10).
+ * XP adjustments that change the stored level, and resets, push `{guildId, userId}` onto the
+ * reward-reconcile Redis list so the bot updates roles. This process only writes or deletes rows.
+ * The `/leaderboard/public` and `/rank/:userId` routes take no session. They 404 unless
+ * `leveling.publicLeaderboard` is on and the bot is in the guild.
  */
 export default async function engagementRoutes(app: ZodFastifyInstance): Promise<void> {
+  if (!publicProxyIsHopCount()) {
+    app.log.warn(
+      'Public leveling leaderboard routes are closed because TRUST_PROXY is not a numeric hop count.',
+    );
+  }
+
   app.get(
     '/:guildId/engagement/config',
     { schema: { params: guildIdParamSchema }, preHandler: requireGuildAccess() },
@@ -103,14 +184,103 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
     async (request) => {
       const guildId = request.guildId!;
       const { cursor, limit: rawLimit } = request.query;
-      const { limit, offset } = paginate({ cursor, limit: rawLimit });
-      const rows = await app.prisma.levelProfile.findMany({
-        where: { guildId },
-        orderBy: [{ xp: 'desc' }],
-        skip: offset,
-        take: limit + 1,
+      const offset = leaderboardOffset(cursor);
+      const { limit } = paginate({ limit: rawLimit, maxLimit: STAFF_PAGE_MAX });
+      const [rows, total] = await Promise.all([
+        app.prisma.levelProfile.findMany({
+          where: { guildId },
+          orderBy: [{ xp: 'desc' }],
+          skip: offset,
+          take: limit + 1,
+        }),
+        app.prisma.levelProfile.count({ where: { guildId } }),
+      ]);
+      const items = rows.map((row, index) => ({
+        ...toLevelProfileDto(row),
+        rank: offset + index + 1,
+      }));
+      return buildPaginated(items, limit, offset, total);
+    },
+  );
+
+  app.get(
+    '/:guildId/engagement/leaderboard/public',
+    {
+      schema: { params: guildIdParamSchema, querystring: paginationQuerySchema },
+      config: { rateLimit: PUBLIC_LEADERBOARD_RATE_LIMIT },
+    },
+    async (request, reply): Promise<PublicLeaderboardDto> => {
+      const { guildId } = request.params;
+      await assertPublicLeaderboardOpen(app, guildId);
+      const { cursor, limit: rawLimit } = request.query;
+      const offset = leaderboardOffset(cursor, MAX_LEADERBOARD_OFFSET);
+      const { limit } = paginate({
+        limit: rawLimit,
+        maxLimit: PUBLIC_PAGE_MAX,
+        defaultLimit: PUBLIC_PAGE_MAX,
       });
-      return buildPaginated(rows.map(toLevelProfileDto), limit, offset);
+      const [rows, total] = await Promise.all([
+        app.prisma.levelProfile.findMany({
+          where: { guildId },
+          orderBy: [{ xp: 'desc' }],
+          skip: offset,
+          take: limit + 1,
+        }),
+        app.prisma.levelProfile.count({ where: { guildId } }),
+      ]);
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const identities = await Promise.all(page.map((row) => getCachedDiscordUser(app.redis, row.userId)));
+      const items: PublicLeaderboardEntryDto[] = page.map((row, index) => ({
+        rank: offset + index + 1,
+        userId: row.userId,
+        username: identities[index]?.username ?? null,
+        globalName: identities[index]?.globalName ?? null,
+        avatarUrl: identities[index]?.avatarUrl ?? null,
+        xp: row.xp,
+        level: row.level,
+      }));
+      reply.header('Cache-Control', PUBLIC_CACHE_CONTROL);
+      return {
+        guildId,
+        items,
+        nextCursor: hasMore ? encodeCursor(offset + limit) : null,
+        total,
+      };
+    },
+  );
+
+  app.get(
+    '/:guildId/engagement/rank/:userId',
+    {
+      schema: { params: userRankParamSchema },
+      config: { rateLimit: PUBLIC_LEADERBOARD_RATE_LIMIT },
+    },
+    async (request, reply): Promise<PublicRankDto> => {
+      const { guildId, userId } = request.params;
+      await assertPublicLeaderboardOpen(app, guildId);
+      const profile = await app.prisma.levelProfile.findUnique({
+        where: { guildId_userId: { guildId, userId } },
+      });
+      if (!profile) throw new NotFoundError('Leaderboard not found.');
+
+      const [higher, identity] = await Promise.all([
+        app.prisma.levelProfile.count({ where: { guildId, xp: { gt: profile.xp } } }),
+        getCachedDiscordUser(app.redis, userId),
+      ]);
+      const { level, intoLevel, span } = levelProgress(profile.xp);
+      reply.header('Cache-Control', PUBLIC_CACHE_CONTROL);
+      return {
+        userId,
+        username: identity.username,
+        globalName: identity.globalName,
+        avatarUrl: identity.avatarUrl,
+        rank: 1 + higher,
+        level,
+        xp: profile.xp,
+        intoLevel,
+        span,
+      };
     },
   );
 
@@ -174,7 +344,7 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
     },
   );
 
-  /** Dashboard-issued XP adjustment. Writes `LevelProfile` directly (no Discord round-trip needed for the number itself); role-reward reconciliation for the new level happens next time the member is active, or via `/level rewards sync` in Discord. */
+  /** Dashboard-issued XP adjustment. Writes `LevelProfile` directly. When the stored level changes, enqueues `{guildId, userId}` so the bot recomputes reward roles. */
   app.post(
     '/:guildId/engagement/xp-adjust',
     { schema: { params: guildIdParamSchema, body: xpAdjustBodySchema }, preHandler: requireGuildAccess() },
@@ -187,6 +357,7 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
         where: { guildId_userId: { guildId, userId } },
       });
       const currentXp = existing?.xp ?? 0;
+      const previousLevel = existing?.level ?? 0;
       const nextXp =
         mode === 'give'
           ? currentXp + amount
@@ -201,6 +372,10 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
         update: { xp: nextXp, level: nextLevel },
       });
 
+      if (nextLevel !== previousLevel) {
+        await enqueueRewardReconcile(app.redis, [{ guildId, userId }]);
+      }
+
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,
@@ -213,6 +388,52 @@ export default async function engagementRoutes(app: ZodFastifyInstance): Promise
       });
 
       return toLevelProfileDto(row);
+    },
+  );
+
+  /**
+   * Deletes leveling profile rows only (one member, or every member when `userId` is omitted).
+   * Reward roles are not edited here — each affected user is pushed onto the reward-reconcile list
+   * so the bot removes them. The list write happens first, with `notBefore` 30s ahead so a worker
+   * that is already draining the list cannot sync the old level. If the write fails, no row is
+   * deleted and nothing is audited. Requires the same dashboard admin session as the other writes.
+   */
+  app.post(
+    '/:guildId/engagement/reset',
+    { schema: { params: guildIdParamSchema, body: resetBodySchema }, preHandler: requireGuildAccess() },
+    async (request) => {
+      const guildId = request.guildId!;
+      const session = request.session!;
+      const userId = request.body.userId;
+      const where = userId ? { guildId, userId } : { guildId };
+
+      const profiles = userId
+        ? [{ userId }]
+        : await app.prisma.levelProfile.findMany({
+            where: { guildId },
+            orderBy: { xp: 'desc' },
+            select: { userId: true },
+          });
+      const targets = [...new Set(profiles.map((row) => row.userId))];
+
+      // Enqueue before delete, but not eligible until the delete has landed. A Redis failure must
+      // leave every level row in place and skip the audit.
+      await enqueueRewardReconcile(
+        app.redis,
+        targets.map((id) => ({ guildId, userId: id })),
+        Date.now() + REWARD_RECONCILE_RESET_DELAY_MS,
+      );
+      const result = await app.prisma.levelProfile.deleteMany({ where });
+      await writeDashboardAudit(app.prisma, {
+        guildId,
+        actorId: session.userId,
+        action: 'engagement.level.reset',
+        targetType: 'level_profile',
+        targetId: userId ?? 'all',
+        after: { count: result.count },
+      });
+
+      return { count: result.count };
     },
   );
 

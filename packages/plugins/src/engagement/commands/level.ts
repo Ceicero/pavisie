@@ -1,12 +1,17 @@
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
+  PermissionFlagsBits,
   SlashCommandBuilder,
   userMention,
   type ButtonInteraction,
+  type ChatInputCommandInteraction,
   type EmbedBuilder,
+  type Guild,
+  type User,
 } from 'discord.js';
 import {
   assertStaffLevel,
@@ -20,18 +25,20 @@ import {
   requestConfirmation,
   resolveTextChannel,
   successEmbed,
+  type CommandContext,
   type ComponentHandler,
   type PluginCommand,
   type PluginContext,
 } from '../../sdk';
-import type { EngagementConfig } from '../manifest';
-import { applyLevelUp } from '../level-actions';
-import { computeLevelRewardPlan, formatProgressBar, levelFromXp, levelProgress } from '../service';
+import { clampXpMultiplier, type EngagementConfig } from '../manifest';
+import { applyLevelUp, REWARD_ROLE_SYNC_LIMIT, syncMemberRewardRoles } from '../level-actions';
+import { renderRankCard } from '../rank-card';
+import { formatProgressBar, levelFromXp, levelProgress } from '../service';
 
 const LEADERBOARD_PAGE_SIZE = 10;
 
-/** Most ranked members one `/level rewards sync` will touch, highest-XP first (see the `sync` branch). */
-const REWARD_SYNC_LIMIT = 500;
+/** Most ranked members one `/level rewards sync` or `/level reset` will touch, highest-XP first. */
+const REWARD_SYNC_LIMIT = REWARD_ROLE_SYNC_LIMIT;
 
 const data = new SlashCommandBuilder()
   .setName('level')
@@ -176,11 +183,216 @@ const data = new SlashCommandBuilder()
           )
           .addRoleOption((opt) => opt.setName('role').setDescription('Role to un-ignore.')),
       ),
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName('multiplier')
+      .setDescription('Boost or reduce XP for a role or channel.')
+      .addSubcommand((sub) =>
+        sub
+          .setName('set')
+          .setDescription('Set the XP multiplier for one role or one channel.')
+          .addNumberOption((opt) =>
+            opt
+              .setName('multiplier')
+              .setDescription('Factor from 0.25 to 5. The higher of the role and channel factors is used.')
+              .setMinValue(0.25)
+              .setMaxValue(5)
+              .setRequired(true),
+          )
+          .addChannelOption((opt) =>
+            opt
+              .setName('channel')
+              .setDescription('Channel whose messages or voice time use this factor.')
+              .addChannelTypes(
+                ChannelType.GuildText,
+                ChannelType.GuildAnnouncement,
+                ChannelType.GuildForum,
+                ChannelType.GuildVoice,
+              ),
+          )
+          .addRoleOption((opt) => opt.setName('role').setDescription('Role whose members use this factor.')),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('clear')
+          .setDescription('Remove the XP multiplier from one role or one channel.')
+          .addChannelOption((opt) =>
+            opt
+              .setName('channel')
+              .setDescription('Channel to clear.')
+              .addChannelTypes(
+                ChannelType.GuildText,
+                ChannelType.GuildAnnouncement,
+                ChannelType.GuildForum,
+                ChannelType.GuildVoice,
+              ),
+          )
+          .addRoleOption((opt) => opt.setName('role').setDescription('Role to clear.')),
+      ),
   );
 
 function xpBar(xp: number): { level: number; intoLevel: number; span: number; bar: string } {
   const { level, intoLevel, span } = levelProgress(xp);
   return { level, intoLevel, span, bar: formatProgressBar(intoLevel, span) };
+}
+
+/** Channel permission for this interaction. Missing data is treated as "cannot attach". */
+function botHasAttachFiles(interaction: ChatInputCommandInteraction<'cached'>): boolean {
+  try {
+    return Boolean(interaction.appPermissions?.has(PermissionFlagsBits.AttachFiles));
+  } catch {
+    return false;
+  }
+}
+
+function rankSubject(interaction: ChatInputCommandInteraction<'cached'>): {
+  user: User;
+  member: { displayName?: string; displayAvatarURL?: User['displayAvatarURL'] } | null;
+} {
+  const user = interaction.options.getUser('user') ?? interaction.user;
+  let member: { displayName?: string; displayAvatarURL?: User['displayAvatarURL'] } | null = null;
+  try {
+    const chosen = interaction.options.getMember('user');
+    const self = user.id === interaction.user.id ? interaction.member : null;
+    const resolved = chosen ?? self;
+    if (resolved) member = resolved;
+  } catch {
+    member = null;
+  }
+  return { user, member };
+}
+
+function rankDisplayName(user: User, member: { displayName?: string } | null): string {
+  const name = (member?.displayName || user.displayName || user.username).trim();
+  return name || user.username;
+}
+
+function avatarUrl(
+  user: User,
+  member: { displayAvatarURL?: User['displayAvatarURL'] } | null,
+): string | null {
+  try {
+    const url =
+      member?.displayAvatarURL?.({ extension: 'png', size: 256 }) ??
+      user.displayAvatarURL({ extension: 'png', size: 256 });
+    return typeof url === 'string' && url.length > 0 ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadAvatar(url: string | null): Promise<Uint8Array | null> {
+  if (!url) return null;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(1_500) });
+    if (!response.ok) return null;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > 1_500_000) return null;
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+const rankCardWarnings = new Set<string>();
+
+/** One warning per distinct failure for the life of the process, so a broken card cannot flood the log. */
+function warnRankCardOnce(
+  logger: PluginContext['logger'],
+  key: string,
+  fields: object,
+  message: string,
+): void {
+  if (rankCardWarnings.has(key)) return;
+  rankCardWarnings.add(key);
+  logger.warn(fields, message);
+}
+
+/**
+ * Public rank reply. Attaches a PNG when it can be rendered and the bot may upload files in this
+ * channel. Any render failure, and a missing Attach Files permission, log once and send the text embed.
+ */
+async function replyRank(c: CommandContext): Promise<void> {
+  const { user, member } = rankSubject(c.interaction);
+  const profile = await c.ctx.prisma.levelProfile.findUnique({
+    where: { guildId_userId: { guildId: c.guildId, userId: user.id } },
+  });
+  if (!profile) {
+    await c.interaction.reply({
+      embeds: [brandEmbed().setDescription(c.t('level.rank.notRanked', { name: user.username }))],
+      ephemeral: false,
+    });
+    return;
+  }
+
+  const rank =
+    1 + (await c.ctx.prisma.levelProfile.count({ where: { guildId: c.guildId, xp: { gt: profile.xp } } }));
+  const { level, intoLevel, span, bar } = xpBar(profile.xp);
+  const embed = brandEmbed()
+    .setTitle(c.t('level.rank.title', { name: user.username }))
+    .addFields(
+      { name: 'Rank', value: `#${rank}`, inline: true },
+      { name: 'Level', value: String(level), inline: true },
+      { name: 'Total XP', value: profile.xp.toLocaleString(), inline: true },
+      {
+        name: 'Progress',
+        value: `${bar}\n${intoLevel.toLocaleString()} / ${span.toLocaleString()} XP to next level`,
+        inline: false,
+      },
+      { name: 'Messages', value: profile.messages.toLocaleString(), inline: true },
+      { name: 'Voice minutes', value: profile.voiceMinutes.toLocaleString(), inline: true },
+    );
+  const portrait = avatarUrl(user, member);
+  if (portrait) embed.setThumbnail(portrait);
+  const textReply = { embeds: [embed], ephemeral: false as const };
+
+  if (!botHasAttachFiles(c.interaction)) {
+    warnRankCardOnce(
+      c.ctx.logger,
+      'attach',
+      {},
+      'engagement: /level rank card skipped; the bot lacks Attach Files in this channel',
+    );
+    await c.interaction.reply(textReply);
+    return;
+  }
+
+  try {
+    const png = await renderRankCard({
+      displayName: rankDisplayName(user, member),
+      rank,
+      xp: profile.xp,
+      avatar: await loadAvatar(portrait),
+    });
+    await c.interaction.reply({
+      ...textReply,
+      files: [new AttachmentBuilder(png, { name: 'rank.png' })],
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    warnRankCardOnce(
+      c.ctx.logger,
+      `render:${message}`,
+      { err },
+      'engagement: /level rank card failed; sending the text rank instead',
+    );
+    if (c.interaction.replied || c.interaction.deferred) return;
+    await c.interaction.reply(textReply);
+  }
+}
+
+function formatXpMultiplier(value: number): string {
+  return String(Math.round(value * 1000) / 1000);
+}
+
+/** `none` when the list is empty, otherwise `<mention> ×2` entries joined with commas. */
+function formatXpMultiplierList(
+  entries: { id: string; multiplier: number }[],
+  mention: (id: string) => string,
+): string {
+  if (entries.length === 0) return 'none';
+  return entries.map((entry) => `${mention(entry.id)} ×${formatXpMultiplier(entry.multiplier)}`).join(', ');
 }
 
 /** Renders `leveling.levelUpChannel` for display: the special modes as words, a channel snowflake as `<#id>`. */
@@ -278,7 +490,9 @@ export const command: PluginCommand = {
       });
 
       const newLevel = levelFromXp(nextXp);
-      const leveledUp = newLevel > (before?.level ?? 0);
+      const previousLevel = before?.level ?? 0;
+      const leveledUp = newLevel > previousLevel;
+      const levelChanged = newLevel !== previousLevel;
       if (newLevel !== profile.level) {
         await c.ctx.prisma.levelProfile.update({ where: { id: profile.id }, data: { level: newLevel } });
       }
@@ -295,6 +509,9 @@ export const command: PluginCommand = {
         source: 'bot',
       });
 
+      // Announcements and `level.up` stay level-up only. `remove` and `set` still recompute reward
+      // roles when the stored level drops; a level-up (including `set` upward) goes through applyLevelUp,
+      // which syncs roles and then announces.
       if (leveledUp) {
         const member = await fetchMemberSafe(c.interaction.guild, targetUser.id);
         await applyLevelUp({
@@ -306,6 +523,17 @@ export const command: PluginCommand = {
           newLevel,
           config: config.leveling,
         });
+      } else if ((sub === 'remove' || sub === 'set') && levelChanged) {
+        const member = await fetchMemberSafe(c.interaction.guild, targetUser.id);
+        if (member) {
+          await syncMemberRewardRoles({
+            ctx: c.ctx,
+            guildId: c.guildId,
+            member,
+            level: newLevel,
+            mode: config.leveling.rewardMode,
+          });
+        }
       }
 
       const key = sub === 'give' ? 'level.xp.given' : sub === 'remove' ? 'level.xp.removed' : 'level.xp.set';
@@ -399,22 +627,17 @@ export const command: PluginCommand = {
       for (const profile of profiles) {
         const member = await fetchMemberSafe(c.interaction.guild, profile.userId);
         if (!member) continue;
-        const plan = computeLevelRewardPlan(
-          [...member.roles.cache.keys()],
+        const wrote = await syncMemberRewardRoles({
+          ctx: c.ctx,
+          guildId: c.guildId,
+          member,
+          level: profile.level,
+          mode: config.leveling.rewardMode,
           rewards,
-          profile.level,
-          config.leveling.rewardMode,
-        );
-        if (plan.toAdd.length === 0 && plan.toRemove.length === 0) continue;
-        try {
-          if (plan.toAdd.length > 0)
-            await member.roles.add(plan.toAdd, 'Pavisie engagement: /level rewards sync');
-          if (plan.toRemove.length > 0)
-            await member.roles.remove(plan.toRemove, 'Pavisie engagement: /level rewards sync');
-          synced += 1;
-        } catch {
-          // Missing permission/hierarchy for this member; skip and keep going.
-        }
+          addReason: 'Pavisie engagement: /level rewards sync',
+          removeReason: 'Pavisie engagement: /level rewards sync',
+        });
+        if (wrote) synced += 1;
       }
       await c.interaction.editReply({
         embeds: [
@@ -484,39 +707,72 @@ export const command: PluginCommand = {
       return;
     }
 
-    // Top-level subcommands.
-    if (sub === 'rank') {
-      const target = c.interaction.options.getUser('user') ?? c.interaction.user;
-      const profile = await c.ctx.prisma.levelProfile.findUnique({
-        where: { guildId_userId: { guildId: c.guildId, userId: target.id } },
-      });
-      if (!profile) {
+    if (group === 'multiplier') {
+      assertStaffLevel(c.staffLevel, 'admin', c.t);
+      const channel = c.interaction.options.getChannel('channel', false);
+      const role = c.interaction.options.getRole('role', false);
+      if ((!channel && !role) || (channel && role)) {
         await c.interaction.reply({
-          embeds: [brandEmbed().setDescription(c.t('level.rank.notRanked', { name: target.username }))],
-          ephemeral: false,
+          embeds: [errorEmbed(c.t('errors.needExactlyOneOption'))],
+          ephemeral: true,
         });
         return;
       }
-      const rank =
-        1 +
-        (await c.ctx.prisma.levelProfile.count({ where: { guildId: c.guildId, xp: { gt: profile.xp } } }));
-      const { level, intoLevel, span, bar } = xpBar(profile.xp);
-      const embed = brandEmbed()
-        .setTitle(c.t('level.rank.title', { name: target.username }))
-        .setThumbnail(target.displayAvatarURL())
-        .addFields(
-          { name: 'Rank', value: `#${rank}`, inline: true },
-          { name: 'Level', value: String(level), inline: true },
-          { name: 'Total XP', value: profile.xp.toLocaleString(), inline: true },
-          {
-            name: 'Progress',
-            value: `${bar}\n${intoLevel.toLocaleString()} / ${span.toLocaleString()} XP to next level`,
-            inline: false,
-          },
-          { name: 'Messages', value: profile.messages.toLocaleString(), inline: true },
-          { name: 'Voice minutes', value: profile.voiceMinutes.toLocaleString(), inline: true },
+
+      const id = channel ? channel.id : role!.id;
+      const key = channel ? 'channelMultipliers' : 'roleMultipliers';
+      const mention = channel ? `<#${id}>` : `<@&${id}>`;
+      const current = config.leveling[key];
+
+      if (sub === 'clear') {
+        await c.ctx.setConfig<EngagementConfig>(
+          c.guildId,
+          { leveling: { ...config.leveling, [key]: current.filter((entry) => entry.id !== id) } },
+          { id: c.interaction.user.id, source: 'bot' },
         );
-      await c.interaction.reply({ embeds: [embed], ephemeral: false });
+        await c.interaction.reply({
+          embeds: [
+            successEmbed(
+              c.t(channel ? 'level.multiplier.clearedChannel' : 'level.multiplier.clearedRole', {
+                channel: mention,
+                role: mention,
+              }),
+            ),
+          ],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const multiplier = clampXpMultiplier(c.interaction.options.getNumber('multiplier', true));
+      await c.ctx.setConfig<EngagementConfig>(
+        c.guildId,
+        {
+          leveling: {
+            ...config.leveling,
+            [key]: [...current.filter((entry) => entry.id !== id), { id, multiplier }],
+          },
+        },
+        { id: c.interaction.user.id, source: 'bot' },
+      );
+      await c.interaction.reply({
+        embeds: [
+          successEmbed(
+            c.t(channel ? 'level.multiplier.setChannel' : 'level.multiplier.setRole', {
+              channel: mention,
+              role: mention,
+              multiplier: formatXpMultiplier(multiplier),
+            }),
+          ),
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    // Top-level subcommands.
+    if (sub === 'rank') {
+      await replyRank(c);
       return;
     }
 
@@ -543,6 +799,9 @@ export const command: PluginCommand = {
         `Reward mode: ${l.rewardMode}`,
         `Ignored channels: ${l.ignoredChannelIds.length}`,
         `Ignored roles: ${l.ignoredRoleIds.length}`,
+        `Role XP multipliers: ${formatXpMultiplierList(l.roleMultipliers, (id) => `<@&${id}>`)}`,
+        `Channel XP multipliers: ${formatXpMultiplierList(l.channelMultipliers, (id) => `<#${id}>`)}`,
+        'XP factor: the higher of the best matching role and the best matching channel (not multiplied). A thread counts its own channel and its parent. Message XP is rolled, multiplied, floored, then limited by the hourly cap. Voice XP uses the same factor.',
       ];
       await c.interaction.reply({ embeds: [listEmbed(c.t('level.config.title'), lines)], ephemeral: true });
       return;
@@ -620,7 +879,14 @@ export const command: PluginCommand = {
     });
 
     if (result.confirmed) {
-      const count = await performReset(c.ctx, c.guildId, c.interaction.user.id, result.payload);
+      const count = await performReset(
+        c.ctx,
+        c.interaction.guild,
+        c.guildId,
+        c.interaction.user.id,
+        result.payload,
+        config.leveling.rewardMode,
+      );
       await c.interaction.reply({
         embeds: [
           successEmbed(
@@ -637,11 +903,35 @@ export const command: PluginCommand = {
 
 async function performReset(
   ctx: PluginContext,
+  guild: Guild,
   guildId: string,
   actorId: string,
   payload: ResetPayload,
+  rewardMode: EngagementConfig['leveling']['rewardMode'],
 ): Promise<number> {
   const where = payload.targetUserId ? { guildId, userId: payload.targetUserId } : { guildId };
+  // Role removal is capped like `/level rewards sync` (highest XP first). The profile delete is not:
+  // every matching row goes, even when more than the cap still hold reward roles.
+  const rewards = await ctx.prisma.levelReward.findMany({ where: { guildId } });
+  const profiles = await ctx.prisma.levelProfile.findMany({
+    where,
+    orderBy: { xp: 'desc' },
+    take: REWARD_SYNC_LIMIT,
+  });
+  for (const profile of profiles) {
+    const member = await fetchMemberSafe(guild, profile.userId);
+    if (!member) continue;
+    await syncMemberRewardRoles({
+      ctx,
+      guildId,
+      member,
+      level: 0,
+      mode: rewardMode,
+      rewards,
+      addReason: 'Pavisie engagement: /level reset',
+      removeReason: 'Pavisie engagement: /level reset',
+    });
+  }
   const result = await ctx.prisma.levelProfile.deleteMany({ where });
   await ctx.audit({
     guildId,
@@ -659,7 +949,15 @@ async function performReset(
 const [confirmReset, cancelReset] = registerConfirmHandlers<ResetPayload>(
   'level-reset',
   async (c, payload) => {
-    const count = await performReset(c.ctx, c.guildId, c.interaction.user.id, payload);
+    const config = await c.config<EngagementConfig>();
+    const count = await performReset(
+      c.ctx,
+      c.interaction.guild,
+      c.guildId,
+      c.interaction.user.id,
+      payload,
+      config.leveling.rewardMode,
+    );
     await c.interaction.followUp({
       embeds: [
         successEmbed(

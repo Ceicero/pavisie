@@ -18,12 +18,13 @@ function makePlugin(overrides: Partial<PluginSummary> = {}): PluginSummary {
 }
 
 describe('NAV', () => {
-  it('lists all 16 dashboard sections in the documented order', () => {
+  it('lists all 17 dashboard sections in the documented order', () => {
     expect(NAV.map((item) => item.label)).toEqual([
       'Overview',
       'Plugins',
       'Moderation',
       'Automod',
+      'Threat overview',
       'Enforcer',
       'Logging',
       'Tickets',

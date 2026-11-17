@@ -1,10 +1,14 @@
-// Shared "a member just reached a new level" side effects: level-role rewards (stack/replace),
-// the level-up announcement (channel/DM/none), and the `level.up` platform event. Used by the
-// messageCreate and voiceStateUpdate XP handlers, and by `/level rewards sync`.
+// Shared level side effects. Role rewards are recomputed for a member's current level whenever that
+// level changes (up or down). The announcement and the `level.up` platform event stay level-up only.
+// Used by the messageCreate and voiceStateUpdate XP handlers, `/level xp`, `/level reset`,
+// `/level rewards sync`, and the reward-reconcile job.
 import { userMention, type Guild, type GuildMember } from 'discord.js';
 import { resolveTextChannel, safeDm, type PluginContext } from '../sdk';
 import type { EngagementLevelingConfig } from './manifest';
-import { computeLevelRewardPlan } from './service';
+import { computeLevelRewardPlan, type RewardDef } from './service';
+
+/** Most members one reward-role pass will write roles for (`/level rewards sync`, `/level reset`, one job tick). */
+export const REWARD_ROLE_SYNC_LIMIT = 500;
 
 export interface ApplyLevelUpOptions {
   ctx: PluginContext;
@@ -19,34 +23,82 @@ export interface ApplyLevelUpOptions {
   sourceChannelId?: string;
 }
 
+export interface SyncMemberRewardRolesOptions {
+  ctx: PluginContext;
+  guildId: string;
+  member: GuildMember;
+  /** The level the member should be rewarded for. `0` strips every reward role (a reset, or a deleted profile). */
+  level: number;
+  mode: EngagementLevelingConfig['rewardMode'];
+  /** Preloaded guild rewards. When omitted, the rows are read for `guildId`. */
+  rewards?: readonly RewardDef[];
+  addReason?: string;
+  removeReason?: string;
+}
+
 function renderLevelUpMessage(template: string, userId: string, level: number): string {
   return template.replace(/\{user\}/g, userMention(userId)).replace(/\{level\}/g, String(level));
 }
 
-async function applyRoleRewards(
-  ctx: PluginContext,
-  guildId: string,
-  member: GuildMember,
-  newLevel: number,
+/**
+ * Reward roles the member currently holds but should not, at `level`.
+ * `computeLevelRewardPlan` never removes in `'stack'` mode, and in `'replace'` mode it removes nothing
+ * once the member is below every reward. A level drop still has to take those roles away: stack keeps
+ * every reward at or below the new level, replace keeps only the highest one (or none).
+ */
+function rewardRolesToRemove(
+  currentRoleIds: string[],
+  rewards: readonly RewardDef[],
+  level: number,
   mode: EngagementLevelingConfig['rewardMode'],
-): Promise<void> {
-  const rewards = await ctx.prisma.levelReward.findMany({ where: { guildId } });
-  if (rewards.length === 0) return;
+  planToRemove: readonly string[],
+): string[] {
+  const rewardRoleIds = new Set(rewards.map((reward) => reward.roleId));
+  if (mode === 'replace' && rewards.some((reward) => reward.level <= level)) {
+    return [...planToRemove];
+  }
+  if (mode === 'replace') {
+    return [...new Set(currentRoleIds.filter((id) => rewardRoleIds.has(id)))];
+  }
+  const stillEarned = new Set(
+    rewards.filter((reward) => reward.level <= level).map((reward) => reward.roleId),
+  );
+  return [...new Set(currentRoleIds.filter((id) => rewardRoleIds.has(id) && !stillEarned.has(id)))];
+}
 
-  const currentRoleIds = [...member.roles.cache.keys()];
-  const plan = computeLevelRewardPlan(currentRoleIds, rewards, newLevel, mode);
-  if (plan.toAdd.length === 0 && plan.toRemove.length === 0) return;
+/**
+ * Recomputes one member's level-reward roles for `level` and applies the diff.
+ * Returns whether a role write was attempted. Failures are logged, not thrown — a missing Manage Roles
+ * permission must not block the XP write, the announcement, or the rest of a sync.
+ */
+export async function syncMemberRewardRoles(opts: SyncMemberRewardRolesOptions): Promise<boolean> {
+  const rewards =
+    opts.rewards ?? (await opts.ctx.prisma.levelReward.findMany({ where: { guildId: opts.guildId } }));
+  if (rewards.length === 0) return false;
+
+  const currentRoleIds = [...opts.member.roles.cache.keys()];
+  const plan = computeLevelRewardPlan(currentRoleIds, [...rewards], opts.level, opts.mode);
+  const toAdd = plan.toAdd;
+  const toRemove = rewardRolesToRemove(currentRoleIds, rewards, opts.level, opts.mode, plan.toRemove);
+  if (toAdd.length === 0 && toRemove.length === 0) return false;
+
+  const addReason = opts.addReason ?? `Pavisie engagement: reached level ${opts.level}`;
+  const removeReason = opts.removeReason ?? `Pavisie engagement: level rewards (${opts.mode})`;
 
   try {
-    if (plan.toAdd.length > 0)
-      await member.roles.add(plan.toAdd, `Pavisie engagement: reached level ${newLevel}`);
-    if (plan.toRemove.length > 0)
-      await member.roles.remove(plan.toRemove, `Pavisie engagement: level rewards (${mode})`);
+    if (toAdd.length > 0) await opts.member.roles.add(toAdd, addReason);
+    if (toRemove.length > 0) await opts.member.roles.remove(toRemove, removeReason);
+    return true;
   } catch (err) {
-    ctx.logger.warn(
-      { guildId, userId: member.id, err: err instanceof Error ? err.message : String(err) },
+    opts.ctx.logger.warn(
+      {
+        guildId: opts.guildId,
+        userId: opts.member.id,
+        err: err instanceof Error ? err.message : String(err),
+      },
       'engagement: failed to apply level reward roles (likely missing Manage Roles or role hierarchy)',
     );
+    return false;
   }
 }
 
@@ -69,12 +121,18 @@ async function announceLevelUp(ctx: PluginContext, opts: ApplyLevelUpOptions): P
   await channel.send({ content: text }).catch(() => undefined);
 }
 
-/** Applies every "just leveled up" side effect for one member: role rewards, announcement, and the `level.up` event. */
+/** Level-up only: reward roles for the new level, then the announcement and the `level.up` event. */
 export async function applyLevelUp(opts: ApplyLevelUpOptions): Promise<void> {
   const { ctx, guildId, userId, newLevel, member, config } = opts;
 
   if (member) {
-    await applyRoleRewards(ctx, guildId, member, newLevel, config.rewardMode);
+    await syncMemberRewardRoles({
+      ctx,
+      guildId,
+      member,
+      level: newLevel,
+      mode: config.rewardMode,
+    });
   }
 
   await announceLevelUp(ctx, opts);

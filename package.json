@@ -52,7 +52,8 @@
       "@prisma/config>deepmerge-ts": "^8.0.2",
       "@fastify/static": "^10.1.8",
       "glob@13": "^14.0.2",
-      "minimatch@10": "^11.0.1"
+      "minimatch@10": "^11.0.1",
+      "fflate": "0.7.5"
     }
   }
 }

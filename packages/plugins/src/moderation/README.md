@@ -108,6 +108,20 @@ delayed by the duration) that reverses the action. A repeatable sweep (`moderati
 catches anything the delayed job missed (a Redis flush, worker downtime) by scanning for `TIMEOUT`/`BAN` cases
 whose `expiresAt` has passed but `expiredAt` is still null.
 
+Expiry never undoes a newer punishment:
+
+- A `TIMEOUT` case lifts the member's timeout only if it is the one that case set. The bot applies a timeout
+  before writing its case, so a member whose timeout ends more than a few seconds after the case expires has been
+  given a newer timeout since, and that one is left alone (the case is still marked expired). If a newer timeout
+  lands in the moment between reading the member and lifting, the lift puts it back until that newer case's end.
+- An enforcer timed mute keeps the role while another mute on the same member is still running, and makes sure
+  the role is actually on in that case, so an earlier attempt that removed it and failed to put it back is
+  repaired on the retry. A new mute that starts while an old one is being lifted gets its role put back straight
+  after the removal.
+- The enforcer records a mute's case *before* adding the role (and closes that case at once if the role add
+  fails), and a manual unmute closes the open mute cases *before* removing the role. So the expiry jobs only ever
+  see mutes that are recorded, and never re-add a role after a manual unmute.
+
 ## Appeals
 
 `/appeal <case>` (member) and the **Warn user**/context-menu flows post to the resolved appeals channel with
@@ -121,6 +135,11 @@ client) — a repeatable job (`moderation.appeal-sync`, every minute) picks up a
 effects. Idempotency is tracked with the durable `ModerationAppeal.effectsAppliedAt` column, set once the
 effects are applied and never expiring — a short-lived Redis key is used only as an in-flight lock so two
 overlapping ticks can't race on the same appeal.
+
+Both paths are race-safe. A decision only counts while the appeal is still pending (a conditional update), so
+two moderators clicking Accept and Deny at once get one decision and one "already decided". The bot's own
+buttons and the sync job apply effects through the same per-appeal lease and re-check `effectsAppliedAt` once
+they hold it, so a decision made in Discord while the sync job ticks is acted on once.
 
 ## Dashboard
 

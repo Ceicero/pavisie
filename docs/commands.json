@@ -2670,6 +2670,50 @@
                   "type": "Role"
                 }
               ]
+            },
+            {
+              "name": "set",
+              "fullName": "/level multiplier set",
+              "description": "Set the XP multiplier for one role or one channel.",
+              "options": [
+                {
+                  "name": "multiplier",
+                  "description": "Factor from 0.25 to 5. The higher of the role and channel factors is used.",
+                  "required": true,
+                  "type": "Number"
+                },
+                {
+                  "name": "channel",
+                  "description": "Channel whose messages or voice time use this factor.",
+                  "required": false,
+                  "type": "Channel"
+                },
+                {
+                  "name": "role",
+                  "description": "Role whose members use this factor.",
+                  "required": false,
+                  "type": "Role"
+                }
+              ]
+            },
+            {
+              "name": "clear",
+              "fullName": "/level multiplier clear",
+              "description": "Remove the XP multiplier from one role or one channel.",
+              "options": [
+                {
+                  "name": "channel",
+                  "description": "Channel to clear.",
+                  "required": false,
+                  "type": "Channel"
+                },
+                {
+                  "name": "role",
+                  "description": "Role to clear.",
+                  "required": false,
+                  "type": "Role"
+                }
+              ]
             }
           ]
         },
