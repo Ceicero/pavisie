@@ -1,6 +1,7 @@
 import type { PluginJob } from '../../sdk';
 import { ModerationServiceImpl } from '../service';
 import { liftEnforcerMute } from './enforcer-mute';
+import { liftTimeoutForCase } from './expire';
 
 const SWEEP_BATCH = 100;
 
@@ -29,13 +30,8 @@ export const sweepJob: PluginJob<Record<string, never>> = {
     for (const row of overdue) {
       try {
         if (row.type === 'TIMEOUT') {
-          const guild = await ctx.client.guilds.fetch(row.guildId).catch(() => null);
-          const member = guild ? await guild.members.fetch(row.targetId).catch(() => null) : null;
-          if (member?.communicationDisabledUntilTimestamp) {
-            await member
-              .timeout(null, `Timeout expired (case #${row.caseNumber}, caught by sweep)`)
-              .catch(() => undefined);
-          }
+          // Same rule as the expire job: never lift (or keep lifted) a newer timeout given since this case.
+          await liftTimeoutForCase(ctx, row, `Timeout expired (case #${row.caseNumber}, caught by sweep)`);
           await ctx.prisma.moderationCase.update({ where: { id: row.id }, data: { expiredAt: new Date() } });
         } else if (row.type === 'ROLE_ADD') {
           // Throws when the mute role could not be removed; the catch below then leaves the case active so
