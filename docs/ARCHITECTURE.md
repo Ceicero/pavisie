@@ -645,7 +645,7 @@ Components (all accessible, keyboard-friendly, dark-mode aware, `cn()` helper): 
 
 ## 14. Docker
 
-- `infra/docker/Dockerfile.{bot,api}`: `node:22-alpine`, `corepack enable && corepack prepare pnpm@9.15.9 --activate`, copy workspace manifests, `pnpm install --frozen-lockfile`, copy source, `pnpm db:generate`, `CMD ["pnpm","--filter","@pavisie/bot","start"]` (start = `tsx src/index.ts`). Non-root user. Healthcheck hits `BOT_HEALTH_PORT` / `API_PORT/health`.
+- `infra/docker/Dockerfile.{bot,api}`: `node:22-alpine`, copy root + workspace manifests, then `COREPACK_HOME=/opt/corepack` and `corepack enable && corepack install` (installs the exact pnpm from `packageManager`; the cache lives outside `/root` so the non-root runtime user's `pnpm` start command finds it), then `ENV COREPACK_ENABLE_NETWORK=0` so a version mismatch fails loudly instead of downloading at start. `pnpm install --frozen-lockfile` only (no fallback to a non-frozen install), copy source, `pnpm db:generate`, `CMD ["pnpm","--filter","@pavisie/bot","start"]` (start = `tsx src/index.ts`). Non-root `pavisie` user; `/app` and `/opt/corepack` stay root-owned and read-only to it (the bot/api write nothing under `/app` at runtime). Healthcheck hits `BOT_HEALTH_PORT` / `API_PORT/health`. All Dockerfiles use `--frozen-lockfile` only.
 - `Dockerfile.dashboard`: multi-stage `next build` with `output: 'standalone'`, `CMD ["node","apps/dashboard/server.js"]`.
 - `docker-compose.yml`: `postgres` (16-alpine, volume, healthcheck), `redis` (7-alpine), `migrate` (api image, `pnpm db:migrate`, depends_on healthy postgres), `bot`, `api`, `dashboard` — all `env_file: .env`, DATABASE_URL/REDIS_URL overridden to service hostnames.
 

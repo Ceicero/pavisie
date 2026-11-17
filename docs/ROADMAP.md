@@ -18,7 +18,7 @@ assistant. The dashboard covers every plugin with a settings page, the marketpla
 grid, a JSON-schema-driven config drawer, audit log viewer, and privacy controls (export/delete/
 retention). The public website covers the full command reference (generated from the plugin
 manifests, not hand-maintained — see ARCHITECTURE §17), donations via Ko-fi link-out, and
-privacy/terms pages. CI runs lint, typecheck, 931+ tests, and both app builds on every push; the repo
+privacy/terms pages. CI runs lint, typecheck, 2,700+ tests, and both app builds on every push; the repo
 stays green and runnable with `npm run dev` (well, `pnpm dev`) at every commit.
 
 Deployment is documented cloud-first for Railway (recommended), Render (Blueprint alternative), and
@@ -33,12 +33,12 @@ any VPS via `docker-compose.yml` behind Caddy — see `infra/DEPLOYMENT.md`.
   future compliant voice adapter can be added without touching command code, but none is implemented
   yet (see `packages/plugins/src/media/README.md` for why — no scraping/ripping of streaming
   platforms, only a licensed-provider adapter model).
-- **E2E tests need a running API, not just the dashboard.** `apps/dashboard`'s Playwright suite
-  (`e2e/`) exercises the real dashboard against a real API in `E2E_TEST_MODE=true` (which enables a
+- **E2E tests need a running API, not just the dashboard.** `apps/web`'s Playwright suite
+  (`e2e/`) exercises the real web app and dashboard routes against a real API in `E2E_TEST_MODE=true` (which enables a
   synthetic test-login route that refuses to exist when `NODE_ENV=production`). CI's `e2e` job starts
-  the API, waits for `/health`, then runs the dashboard against it — this isn't a limitation of the
+  the API, waits for `/health`, then runs the web app against it — this isn't a limitation of the
   tests so much as a note for anyone trying to run `pnpm test:e2e` locally: it will hang or fail
-  against a dashboard alone with no API behind it.
+  against the web app alone with no API behind it.
 - **Engagement XP adjustments don't re-sync level-role rewards instantly.** `/level xp give|remove|
 set` (and the equivalent dashboard action) changes a member's stored XP/level immediately, but
   level-role rewards are only granted/revoked when a member naturally levels up through

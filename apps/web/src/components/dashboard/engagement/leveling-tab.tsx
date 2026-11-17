@@ -147,6 +147,15 @@ const LEVEL_UP_CHANNEL_MODES = [
   { value: 'channel', label: 'Specific channel' },
 ];
 
+/** Public page path from the saved flag. An unsaved draft must not reveal the link. */
+export function publicLeaderboardHref(
+  guildId: string,
+  savedPublicLeaderboard: boolean | undefined,
+): string | null {
+  if (savedPublicLeaderboard !== true) return null;
+  return `/leaderboard/${encodeURIComponent(guildId)}`;
+}
+
 export function LevelingTab({ guildId }: { guildId: string }) {
   const { data, isLoading, error, refetch } = useEngagementConfig(guildId);
   const update = useUpdateEngagementConfig(guildId);
@@ -163,6 +172,7 @@ export function LevelingTab({ guildId }: { guildId: string }) {
     if (!data) return;
     setDraft({
       ...data.leveling,
+      publicLeaderboard: data.leveling.publicLeaderboard ?? false,
       roleMultipliers: data.leveling.roleMultipliers ?? [],
       channelMultipliers: data.leveling.channelMultipliers ?? [],
     });
@@ -225,7 +235,7 @@ export function LevelingTab({ guildId }: { guildId: string }) {
   }
 
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
-  if (isLoading || !draft) {
+  if (isLoading || !data || !draft) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
@@ -239,11 +249,17 @@ export function LevelingTab({ guildId }: { guildId: string }) {
     draft.levelUpChannel === 'current' || draft.levelUpChannel === 'dm' || draft.levelUpChannel === 'none'
       ? draft.levelUpChannel
       : 'channel';
-  const dirty = data ? JSON.stringify(draft) !== JSON.stringify(data.leveling) : false;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(data.leveling);
+  const publicHref = publicLeaderboardHref(guildId, data.leveling.publicLeaderboard);
 
   const filteredRows = (leaderboard.data?.items ?? []).filter((row) => row.userId.includes(search.trim()));
 
   const columns: DataTableColumn<LevelProfileDto>[] = [
+    {
+      key: 'rank',
+      header: 'Rank',
+      render: (r) => (typeof r.rank === 'number' ? r.rank.toLocaleString() : '—'),
+    },
     { key: 'userId', header: 'User ID', render: (r) => <code className="text-xs">{r.userId}</code> },
     { key: 'level', header: 'Level', render: (r) => r.level },
     { key: 'xp', header: 'XP', render: (r) => r.xp.toLocaleString() },
@@ -273,6 +289,31 @@ export function LevelingTab({ guildId }: { guildId: string }) {
               onCheckedChange={(v) => set('enabled', v)}
               disabled={update.isPending}
             />
+          </div>
+
+          <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+            <div>
+              <p className="text-sm font-medium">Public leaderboard</p>
+              <p className="text-xs text-muted-foreground">
+                Anyone can view the XP leaderboard and a member&apos;s rank without signing in. Off by
+                default. Former members stay listed until a later update.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {publicHref ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={publicHref} target="_blank" rel="noopener noreferrer">
+                    Open public leaderboard
+                  </a>
+                </Button>
+              ) : null}
+              <Switch
+                checked={draft.publicLeaderboard}
+                onCheckedChange={(v) => set('publicLeaderboard', v)}
+                disabled={update.isPending}
+                aria-label="Public leaderboard"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

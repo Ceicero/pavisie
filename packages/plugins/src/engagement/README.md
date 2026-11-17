@@ -19,6 +19,10 @@ temporary voice channels (SPEC.md §G subset; ARCHITECTURE.md §7.1 row `engagem
 - **Level formula**: `level(xp)` — cumulative XP to reach level `l` is
   `sum_{k=0}^{l-1} (5k² + 50k + 100)` (pure helpers `levelFromXp`/`xpForLevel`/`xpToNextLevel` in
   `service.ts`, unit tested for monotonicity and exact inverse behavior).
+- **Rank card**: `/level rank` draws a PNG (avatar, display name, level, rank, an XP progress bar,
+  and total XP) with the Inter fonts in `assets/` (SIL OFL 1.1, `assets/LICENSE.txt`) and attaches
+  it to the reply. The text embed is unchanged. If rendering throws, or the bot lacks Attach Files
+  in that channel, the command logs once and sends the text embed alone. The image is not stored.
 - **Level-up announcement**: `config.leveling.levelUpChannel` — `'current'` (the channel the
   triggering message/voice activity happened in), `'dm'`, `'none'`, or a channel id — using
   `config.leveling.levelUpMessage` (`{user}`/`{level}` placeholders). Settable from the dashboard or
@@ -34,9 +38,15 @@ temporary voice channels (SPEC.md §G subset; ARCHITECTURE.md §7.1 row `engagem
 - Dashboard XP adjustments enqueue `{guildId, userId}` on the Redis list `pavisie:engagement:reward-reconcile`
   when the stored level changes. `POST /guilds/:guildId/engagement/reset` only deletes profile rows and
   pushes the same entries (one member when `userId` is set, otherwise everyone who had a profile). The
-  `engagement.reward-reconcile` job drains that list once a minute, 500 members per tick, and applies
+  `engagement.reward-reconcile` job drains that list once a minute, 500 members per tick, retries transient failures up to 3 times, and applies
   the same role sync. Roles update shortly after, not in the HTTP request.
 - Emits the platform `level.up` event on every level-up (message or voice).
+- **Public leaderboard** (`config.leveling.publicLeaderboard`, default **off**): when a guild turns this
+  on, `GET /guilds/:guildId/engagement/leaderboard/public` and `GET /guilds/:guildId/engagement/rank/:userId`
+  answer without a session. Both stay 404 while the toggle is off, the bot is not in the guild, or
+  `TRUST_PROXY` is not a numeric hop count. A row exposes rank, XP, level, and that member's Discord
+  username, global name, and avatar — nothing else. The rank route also includes level progress.
+  Former members stay listed until a later update.
 
 ### Reputation
 
@@ -70,7 +80,7 @@ temporary voice channels (SPEC.md §G subset; ARCHITECTURE.md §7.1 row `engagem
 
 | Command                                                                   | Notes                                                                                                                                                                   |
 | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/level rank [user]`                                                      | Public. Progress bar + rank position.                                                                                                                                   |
+| `/level rank [user]`                                                      | Public. PNG rank card plus the text embed. Without Attach Files in the channel, or if the image fails, the text embed alone.                                            |
 | `/level leaderboard [page]`                                               | Public, paginated (10/page) with Previous/Next buttons.                                                                                                                 |
 | `/level config`                                                           | Moderator+. View-only.                                                                                                                                                  |
 | `/level xp give\|remove\|set <user> <amount>`                             | Admin. Audited. `remove` and `set` recompute reward roles when the level changes. Announcements stay level-up only.                                                     |
@@ -99,6 +109,7 @@ See `manifest.ts`'s `configSchema` for the full shape/defaults (`leveling`, `rep
 | Move Members         | Moving the creator into their new temp channel | Yes      | Channel is still created; the member moves in manually.             |
 | Send Messages        | Level-up announcements, starboard posts        | No       | Silently fails to send; nothing else breaks.                        |
 | Embed Links          | Rank/leaderboard/starboard embeds              | No       | —                                                                   |
+| Attach Files         | `/level rank` card image                       | Yes      | The text rank embed is sent instead, and the miss is logged once.  |
 | Read Message History | Starboard reaction counts on older messages    | Yes      | May miss reactions added while the bot was offline.                 |
 
 No privileged intents are required for the plugin to function; `MessageContent` (privileged, optional)
@@ -119,6 +130,8 @@ only upgrades the starboard embed to include a content excerpt when the guild ha
 built on `GET/PUT /guilds/:guildId/engagement/config` (one JSON blob covering every sub-feature's
 settings) plus dedicated endpoints for the leaderboard, level-role rewards CRUD, an audited XP
 adjustment, an audited guild-wide or per-member leveling reset, and the reputation leaderboard.
+The Leveling tab includes the public-leaderboard toggle (off by default) and the rank returned by the
+staff leaderboard.
 XP changes that move the stored level, and resets, enqueue reward-role reconciliation; the dashboard
 tells admins that roles update shortly after, not instantly.
 
