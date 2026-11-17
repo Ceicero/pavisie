@@ -16,15 +16,31 @@ import {
   Skeleton,
   StatCard,
 } from '@pavisie/ui';
+import type { PluginId, PluginSummary } from '@pavisie/types';
 import { useGuild } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
+import { isNavItemDisabled, type NavItem } from '@/components/dashboard/nav';
 
-const QUICK_LINKS = [
+export const QUICK_LINKS: {
+  href: string;
+  label: string;
+  icon: typeof Puzzle;
+  pluginId?: PluginId;
+}[] = [
   { href: 'plugins', label: 'Manage plugins', icon: Puzzle },
-  { href: 'moderation', label: 'Moderation cases', icon: Gavel },
-  { href: 'automod', label: 'Automod rules', icon: ShieldAlert },
-  { href: 'tickets', label: 'Ticket queue', icon: LifeBuoy },
+  { href: 'moderation', label: 'Moderation cases', icon: Gavel, pluginId: 'moderation' },
+  { href: 'automod', label: 'Automod rules', icon: ShieldAlert, pluginId: 'automod' },
+  { href: 'tickets', label: 'Ticket queue', icon: LifeBuoy, pluginId: 'tickets' },
 ];
+
+function pluginNavItem(pluginId: PluginId | undefined): NavItem {
+  return { href: () => '', label: '', icon: Puzzle, pluginId };
+}
+
+/** Quick links minus plugin-gated entries whose plugin is disabled. "Manage plugins" has no pluginId and always stays. */
+export function visibleQuickLinks(plugins: PluginSummary[] | undefined) {
+  return QUICK_LINKS.filter((link) => !isNavItemDisabled(pluginNavItem(link.pluginId), plugins));
+}
 
 export default function GuildOverviewPage() {
   const { guildId } = useParams<{ guildId: string }>();
@@ -128,7 +144,7 @@ export default function GuildOverviewPage() {
             <CardTitle>Quick links</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2">
-            {QUICK_LINKS.map((link) => (
+            {visibleQuickLinks(plugins).map((link) => (
               <Link
                 key={link.href}
                 href={`/dashboard/${guildId}/${link.href}`}
