@@ -7,8 +7,8 @@ const UNKNOWN_ROLE = 10011;
 /** Fetching a guild the bot has been removed from answers Missing Access rather than Unknown Guild. */
 const MISSING_ACCESS = 50001;
 
-function discordCode(err: unknown): unknown {
-  return (err as { code?: unknown } | null)?.code;
+export function discordCode(err: unknown): unknown {
+  return typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined;
 }
 
 /** `metadata.roleId` set by the `enforcer` plugin's timed MUTE (`metadata: { enforcerMute: true, roleId }`). */
