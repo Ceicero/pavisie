@@ -10,7 +10,6 @@ export interface BanCaseRow {
   targetId: string;
   caseNumber: number;
   expiresAt: Date | null;
-  createdAt: Date;
 }
 
 export type LiftTempBanResult = 'lifted' | 'superseded' | 'already-lifted';
@@ -19,7 +18,7 @@ export type LiftTempBanResult = 'lifted' | 'superseded' | 'already-lifted';
  * Lifts the ban a (temp) BAN case set, unless the member has since been given a permanent or longer ban.
  * Shared by the expire job and the sweep.
  *
- * Only BAN cases recorded after this one count. An older case can still be open after its ban was lifted outside
+ * Only BAN cases recorded after this one (a higher case number in the same guild) count. An older case can still be open after its ban was lifted outside
  * the bot (Discord's own UI), and letting it block this expiry would turn this temp ban into a permanent one.
  *
  * - `superseded`: a newer active BAN case outlives this one, so the Discord ban is left in place. The caller marks
@@ -43,12 +42,21 @@ export async function liftTempBan(
       expiredAt: null,
       deletedAt: null,
       id: { not: row.id },
-      createdAt: { gt: row.createdAt },
+      caseNumber: { gt: row.caseNumber },
       OR: row.expiresAt ? [{ expiresAt: null }, { expiresAt: { gt: row.expiresAt } }] : [{ expiresAt: null }],
     },
-    select: { id: true },
+    select: { id: true, caseNumber: true },
   });
-  if (newer) return 'superseded';
+  if (newer) {
+    ctx.logger.info(
+      { guildId: row.guildId, caseId: row.id, supersededBy: newer.id },
+      `moderation: temp ban case #${row.caseNumber} ended without unbanning; case #${newer.caseNumber} is a newer, longer ban`,
+    );
+    return 'superseded';
+  }
+
+  // A ban recorded between the check above and this call would still be lifted. The window is a few ms and
+  // the moderator's own ban reply comes after Discord applies it, so this is accepted rather than locked.
 
   try {
     await service.unban({

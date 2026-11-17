@@ -255,15 +255,13 @@ describe('expireJob — temporary BAN expiry', () => {
 describe('expireJob — temp BAN superseded by a newer ban', () => {
   const EARLIER = new Date(Date.now() - 60 * 1000);
   const LATER = new Date(Date.now() + 60 * 60 * 1000);
-  const BANNED_AT = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const AFTER = new Date(BANNED_AT.getTime() + 60 * 1000);
-  const BEFORE = new Date(BANNED_AT.getTime() - 60 * 1000);
+  const CASE_NUMBER = 7;
 
   /**
-   * `others` are the other active BAN cases for the member; the fake findFirst applies the helper's `createdAt`
-   * and `OR` filters.
+   * `others` are the other active BAN cases for the member; the fake findFirst applies the helper's
+   * `caseNumber` and `OR` filters.
    */
-  function build(others: Array<{ id: string; expiresAt: Date | null; createdAt?: Date }>) {
+  function build(others: Array<{ id: string; expiresAt: Date | null; caseNumber?: number }>) {
     const update = vi.fn().mockResolvedValue({});
     const create = vi.fn().mockResolvedValue({ id: 'unban-1' });
     const removeBan = vi.fn().mockResolvedValue(undefined);
@@ -271,11 +269,11 @@ describe('expireJob — temp BAN superseded by a newer ban', () => {
       prismaOverrides: {
         moderationCase: {
           findUnique: async () =>
-            enforcerMuteCase({ type: 'BAN', metadata: null, expiresAt: EARLIER, createdAt: BANNED_AT }),
+            enforcerMuteCase({ type: 'BAN', metadata: null, expiresAt: EARLIER, caseNumber: CASE_NUMBER }),
           findFirst: async (args: any) =>
             others.find(
               (o) =>
-                (o.createdAt ?? AFTER) > args.where.createdAt.gt &&
+                (o.caseNumber ?? CASE_NUMBER + 1) > args.where.caseNumber.gt &&
                 args.where.OR.some((c: any) =>
                   c.expiresAt === null
                     ? o.expiresAt === null
@@ -315,7 +313,7 @@ describe('expireJob — temp BAN superseded by a newer ban', () => {
   });
 
   it('still unbans when the only longer ban case is older than this one (lifted outside the bot)', async () => {
-    const { ctx, removeBan } = build([{ id: 'case-0', expiresAt: null, createdAt: BEFORE }]);
+    const { ctx, removeBan } = build([{ id: 'case-0', expiresAt: null, caseNumber: CASE_NUMBER - 1 }]);
     // The follow-up UNBAN case needs a transaction the fake lacks; only the Discord call matters here.
     await expireJob.processor(ctx, fakeJob(CASE_ID)).catch(() => undefined);
     expect(removeBan).toHaveBeenCalledTimes(1);
