@@ -11,7 +11,7 @@ import {
   type Message,
   type PartialMessage,
 } from 'discord.js';
-import { BRAND, Cooldowns, redisKey, sanitizeEmbedText, truncate } from '@pavisie/core';
+import { BRAND, Cooldowns, redisKey, resolveLocale, sanitizeEmbedText, truncate } from '@pavisie/core';
 import type { AutomodEvent, AutomodRule, Prisma } from '@pavisie/database';
 import { buildCustomId, resolveTextChannel, type PluginContext } from '../sdk';
 import type { AutomodConfig } from './manifest';
@@ -231,6 +231,26 @@ async function applyQuarantine(
   }
 }
 
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
+/**
+ * Locale for channel posts (staff alerts), which have no invoking user. Uses the guild's configured locale,
+ * the same `resolveLocale` mapping the command router applies to an interaction locale. Missing host or a
+ * failed read falls back to `en`, and the alert is still posted.
+ */
+async function guildTranslate(ctx: PluginContext, guildId: string): Promise<Translate> {
+  let locale = 'en';
+  const host = ctx.services.get('host');
+  if (host) {
+    try {
+      locale = resolveLocale((await host.getGuildConfig(guildId)).locale);
+    } catch {
+      locale = 'en';
+    }
+  }
+  return (key, vars) => ctx.t(key, vars, locale);
+}
+
 /** One line per configured action and what became of it — the "Actions" field of every alert embed. */
 function formatActionOutcomes(actionOutcomes: ActionOutcome[], dryRun: boolean): string {
   if (actionOutcomes.length === 0) return '_None configured_';
@@ -239,15 +259,18 @@ function formatActionOutcomes(actionOutcomes: ActionOutcome[], dryRun: boolean):
     .join('\n');
 }
 
-function alertEmbed(params: {
-  rule: AutomodRule;
-  userId: string;
-  channelId: string | null;
-  result: EvaluatorResult;
-  excerpt: string | null;
-  actionOutcomes: ActionOutcome[];
-  dryRun: boolean;
-}): EmbedBuilder {
+function alertEmbed(
+  params: {
+    rule: AutomodRule;
+    userId: string;
+    channelId: string | null;
+    result: EvaluatorResult;
+    excerpt: string | null;
+    actionOutcomes: ActionOutcome[];
+    dryRun: boolean;
+  },
+  t: Translate,
+): EmbedBuilder {
   const { rule, userId, channelId, result, excerpt, actionOutcomes, dryRun } = params;
   const embed = new EmbedBuilder()
     // dry-run alerts are informational, not a real enforcement action, so they get the neutral brand color
@@ -256,31 +279,35 @@ function alertEmbed(params: {
     .setTitle(`${dryRun ? '[DRY RUN] ' : ''}Automod: ${rule.name}`)
     .setDescription(result.reason ? truncate(result.reason, 2000) : 'A configured rule matched.')
     .addFields(
-      { name: 'User', value: `<@${userId}>`, inline: true },
+      { name: t('automod.review.label.user'), value: `<@${userId}>`, inline: true },
+      // No exact key: `review.label.rule` is "Rule" and `rule.line.type` is "Type: **{type}**".
       { name: 'Rule type', value: rule.type, inline: true },
-      { name: 'Channel', value: channelId ? `<#${channelId}>` : '—', inline: true },
-      { name: 'Actions', value: formatActionOutcomes(actionOutcomes, dryRun) },
+      { name: t('automod.review.label.channel'), value: channelId ? `<#${channelId}>` : '—', inline: true },
+      { name: t('automod.review.label.actions'), value: formatActionOutcomes(actionOutcomes, dryRun) },
     )
     .setTimestamp();
 
   if (excerpt) {
-    embed.addFields({ name: 'Matched content', value: `\`\`\`${truncate(excerpt, 900)}\`\`\`` });
+    embed.addFields({
+      name: t('automod.review.label.matchedContent'),
+      value: `\`\`\`${truncate(excerpt, 900)}\`\`\``,
+    });
   }
 
   return embed;
 }
 
-function reviewButtons(eventId: string, resolved = false): ActionRowBuilder<ButtonBuilder>[] {
+function reviewButtons(eventId: string, t: Translate, resolved = false): ActionRowBuilder<ButtonBuilder>[] {
   if (resolved) return [];
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(buildCustomId('automod', 'review-confirm', eventId))
-        .setLabel('Confirm violation')
+        .setLabel(t('automod.review.label.confirmViolation'))
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
         .setCustomId(buildCustomId('automod', 'review-false-positive', eventId))
-        .setLabel('False positive')
+        .setLabel(t('automod.review.label.falsePositive'))
         .setStyle(ButtonStyle.Secondary),
     ),
   ];
@@ -317,9 +344,10 @@ async function postAlert(
     return;
   }
   try {
+    const t = await guildTranslate(ctx, guild.id);
     await channel.send({
-      embeds: [alertEmbed(params)],
-      components: reviewButtons(params.eventId),
+      embeds: [alertEmbed(params, t)],
+      components: reviewButtons(params.eventId, t),
       allowedMentions: { parse: [] },
     });
   } catch (err) {
