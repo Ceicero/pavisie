@@ -1,5 +1,12 @@
 import { ChannelType, type Guild, type TextChannel } from 'discord.js';
-import { AppError, NotFoundError, PermissionError, ValidationError, redisKey } from '@pavisie/core';
+import {
+  AppError,
+  NotFoundError,
+  PermissionError,
+  ValidationError,
+  redisKey,
+  resolveLocale,
+} from '@pavisie/core';
 import { nextEnforcerRecordNumber } from '@pavisie/database/guild';
 import { Prisma, type EnforcerRecord, type ModerationCase, type PrismaClient } from '@pavisie/database';
 import { fetchMemberSafe, hierarchyGuard, resolveTextChannel, safeDm, type PluginContext } from '../sdk';
@@ -21,6 +28,26 @@ import type { EnforcerConfig } from './manifest';
 import type { EnforcerDecisionLower, MatcherInput, PolicySeverityValue } from './schemas';
 
 const RECORD_NUMBER_MAX_ATTEMPTS = 3;
+
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
+/**
+ * Locale for channel posts (the flag queue), which have no invoking user. Uses the guild's configured locale,
+ * the same `resolveLocale` mapping the command router applies to an interaction locale. Missing host or a
+ * failed read falls back to `en`.
+ */
+async function guildTranslate(ctx: PluginContext, guildId: string): Promise<Translate> {
+  let locale = 'en';
+  const host = ctx.services.get('host');
+  if (host) {
+    try {
+      locale = resolveLocale((await host.getGuildConfig(guildId)).locale);
+    } catch {
+      locale = 'en';
+    }
+  }
+  return (key, vars) => ctx.t(key, vars, locale);
+}
 
 /** Retries `create` up to 3 times on a Prisma unique-constraint violation on `[guildId, recordNumber]`, mirroring `@pavisie/database`'s `withNextCaseNumber`. */
 export async function withNextRecordNumber<T>(
@@ -312,21 +339,25 @@ export async function flagRecord(ctx: PluginContext, input: FlagRecordInput): Pr
   const flagChannel = await fetchManagedTextChannel(guild, config.flagChannelId);
   let flagMessageId: string | null = null;
   if (flagChannel) {
-    const embed = buildFlagQueueEmbed({
-      recordId,
-      recordNumber,
-      userId: input.userId,
-      createdAt,
-      severity: input.severity ?? 'MEDIUM',
-      policyName: input.policyName,
-      matcherSummary: input.matcherSummary,
-      suggestedAction: input.suggestedAction,
-      excerpt,
-      messageJumpUrl,
-      source: input.source,
-      riskScore,
-      aiExplanation,
-    });
+    const t = await guildTranslate(ctx, input.guildId);
+    const embed = buildFlagQueueEmbed(
+      {
+        recordId,
+        recordNumber,
+        userId: input.userId,
+        createdAt,
+        severity: input.severity ?? 'MEDIUM',
+        policyName: input.policyName,
+        matcherSummary: input.matcherSummary,
+        suggestedAction: input.suggestedAction,
+        excerpt,
+        messageJumpUrl,
+        source: input.source,
+        riskScore,
+        aiExplanation,
+      },
+      t,
+    );
     const components = buildFlagQueueComponents(recordId, config.allowedDecisions);
     const message = await flagChannel
       .send({ embeds: [embed], components, allowedMentions: { parse: [] } })
@@ -427,22 +458,26 @@ async function editFlagQueueMessage(
   const message = await flagChannel.messages.fetch(record.flagMessageId).catch(() => null);
   if (!message) return;
 
-  const embed = buildFlagQueueEmbed({
-    recordId: record.id,
-    recordNumber: record.recordNumber,
-    userId: record.userId,
-    createdAt: record.createdAt,
-    severity: 'MEDIUM',
-    policyName: record.policyName,
-    matcherSummary: record.matcherSummary,
-    excerpt: record.excerpt,
-    messageJumpUrl: record.messageJumpUrl,
-    source: record.source,
-    riskScore: record.riskScore,
-    aiExplanation: record.aiExplanation,
-    decidedBy,
-    decidedAt: new Date(),
-  });
+  const t = await guildTranslate(ctx, record.guildId);
+  const embed = buildFlagQueueEmbed(
+    {
+      recordId: record.id,
+      recordNumber: record.recordNumber,
+      userId: record.userId,
+      createdAt: record.createdAt,
+      severity: 'MEDIUM',
+      policyName: record.policyName,
+      matcherSummary: record.matcherSummary,
+      excerpt: record.excerpt,
+      messageJumpUrl: record.messageJumpUrl,
+      source: record.source,
+      riskScore: record.riskScore,
+      aiExplanation: record.aiExplanation,
+      decidedBy,
+      decidedAt: new Date(),
+    },
+    t,
+  );
   const components = buildDecidedFlagQueueComponents(record.id, config.allowedDecisions);
   await message.edit({ embeds: [embed], components }).catch((err) => {
     ctx.logger.warn(
