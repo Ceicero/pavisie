@@ -186,7 +186,7 @@ async function runSetup(c: CommandContext): Promise<void> {
   await applyFlagQueueOverwrites(flagChannel, staffRoleIds);
 
   let muteRoleId = config.muteRoleId;
-  let muteRoleReport = 'unchanged';
+  let muteRoleReport = c.t('setup.report.unchanged');
   if (muteRoleOpt) {
     muteRoleId = muteRoleOpt.id;
     // A supplied role carries no permissions of its own — it silences people only once the deny-overwrites are
@@ -247,11 +247,12 @@ async function runSetup(c: CommandContext): Promise<void> {
         [
           c.t('setup.report.ledgerChannel', {
             channel: `<#${ledgerChannel.id}>`,
-            visibility: ledgerVisibility === 'staff' ? 'staff only' : 'server-wide',
+            visibility:
+              ledgerVisibility === 'staff' ? c.t('setup.report.staffOnly') : c.t('setup.report.serverWide'),
           }),
           c.t('setup.report.flagQueueChannel', { channel: `<#${flagChannel.id}>` }),
           c.t('setup.report.muteRole', {
-            role: muteRoleId ? `<@&${muteRoleId}> — ${muteRoleReport}` : 'not set',
+            role: muteRoleId ? `<@&${muteRoleId}> — ${muteRoleReport}` : c.t('setup.report.notSet'),
           }),
           (captureContextOpt ?? config.captureContext)
             ? c.t('setup.report.captureOn')

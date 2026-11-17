@@ -227,14 +227,16 @@ export async function handleRuleList(c: CommandContext): Promise<void> {
     return;
   }
 
-  const lines = rules.map((r) => ruleListLine(r, c.ctx.intentsEnabled));
+  const lines = rules.map((r) => ruleListLine(r, c.ctx.intentsEnabled, c.t));
   await c.interaction.reply({ embeds: [listEmbed(c.t('automod.rule.listTitle'), lines)], ephemeral: true });
 }
 
 export async function handleRuleView(c: CommandContext): Promise<void> {
   const rule = await resolveRuleByOption(c);
   await c.interaction.reply({
-    embeds: [ruleDetailEmbed(rule, c.ctx.intentsEnabled, c.t('automod.rule.viewTitle', { name: rule.name }))],
+    embeds: [
+      ruleDetailEmbed(rule, c.ctx.intentsEnabled, c.t('automod.rule.viewTitle', { name: rule.name }), c.t),
+    ],
     ephemeral: true,
   });
 }

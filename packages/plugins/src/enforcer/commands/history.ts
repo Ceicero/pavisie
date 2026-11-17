@@ -25,10 +25,10 @@ export async function executeHistory(c: CommandContext): Promise<void> {
   ]);
 
   const lines = [
-    `Total flags: **${flagCount}**`,
-    `Total decisions: **${decisionCount}**`,
+    c.t('history.totalFlags', { count: flagCount }),
+    c.t('history.totalDecisions', { count: decisionCount }),
     '',
-    '**Last 5 records**',
+    c.t('history.lastRecords'),
     ...recent.map(
       (r) =>
         `#E-${r.recordNumber} · ${r.kind}${r.decision ? ` (${r.decision})` : ''} · <t:${Math.floor(r.createdAt.getTime() / 1000)}:R>`,

@@ -258,9 +258,11 @@ const MATCHER_PATTERN_KEYS = {
  */
 function localizeMatcherMessage(t: Translate, message: string | undefined): string {
   if (!message) return t('policy.invalidMatcherValueGeneric');
-  if (message === 'mention_count matchers need an integer value >= 1.') return t('policy.matcher.mentionCount');
+  if (message === 'mention_count matchers need an integer value >= 1.')
+    return t('policy.matcher.mentionCount');
   if (message === 'regex matchers need a single pattern string.') return t('policy.matcher.regexSingle');
-  if (message === 'link_domain matchers need a string or list of domains.') return t('policy.matcher.linkDomain');
+  if (message === 'link_domain matchers need a string or list of domains.')
+    return t('policy.matcher.linkDomain');
   if (message === 'ai_category matchers need a category name.') return t('policy.matcher.aiCategory');
   const needsValue = /^([a-z_]+) matchers need at least one non-empty value\.$/.exec(message);
   if (needsValue?.[1]) return t('policy.matcher.needsValue', { type: needsValue[1] });
@@ -314,15 +316,24 @@ function buildMatcherFromOptions(
   return { matcher: parsed.data };
 }
 
-function policySummaryLine(policy: {
-  id: string;
-  name: string;
-  enabled: boolean;
-  severity: string;
-  matchers: unknown;
-}): string {
+function policySummaryLine(
+  policy: {
+    id: string;
+    name: string;
+    enabled: boolean;
+    severity: string;
+    matchers: unknown;
+  },
+  t: Translate,
+): string {
   const matcherCount = Array.isArray(policy.matchers) ? policy.matchers.length : 0;
-  return `${policy.enabled ? '🟢' : '⚪'} **${policy.name}** (${policy.severity}) — ${matcherCount} matcher(s) — \`${policy.id}\``;
+  return t('policy.detail.summary', {
+    mark: policy.enabled ? '🟢' : '⚪',
+    name: policy.name,
+    severity: policy.severity,
+    count: matcherCount,
+    id: policy.id,
+  });
 }
 
 function policyDetailEmbed(
@@ -339,20 +350,33 @@ function policyDetailEmbed(
     suggestedAction: string | null;
   },
   title: string,
+  t: Translate,
 ) {
+  const none = t('policy.detail.none');
   const lines = [
     policy.description,
     '',
-    `Enabled: ${policy.enabled ? 'Yes' : 'No'}`,
-    `Severity: ${policy.severity}`,
-    `Suggested action: ${policy.suggestedAction ?? '_None_'}`,
-    `Scope: ${policy.channelIds.length > 0 ? policy.channelIds.map((id) => `<#${id}>`).join(', ') : 'All channels'}`,
-    `Exempt roles: ${policy.exemptRoleIds.length > 0 ? policy.exemptRoleIds.map((id) => `<@&${id}>`).join(', ') : '_None_'}`,
-    `Exempt channels: ${policy.exemptChannelIds.length > 0 ? policy.exemptChannelIds.map((id) => `<#${id}>`).join(', ') : '_None_'}`,
+    `${t('policy.detail.enabled')}: ${policy.enabled ? t('policy.detail.yes') : t('policy.detail.no')}`,
+    `${t('policy.detail.severity')}: ${policy.severity}`,
+    `${t('policy.detail.suggestedAction')}: ${policy.suggestedAction ?? none}`,
+    `${t('policy.detail.scope')}: ${
+      policy.channelIds.length > 0
+        ? policy.channelIds.map((id) => `<#${id}>`).join(', ')
+        : t('policy.detail.allChannels')
+    }`,
+    `${t('policy.detail.exemptRoles')}: ${
+      policy.exemptRoleIds.length > 0 ? policy.exemptRoleIds.map((id) => `<@&${id}>`).join(', ') : none
+    }`,
+    `${t('policy.detail.exemptChannels')}: ${
+      policy.exemptChannelIds.length > 0 ? policy.exemptChannelIds.map((id) => `<#${id}>`).join(', ') : none
+    }`,
     '',
-    '**Matchers**',
-    ...policy.matchers.map(
-      (m) => `• ${m.type}: ${Array.isArray(m.value) ? m.value.join(', ') : String(m.value)}`,
+    t('policy.detail.matchers'),
+    ...policy.matchers.map((m) =>
+      t('policy.detail.matcher', {
+        type: m.type,
+        value: Array.isArray(m.value) ? m.value.join(', ') : String(m.value),
+      }),
     ),
   ];
   return infoEmbed(title, lines.join('\n'));
@@ -475,7 +499,12 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
       return;
     }
     await c.interaction.reply({
-      embeds: [listEmbed(c.t('policy.listTitle'), policies.map(policySummaryLine))],
+      embeds: [
+        listEmbed(
+          c.t('policy.listTitle'),
+          policies.map((policy) => policySummaryLine(policy, c.t)),
+        ),
+      ],
       ephemeral: true,
     });
     return;
@@ -489,6 +518,7 @@ export async function executePolicy(c: CommandContext, sub: string): Promise<voi
         policyDetailEmbed(
           { ...policy, matchers: policy.matchers as MatcherInput[] },
           c.t('policy.viewTitle', { name: policy.name }),
+          c.t,
         ),
       ],
       ephemeral: true,

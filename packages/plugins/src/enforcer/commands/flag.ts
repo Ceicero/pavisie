@@ -118,9 +118,9 @@ export const flagContextMenuCommand: PluginCommand = {
 
     const select = new StringSelectMenuBuilder()
       .setCustomId(buildCustomId('enforcer', 'flag-select-policy', c.interaction.user.id, pendingId))
-      .setPlaceholder('Select a policy (optional)')
+      .setPlaceholder(c.t('flag.selectPolicy'))
       .addOptions(
-        { label: 'No specific policy', value: 'none' },
+        { label: c.t('flag.noSpecificPolicy'), value: 'none' },
         ...policies.map((p) => ({
           label: p.name.slice(0, 100),
           value: p.id,

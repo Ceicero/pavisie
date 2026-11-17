@@ -43,7 +43,7 @@ export async function handleReview(c: CommandContext): Promise<void> {
 
   const select = new StringSelectMenuBuilder()
     .setCustomId(buildCustomId('automod', 'review-select', c.interaction.user.id))
-    .setPlaceholder('Pick an event to review')
+    .setPlaceholder(c.t('automod.review.placeholder'))
     .addOptions(
       events.map((e) => ({
         label: `${ruleNameById.get(e.ruleId) ?? e.ruleType} — ${e.userId}`.slice(0, 100),
@@ -56,7 +56,7 @@ export async function handleReview(c: CommandContext): Promise<void> {
     embeds: [
       infoEmbed(
         c.t('automod.review.title'),
-        events.map((e) => eventSummaryLine(e, ruleNameById.get(e.ruleId) ?? e.ruleType)).join('\n'),
+        events.map((e) => eventSummaryLine(e, ruleNameById.get(e.ruleId) ?? e.ruleType, c.t)).join('\n'),
       ),
     ],
     components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
@@ -70,14 +70,16 @@ async function eventDetailEmbed(c: ComponentContext, eventId: string) {
   const rule = await c.ctx.prisma.automodRule.findUnique({ where: { id: event.ruleId } });
 
   const lines = [
-    `User: <@${event.userId}>`,
-    `Rule: ${rule ? `${rule.name} (${ruleStatusLine(rule, c.ctx.intentsEnabled)})` : event.ruleType}`,
-    `Channel: ${event.channelId ? `<#${event.channelId}>` : '—'}`,
-    `Actions: ${Array.isArray(event.actionsTaken) ? JSON.stringify(event.actionsTaken) : String(event.actionsTaken)}`,
-    `Dry run: ${event.dryRun ? 'Yes' : 'No'}`,
-    `Review status: ${event.reviewStatus}`,
+    `${c.t('automod.review.label.user')}: <@${event.userId}>`,
+    `${c.t('automod.review.label.rule')}: ${rule ? `${rule.name} (${ruleStatusLine(rule, c.ctx.intentsEnabled, c.t)})` : event.ruleType}`,
+    `${c.t('automod.review.label.channel')}: ${event.channelId ? `<#${event.channelId}>` : '—'}`,
+    `${c.t('automod.review.label.actions')}: ${Array.isArray(event.actionsTaken) ? JSON.stringify(event.actionsTaken) : String(event.actionsTaken)}`,
+    `${c.t('automod.review.label.dryRun')}: ${event.dryRun ? c.t('automod.review.yes') : c.t('automod.review.no')}`,
+    `${c.t('automod.review.label.reviewStatus')}: ${event.reviewStatus}`,
   ];
-  if (event.matched) lines.push(`Matched content: \`\`\`${event.matched.slice(0, 900)}\`\`\``);
+  if (event.matched) {
+    lines.push(`${c.t('automod.review.label.matchedContent')}: \`\`\`${event.matched.slice(0, 900)}\`\`\``);
+  }
 
   return {
     event,
@@ -125,7 +127,10 @@ export const reviewSelectHandler: ComponentHandler = {
   },
 };
 
-function makeReviewResolveHandler(status: 'CONFIRMED' | 'FALSE_POSITIVE', labelKey: string): ComponentHandler {
+function makeReviewResolveHandler(
+  status: 'CONFIRMED' | 'FALSE_POSITIVE',
+  labelKey: string,
+): ComponentHandler {
   return {
     action: status === 'CONFIRMED' ? 'review-confirm' : 'review-false-positive',
     kind: 'button',
