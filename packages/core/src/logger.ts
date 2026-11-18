@@ -106,6 +106,30 @@ export function serializeError(err: unknown): unknown {
   return scrubLogValue(err);
 }
 
+/**
+ * Keys a framework hands to its own serializer, which picks a fixed set of safe fields (the API's `serializeRequest`
+ * masks capability tokens in `url`; Fastify's `res` serializer keeps only `statusCode`). These are live class
+ * instances whose fields are prototype getters, so a scrubbed copy would lose them: a censored `req.params.token`
+ * left the request serializer with nothing to read. They pass through untouched, and the serializer's output is
+ * what gets written.
+ */
+const SELF_SERIALIZED_KEYS: ReadonlySet<string> = new Set(['req', 'res']);
+
+/** pino `formatters.log`: scrubs every top-level value except the self-serialized `req`/`res`. */
+function scrubLogObject(object: Record<string, unknown>): Record<string, unknown> {
+  let copy: Record<string, unknown> | undefined;
+  for (const key of Object.keys(object)) {
+    if (SELF_SERIALIZED_KEYS.has(key)) continue;
+    const before = object[key];
+    const after = SECRET_KEYS.has(key.toLowerCase()) ? CENSOR : scrubLogValue(before, 1);
+    if (after !== before) {
+      copy ??= { ...object };
+      copy[key] = after;
+    }
+  }
+  return copy ?? object;
+}
+
 const usePretty = !isProduction && Boolean(process.stdout.isTTY);
 
 /**
@@ -123,7 +147,7 @@ export const LOGGER_OPTIONS: LoggerOptions = {
     // Emit `"level":"warn"` instead of pino's numeric `"level":40`: Railway's log viewer only understands level
     // names, so with numbers every warn/error line showed up (and filtered) as info.
     level: (label) => ({ level: label }),
-    log: (object) => scrubLogValue(object) as Record<string, unknown>,
+    log: scrubLogObject,
   },
   hooks: {
     // The message text is not part of the object the formatter sees. pino takes it from the string arguments, or
