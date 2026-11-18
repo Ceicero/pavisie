@@ -67,7 +67,10 @@ return 0
  * looks for a newer case in that gap would lift the brand-new ban. Both sides hold this lease across their span (two
  * Discord round trips plus a DB write at most), so the expiry either sees the new case or runs before the ban starts.
  */
-const BAN_LEASE_TTL_MS = 15_000;
+// Not renewed: 30s (as the warn-escalation and enforcer decide locks) covers a DM, two Discord calls and a DB write
+// with room for a rate-limit wait. A holder slower than that can lose it; release is compare-and-delete, so it
+// never removes the next holder's lease.
+const BAN_LEASE_TTL_MS = 30_000;
 /** A moderator's ban waits this long for an in-flight expiry lift (one Discord call) rather than failing. */
 const BAN_LEASE_WAIT_MS = 3_000;
 const BAN_LEASE_RETRY_MS = 100;
@@ -75,7 +78,10 @@ const BAN_LEASE_RETRY_MS = 100;
 export interface BanLeaseOptions {
   /** How long to keep retrying a held lease before giving up. Default 0: fail at once and let the caller retry. */
   waitMs?: number;
-  /** When Redis itself errors, run unleased (logged) instead of failing. For moderator actions that must not depend on Redis. */
+  /**
+   * When Redis itself errors, run unleased (logged) instead of failing. For moderator actions that must not depend on
+   * Redis. This side is then unprotected, but the expiry side fails closed (and BullMQ needs Redis to run it at all).
+   */
   failOpen?: boolean;
 }
 
@@ -797,20 +803,21 @@ export class ModerationServiceImpl implements ModerationService {
     const user = (await this.fetchUser(input.targetId)) ?? undefined;
 
     let dmSent = false;
-    if (user && input.dmUser !== false && (await this.dmAllowed(input.guildId))) {
-      const hintedCaseNumber = await nextCaseNumber(this.ctx.prisma, input.guildId);
-      dmSent = await this.sendCaseDmToUser(
-        user,
-        { type: 'BAN', caseNumber: hintedCaseNumber, reason: input.reason ?? null },
-        guild.name,
-      );
-    }
-
-    // The lease covers the Discord ban and the case write, so a concurrent temp-ban expiry cannot look between them.
+    // The lease covers the DM, the Discord ban and the case write, so a concurrent temp-ban expiry cannot look
+    // between the ban and its case, and a ban that gives up on a busy lease has not already told the user.
     const row = await this.withBanLease(
       input.guildId,
       input.targetId,
       async () => {
+        if (user && input.dmUser !== false && (await this.dmAllowed(input.guildId))) {
+          const hintedCaseNumber = await nextCaseNumber(this.ctx.prisma, input.guildId);
+          dmSent = await this.sendCaseDmToUser(
+            user,
+            { type: 'BAN', caseNumber: hintedCaseNumber, reason: input.reason ?? null },
+            guild.name,
+          );
+        }
+
         await guild.bans.create(input.targetId, {
           reason: input.reason,
           deleteMessageSeconds: input.deleteMessageSeconds ?? 0,
@@ -888,21 +895,22 @@ export class ModerationServiceImpl implements ModerationService {
     const user = (await this.fetchUser(input.targetId)) ?? undefined;
 
     let dmSent = false;
-    if (user && input.dmUser !== false && (await this.dmAllowed(input.guildId))) {
-      const hintedCaseNumber = await nextCaseNumber(this.ctx.prisma, input.guildId);
-      dmSent = await this.sendCaseDmToUser(
-        user,
-        { type: 'SOFTBAN', caseNumber: hintedCaseNumber, reason: input.reason ?? null },
-        guild.name,
-      );
-    }
-
-    // Held across create, remove and the case write: if the cleanup unban fails, the BAN case written below must
-    // exist before a temp-ban expiry can check for it.
+    // Held across the DM, create, remove and the case write: if the cleanup unban fails, the BAN case written below
+    // must exist before a temp-ban expiry can check for it, and a softban that gives up on a busy lease has not
+    // already told the user.
     return this.withBanLease(
       input.guildId,
       input.targetId,
       async () => {
+        if (user && input.dmUser !== false && (await this.dmAllowed(input.guildId))) {
+          const hintedCaseNumber = await nextCaseNumber(this.ctx.prisma, input.guildId);
+          dmSent = await this.sendCaseDmToUser(
+            user,
+            { type: 'SOFTBAN', caseNumber: hintedCaseNumber, reason: input.reason ?? null },
+            guild.name,
+          );
+        }
+
         await guild.bans.create(input.targetId, {
           reason: input.reason ?? 'Softban',
           deleteMessageSeconds: input.deleteMessageSeconds ?? 86400,
