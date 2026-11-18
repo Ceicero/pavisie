@@ -20,6 +20,15 @@ const REDACT_PATHS = [
 const CENSOR = '[REDACTED]';
 
 /**
+ * Key names (lower-cased) whose values are censored at every depth by `scrubLogValue`. pino's `*.key` paths above
+ * match exactly one level down, so a top-level `{ token }`, `{ a: { b: { apiKey } } }` or `{ a: [{ password }] }`
+ * would otherwise be written as is. The pino paths stay as a second layer.
+ */
+const SECRET_KEYS: ReadonlySet<string> = new Set(
+  REDACT_PATHS.map((path) => path.slice(path.lastIndexOf('.') + 1).toLowerCase()),
+);
+
+/**
  * Discord puts the interaction or webhook token in the REST path (`/interactions/:id/:token/callback`,
  * `/webhooks/:id/:token[/…]`), and discord.js REST errors carry that path as `err.url`. Mask only the token segment
  * so the route stays readable in the logs. Webhook tokens never expire, so this matters most for them.
@@ -41,7 +50,8 @@ const MAX_SCRUB_DEPTH = 8;
  * matches exactly one level):
  * - every `Error` becomes pino's standard serialized form (which also expands `AggregateError.errors` and nested
  *   error properties, and folds `cause` into the stack), then is cleaned like any other object;
- * - a `requestBody` key (the outgoing message a discord.js REST error carries) is censored wherever it sits;
+ * - a secret-named key (`token`, `password`, `authorization`, `apiKey`, `cookie`, message `content`, `requestBody`
+ *   and the rest of `REDACT_PATHS`, any letter case) is censored wherever it sits;
  * - strings have Discord interaction and webhook tokens masked;
  * - a `toJSON()` method is called here, so what it returns is cleaned too (a `URL` logs as its full href);
  * - class instances are walked like plain objects, since JSON writes their own enumerable properties the same way.
@@ -79,7 +89,7 @@ function scrubObject(value: object, depth: number, seen: WeakSet<object>): unkno
     const before = (value as Record<string, unknown>)[key];
     let after: unknown;
     if (isArray) after = scrubLogValue(before, depth + 1, seen);
-    else if (key.toLowerCase() === 'requestbody') after = CENSOR;
+    else if (SECRET_KEYS.has(key.toLowerCase())) after = CENSOR;
     // A `toJSON` own property (set on an error, then copied by the serializer) would replace the cleaned object.
     else if (key === 'toJSON' && typeof before === 'function') after = undefined;
     else after = scrubLogValue(before, depth + 1, seen);

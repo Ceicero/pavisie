@@ -39,6 +39,71 @@ describe('logger redaction', () => {
     expect(lines()).not.toContain('abc123');
   });
 
+  it('censors secret-named keys at the top level, two or more levels deep, inside arrays and in any letter case', () => {
+    const { log, lines } = capture();
+    log.info({ token: 'top-level-token' }, 'a');
+    log.info(
+      {
+        a: {
+          b: {
+            token: 'deep-token',
+            accessToken: 'deep-access',
+            apiKey: 'deep-key',
+            authorization: 'Bot deep-auth',
+          },
+        },
+      },
+      'b',
+    );
+    log.info({ a: [{ password: 'array-password' }, { nested: [{ secret: 'array-secret' }] }] }, 'c');
+    log.info({ ctx: { headers: { Authorization: 'Bearer header-auth', Cookie: 'sid=header-cookie' } } }, 'd');
+    log.info(
+      { job: { data: { RefreshToken: 'mixed-case-refresh', messageContent: 'deep message text' } } },
+      'e',
+    );
+    const out = lines();
+    for (const leaked of [
+      'top-level-token',
+      'deep-token',
+      'deep-access',
+      'deep-key',
+      'deep-auth',
+      'array-password',
+      'array-secret',
+      'header-auth',
+      'header-cookie',
+      'mixed-case-refresh',
+      'deep message text',
+    ]) {
+      expect(out).not.toContain(leaked);
+    }
+    const [first, second, third] = out
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(first!.token).toBe('[REDACTED]');
+    // The shape stays readable: only the secret values are replaced.
+    expect(second!.a).toEqual({
+      b: {
+        token: '[REDACTED]',
+        accessToken: '[REDACTED]',
+        apiKey: '[REDACTED]',
+        authorization: '[REDACTED]',
+      },
+    });
+    expect(third!.a).toEqual([{ password: '[REDACTED]' }, { nested: [{ secret: '[REDACTED]' }] }]);
+  });
+
+  it('leaves keys that only contain a secret word alone', () => {
+    const { log, lines } = capture();
+    log.info({ tokenCount: 3, hasPassword: true, contentType: 'application/json' }, 'x');
+    expect(JSON.parse(lines())).toMatchObject({
+      tokenCount: 3,
+      hasPassword: true,
+      contentType: 'application/json',
+    });
+  });
+
   const WEBHOOK_TOKEN = 'aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789-_webhooktoken';
   const INTERACTION_TOKEN = 'aW50ZXJhY3Rpb246MTIzNDU2Nzg5MDEyMzQ1Njc4OTpzZWNyZXQ';
 
