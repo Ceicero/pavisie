@@ -446,9 +446,49 @@ describe('EnforcerService.decide — Discord action failures are not swallowed',
     expect(createCase).not.toHaveBeenCalled();
   });
 
-  it('propagates a MUTE (role add) failure instead of recording a phantom case', async () => {
+  it('records the MUTE case before it adds the role', async () => {
+    const order: string[] = [];
     const record = baseRecord({ userId: 'member-1' });
     const prisma = makeFakePrisma(record);
+    const client = fakeClientWithMembers({
+      'mod-1': { highestRolePosition: 50 },
+      'member-1': {
+        highestRolePosition: 5,
+        addRole: async () => {
+          order.push('role.add');
+        },
+      },
+    });
+    const { ctx } = createTestContext({
+      config: defaultConfig({ muteRoleId: 'role-1' }),
+      overrides: { prisma, client },
+    });
+    const createCase = vi.fn(async () => {
+      order.push('case.create');
+      return { id: 'case-1', caseNumber: 1 } as never;
+    });
+    ctx.services.register('moderation', { ...fakeModeration(), createCase });
+
+    await createEnforcerService(ctx).decide({
+      guildId: 'g1',
+      recordId: 'rec-1',
+      decision: 'MUTE',
+      moderatorId: 'mod-1',
+      source: 'bot',
+    });
+
+    expect(order).toEqual(['case.create', 'role.add']);
+  });
+
+  it('propagates a MUTE (role add) failure and closes the case it recorded first', async () => {
+    // The mute's case is written before the role is added, so a crash in between can never leave a member muted
+    // with no record. When the role add then fails, that case is closed at once (conditional on still being
+    // open), so it never counts as a running mute and its expiry job finds nothing to do.
+    const record = baseRecord({ userId: 'member-1' });
+    const prisma = makeFakePrisma(record);
+    const closeCase = vi.fn(async () => ({ count: 1 }));
+    (prisma as unknown as { moderationCase: { updateMany: typeof closeCase } }).moderationCase.updateMany =
+      closeCase;
     const client = fakeClientWithMembers({
       'mod-1': { highestRolePosition: 50 },
       'member-1': { highestRolePosition: 5, addRole: () => Promise.reject(new Error('Missing Access')) },
@@ -470,7 +510,11 @@ describe('EnforcerService.decide — Discord action failures are not swallowed',
         source: 'bot',
       }),
     ).rejects.toThrow(/Missing Access/);
-    expect(createCase).not.toHaveBeenCalled();
+    expect(createCase).toHaveBeenCalledTimes(1);
+    expect(closeCase).toHaveBeenCalledWith({
+      where: { id: 'case-1', expiredAt: null },
+      data: { expiredAt: expect.any(Date) },
+    });
   });
 
   it('propagates a BAN failure instead of recording a phantom case', async () => {

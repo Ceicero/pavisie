@@ -1,5 +1,13 @@
 import { ChannelType, type SlashCommandBuilder } from 'discord.js';
-import { assertStaffLevel, errorEmbed, successEmbed, type CommandContext } from '../../sdk';
+import {
+  assertStaffLevel,
+  classifyDiscordFailure,
+  discordErrorCode,
+  discordFailureKey,
+  errorEmbed,
+  successEmbed,
+  type CommandContext,
+} from '../../sdk';
 import {
   applyFlagQueueOverwrites,
   applyLedgerOverwrites,
@@ -64,25 +72,44 @@ export function addSetupSubcommand(builder: SlashCommandBuilder): SlashCommandBu
   ) as SlashCommandBuilder;
 }
 
+type Translate = CommandContext['t'];
+
+/** Shared Discord-failure sentence, or `errors.generic` for any other numeric Discord code. Never reads `err.message`. */
+function discordRestReply(t: Translate, err: unknown): string | null {
+  const key = discordFailureKey(err);
+  if (key) return t(key);
+  if (classifyDiscordFailure(err) !== null || discordErrorCode(err) !== null) return t('errors.generic');
+  return null;
+}
+
 /**
- * What to check when the mute role could not be applied to a channel. Manage Roles / Manage Channels are the
- * usual cause, but not the only one: Discord also rejects an overwrite that denies a permission the bot does not
- * hold itself, so a bot missing Speak (or any other permission the mute role denies) fails the same way.
+ * The permission sentence inside `setup.report.muteHint` (`({count} failed — …)`). Repair uses that whole
+ * sentence. The per-channel report lists failed and skipped counts, then this same guidance: Manage Roles and
+ * Manage Channels are the usual cause, but Discord also rejects an overwrite that denies a permission the bot
+ * does not hold itself (Speak, or any other permission the mute role denies).
  */
-const MUTE_APPLY_HINT =
-  'check that I have Manage Roles and Manage Channels there, plus every permission the mute role denies: Send Messages, Send Messages in Threads, Speak, Add Reactions';
+function mutePermissionHint(t: Translate): string {
+  const wrapped = t('setup.report.muteHint', { count: 0 });
+  const dash = wrapped.indexOf(' \u2014 ');
+  if (dash === -1) return wrapped;
+  const body = wrapped.slice(dash + ' \u2014 '.length);
+  return body.endsWith(')') ? body.slice(0, -1) : body;
+}
 
 /**
  * One sentence describing a bulk mute-role apply. Channels that failed and channels the bot cannot manage at all
  * are both named: a mute that silently doesn't reach part of the server is the failure mode this command has to
  * make visible, not summarise away.
  */
-function describeMuteApply(result: { applied: number; failed: number; skipped: number }): string {
+function describeMuteApply(
+  t: Translate,
+  result: { applied: number; failed: number; skipped: number },
+): string {
   const problems: string[] = [];
-  if (result.failed > 0) problems.push(`${result.failed} failed`);
-  if (result.skipped > 0) problems.push(`${result.skipped} skipped — I can't manage them`);
-  const suffix = problems.length > 0 ? ` (${problems.join(', ')}; ${MUTE_APPLY_HINT})` : '';
-  return `applied deny-overwrites to ${result.applied} channel(s)${suffix}`;
+  if (result.failed > 0) problems.push(t('setup.report.failed', { failed: result.failed }));
+  if (result.skipped > 0) problems.push(t('setup.report.skipped', { skipped: result.skipped }));
+  const suffix = problems.length > 0 ? ` (${problems.join(', ')}; ${mutePermissionHint(t)})` : '';
+  return `${t('setup.report.applied', { applied: result.applied })}${suffix}`;
 }
 
 export async function executeSetup(c: CommandContext): Promise<void> {
@@ -96,6 +123,20 @@ export async function executeSetup(c: CommandContext): Promise<void> {
 
   await c.interaction.deferReply({ ephemeral: true });
 
+  try {
+    await runSetup(c);
+  } catch (err) {
+    const text = discordRestReply(c.t, err);
+    if (!text) throw err;
+    c.ctx.logger.warn(
+      { code: discordErrorCode(err), guildId: c.guildId },
+      'enforcer: setup hit a Discord error',
+    );
+    await c.interaction.editReply({ embeds: [errorEmbed(text)] });
+  }
+}
+
+async function runSetup(c: CommandContext): Promise<void> {
   const guild = c.interaction.guild;
   const config = await c.config<EnforcerConfig>();
   const repairOnly = c.interaction.options.getBoolean('repair') ?? false;
@@ -110,10 +151,12 @@ export async function executeSetup(c: CommandContext): Promise<void> {
       : { muteApplied: 0, muteFailed: 0 };
     const muteSuffix =
       muteApplied > 0 || muteFailed > 0
-        ? `, mute role on ${muteApplied} channel(s)${muteFailed > 0 ? ` (${muteFailed} failed — ${MUTE_APPLY_HINT})` : ''}`
+        ? `${c.t('setup.repairedMuteSuffix', { count: muteApplied })}${
+            muteFailed > 0 ? ` ${c.t('setup.report.muteHint', { count: muteFailed })}` : ''
+          }`
         : '';
     await c.interaction.editReply({
-      embeds: [successEmbed(`Channel permission overwrites re-applied (ledger, flag queue${muteSuffix}).`)],
+      embeds: [successEmbed(c.t('setup.repaired', { muteSuffix }))],
     });
     return;
   }
@@ -143,7 +186,7 @@ export async function executeSetup(c: CommandContext): Promise<void> {
   await applyFlagQueueOverwrites(flagChannel, staffRoleIds);
 
   let muteRoleId = config.muteRoleId;
-  let muteRoleReport = 'unchanged';
+  let muteRoleReport = c.t('setup.report.unchanged');
   if (muteRoleOpt) {
     muteRoleId = muteRoleOpt.id;
     // A supplied role carries no permissions of its own — it silences people only once the deny-overwrites are
@@ -151,12 +194,18 @@ export async function executeSetup(c: CommandContext): Promise<void> {
     // and every later Mute decision is a no-op the ledger still records.
     const role = await guild.roles.fetch(muteRoleId).catch(() => null);
     muteRoleReport = role
-      ? `using <@&${muteRoleId}> and ${describeMuteApply(await applyMuteRoleToChannels(guild, role))}`
-      : `using <@&${muteRoleId}> — I could not read that role just now, so no deny-overwrites were applied; run \`/enforcer setup repair:true\` once I can`;
+      ? c.t('setup.report.usingRole', {
+          roleId: muteRoleId,
+          report: describeMuteApply(c.t, await applyMuteRoleToChannels(guild, role)),
+        })
+      : c.t('setup.report.roleUnreadable', { roleId: muteRoleId });
   } else if (!config.muteRoleId) {
     const role = await ensureMuteRole({ guild, existingRoleId: null, reason: 'Enforcer setup: mute role' });
     muteRoleId = role.id;
-    muteRoleReport = `created <@&${role.id}> and ${describeMuteApply(await applyMuteRoleToChannels(guild, role))}`;
+    muteRoleReport = c.t('setup.report.createdRole', {
+      roleId: role.id,
+      report: describeMuteApply(c.t, await applyMuteRoleToChannels(guild, role)),
+    });
   }
 
   await c.ctx.setConfig<EnforcerConfig>(
@@ -196,12 +245,20 @@ export async function executeSetup(c: CommandContext): Promise<void> {
     embeds: [
       successEmbed(
         [
-          `Ledger channel: <#${ledgerChannel.id}> (${ledgerVisibility === 'staff' ? 'staff only' : 'server-wide'})`,
-          `Flag-queue channel: <#${flagChannel.id}> (staff only)`,
-          `Mute role: ${muteRoleId ? `<@&${muteRoleId}> — ${muteRoleReport}` : 'not set'}`,
-          `Capture context: ${(captureContextOpt ?? config.captureContext) ? 'On' : 'Off'}`,
+          c.t('setup.report.ledgerChannel', {
+            channel: `<#${ledgerChannel.id}>`,
+            visibility:
+              ledgerVisibility === 'staff' ? c.t('setup.report.staffOnly') : c.t('setup.report.serverWide'),
+          }),
+          c.t('setup.report.flagQueueChannel', { channel: `<#${flagChannel.id}>` }),
+          c.t('setup.report.muteRole', {
+            role: muteRoleId ? `<@&${muteRoleId}> — ${muteRoleReport}` : c.t('setup.report.notSet'),
+          }),
+          (captureContextOpt ?? config.captureContext)
+            ? c.t('setup.report.captureOn')
+            : c.t('setup.report.captureOff'),
           '',
-          'Enable Enforcer with `/plugin enable enforcer`, then create your first policy with `/enforcer policy import` or `/enforcer policy create`.',
+          c.t('setup.report.nextSteps'),
         ].join('\n'),
       ),
     ],

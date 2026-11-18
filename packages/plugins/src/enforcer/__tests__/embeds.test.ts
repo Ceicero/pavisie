@@ -66,28 +66,59 @@ describe('buildLedgerEmbed', () => {
 });
 
 describe('buildFlagQueueEmbed', () => {
+  const english = (key: string): string => {
+    if (key === 'policy.detail.severity') return 'Severity';
+    if (key === 'policy.detail.suggestedAction') return 'Suggested action';
+    return key;
+  };
+
   it('shows a "Decided by" footer once decided, and a plain source footer while pending', () => {
-    const pending = buildFlagQueueEmbed({
-      recordId: 'r1',
-      recordNumber: 1,
-      userId: '123456789012345678',
-      createdAt: new Date(),
-      severity: 'MEDIUM',
-      source: 'AUTO',
-    });
+    const pending = buildFlagQueueEmbed(
+      {
+        recordId: 'r1',
+        recordNumber: 1,
+        userId: '123456789012345678',
+        createdAt: new Date(),
+        severity: 'MEDIUM',
+        source: 'AUTO',
+      },
+      english,
+    );
     expect(pending.toJSON().footer?.text).toMatch(/^Source:/);
 
-    const decided = buildFlagQueueEmbed({
-      recordId: 'r1',
-      recordNumber: 1,
-      userId: '123456789012345678',
-      createdAt: new Date(),
-      severity: 'MEDIUM',
-      source: 'AUTO',
-      decidedBy: '223456789012345678',
-      decidedAt: new Date(),
-    });
+    const decided = buildFlagQueueEmbed(
+      {
+        recordId: 'r1',
+        recordNumber: 1,
+        userId: '123456789012345678',
+        createdAt: new Date(),
+        severity: 'MEDIUM',
+        source: 'AUTO',
+        decidedBy: '223456789012345678',
+        decidedAt: new Date(),
+      },
+      english,
+    );
     expect(decided.toJSON().footer?.text).toMatch(/^Decided by/);
+  });
+
+  it('names severity and suggested action from the caller locale', () => {
+    const t = (key: string) => `L:${key}`;
+    const embed = buildFlagQueueEmbed(
+      {
+        recordId: 'r1',
+        recordNumber: 4,
+        userId: '123456789012345678',
+        createdAt: new Date(),
+        severity: 'HIGH',
+        suggestedAction: 'ban',
+        source: 'AUTO',
+      },
+      t,
+    );
+    const fields = embed.toJSON().fields ?? [];
+    expect(fields.find((field) => field.name === 'L:policy.detail.severity')?.value).toBe('HIGH');
+    expect(fields.find((field) => field.name === 'L:policy.detail.suggestedAction')?.value).toBe('ban');
   });
 });
 

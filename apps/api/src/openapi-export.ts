@@ -3,9 +3,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import RedisMock from 'ioredis-mock';
 import type Redis from 'ioredis';
-import { createPrismaStub } from '@pavisie/plugins/sdk/testing';
 import type { QueueRegistryLike } from './lib/queues';
-import { buildApp } from './app';
+
+/**
+ * The committed spec must not depend on whoever runs the export. `@pavisie/core`'s env loader reads the repo-root
+ * `.env` at import time without overriding variables that are already set, so pin the values that change the spec
+ * *before* the app is imported (hence the dynamic imports in `main`):
+ * - NODE_ENV: production skips registering swagger entirely; test matches CI.
+ * - E2E_TEST_MODE: would add the Playwright-only `POST /auth/test-login`.
+ * `servers` (from API_BASE_URL) is overwritten after generation instead, because an unset value can't be pinned.
+ */
+process.env.NODE_ENV = 'test';
+process.env.E2E_TEST_MODE = 'false';
+const SPEC_SERVERS = [{ url: 'http://localhost:3001' }];
 
 /** Fake queue registry — the openapi export only needs the app to build and boot, never to actually enqueue anything. */
 const fakeQueues: QueueRegistryLike = {
@@ -16,6 +26,8 @@ const fakeQueues: QueueRegistryLike = {
 };
 
 async function main(): Promise<void> {
+  const { createPrismaStub } = await import('@pavisie/plugins/sdk/testing');
+  const { buildApp } = await import('./app');
   const { prisma } = createPrismaStub();
   const redis = new RedisMock() as unknown as Redis;
   // Second, dedicated ioredis-mock for the OBS-overlay routes' pub/sub subscriber. Without it, buildApp()
@@ -27,7 +39,7 @@ async function main(): Promise<void> {
   const app = await buildApp({ prisma, redis, queues: fakeQueues, overlaySubscriber });
   await app.ready();
 
-  const spec = app.swagger();
+  const spec = { ...app.swagger(), servers: SPEC_SERVERS };
 
   const here = path.dirname(fileURLToPath(import.meta.url));
   const docsDir = path.resolve(here, '../../../docs');

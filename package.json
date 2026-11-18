@@ -22,6 +22,7 @@
     "commands:register": "pnpm --filter @pavisie/bot register",
     "commands:export": "pnpm --filter @pavisie/plugins export:commands",
     "docs:permissions": "pnpm --filter @pavisie/plugins export:permissions",
+    "docs:openapi": "pnpm --filter @pavisie/api openapi:export && prettier --write docs/openapi.json && node scripts/check-openapi.mjs",
     "check:i18n": "pnpm --filter @pavisie/plugins check:i18n",
     "brand:sync": "node scripts/sync-brand.mjs",
     "format": "prettier --write .",

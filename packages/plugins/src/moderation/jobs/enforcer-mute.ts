@@ -30,7 +30,11 @@ export interface EnforcerMuteCaseRow {
  * not been closed and either never expires or expires in the future. An overdue case does not count. It is
  * waiting to be lifted itself, and two overdue mutes deferring to each other would never lift either.
  */
-async function hasAnotherActiveMute(ctx: PluginContext, row: EnforcerMuteCaseRow, roleId: string): Promise<boolean> {
+async function hasAnotherActiveMute(
+  ctx: PluginContext,
+  row: EnforcerMuteCaseRow,
+  roleId: string,
+): Promise<boolean> {
   const now = Date.now();
   const others = await ctx.prisma.moderationCase.findMany({
     where: {
@@ -73,10 +77,6 @@ export async function liftEnforcerMute(
   const roleId = enforcerMuteRoleId(row.metadata);
   if (!roleId) return;
 
-  // The role is one switch shared by every mute on this member. If a later mute is still running, this
-  // case is over but the member must stay muted: removing the role here would cut the later mute short.
-  if (await hasAnotherActiveMute(ctx, row, roleId)) return;
-
   let guild;
   try {
     guild = await ctx.client.guilds.fetch(row.guildId);
@@ -89,11 +89,19 @@ export async function liftEnforcerMute(
   let member;
   try {
     // `force` skips the member cache. Without the GuildMembers intent the cached member does not see the
-    // mute role being added, and a stale cache would make the role check below skip a removal that is needed.
+    // mute role being added, and a stale cache would make the role checks below wrong.
     member = await guild.members.fetch({ user: row.targetId, force: true });
   } catch (err) {
     if (discordCode(err) === UNKNOWN_MEMBER) return;
     throw err;
+  }
+
+  // The role is one switch shared by every mute on this member. If a later mute is still running, this case is
+  // over but the member must stay muted. Rather than just skipping, make sure the role is actually on: an
+  // earlier attempt may have removed it and then failed to put it back (see below), and a retry must repair that.
+  if (await hasAnotherActiveMute(ctx, row, roleId)) {
+    if (!member.roles.cache.has(roleId)) await member.roles.add(roleId, 'A newer mute is still in force');
+    return;
   }
   if (!member.roles.cache.has(roleId)) return;
 
@@ -104,5 +112,13 @@ export async function liftEnforcerMute(
     // The role was deleted, or the member left between the fetch and the removal.
     if (code === UNKNOWN_ROLE || code === UNKNOWN_MEMBER) return;
     throw err;
+  }
+
+  // A new mute can start between the check above and the removal: its role add changes nothing (the role is
+  // still on) and its case is written while this runs, so the removal just undid it. Check again and put the
+  // role back. If that add fails it throws: the caller keeps this case active and retries, and the retry takes
+  // the branch above, which re-adds the role.
+  if (await hasAnotherActiveMute(ctx, row, roleId)) {
+    await member.roles.add(roleId, 'A newer mute is still in force');
   }
 }
