@@ -3,6 +3,7 @@
     "levelingDisabled": "Leveling is turned off for this server.",
     "repDisabled": "Reputation is turned off for this server.",
     "selfRep": "You can't give reputation to yourself.",
+    "repBot": "You can't give reputation to a bot.",
     "repCooldown": "You can give reputation again <t:{resetAt}:R>.",
     "starboardNotConfigured": "The starboard has no channel configured yet. Set one with `/starboard set channel`.",
     "tempVoiceNotOwner": "Only the owner of this temp voice channel can do that.",
@@ -71,11 +72,14 @@
       "success": "Gave reputation to {user}."
     },
     "check": {
-      "title": "{name}'s reputation"
+      "title": "{name}'s reputation",
+      "fieldTotal": "Reputation",
+      "fieldCount": "Times thanked"
     },
     "leaderboard": {
       "title": "Reputation leaderboard",
-      "empty": "Nobody has received reputation yet."
+      "empty": "Nobody has received reputation yet.",
+      "row": "**#{rank}** {user} — {amount} reputation"
     },
     "revoke": {
       "success": "Revoked {amount} reputation from {user}."
