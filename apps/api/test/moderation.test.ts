@@ -185,7 +185,7 @@ function moderationOverrides() {
 
 async function authedContext() {
   const { store, overrides } = moderationOverrides();
-  const { app, redis } = await buildTestApp({
+  const { app, redis, prismaCalls } = await buildTestApp({
     guild: { findUnique: async () => ({ id: GUILD_ID, botPresent: true }) },
     ...overrides,
   });
@@ -196,7 +196,13 @@ async function authedContext() {
     origin: 'http://localhost:3000',
     'x-csrf-token': session.csrfToken,
   };
-  return { app, cookieHeader, mutHeaders, store };
+  return { app, cookieHeader, mutHeaders, store, prismaCalls };
+}
+
+function auditActions(prismaCalls: { model: string; method: string; args: unknown[] }[]): string[] {
+  return prismaCalls
+    .filter((call) => call.model === 'auditLog' && call.method === 'create')
+    .map((call) => (call.args[0] as { data: { action: string } }).data.action);
 }
 
 function seedCase(
@@ -290,7 +296,7 @@ describe('moderation cases', () => {
 
 describe('moderation notes', () => {
   it('POST creates a note, GET lists it, DELETE soft-deletes it', async () => {
-    const { app, mutHeaders, cookieHeader } = await authedContext();
+    const { app, mutHeaders, cookieHeader, prismaCalls } = await authedContext();
 
     const created = await app.inject({
       method: 'POST',
@@ -300,6 +306,7 @@ describe('moderation notes', () => {
     });
     expect(created.statusCode).toBe(201);
     const noteId = created.json().id;
+    expect(auditActions(prismaCalls)).toEqual(['moderation.note.create']);
 
     const list = await app.inject({
       method: 'GET',
@@ -314,6 +321,7 @@ describe('moderation notes', () => {
       headers: mutHeaders,
     });
     expect(del.statusCode).toBe(204);
+    expect(auditActions(prismaCalls)).toEqual(['moderation.note.create', 'moderation.note.delete']);
 
     const listAfter = await app.inject({
       method: 'GET',
@@ -405,7 +413,7 @@ describe('moderation appeals', () => {
 
 describe('moderation settings', () => {
   it('GET returns defaults, PUT persists a change and GET reflects it', async () => {
-    const { app, mutHeaders, cookieHeader } = await authedContext();
+    const { app, mutHeaders, cookieHeader, prismaCalls } = await authedContext();
 
     const initial = await app.inject({
       method: 'GET',
@@ -429,6 +437,9 @@ describe('moderation settings', () => {
     expect(updated.statusCode).toBe(200);
     expect(updated.json().purgeMax).toBe(25);
     expect(updated.json().requireReasonFor).toEqual(['ban']);
+    expect(auditActions(prismaCalls).filter((action) => action === 'moderation.settings.update')).toEqual([
+      'moderation.settings.update',
+    ]);
 
     const after = await app.inject({
       method: 'GET',

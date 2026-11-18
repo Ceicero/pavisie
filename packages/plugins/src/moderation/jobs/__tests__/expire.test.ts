@@ -161,7 +161,9 @@ describe('expireJob — overlapping enforcer mutes on one member', () => {
         client: {
           guilds: {
             fetch: async () => ({
-              members: { fetch: async () => ({ roles: { cache: new Map([[ROLE_ID, true]]), remove: removeRole } }) },
+              members: {
+                fetch: async () => ({ roles: { cache: new Map([[ROLE_ID, true]]), remove: removeRole } }),
+              },
             }),
           },
         } as any,
@@ -189,7 +191,11 @@ describe('expireJob — overlapping enforcer mutes on one member', () => {
       enforcerMuteCase({ id: 'case-2', expiresAt: EARLIER }),
       enforcerMuteCase({ id: 'case-2', expiresAt: LATER, expiredAt: new Date() }),
       enforcerMuteCase({ id: 'case-2', expiresAt: LATER, deletedAt: new Date() }),
-      enforcerMuteCase({ id: 'case-2', expiresAt: LATER, metadata: { enforcerMute: true, roleId: 'another-role' } }),
+      enforcerMuteCase({
+        id: 'case-2',
+        expiresAt: LATER,
+        metadata: { enforcerMute: true, roleId: 'another-role' },
+      }),
       enforcerMuteCase({ id: 'case-2', expiresAt: LATER, targetId: 'someone-else' }),
       enforcerMuteCase({ id: 'case-2', expiresAt: LATER, metadata: { roleId: ROLE_ID } }),
     ]) {
@@ -275,13 +281,17 @@ describe('expireJob — enforcer mute removal failures', () => {
   }
 
   it('keeps the case active and rethrows so the job retries when role removal fails', async () => {
-    const { ctx, updateCalls } = build(vi.fn().mockRejectedValue(Object.assign(new Error('outage'), { code: 500 })));
+    const { ctx, updateCalls } = build(
+      vi.fn().mockRejectedValue(Object.assign(new Error('outage'), { code: 500 })),
+    );
     await expect(expireJob.processor(ctx, fakeJob(CASE_ID))).rejects.toThrow('outage');
     expect(updateCalls).toHaveLength(0);
   });
 
   it('treats an already-deleted mute role (10011) as lifted and marks the case expired', async () => {
-    const { ctx, updateCalls } = build(vi.fn().mockRejectedValue(Object.assign(new Error('Unknown Role'), { code: 10011 })));
+    const { ctx, updateCalls } = build(
+      vi.fn().mockRejectedValue(Object.assign(new Error('Unknown Role'), { code: 10011 })),
+    );
     await expireJob.processor(ctx, fakeJob(CASE_ID));
     expect(updateCalls).toHaveLength(1);
   });
@@ -388,7 +398,9 @@ describe('expireJob — skipped and tolerant paths', () => {
 
   it('marks a TIMEOUT expired even if the member left the server', async () => {
     const { ctx, update } = build(enforcerMuteCase({ type: 'TIMEOUT', metadata: null }), async () => ({
-      members: { fetch: async () => Promise.reject(Object.assign(new Error('Unknown Member'), { code: 10007 })) },
+      members: {
+        fetch: async () => Promise.reject(Object.assign(new Error('Unknown Member'), { code: 10007 })),
+      },
     }));
     await expireJob.processor(ctx, fakeJob(CASE_ID));
     expect(update).toHaveBeenCalledTimes(1);

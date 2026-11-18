@@ -237,7 +237,7 @@ export default async function moderationRoutes(app: ZodFastifyInstance): Promise
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,
-        action: 'moderation.note.create',
+        action: AuditAction.ModerationNoteCreate,
         targetType: 'moderation_note',
         targetId: row.id,
         after: { userId: row.userId, content: row.content },
@@ -271,7 +271,7 @@ export default async function moderationRoutes(app: ZodFastifyInstance): Promise
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,
-        action: 'moderation.note.delete',
+        action: AuditAction.ModerationNoteDelete,
         targetType: 'moderation_note',
         targetId: noteId,
       });
@@ -407,7 +407,7 @@ export default async function moderationRoutes(app: ZodFastifyInstance): Promise
       await writeDashboardAudit(app.prisma, {
         guildId,
         actorId: session.userId,
-        action: 'moderation.settings.update',
+        action: AuditAction.ModerationSettingsUpdate,
         targetType: 'plugin_config',
         targetId: MODERATION_PLUGIN_ID,
       });

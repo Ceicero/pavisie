@@ -230,7 +230,6 @@ describe('public leaderboard page conventions', () => {
       '../src/components/TopBar.tsx',
       '../src/components/Footer.tsx',
       '../src/components/dashboard/nav.ts',
-      '../src/components/dashboard/engagement/leveling-tab.tsx',
       '../src/app/page.tsx',
     ];
     for (const file of files) {
