@@ -126,6 +126,7 @@ _Leveling/XP with anti-farming controls, leaderboards, a reputation system, a st
 | Deafen Members | temporary voice channels (owner can deafen members in their own channel) | Optional | The temp voice owner cannot deafen other members in their own channel; everything else still works. |
 | Send Messages | level-up announcements, starboard posts | Required | Announcements/starboard posts silently fail to send; nothing else is affected. |
 | Embed Links | starboard posts, leaderboard/rank embeds | Required | Falls back to plain text where possible. |
+| Attach Files | /level rank card image | Optional | The text rank embed is sent instead, and the miss is logged once. |
 | Read Message History | starboard (reading reaction counts on older messages) | Optional | Starboard may miss reactions added to messages the bot has not seen since restart. |
 
 

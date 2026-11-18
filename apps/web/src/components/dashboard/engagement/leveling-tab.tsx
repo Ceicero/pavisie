@@ -147,6 +147,15 @@ const LEVEL_UP_CHANNEL_MODES = [
   { value: 'channel', label: 'Specific channel' },
 ];
 
+/** Public page path from the saved flag. An unsaved draft must not reveal the link. */
+export function publicLeaderboardHref(
+  guildId: string,
+  savedPublicLeaderboard: boolean | undefined,
+): string | null {
+  if (savedPublicLeaderboard !== true) return null;
+  return `/leaderboard/${encodeURIComponent(guildId)}`;
+}
+
 export function LevelingTab({ guildId }: { guildId: string }) {
   const { data, isLoading, error, refetch } = useEngagementConfig(guildId);
   const update = useUpdateEngagementConfig(guildId);
@@ -226,7 +235,7 @@ export function LevelingTab({ guildId }: { guildId: string }) {
   }
 
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
-  if (isLoading || !draft) {
+  if (isLoading || !data || !draft) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
@@ -240,7 +249,8 @@ export function LevelingTab({ guildId }: { guildId: string }) {
     draft.levelUpChannel === 'current' || draft.levelUpChannel === 'dm' || draft.levelUpChannel === 'none'
       ? draft.levelUpChannel
       : 'channel';
-  const dirty = data ? JSON.stringify(draft) !== JSON.stringify(data.leveling) : false;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(data.leveling);
+  const publicHref = publicLeaderboardHref(guildId, data.leveling.publicLeaderboard);
 
   const filteredRows = (leaderboard.data?.items ?? []).filter((row) => row.userId.includes(search.trim()));
 
@@ -289,12 +299,21 @@ export function LevelingTab({ guildId }: { guildId: string }) {
                 default. Former members stay listed until a later update.
               </p>
             </div>
-            <Switch
-              checked={draft.publicLeaderboard}
-              onCheckedChange={(v) => set('publicLeaderboard', v)}
-              disabled={update.isPending}
-              aria-label="Public leaderboard"
-            />
+            <div className="flex shrink-0 items-center gap-2">
+              {publicHref ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={publicHref} target="_blank" rel="noopener noreferrer">
+                    Open public leaderboard
+                  </a>
+                </Button>
+              ) : null}
+              <Switch
+                checked={draft.publicLeaderboard}
+                onCheckedChange={(v) => set('publicLeaderboard', v)}
+                disabled={update.isPending}
+                aria-label="Public leaderboard"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { AlertTriangle, Gavel, LifeBuoy, Puzzle, ScrollText, ShieldAlert, Users } from 'lucide-react';
+import { AlertTriangle, Gavel, LifeBuoy, Puzzle, ScrollText, Users } from 'lucide-react';
 import {
   Alert,
   AlertDescription,
@@ -18,13 +18,7 @@ import {
 } from '@pavisie/ui';
 import { useGuild } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
-
-const QUICK_LINKS = [
-  { href: 'plugins', label: 'Manage plugins', icon: Puzzle },
-  { href: 'moderation', label: 'Moderation cases', icon: Gavel },
-  { href: 'automod', label: 'Automod rules', icon: ShieldAlert },
-  { href: 'tickets', label: 'Ticket queue', icon: LifeBuoy },
-];
+import { visibleQuickLinks } from '@/components/dashboard/overview-quick-links';
 
 export default function GuildOverviewPage() {
   const { guildId } = useParams<{ guildId: string }>();
@@ -128,7 +122,7 @@ export default function GuildOverviewPage() {
             <CardTitle>Quick links</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2">
-            {QUICK_LINKS.map((link) => (
+            {visibleQuickLinks(plugins).map((link) => (
               <Link
                 key={link.href}
                 href={`/dashboard/${guildId}/${link.href}`}
