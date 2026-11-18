@@ -5,6 +5,7 @@ import { cn } from '../lib/cn';
 import { Label } from './label';
 import { Input } from './input';
 import { Textarea } from './textarea';
+import { FormFieldControlIdContext, Select, SelectTrigger } from './select';
 
 export interface FormFieldProps extends React.HTMLAttributes<HTMLDivElement> {
   label: string;
@@ -16,7 +17,10 @@ export interface FormFieldProps extends React.HTMLAttributes<HTMLDivElement> {
 
 /**
  * UI components that forward `id` to a native labelable control. `Select` is not on this list:
- * it is Radix `Select.Root` and does not forward `id` to the focusable `SelectTrigger`.
+ * Radix `Select.Root` does not forward `id` to the focusable `SelectTrigger`. When the sole
+ * child is that `Select` and neither `htmlFor` nor a child/trigger id is set, FormField instead
+ * provides the generated id through `FormFieldControlIdContext` and points the label at it.
+ * `SelectTrigger` reads the context and applies the id.
  */
 const AUTO_LABEL_UI_COMPONENTS: ReadonlySet<unknown> = new Set([Input, Textarea]);
 const AUTO_LABEL_NATIVE = new Set(['input', 'select', 'textarea']);
@@ -57,37 +61,63 @@ function elementId(child: React.ReactElement): string | undefined {
   return typeof id === 'string' && id.length > 0 ? id : undefined;
 }
 
+function isSelectElement(child: React.ReactElement): boolean {
+  return child.type === Select;
+}
+
+/** Immediate `SelectTrigger` child of a `Select`, if it already has an id. */
+function selectTriggerId(select: React.ReactElement): string | undefined {
+  const items = immediateMeaningfulChildren((select.props as { children?: React.ReactNode }).children);
+  for (const item of items) {
+    if (React.isValidElement(item) && item.type === SelectTrigger) {
+      return elementId(item);
+    }
+  }
+  return undefined;
+}
+
 /** Label + control + hint/error slot. Pass the control as `children`. */
 export const FormField = React.forwardRef<HTMLDivElement, FormFieldProps>(
   ({ className, label, htmlFor, hint, error, required, children, ...props }, ref) => {
     const generatedId = React.useId();
     const sole = singleElementChild(children);
     const childId = sole ? elementId(sole) : undefined;
+    const triggerId = sole && isSelectElement(sole) ? selectTriggerId(sole) : undefined;
 
     let labelFor = htmlFor;
     let renderedChildren = children;
+    // Only provide a Select trigger id when this field should auto-link a single Select.
+    // Nested FormFields always re-provide the context so an inner field resets it.
+    let selectControlId: string | undefined;
     // Never override a caller-supplied htmlFor or an existing child id. Only inject when
     // there is a single allow-listed element and neither is already set.
     if (!htmlFor && childId) {
       labelFor = childId;
+    } else if (!htmlFor && triggerId) {
+      labelFor = triggerId;
     } else if (!htmlFor && !childId && sole && isAllowListedElement(sole)) {
       labelFor = generatedId;
       renderedChildren = React.cloneElement(sole, { id: generatedId } as { id: string });
+    } else if (!htmlFor && sole && isSelectElement(sole)) {
+      labelFor = generatedId;
+      selectControlId = generatedId;
     }
 
     return (
-      <div ref={ref} className={cn('space-y-1.5', className)} {...props}>
-        <Label htmlFor={labelFor}>
-          {label}
-          {required ? <span className="ml-0.5 text-destructive">*</span> : null}
-        </Label>
-        {renderedChildren}
-        {error ? (
-          <p className="text-xs text-destructive">{error}</p>
-        ) : hint ? (
-          <p className="text-xs text-muted-foreground">{hint}</p>
-        ) : null}
-      </div>
+      <FormFieldControlIdContext.Provider value={selectControlId}>
+        <div ref={ref} className={cn('space-y-1.5', className)} {...props}>
+          <Label htmlFor={labelFor}>
+            {label}
+            {required ? <span className="ml-0.5 text-destructive">*</span> : null}
+          </Label>
+          {renderedChildren}
+          {error ? (
+            <p className="text-xs text-destructive">{error}</p>
+          ) : hint ? (
+            <p className="text-xs text-muted-foreground">{hint}</p>
+          ) : null}
+        </div>
+      </FormFieldControlIdContext.Provider>
     );
   },
 );
