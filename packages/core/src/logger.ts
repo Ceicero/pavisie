@@ -115,12 +115,21 @@ export function serializeError(err: unknown): unknown {
  */
 const SELF_SERIALIZED_KEYS: ReadonlySet<string> = new Set(['req', 'res']);
 
-/** pino `formatters.log`: scrubs every top-level value except the self-serialized `req`/`res`. */
+function isClassInstance(value: unknown): boolean {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto !== Object.prototype && proto !== null;
+}
+
+/**
+ * pino `formatters.log`: scrubs every top-level value, except a live `req`/`res` object (a Fastify request or reply).
+ * A plain object under those keys is still scrubbed, since no serializer may be registered for it.
+ */
 function scrubLogObject(object: Record<string, unknown>): Record<string, unknown> {
   let copy: Record<string, unknown> | undefined;
   for (const key of Object.keys(object)) {
-    if (SELF_SERIALIZED_KEYS.has(key)) continue;
     const before = object[key];
+    if (SELF_SERIALIZED_KEYS.has(key) && isClassInstance(before)) continue;
     const after = SECRET_KEYS.has(key.toLowerCase()) ? CENSOR : scrubLogValue(before, 1);
     if (after !== before) {
       copy ??= { ...object };

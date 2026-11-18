@@ -94,6 +94,41 @@ describe('logger redaction', () => {
     expect(third!.a).toEqual([{ password: '[REDACTED]' }, { nested: [{ secret: '[REDACTED]' }] }]);
   });
 
+  it('passes a live req/res object to its serializer untouched, but still scrubs a plain object under those keys', () => {
+    class FakeRequest {
+      readonly params = { token: 'capability-token' };
+      get url(): string {
+        return '/overlay/[masked-by-serializer]';
+      }
+    }
+    let out = '';
+    const sink = new Writable({
+      write(chunk, _enc, cb) {
+        out += chunk.toString();
+        cb();
+      },
+    });
+    const log = pino(
+      {
+        ...LOGGER_OPTIONS,
+        transport: undefined,
+        serializers: { ...LOGGER_OPTIONS.serializers, req: (req: FakeRequest) => ({ url: req.url }) },
+      },
+      sink,
+    );
+    log.info({ req: new FakeRequest() }, 'a');
+    log.info({ req: { token: 'plain-req-token' }, res: { headers: { cookie: 'plain-res-cookie' } } }, 'b');
+    const [first, second] = out
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    // The serializer could still read the getter, so the request was not replaced by a plain copy.
+    expect(first!.req).toEqual({ url: '/overlay/[masked-by-serializer]' });
+    expect(out).not.toContain('plain-req-token');
+    expect(out).not.toContain('plain-res-cookie');
+    expect(second!.res).toEqual({ headers: { cookie: '[REDACTED]' } });
+  });
+
   it('leaves keys that only contain a secret word alone', () => {
     const { log, lines } = capture();
     log.info({ tokenCount: 3, hasPassword: true, contentType: 'application/json' }, 'x');
