@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   ChannelType,
   PermissionFlagsBits,
@@ -60,6 +61,23 @@ const RELEASE_LEASE_SCRIPT = `
 if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
 return 0
 `;
+
+/**
+ * Per-(guild, member) ban lease. `ban()` applies the Discord ban before it records the case, so a temp-ban expiry that
+ * looks for a newer case in that gap would lift the brand-new ban. Both sides hold this lease across their span (two
+ * Discord round trips plus a DB write at most), so the expiry either sees the new case or runs before the ban starts.
+ */
+const BAN_LEASE_TTL_MS = 15_000;
+/** A moderator's ban waits this long for an in-flight expiry lift (one Discord call) rather than failing. */
+const BAN_LEASE_WAIT_MS = 3_000;
+const BAN_LEASE_RETRY_MS = 100;
+
+export interface BanLeaseOptions {
+  /** How long to keep retrying a held lease before giving up. Default 0: fail at once and let the caller retry. */
+  waitMs?: number;
+  /** When Redis itself errors, run unleased (logged) instead of failing. For moderator actions that must not depend on Redis. */
+  failOpen?: boolean;
+}
 
 // `warn()` serializes insert-then-count-then-escalate per (guildId, targetId) — see `acquireWarnEscalationLock`'s
 // doc comment. Unlike the enforcer decide lock (`enforcer/service.ts`), which rejects a second concurrent decider
@@ -788,28 +806,81 @@ export class ModerationServiceImpl implements ModerationService {
       );
     }
 
-    await guild.bans.create(input.targetId, {
-      reason: input.reason,
-      deleteMessageSeconds: input.deleteMessageSeconds ?? 0,
-    });
+    // The lease covers the Discord ban and the case write, so a concurrent temp-ban expiry cannot look between them.
+    const row = await this.withBanLease(
+      input.guildId,
+      input.targetId,
+      async () => {
+        await guild.bans.create(input.targetId, {
+          reason: input.reason,
+          deleteMessageSeconds: input.deleteMessageSeconds ?? 0,
+        });
 
-    const row = await this.recordAppliedAction({
-      guildId: input.guildId,
-      type: 'BAN',
-      targetId: input.targetId,
-      moderatorId: input.moderatorId,
-      reason: input.reason,
-      evidenceUrls: input.evidenceUrls,
-      durationMs: input.durationMs,
-      source: input.source,
-      dmUser: false,
-    });
+        return this.recordAppliedAction({
+          guildId: input.guildId,
+          type: 'BAN',
+          targetId: input.targetId,
+          moderatorId: input.moderatorId,
+          reason: input.reason,
+          evidenceUrls: input.evidenceUrls,
+          durationMs: input.durationMs,
+          source: input.source,
+          dmUser: false,
+        });
+      },
+      { waitMs: BAN_LEASE_WAIT_MS, failOpen: true },
+    );
 
     if (input.durationMs) {
       await this.scheduleExpiry(row);
     }
 
     return dmSent ? this.markDmSent(row) : row;
+  }
+
+  /**
+   * Runs `fn` while holding the (guild, member) ban lease: SET NX PX with an owner token, released by
+   * compare-and-delete (same helper as the appeal lease). `ban()` holds it across the Discord ban and the case
+   * write; the temp-ban expiry holds it across its newer-case check and `unban()`. `unban()` itself never takes it,
+   * so calling it from inside `fn` cannot self-block. If the lease cannot be had within `waitMs`, throws a
+   * retryable `ban_lease_busy` error.
+   */
+  async withBanLease<T>(
+    guildId: string,
+    userId: string,
+    fn: () => Promise<T>,
+    opts: BanLeaseOptions = {},
+  ): Promise<T> {
+    const key = redisKey('moderation', 'ban-lease', guildId, userId);
+    const token = randomUUID();
+    const deadline = Date.now() + (opts.waitMs ?? 0);
+    for (;;) {
+      let acquired: string | null;
+      try {
+        acquired = await this.ctx.redis.set(key, token, 'PX', BAN_LEASE_TTL_MS, 'NX');
+      } catch (err) {
+        if (!opts.failOpen) throw err;
+        this.ctx.logger.warn(
+          { err: String(err), guildId, userId },
+          'moderation: ban lease unavailable; continuing without it',
+        );
+        return fn();
+      }
+      if (acquired === 'OK') break;
+      if (Date.now() >= deadline) {
+        throw new AppError(
+          'ban_lease_busy',
+          'Another ban action on this member is still in progress. Try again in a moment.',
+          { status: 409, expose: true },
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, BAN_LEASE_RETRY_MS));
+    }
+    try {
+      return await fn();
+    } finally {
+      await this.ctx.redis.eval(RELEASE_LEASE_SCRIPT, 1, key, token).catch(() => undefined);
+    }
   }
 
   async softban(input: SoftbanInput): Promise<ModerationCase> {
@@ -826,50 +897,59 @@ export class ModerationServiceImpl implements ModerationService {
       );
     }
 
-    await guild.bans.create(input.targetId, {
-      reason: input.reason ?? 'Softban',
-      deleteMessageSeconds: input.deleteMessageSeconds ?? 86400,
-    });
-    try {
-      await guild.bans.remove(input.targetId, 'Softban cleanup — automatic unban after message purge.');
-    } catch (err) {
-      // The ban went through but the automatic unban did not: the member is now BANNED. Record exactly that, as
-      // a BAN case, so the record matches Discord and `/mod unban` (or a temp-ban expiry) finds it.
-      const row = await this.recordAppliedAction({
-        guildId: input.guildId,
-        type: 'BAN',
-        targetId: input.targetId,
-        moderatorId: input.moderatorId,
-        reason: input.reason,
-        evidenceUrls: input.evidenceUrls,
-        source: input.source,
-        dmUser: false,
-        metadata: { softban: true, softbanUnbanFailed: true },
-      });
-      if (dmSent) await this.markDmSent(row);
-      this.ctx.logger.warn(
-        { err: String(err), guildId: input.guildId, caseId: row.id },
-        'moderation: softban unban failed; member left banned and recorded as a BAN case',
-      );
-      throw new AppError(
-        'softban_unban_failed',
-        `The member was banned and their recent messages were deleted, but the automatic unban failed, so they are still banned (case #${row.caseNumber}). Use \`/mod unban\` to lift it.`,
-        { status: 502, expose: true },
-      );
-    }
+    // Held across create, remove and the case write: if the cleanup unban fails, the BAN case written below must
+    // exist before a temp-ban expiry can check for it.
+    return this.withBanLease(
+      input.guildId,
+      input.targetId,
+      async () => {
+        await guild.bans.create(input.targetId, {
+          reason: input.reason ?? 'Softban',
+          deleteMessageSeconds: input.deleteMessageSeconds ?? 86400,
+        });
+        try {
+          await guild.bans.remove(input.targetId, 'Softban cleanup — automatic unban after message purge.');
+        } catch (err) {
+          // The ban went through but the automatic unban did not: the member is now BANNED. Record exactly that, as
+          // a BAN case, so the record matches Discord and `/mod unban` (or a temp-ban expiry) finds it.
+          const row = await this.recordAppliedAction({
+            guildId: input.guildId,
+            type: 'BAN',
+            targetId: input.targetId,
+            moderatorId: input.moderatorId,
+            reason: input.reason,
+            evidenceUrls: input.evidenceUrls,
+            source: input.source,
+            dmUser: false,
+            metadata: { softban: true, softbanUnbanFailed: true },
+          });
+          if (dmSent) await this.markDmSent(row);
+          this.ctx.logger.warn(
+            { err: String(err), guildId: input.guildId, caseId: row.id },
+            'moderation: softban unban failed; member left banned and recorded as a BAN case',
+          );
+          throw new AppError(
+            'softban_unban_failed',
+            `The member was banned and their recent messages were deleted, but the automatic unban failed, so they are still banned (case #${row.caseNumber}). Use \`/mod unban\` to lift it.`,
+            { status: 502, expose: true },
+          );
+        }
 
-    const row = await this.recordAppliedAction({
-      guildId: input.guildId,
-      type: 'SOFTBAN',
-      targetId: input.targetId,
-      moderatorId: input.moderatorId,
-      reason: input.reason,
-      evidenceUrls: input.evidenceUrls,
-      source: input.source,
-      dmUser: false,
-    });
+        const row = await this.recordAppliedAction({
+          guildId: input.guildId,
+          type: 'SOFTBAN',
+          targetId: input.targetId,
+          moderatorId: input.moderatorId,
+          reason: input.reason,
+          evidenceUrls: input.evidenceUrls,
+          source: input.source,
+          dmUser: false,
+        });
 
-    return dmSent ? this.markDmSent(row) : row;
+        return dmSent ? this.markDmSent(row) : row;
+      },
+      { waitMs: BAN_LEASE_WAIT_MS, failOpen: true },
+    );
   }
 
   async unban(input: UnbanInput): Promise<ModerationCase> {
