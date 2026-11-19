@@ -180,13 +180,96 @@ describe('formatRelativeTime', () => {
     expect(format.formatRelativeTime(offsetBySeconds(now, 604800))).toBe(formatRelativeAuto(1, 'week'));
   });
 
-  // formatRelativeTime picks the largest unit whose length is <= |diffSec|, then
-  // Math.round(diffSec / unit). A value just shy of the next unit can round up
-  // to that unit's count without switching units: ~23.6 hours (84960s) is still
-  // below 1 day (86400s), so it formats as "24 hours" rather than "1 day". The
-  // same crossover exists at the other unit edges (e.g. 59.6 minutes → "60
-  // minutes"). Leaving this as a todo rather than locking in the current output.
-  it.todo('steps up to the next unit when rounding crosses the unit boundary');
+  describe('steps up to the next unit when rounding crosses the unit boundary', () => {
+    // Each row is a smaller → larger unit pair. `below` is just under the
+    // half-up point (or the raw next-unit threshold for week→month and
+    // month→year, where 5 weeks / 13 months would land after that threshold).
+    // `above` is a value that rounds up and must use the larger unit.
+    const boundaries: {
+      name: string;
+      belowSeconds: number;
+      belowValue: number;
+      belowUnit: Intl.RelativeTimeFormatUnit;
+      aboveSeconds: number;
+      aboveValue: number;
+      aboveUnit: Intl.RelativeTimeFormatUnit;
+    }[] = [
+      {
+        name: 'second to minute',
+        belowSeconds: 59.4,
+        belowValue: 59,
+        belowUnit: 'second',
+        aboveSeconds: 59.6,
+        aboveValue: 1,
+        aboveUnit: 'minute',
+      },
+      {
+        name: 'minute to hour',
+        belowSeconds: 59.4 * 60,
+        belowValue: 59,
+        belowUnit: 'minute',
+        aboveSeconds: 59.6 * 60,
+        aboveValue: 1,
+        aboveUnit: 'hour',
+      },
+      {
+        name: 'hour to day',
+        belowSeconds: 23.4 * 3600,
+        belowValue: 23,
+        belowUnit: 'hour',
+        aboveSeconds: 23.6 * 3600,
+        aboveValue: 1,
+        aboveUnit: 'day',
+      },
+      {
+        name: 'day to week',
+        belowSeconds: 6.4 * 86400,
+        belowValue: 6,
+        belowUnit: 'day',
+        aboveSeconds: 6.6 * 86400,
+        aboveValue: 1,
+        aboveUnit: 'week',
+      },
+      {
+        name: 'week to month',
+        belowSeconds: 2_592_000 - 1,
+        belowValue: 4,
+        belowUnit: 'week',
+        aboveSeconds: 2_592_000,
+        aboveValue: 1,
+        aboveUnit: 'month',
+      },
+      {
+        name: 'month to year',
+        belowSeconds: 31_536_000 - 1,
+        belowValue: 12,
+        belowUnit: 'month',
+        aboveSeconds: 31_536_000,
+        aboveValue: 1,
+        aboveUnit: 'year',
+      },
+    ];
+
+    for (const boundary of boundaries) {
+      it(`${boundary.name}: stays in the smaller unit just below the round-up point`, () => {
+        expect(format.formatRelativeTime(offsetBySeconds(now, boundary.belowSeconds), now)).toBe(
+          formatRelativeAuto(boundary.belowValue, boundary.belowUnit),
+        );
+        expect(format.formatRelativeTime(offsetBySeconds(now, -boundary.belowSeconds), now)).toBe(
+          formatRelativeAuto(-boundary.belowValue, boundary.belowUnit),
+        );
+      });
+
+      it(`${boundary.name}: switches to the larger unit once rounding crosses`, () => {
+        expect(format.formatRelativeTime(offsetBySeconds(now, boundary.aboveSeconds), now)).toBe(
+          formatRelativeAuto(boundary.aboveValue, boundary.aboveUnit),
+        );
+        expect(format.formatRelativeTime(offsetBySeconds(now, -boundary.aboveSeconds), now)).toBe(
+          formatRelativeAuto(-boundary.aboveValue, boundary.aboveUnit),
+        );
+      });
+    }
+  });
 });
 
 describe('formatNumber', () => {
