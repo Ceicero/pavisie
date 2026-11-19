@@ -128,6 +128,7 @@ function fakeModeration(): ModerationService {
     openAppeal: async () => ({ appealId: 'appeal-1' }),
     getCaseByNumber: async () => null,
     exportCases: async () => ({ csv: '', count: 0 }),
+    withBanLease: async <T>(_guildId: string, _userId: string, fn: () => Promise<T>) => fn(),
   };
 }
 
