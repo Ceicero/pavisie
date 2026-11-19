@@ -39,19 +39,31 @@ export function formatRelativeTime(input: string | Date, now: Date = new Date())
   const diffMs = date.getTime() - now.getTime();
   const diffSec = Math.round(diffMs / 1000);
   const units: [Intl.RelativeTimeFormatUnit, number][] = [
-    ['year', 31536000],
-    ['month', 2592000],
-    ['week', 604800],
-    ['day', 86400],
-    ['hour', 3600],
-    ['minute', 60],
     ['second', 1],
+    ['minute', 60],
+    ['hour', 3600],
+    ['day', 86400],
+    ['week', 604800],
+    ['month', 2592000],
+    ['year', 31536000],
   ];
   const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  for (const [unit, secondsInUnit] of units) {
-    if (Math.abs(diffSec) >= secondsInUnit || unit === 'second') {
-      return rtf.format(Math.round(diffSec / secondsInUnit), unit);
+  // Choose the unit after rounding so a value that rounds up to the next unit
+  // (23.6 hours → 1 day) is not left in the smaller unit ("24 hours"). Walk
+  // smallest to largest and step up when |rounded| * unit size reaches the
+  // next unit, or when the duration is already at least that next unit.
+  // Use the absolute duration so past and future share the same midpoints
+  // (Math.round half-ties toward +Infinity).
+  const sign = diffSec < 0 ? -1 : 1;
+  const absSec = Math.abs(diffSec);
+  for (let i = 0; i < units.length; i++) {
+    const [unit, secondsInUnit] = units[i]!;
+    const roundedAbs = Math.round(absSec / secondsInUnit);
+    const next = units[i + 1];
+    if (next && (absSec >= next[1] || roundedAbs * secondsInUnit >= next[1])) {
+      continue;
     }
+    return rtf.format(sign * roundedAbs, unit);
   }
   return rtf.format(0, 'second');
 }
