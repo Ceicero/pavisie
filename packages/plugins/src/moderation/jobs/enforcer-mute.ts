@@ -8,8 +8,7 @@ const UNKNOWN_ROLE = 10011;
 const MISSING_ACCESS = 50001;
 
 export function discordCode(err: unknown): unknown {
-  if (typeof err !== 'object' || err === null) return undefined;
-  return 'code' in err ? err.code : undefined;
+  return typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined;
 }
 
 /** `metadata.roleId` set by the `enforcer` plugin's timed MUTE (`metadata: { enforcerMute: true, roleId }`). */

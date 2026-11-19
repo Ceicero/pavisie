@@ -18,19 +18,31 @@ export async function handleStatus(c: CommandContext): Promise<void> {
   ]);
 
   const lines = [
-    `Guild-wide dry-run: ${config.dryRun ? '🧪 **On** (no real actions are taken)' : '🟢 **Off** (actions are live)'}`,
-    `Rules: ${rules.length} total, ${enabledRules.length} enabled${inactiveRules.length > 0 ? `, ${inactiveRules.length} inactive (missing intent)` : ''}`,
-    `Alert channel: ${config.alertChannelId ? `<#${config.alertChannelId}>` : '_not set_'}`,
-    `Quarantine role: ${config.quarantineRoleId ? `<@&${config.quarantineRoleId}>` : '_not set_'}`,
-    `Raid lockdown: ${config.raidLockdown}${config.raidLockdown !== 'none' ? ` (${config.raidLockdownMinutes}m)` : ''}`,
-    `Events in the last 24h: ${eventsLast24h}`,
-    `Pending review: ${pendingReview}`,
+    c.t('automod.status.dryRun', {
+      state: config.dryRun ? c.t('automod.status.dryRunOn') : c.t('automod.status.dryRunOff'),
+    }),
+    `${c.t('automod.status.rules', { total: rules.length, enabled: enabledRules.length })}${
+      inactiveRules.length > 0 ? c.t('automod.status.rulesInactive', { count: inactiveRules.length }) : ''
+    }`,
+    c.t('automod.status.alertChannel', {
+      channel: config.alertChannelId ? `<#${config.alertChannelId}>` : c.t('automod.status.notSet'),
+    }),
+    c.t('automod.status.quarantineRole', {
+      role: config.quarantineRoleId ? `<@&${config.quarantineRoleId}>` : c.t('automod.status.notSet'),
+    }),
+    `${c.t('automod.status.raidLockdown', { mode: config.raidLockdown })}${
+      config.raidLockdown !== 'none'
+        ? c.t('automod.status.raidDuration', { minutes: config.raidLockdownMinutes })
+        : ''
+    }`,
+    c.t('automod.status.eventsLast24h', { count: eventsLast24h }),
+    c.t('automod.status.pendingReview', { count: pendingReview }),
   ];
 
   if (inactiveRules.length > 0) {
     lines.push(
       '',
-      `Inactive: ${inactiveRules.map((r) => `**${r.name}**`).join(', ')} — enable the required privileged intent to activate them.`,
+      c.t('automod.status.inactive', { rules: inactiveRules.map((r) => `**${r.name}**`).join(', ') }),
     );
   }
 

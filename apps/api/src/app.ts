@@ -32,6 +32,7 @@ import { describeFastifyClientError, isFastifyRateLimitError } from './lib/fasti
 import type { ZodFastifyInstance } from './lib/http';
 import { dispatchOverlayMessage } from './lib/overlay-registry';
 import { QueueRegistry, type QueueRegistryLike } from './lib/queues';
+import { serializeRequest } from './lib/request-log';
 import { getSession, SESSION_COOKIE_NAME } from './lib/session';
 import { CREATOR_SESSION_COOKIE_NAME, getCreatorSession } from './lib/creator/session';
 
@@ -132,7 +133,12 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   });
 
   const app = Fastify({
-    loggerInstance: deps.logger ?? createLogger('api'),
+    // Fastify logs every request with its `req` serializer. Its default writes the full URL, which would put the
+    // overlay/verify capability tokens and the OAuth `code`/`state` query into the logs (lib/request-log.ts).
+    loggerInstance: (deps.logger ?? createLogger('api')).child(
+      {},
+      { serializers: { req: serializeRequest } },
+    ),
     genReqId: () => randomUUID(),
     // fastify >=5.12 types omit the numeric hop-count form, but lib/request.js still handles `typeof tp === 'number'`.
     trustProxy: env.TRUST_PROXY as boolean | string,
@@ -198,12 +204,12 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
     // per-route overrides (auth routes: 20/min) are set via each route's `config.rateLimit`.
   });
 
-
   await app.register(sensible);
 
-  // Publicly documenting the exact request/response shape of every endpoint (including public, unauthenticated
-  // ones) is a gift to anyone probing for abuse — keep `/docs` out of production entirely (404, via the default
-  // not-found handler) rather than trying to lock it behind auth. Still available in development and test.
+  // Don't serve the interactive explorer on the live host: keep `/docs` out of production entirely (404, via the
+  // default not-found handler) rather than trying to lock it behind auth. Still available in development and test.
+  // The spec document itself is committed as `docs/openapi.json` (`pnpm docs:openapi`), since every route is already
+  // readable in this public repo and a reviewed, CI-checked spec makes API surface changes visible in PR diffs.
   if (env.NODE_ENV !== 'production') {
     await app.register(swagger, {
       openapi: {

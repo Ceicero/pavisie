@@ -56,7 +56,21 @@
       "noFields": "_no fields_",
       "invalidStoredActions": "_invalid stored actions_",
       "timeout": "timeout ({minutes}m)",
-      "list": "**{name}** (`{id}`) — {type} — {status}"
+      "list": "**{name}** (`{id}`) — {type} — {status}",
+      "configField": "{field}={value}",
+      "configList": "{field}=[{count}]",
+      "warn": "warn",
+      "delete": "delete",
+      "quarantine": "quarantine",
+      "alertStaff": "alert_staff",
+      "ignore": "ignore"
+    },
+    "action": {
+      "warn": "Warn",
+      "delete": "Delete message",
+      "quarantine": "Quarantine",
+      "alertStaff": "Alert staff",
+      "ignore": "Log only (ignore)"
     }
   },
   "exempt": {
@@ -64,7 +78,10 @@
     "removed": "Removed the {kind} exemption: `{value}`.",
     "alreadyPresent": "That exemption is already set for this rule.",
     "notPresent": "That exemption isn't set for this rule.",
-    "listTitle": "Exemptions — {name}"
+    "listTitle": "Exemptions — {name}",
+    "roles": "Roles:",
+    "channels": "Channels:",
+    "users": "Users:"
   },
   "review": {
     "title": "Automod review queue",
@@ -77,6 +94,14 @@
     "summary": "#{id} · {rule} · <@{userId}>{dryRun}{excerpt}",
     "dryRunMark": " · [dry run]",
     "excerpt": " — \"{excerpt}\"",
+    "optionLabel": "{rule} — {userId}",
+    "missingChannel": "—",
+    "statusValue": {
+      "none": "NONE",
+      "pending": "PENDING",
+      "confirmed": "CONFIRMED",
+      "falsePositive": "FALSE_POSITIVE"
+    },
     "label": {
       "confirmViolation": "Confirm violation",
       "falsePositive": "False positive",
@@ -87,7 +112,8 @@
       "actions": "Actions",
       "dryRun": "Dry run",
       "reviewStatus": "Review status",
-      "matchedContent": "Matched content"
+      "matchedContent": "Matched content",
+      "ruleType": "Rule type"
     }
   },
   "status": {

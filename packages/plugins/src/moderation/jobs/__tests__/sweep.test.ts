@@ -116,3 +116,98 @@ describe('sweepJob — overdue enforcer timed MUTE (ROLE_ADD)', () => {
     expect(expiredIds).toEqual(['case-2']);
   });
 });
+
+function banCase(id: string, targetId: string, expiresAt = new Date(Date.now() - 1000)) {
+  return { ...muteCase(id, targetId), type: 'BAN', metadata: null, expiresAt };
+}
+
+describe('sweepJob — overdue BAN', () => {
+  function buildBans(
+    rows: unknown[],
+    opts: {
+      removeBan?: () => Promise<unknown>;
+      superseded?: boolean;
+      findMany?: ReturnType<typeof vi.fn>;
+    } = {},
+  ) {
+    const expiredIds: string[] = [];
+    const removeBan = vi.fn(opts.removeBan ?? (async () => undefined));
+    const findMany = opts.findMany ?? vi.fn(async () => rows);
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findMany,
+          findFirst: async () => (opts.superseded ? { id: 'newer' } : null),
+          update: async (args: any) => {
+            expiredIds.push(args.where.id);
+            return {};
+          },
+          updateMany: async () => ({ count: 1 }),
+          create: async () => ({ id: 'unban-1' }),
+        },
+      },
+      overrides: {
+        client: {
+          user: { id: 'bot' },
+          guilds: { fetch: async () => ({ id: GUILD_ID, bans: { remove: removeBan } }) },
+        } as any,
+      },
+    });
+    return { ctx, expiredIds, removeBan, findMany };
+  }
+
+  it('marks the case expired when the ban is already gone (Unknown Ban, 10026)', async () => {
+    const { ctx, expiredIds } = buildBans([banCase('case-1', 'user-1')], {
+      removeBan: () => Promise.reject(Object.assign(new Error('Unknown Ban'), { code: 10026 })),
+    });
+    await sweepJob.processor(ctx, job);
+    expect(expiredIds).toEqual(['case-1']);
+  });
+
+  it('does not unban when a newer ban supersedes it, and marks only this case expired', async () => {
+    const { ctx, expiredIds, removeBan } = buildBans([banCase('case-1', 'user-1')], { superseded: true });
+    await sweepJob.processor(ctx, job);
+    expect(removeBan).not.toHaveBeenCalled();
+    expect(expiredIds).toEqual(['case-1']);
+  });
+
+  it('leaves the case active when Discord fails with a server error', async () => {
+    const { ctx, expiredIds } = buildBans([banCase('case-1', 'user-1')], {
+      removeBan: () => Promise.reject(Object.assign(new Error('503'), { status: 503 })),
+    });
+    await expect(sweepJob.processor(ctx, job)).resolves.toBeUndefined();
+    expect(expiredIds).toEqual([]);
+  });
+
+  it('orders by expiresAt then id', async () => {
+    const { ctx, findMany } = buildBans([]);
+    await sweepJob.processor(ctx, job);
+    expect(findMany.mock.calls[0]?.[0].orderBy).toEqual([{ expiresAt: 'asc' }, { id: 'asc' }]);
+    expect(findMany.mock.calls[0]?.[0].where.OR).toBeUndefined();
+  });
+
+  it('pages past the last row seen: a full page then a short page are both processed', async () => {
+    const full = Array.from({ length: 100 }, (_, i) => banCase(`a-${i}`, `u-${i}`));
+    const short = [banCase('b-0', 'u-b')];
+    const findMany = vi.fn().mockResolvedValueOnce(full).mockResolvedValueOnce(short);
+    const { ctx, expiredIds, findMany: fm } = buildBans([], { superseded: true, findMany });
+    await sweepJob.processor(ctx, job);
+    expect(fm).toHaveBeenCalledTimes(2);
+    const last = full[99]!;
+    expect(fm.mock.calls[1]?.[0]).toMatchObject({
+      take: 100,
+      where: {
+        OR: [{ expiresAt: { gt: last.expiresAt } }, { expiresAt: last.expiresAt, id: { gt: 'a-99' } }],
+      },
+    });
+    expect(expiredIds).toHaveLength(101);
+    expect(expiredIds).toContain('b-0');
+  });
+
+  it('stops after the page cap even when every page is full', async () => {
+    const findMany = vi.fn(async () => Array.from({ length: 100 }, (_, i) => banCase(`a-${i}`, `u-${i}`)));
+    const { ctx, findMany: fm } = buildBans([], { superseded: true, findMany });
+    await sweepJob.processor(ctx, job);
+    expect(fm).toHaveBeenCalledTimes(10);
+  });
+});

@@ -24,6 +24,8 @@ const DECIDE_STYLE: Record<EnforcerDecisionLower, ButtonStyle> = {
 // Discord order: destructive actions rightmost-ish, Dismiss last on its own visual weight.
 const DECIDE_ORDER: EnforcerDecisionLower[] = ['warn', 'timeout', 'mute', 'kick', 'ban', 'dismiss'];
 
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
 export interface LedgerEmbedInput {
   recordNumber: number;
   kind: 'FLAG' | 'DECISION' | 'APPEAL_OPENED' | 'APPEAL_DECIDED' | 'NOTE';
@@ -105,16 +107,16 @@ export interface FlagQueueEmbedInput {
 }
 
 /** Builds the flag-queue channel embed a moderator reviews and decides on (ARCHITECTURE.md §19). */
-export function buildFlagQueueEmbed(input: FlagQueueEmbedInput): EmbedBuilder {
+export function buildFlagQueueEmbed(input: FlagQueueEmbedInput, t: Translate): EmbedBuilder {
   const fields: { name: string; value: string; inline?: boolean }[] = [
     { name: 'Record', value: `#E-${input.recordNumber}`, inline: true },
     { name: 'User', value: `${userMention(input.userId)} (\`${input.userId}\`)`, inline: true },
-    { name: 'Severity', value: input.severity, inline: true },
+    { name: t('policy.detail.severity'), value: input.severity, inline: true },
   ];
   if (input.policyName)
     fields.push({ name: 'Policy', value: truncate(input.policyName, EMBED_LIMITS.fieldValue), inline: true });
   if (input.suggestedAction)
-    fields.push({ name: 'Suggested action', value: input.suggestedAction, inline: true });
+    fields.push({ name: t('policy.detail.suggestedAction'), value: input.suggestedAction, inline: true });
   if (input.matcherSummary)
     fields.push({
       name: 'Matched',

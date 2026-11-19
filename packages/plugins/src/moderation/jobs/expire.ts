@@ -1,6 +1,7 @@
 import type { PluginContext, PluginJob } from '../../sdk';
 import { ModerationServiceImpl } from '../service';
-import { discordCode, liftEnforcerMute } from './enforcer-mute';
+import { liftTempBan } from './ban-expiry';
+import { liftEnforcerMute } from './enforcer-mute';
 
 export interface ExpireJobData {
   caseId: string;
@@ -88,20 +89,17 @@ export const expireJob: PluginJob<ExpireJobData> = {
         await liftTimeoutForCase(ctx, row, `Timeout expired (case #${row.caseNumber})`);
       } else if (row.type === 'BAN') {
         try {
-          await service.unban({
-            guildId: row.guildId,
-            targetId: row.targetId,
-            moderatorId: ctx.client.user.id,
-            reason: `Temporary ban expired (case #${row.caseNumber})`,
-            source: 'SYSTEM',
-          });
-          return; // unban() already marks BAN cases expired via markExpiredForActiveBan
+          const result = await liftTempBan(
+            ctx,
+            service,
+            row,
+            `Temporary ban expired (case #${row.caseNumber})`,
+          );
+          // unban() already marks BAN cases expired; otherwise (superseded / already lifted) only this case is closed.
+          if (result === 'lifted') return;
         } catch (err) {
-          // 10026 = Unknown Ban: a moderator already lifted it by hand, so there is nothing left to undo.
-          if (discordCode(err) !== 10026) {
-            markExpired = false;
-            throw err;
-          }
+          markExpired = false;
+          throw err;
         }
       } else if (row.type === 'ROLE_ADD') {
         try {

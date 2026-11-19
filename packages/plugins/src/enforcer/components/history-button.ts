@@ -15,7 +15,10 @@ const historyHandler: ComponentHandler = {
       where: { id: recordId, guildId: c.guildId },
     });
     if (!record) {
-      await interaction.reply({ embeds: [infoEmbed('Not found', c.t('record.notFound'))], ephemeral: true });
+      await interaction.reply({
+        embeds: [infoEmbed(c.t('record.notFoundTitle'), c.t('record.notFound'))],
+        ephemeral: true,
+      });
       return;
     }
 
@@ -34,7 +37,7 @@ const historyHandler: ComponentHandler = {
     ]);
 
     const lines = [
-      `Total flags: **${flagCount}** · Total decisions: **${decisionCount}**`,
+      c.t('history.totals', { flags: flagCount, decisions: decisionCount }),
       '',
       ...recent.map(
         (r) =>
