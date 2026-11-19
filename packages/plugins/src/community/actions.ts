@@ -212,7 +212,7 @@ async function editGiveawayMessage(
   try {
     const message = await opened.channel.messages.fetch(giveaway.messageId);
     await message.edit({
-      embeds: [buildGiveawayEmbed(giveaway, entryCount)],
+      embeds: [buildGiveawayEmbed(giveaway, entryCount, ctx.t)],
       components: buildGiveawayComponents(giveaway.id, giveaway.ended),
     });
     return 'ok';
@@ -453,8 +453,8 @@ export async function cancelGiveaway(ctx: PluginContext, giveawayId: string): Pr
   try {
     const message = await opened.channel.messages.fetch(updated.messageId);
     await message.edit({
-      content: 'This giveaway was cancelled.',
-      embeds: [buildGiveawayEmbed(updated, 0)],
+      content: ctx.t('giveaway.cancelledNote'),
+      embeds: [buildGiveawayEmbed(updated, 0, ctx.t)],
       components: [],
     });
   } catch (err) {

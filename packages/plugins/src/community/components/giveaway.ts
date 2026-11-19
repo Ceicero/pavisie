@@ -52,7 +52,7 @@ const enterButton: ComponentHandler = {
     const entryCount = await c.ctx.prisma.giveawayEntry.count({ where: { giveawayId } });
     await interaction.message
       .edit({
-        embeds: [buildGiveawayEmbed(giveaway, entryCount)],
+        embeds: [buildGiveawayEmbed(giveaway, entryCount, c.t)],
         components: buildGiveawayComponents(giveaway.id, giveaway.ended),
       })
       .catch(() => undefined);

@@ -26,7 +26,16 @@
     "rerolled": "New winner(s): {winners}",
     "listTitle": "Giveaways",
     "listEmpty": "No giveaways yet. Start one with `/giveaway start`.",
-    "cancelled": "Giveaway cancelled."
+    "cancelled": "Giveaway cancelled.",
+    "embedWinners": "Winners",
+    "embedEntries": "Entries",
+    "embedRequiredRole": "Required role",
+    "embedMinAccountAge": "Min. account age",
+    "embedMinLevel": "Min. level",
+    "embedDrawnWinners": "Winners",
+    "embedAccountAgeDay": "{days} day",
+    "embedAccountAgeDays": "{days} days",
+    "cancelledNote": "This giveaway was cancelled."
   },
   "suggest": {
     "notConfigured": "The suggestion box hasn't been set up yet. Ask a staff member to run `/suggestions setup`.",
