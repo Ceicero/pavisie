@@ -79,7 +79,12 @@ export function PersistenceTab({ guildId }: { guildId: string }) {
               Off by default. Turning this on is logged to the audit log.
             </p>
           </div>
-          <Switch checked={data.enabled} onCheckedChange={handleToggle} disabled={setPersistence.isPending} />
+          <Switch
+            aria-label="Enabled: role persistence"
+            checked={data.enabled}
+            onCheckedChange={handleToggle}
+            disabled={setPersistence.isPending}
+          />
         </div>
 
         <FormField label="Restore window (days)">

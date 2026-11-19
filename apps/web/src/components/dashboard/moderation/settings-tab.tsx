@@ -157,6 +157,7 @@ export function SettingsTab({ guildId }: { guildId: string }) {
               </p>
             </div>
             <Switch
+              aria-label="DM users on moderation action"
               checked={draft.dmOnAction}
               onCheckedChange={(v) => set('dmOnAction', v)}
               disabled={update.isPending}
@@ -168,6 +169,7 @@ export function SettingsTab({ guildId }: { guildId: string }) {
               <p className="text-xs text-muted-foreground">Lets /mod ban accept a duration option.</p>
             </div>
             <Switch
+              aria-label="Allow temporary bans"
               checked={draft.tempBanEnabled}
               onCheckedChange={(v) => set('tempBanEnabled', v)}
               disabled={update.isPending}

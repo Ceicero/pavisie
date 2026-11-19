@@ -204,6 +204,7 @@ export function PanelFormDialog({ guildId, open, onOpenChange, panel }: PanelFor
                 </p>
               </div>
               <Switch
+                aria-label="Ask questions before opening"
                 checked={draft.intakeForm !== null}
                 onCheckedChange={(v) =>
                   set(

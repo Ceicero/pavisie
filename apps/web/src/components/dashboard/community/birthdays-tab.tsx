@@ -126,6 +126,7 @@ export function BirthdaysTab({ guildId }: { guildId: string }) {
               </p>
             </div>
             <Switch
+              aria-label="Enabled: birthdays"
               checked={draft.enabled}
               onCheckedChange={(v) => set('enabled', v)}
               disabled={update.isPending}
@@ -186,6 +187,7 @@ export function BirthdaysTab({ guildId }: { guildId: string }) {
               </p>
             </div>
             <Switch
+              aria-label="Public list"
               checked={draft.publicList}
               onCheckedChange={(v) => set('publicList', v)}
               disabled={update.isPending}
@@ -201,6 +203,7 @@ export function BirthdaysTab({ guildId }: { guildId: string }) {
               </p>
             </div>
             <Switch
+              aria-label="Members can set their own birthday"
               checked={draft.allowSelfService}
               onCheckedChange={(v) => set('allowSelfService', v)}
               disabled={update.isPending}

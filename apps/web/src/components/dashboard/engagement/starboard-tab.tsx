@@ -110,6 +110,7 @@ export function StarboardTab({ guildId }: { guildId: string }) {
             </p>
           </div>
           <Switch
+            aria-label="Ignore self-stars"
             checked={draft.ignoreSelfStar}
             onCheckedChange={(v) => set('ignoreSelfStar', v)}
             disabled={update.isPending}
@@ -124,6 +125,7 @@ export function StarboardTab({ guildId }: { guildId: string }) {
             </p>
           </div>
           <Switch
+            aria-label="Allow NSFW channels"
             checked={draft.allowNsfw}
             onCheckedChange={(v) => set('allowNsfw', v)}
             disabled={update.isPending}

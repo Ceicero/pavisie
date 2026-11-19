@@ -285,6 +285,7 @@ export function LevelingTab({ guildId }: { guildId: string }) {
               </p>
             </div>
             <Switch
+              aria-label="Leveling enabled"
               checked={draft.enabled}
               onCheckedChange={(v) => set('enabled', v)}
               disabled={update.isPending}

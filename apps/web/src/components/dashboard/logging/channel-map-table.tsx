@@ -85,6 +85,7 @@ export function ChannelMapTable({ guildId, draft, onChange, disabled }: ChannelM
                   </TableCell>
                   <TableCell className="text-right">
                     <Switch
+                      aria-label={`Enabled: ${LOG_KIND_LABELS[kind]}`}
                       checked={draft.enabledKinds.includes(kind)}
                       onCheckedChange={(v) => toggleEnabled(kind, v)}
                       disabled={disabled}
@@ -111,6 +112,7 @@ export function ChannelMapTable({ guildId, draft, onChange, disabled }: ChannelM
               </p>
             </div>
             <Switch
+              aria-label="Store events for search & export"
               checked={draft.storeEvents}
               onCheckedChange={(v) => onChange({ ...draft, storeEvents: v })}
               disabled={disabled}
@@ -126,6 +128,7 @@ export function ChannelMapTable({ guildId, draft, onChange, disabled }: ChannelM
               </p>
             </div>
             <Switch
+              aria-label="Capture message content on edit/delete"
               checked={draft.captureContent}
               onCheckedChange={(v) => onChange({ ...draft, captureContent: v })}
               disabled={disabled}

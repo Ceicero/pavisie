@@ -261,6 +261,7 @@ function TagFormDialog({ guildId, open, onOpenChange, tag }: TagFormDialogProps)
               </p>
             </div>
             <Switch
+              aria-label="Staff only"
               checked={draft.staffOnly}
               onCheckedChange={(v) => {
                 // Staff-only tags can't be auto-responders (enforced server-side too) — clear any trigger

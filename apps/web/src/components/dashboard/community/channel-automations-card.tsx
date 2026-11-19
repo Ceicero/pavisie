@@ -309,6 +309,7 @@ export function ChannelAutomationsCard({ guildId }: { guildId: string }) {
                   </p>
                 </div>
                 <Switch
+                  aria-label="Also publish other bots and webhooks"
                   checked={draft.autoPublish.includeBots}
                   onCheckedChange={(v) =>
                     setDraft({ ...draft, autoPublish: { ...draft.autoPublish, includeBots: v } })
@@ -494,6 +495,7 @@ function RuleDialog({
               </p>
             </div>
             <Switch
+              aria-label="Attachments or embeds only"
               checked={rule.requireAttachment}
               onCheckedChange={(v) => setRule({ ...rule, requireAttachment: v })}
             />

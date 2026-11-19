@@ -124,7 +124,12 @@ export function AutoRolesTab({ guildId }: { guildId: string }) {
               screening, if your server uses it). Every assignment is written to the audit log.
             </p>
           </div>
-          <Switch checked={data.enabled} onCheckedChange={handleToggle} disabled={setAutoRoles.isPending} />
+          <Switch
+            aria-label="Enabled: autoroles"
+            checked={data.enabled}
+            onCheckedChange={handleToggle}
+            disabled={setAutoRoles.isPending}
+          />
         </div>
 
         <FormField

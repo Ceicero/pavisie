@@ -206,6 +206,7 @@ export function GroupsTab({
                 </p>
               </div>
               <Switch
+                aria-label="Exclusive"
                 checked={form.exclusive}
                 onCheckedChange={(v) => setForm((p) => ({ ...p, exclusive: v }))}
               />
