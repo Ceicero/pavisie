@@ -136,6 +136,9 @@ function buildFakeModerationService(overrides: Partial<ModerationService> = {}):
     exportCases: track('exportCases', (async () => {
       throw new Error('mod-assist must never export cases');
     }) as never),
+    withBanLease: track('withBanLease', (async () => {
+      throw new Error('mod-assist must never ban');
+    }) as never),
   };
 
   return { service, calledMethods };
@@ -175,6 +178,7 @@ describe('/mod-assist', () => {
     expect(calledMethods).not.toContain('timeout');
     expect(calledMethods).not.toContain('openAppeal');
     expect(calledMethods).not.toContain('exportCases');
+    expect(calledMethods).not.toContain('withBanLease');
 
     expect(aiCalls).toHaveLength(1);
     expect(aiCalls[0].command).toBe('mod-assist');

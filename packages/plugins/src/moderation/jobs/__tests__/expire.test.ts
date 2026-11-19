@@ -252,6 +252,83 @@ describe('expireJob — temporary BAN expiry', () => {
   });
 });
 
+describe('expireJob — temp BAN superseded by a newer ban', () => {
+  const EARLIER = new Date(Date.now() - 60 * 1000);
+  const LATER = new Date(Date.now() + 60 * 60 * 1000);
+  const CASE_NUMBER = 7;
+
+  /**
+   * `others` are the other active BAN cases for the member; the fake findFirst applies the helper's
+   * `caseNumber` and `OR` filters.
+   */
+  function build(others: Array<{ id: string; expiresAt: Date | null; caseNumber?: number }>) {
+    const update = vi.fn().mockResolvedValue({});
+    const create = vi.fn().mockResolvedValue({ id: 'unban-1' });
+    const removeBan = vi.fn().mockResolvedValue(undefined);
+    const { ctx } = createTestContext({
+      prismaOverrides: {
+        moderationCase: {
+          findUnique: async () =>
+            enforcerMuteCase({ type: 'BAN', metadata: null, expiresAt: EARLIER, caseNumber: CASE_NUMBER }),
+          findFirst: async (args: any) =>
+            others.find(
+              (o) =>
+                (o.caseNumber ?? CASE_NUMBER + 1) > args.where.caseNumber.gt &&
+                args.where.OR.some((c: any) =>
+                  c.expiresAt === null
+                    ? o.expiresAt === null
+                    : o.expiresAt !== null && o.expiresAt > c.expiresAt.gt,
+                ),
+            ) ?? null,
+          update,
+          updateMany: async () => ({ count: 1 }),
+          create,
+        },
+      },
+      overrides: {
+        client: {
+          user: { id: 'bot' },
+          guilds: { fetch: async () => ({ id: GUILD_ID, bans: { remove: removeBan } }) },
+        } as any,
+      },
+    });
+    return { ctx, update, create, removeBan };
+  }
+
+  it('does not unban when a newer permanent ban is active; only this case is marked expired', async () => {
+    const { ctx, update, create, removeBan } = build([{ id: 'case-2', expiresAt: null }]);
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(removeBan).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0]?.[0].where.id).toBe(CASE_ID);
+  });
+
+  it('does not unban when a later-ending temp ban is active', async () => {
+    const { ctx, update, create, removeBan } = build([{ id: 'case-2', expiresAt: LATER }]);
+    await expireJob.processor(ctx, fakeJob(CASE_ID));
+    expect(removeBan).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('still unbans when the only longer ban case is older than this one (lifted outside the bot)', async () => {
+    const { ctx, removeBan } = build([{ id: 'case-0', expiresAt: null, caseNumber: CASE_NUMBER - 1 }]);
+    // The follow-up UNBAN case needs a transaction the fake lacks; only the Discord call matters here.
+    await expireJob.processor(ctx, fakeJob(CASE_ID)).catch(() => undefined);
+    expect(removeBan).toHaveBeenCalledTimes(1);
+  });
+
+  it('unbans as before when the other ban ends earlier or there is none', async () => {
+    for (const others of [[], [{ id: 'case-2', expiresAt: new Date(EARLIER.getTime() - 1000) }]]) {
+      const { ctx, removeBan } = build(others);
+      // The follow-up UNBAN case needs a transaction the fake lacks; only the Discord call matters here.
+      await expireJob.processor(ctx, fakeJob(CASE_ID)).catch(() => undefined);
+      expect(removeBan).toHaveBeenCalledTimes(1);
+    }
+  });
+});
+
 describe('expireJob — enforcer mute removal failures', () => {
   function build(removeRole: ReturnType<typeof vi.fn>) {
     const updateCalls: unknown[] = [];

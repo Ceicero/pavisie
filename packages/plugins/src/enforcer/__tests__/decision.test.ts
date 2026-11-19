@@ -109,6 +109,7 @@ function fakeModeration(): ModerationService {
     openAppeal: async () => ({ appealId: 'appeal-1' }),
     getCaseByNumber: async () => null,
     exportCases: async () => ({ csv: '', count: 0 }),
+    withBanLease: async <T>(_guildId: string, _userId: string, fn: () => Promise<T>) => fn(),
   };
 }
 
@@ -622,6 +623,44 @@ describe('EnforcerService.decide — target who has already left the guild', () 
 
     expect(ban).toHaveBeenCalledTimes(1);
     expect(createCase).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies the BAN and records its case inside the member ban lease, so a temp-ban expiry cannot run between them', async () => {
+    const record = baseRecord({ userId: 'departed-1' });
+    const prisma = makeFakePrisma(record);
+    const events: string[] = [];
+    const ban = vi.fn(async () => {
+      events.push('ban');
+    });
+    const { ctx } = createTestContext({
+      config: defaultConfig(),
+      overrides: { prisma, client: clientWithoutTarget(ban) },
+    });
+    const createCase = vi.fn(async () => {
+      events.push('case');
+      return { id: 'case-1', caseNumber: 1 } as never;
+    });
+    const withBanLease = async <T>(guildId: string, userId: string, fn: () => Promise<T>) => {
+      events.push(`lease:${guildId}:${userId}`);
+      try {
+        return await fn();
+      } finally {
+        events.push('release');
+      }
+    };
+    ctx.services.register('moderation', { ...fakeModeration(), createCase, withBanLease });
+    const service = createEnforcerService(ctx);
+
+    await service.decide({
+      guildId: 'g1',
+      recordId: 'rec-1',
+      decision: 'BAN',
+      moderatorId: 'mod-1',
+      reason: 'test reason',
+      source: 'bot',
+    });
+
+    expect(events).toEqual(['lease:g1:departed-1', 'ban', 'case', 'release']);
   });
 });
 
