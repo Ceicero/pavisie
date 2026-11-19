@@ -33,22 +33,31 @@ function walk(dir: string): string[] {
   return out;
 }
 
-/** Returns the source text of each `<Switch ... />` element, tracking braces so `=>` / `/>` inside props are safe. */
+/**
+ * Returns the opening tag of each `<Switch ...>` / `<Switch ... />` element. Tracks `{}` depth and
+ * string literals, so `=>`, `>` or braces inside prop expressions and strings don't end the tag early.
+ * `<Switch.Thumb>` and the like are not matched.
+ */
 function switchTags(source: string): string[] {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const tags: string[] = [];
-  const re = /<Switch\b/g;
+  const re = /<Switch(?=[\s/>])/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(source))) {
+  while ((m = re.exec(code))) {
     let i = m.index + m[0].length;
     let depth = 0;
-    while (i < source.length) {
-      const c = source[i];
-      if (c === '{') depth++;
+    let quote: string | null = null;
+    for (; i < code.length; i++) {
+      const c = code[i];
+      if (quote) {
+        if (c === '\\') i++;
+        else if (c === quote) quote = null;
+      } else if (c === '"' || c === "'" || c === '`') quote = c;
+      else if (c === '{') depth++;
       else if (c === '}') depth--;
-      else if (c === '/' && source[i + 1] === '>' && depth === 0) break;
-      i++;
+      else if (c === '>' && depth === 0) break;
     }
-    tags.push(source.slice(m.index, i + 2));
+    tags.push(code.slice(m.index, i + 1));
   }
   return tags;
 }
