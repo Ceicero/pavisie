@@ -63,7 +63,7 @@ export const command: PluginCommand = {
         return;
       }
       if (target.bot) {
-        await c.interaction.reply({ embeds: [errorEmbed(c.t('errors.selfRep'))], ephemeral: true });
+        await c.interaction.reply({ embeds: [errorEmbed(c.t('errors.repBot'))], ephemeral: true });
         return;
       }
 
@@ -111,8 +111,8 @@ export const command: PluginCommand = {
         .setTitle(c.t('rep.check.title', { name: target.username }))
         .setThumbnail(target.displayAvatarURL())
         .addFields(
-          { name: 'Reputation', value: String(total), inline: true },
-          { name: 'Times thanked', value: String(agg._count), inline: true },
+          { name: c.t('rep.check.fieldTotal'), value: String(total), inline: true },
+          { name: c.t('rep.check.fieldCount'), value: String(agg._count), inline: true },
         );
       await c.interaction.reply({ embeds: [embed], ephemeral: false });
       return;
@@ -129,7 +129,13 @@ export const command: PluginCommand = {
       const positive = grouped.filter((g) => (g._sum.amount ?? 0) > 0);
       const lines =
         positive.length > 0
-          ? positive.map((g, i) => `**#${i + 1}** ${userMention(g.toUserId)} — ${g._sum.amount} reputation`)
+          ? positive.map((g, i) =>
+              c.t('rep.leaderboard.row', {
+                rank: i + 1,
+                user: userMention(g.toUserId),
+                amount: g._sum.amount ?? 0,
+              }),
+            )
           : [c.t('rep.leaderboard.empty')];
       await c.interaction.reply({
         embeds: [listEmbed(c.t('rep.leaderboard.title'), lines)],

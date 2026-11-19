@@ -91,16 +91,6 @@ describe('FormField auto-label', () => {
           <input />
           <input />
         </FormField>
-        <FormField label="Locale">
-          <Select>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="en">English</SelectItem>
-            </SelectContent>
-          </Select>
-        </FormField>
         <FormField label="Box">
           <div>
             <input />
@@ -111,9 +101,133 @@ describe('FormField auto-label', () => {
 
     expect(labelFor('Fragment')).toBeNull();
     expect(labelFor('Pair')).toBeNull();
-    expect(labelFor('Locale')).toBeNull();
     expect(labelFor('Box')).toBeNull();
     expect(container.querySelectorAll('input, textarea, select, button').length).toBeGreaterThan(0);
+    expect(idsIn(container)).toEqual([]);
+  });
+
+  it('auto-links a single Select to its trigger', () => {
+    const { container } = render(
+      <FormField label="Locale">
+        <Select>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="en">English</SelectItem>
+          </SelectContent>
+        </Select>
+      </FormField>,
+    );
+
+    const trigger = screen.getByRole('combobox');
+    expect(labelFor('Locale')).toBe(trigger.id);
+    expect(screen.getByLabelText('Locale')).toBe(trigger);
+    expect(idsIn(container)).toEqual([trigger.id]);
+  });
+
+  it('keeps a caller htmlFor or an existing SelectTrigger id', () => {
+    const { container } = render(
+      <>
+        <FormField label="Preset" htmlFor="preset-select">
+          <Select>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="en">English</SelectItem>
+            </SelectContent>
+          </Select>
+        </FormField>
+        <FormField label="Kept">
+          <Select>
+            <SelectTrigger id="keep-trigger">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="en">English</SelectItem>
+            </SelectContent>
+          </Select>
+        </FormField>
+      </>,
+    );
+
+    const [presetTrigger, keptTrigger] = screen.getAllByRole('combobox');
+    expect(labelFor('Preset')).toBe('preset-select');
+    expect(presetTrigger.getAttribute('id')).toBeNull();
+    expect(labelFor('Kept')).toBe('keep-trigger');
+    expect(keptTrigger.getAttribute('id')).toBe('keep-trigger');
+    expect(screen.getByLabelText('Kept')).toBe(keptTrigger);
+    expect(idsIn(container)).toEqual(['keep-trigger']);
+  });
+
+  it('does not inject ids when a FormField has two Selects', () => {
+    const { container } = render(
+      <FormField label="Pair">
+        <Select>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="en">English</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fr">French</SelectItem>
+          </SelectContent>
+        </Select>
+      </FormField>,
+    );
+
+    expect(labelFor('Pair')).toBeNull();
+    const triggers = screen.getAllByRole('combobox');
+    expect(triggers).toHaveLength(2);
+    expect(triggers[0].getAttribute('id')).toBeNull();
+    expect(triggers[1].getAttribute('id')).toBeNull();
+    expect(idsIn(container)).toEqual([]);
+  });
+
+  it('resets the select control id context in a nested FormField', () => {
+    const { container } = render(
+      <FormField label="Outer">
+        <Select>
+          <FormField label="Inner">
+            <div>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+            </div>
+          </FormField>
+          <SelectContent>
+            <SelectItem value="en">English</SelectItem>
+          </SelectContent>
+        </Select>
+      </FormField>,
+    );
+
+    expect(labelFor('Outer')).not.toBeNull();
+    expect(labelFor('Inner')).toBeNull();
+    expect(screen.getByRole('combobox').getAttribute('id')).toBeNull();
+    expect(idsIn(container)).toEqual([]);
+  });
+
+  it('does not add an id to a SelectTrigger outside a FormField', () => {
+    const { container } = render(
+      <Select>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="en">English</SelectItem>
+        </SelectContent>
+      </Select>,
+    );
+
+    expect(screen.getByRole('combobox').getAttribute('id')).toBeNull();
     expect(idsIn(container)).toEqual([]);
   });
 

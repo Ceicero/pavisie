@@ -745,19 +745,28 @@ export function createEnforcerService(ctx: PluginContext): EnforcerService {
           }
           case 'BAN': {
             guardTarget();
-            await guild.members.ban(record.userId, {
-              deleteMessageSeconds: input.banDeleteMessageSeconds ?? config.banDeleteMessageSeconds,
-              reason: input.reason,
-            });
-            const created = await moderation.createCase({
-              guildId: input.guildId,
-              type: 'BAN',
-              targetId: record.userId,
-              moderatorId: input.moderatorId,
-              reason: input.reason,
-              source: actionSource,
-              dmUser: false,
-            });
+            // Ban and case under the member's ban lease, as moderation's own ban() does: an older temp ban's
+            // expiry that ran between the two would see no newer case and lift this ban.
+            const created = await moderation.withBanLease(
+              input.guildId,
+              record.userId,
+              async () => {
+                await guild.members.ban(record.userId, {
+                  deleteMessageSeconds: input.banDeleteMessageSeconds ?? config.banDeleteMessageSeconds,
+                  reason: input.reason,
+                });
+                return moderation.createCase({
+                  guildId: input.guildId,
+                  type: 'BAN',
+                  targetId: record.userId,
+                  moderatorId: input.moderatorId,
+                  reason: input.reason,
+                  source: actionSource,
+                  dmUser: false,
+                });
+              },
+              { waitMs: 3_000, failOpen: true },
+            );
             caseId = created.id;
             caseNumber = created.caseNumber;
             break;
