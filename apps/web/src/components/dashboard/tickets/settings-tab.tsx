@@ -194,6 +194,7 @@ export function TicketsSettingsTab({ guildId }: TicketsSettingsTabProps) {
               </p>
             </div>
             <Switch
+              aria-label="DM the transcript to the ticket opener"
               checked={draft.dmTranscript}
               onCheckedChange={(v) => set('dmTranscript', v)}
               disabled={update.isPending}
@@ -242,6 +243,7 @@ export function TicketsSettingsTab({ guildId }: TicketsSettingsTabProps) {
               </p>
             </div>
             <Switch
+              aria-label="Never auto-delete closed channels"
               checked={draft.keepClosedChannels}
               onCheckedChange={(v) => set('keepClosedChannels', v)}
               disabled={update.isPending}

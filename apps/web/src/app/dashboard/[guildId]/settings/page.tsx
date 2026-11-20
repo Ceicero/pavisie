@@ -224,6 +224,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <Switch
+              aria-label="Fast actions"
               checked={Boolean(draft.fastActions)}
               onCheckedChange={(v) => set('fastActions', v)}
               disabled={update.isPending}
@@ -247,6 +248,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <Switch
+              aria-label="DM users on moderation action"
               checked={Boolean(draft.dmOnModeration)}
               onCheckedChange={(v) => set('dmOnModeration', v)}
               disabled={update.isPending}
@@ -269,6 +271,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <Switch
+              aria-label="Enable analytics data collection"
               checked={Boolean(draft.dataCollectionEnabled)}
               onCheckedChange={(v) => set('dataCollectionEnabled', v)}
               disabled={update.isPending}
@@ -283,6 +286,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <Switch
+              aria-label="Log message content on edit/delete"
               checked={Boolean(draft.logMessageContent)}
               onCheckedChange={(v) => set('logMessageContent', v)}
               disabled={update.isPending}
