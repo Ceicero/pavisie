@@ -127,7 +127,7 @@ export function buildGiveawayEmbed(
     { name: t('giveaway.embedWinners'), value: String(giveaway.winnerCount), inline: true },
     { name: t('giveaway.embedEntries'), value: String(entryCount), inline: true },
     {
-      name: giveaway.ended ? 'Ended' : 'Ends',
+      name: t(giveaway.ended ? 'giveaway.embedEnded' : 'giveaway.embedEnds'),
       value: discordTimestamp(giveaway.endsAt, giveaway.ended ? 'f' : 'R'),
       inline: true,
     },
