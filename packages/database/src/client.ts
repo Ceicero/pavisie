@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { withPoolDefaults } from './pool';
 
 // Cache the PrismaClient instance on `globalThis` outside production so that
 // hot-reloading dev processes (tsx watch, Next.js dev) reuse one connection
@@ -14,12 +15,17 @@ function buildLogConfig(): ('query' | 'info' | 'warn' | 'error')[] {
   return levels;
 }
 
-/** Shared PrismaClient singleton for the whole monorepo; reused across hot reloads in non-production. */
-export const prisma: PrismaClient =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+/** Builds the client, bounding its pool (see pool.ts); with no DATABASE_URL, Prisma's own missing-env error stands. */
+function createClient(): PrismaClient {
+  const datasourceUrl = withPoolDefaults(process.env.DATABASE_URL, process.env.DATABASE_POOL_SIZE);
+  return new PrismaClient({
     log: buildLogConfig(),
+    ...(datasourceUrl === undefined ? {} : { datasourceUrl }),
   });
+}
+
+/** Shared PrismaClient singleton for the whole monorepo; reused across hot reloads in non-production. */
+export const prisma: PrismaClient = globalForPrisma.prisma ?? createClient();
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
