@@ -137,12 +137,27 @@ describe('buildGiveawayEmbed', () => {
     expect(names(embed)).toEqual([
       'loc:giveaway.embedWinners',
       'loc:giveaway.embedEntries',
-      'Ended',
+      'loc:giveaway.embedEnded',
       'loc:giveaway.embedRequiredRole',
       'loc:giveaway.embedMinAccountAge',
       'loc:giveaway.embedMinLevel',
       'loc:giveaway.embedDrawnWinners',
     ]);
+  });
+
+  it('names the time field Ends while running and Ended once the giveaway has ended', () => {
+    const running = buildGiveawayEmbed(giveaway(), 1, realT);
+    const ended = buildGiveawayEmbed(giveaway({ ended: true }), 1, realT);
+    expect(fields(running)[2]).toMatchObject({ name: 'Ends', inline: true });
+    expect(fields(ended)[2]).toMatchObject({ name: 'Ended', inline: true });
+  });
+
+  it('reads the ends and ended field names from the translator', () => {
+    const echo: Translate = (key) => `loc:${key}`;
+    const running = buildGiveawayEmbed(giveaway(), 0, echo);
+    const ended = buildGiveawayEmbed(giveaway({ ended: true }), 0, echo);
+    expect(fields(running)[2]?.name).toBe('loc:giveaway.embedEnds');
+    expect(fields(ended)[2]?.name).toBe('loc:giveaway.embedEnded');
   });
 
   it('reads the singular and plural account-age values from the translator', () => {

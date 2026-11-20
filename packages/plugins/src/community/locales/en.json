@@ -29,6 +29,8 @@
     "cancelled": "Giveaway cancelled.",
     "embedWinners": "Winners",
     "embedEntries": "Entries",
+    "embedEnded": "Ended",
+    "embedEnds": "Ends",
     "embedRequiredRole": "Required role",
     "embedMinAccountAge": "Min. account age",
     "embedMinLevel": "Min. level",
