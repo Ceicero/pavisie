@@ -34,6 +34,17 @@ describe('withPoolDefaults', () => {
     );
   });
 
+  it('rejects an invalid DATABASE_POOL_SIZE even when the URL sets connection_limit or is missing', () => {
+    expect(() => withPoolDefaults(`${BASE}?connection_limit=3`, 'ten')).toThrow(/DATABASE_POOL_SIZE/);
+    expect(() => withPoolDefaults(undefined, '0')).toThrow(/DATABASE_POOL_SIZE/);
+  });
+
+  it('treats only the lowercase parameter (the one Prisma reads) as already set', () => {
+    expect(withPoolDefaults(`${BASE}?Connection_Limit=3`, '4')).toBe(
+      `${BASE}?Connection_Limit=3&connection_limit=4`,
+    );
+  });
+
   it('uses DATABASE_POOL_SIZE in place of the default', () => {
     expect(withPoolDefaults(BASE, '25')).toBe(`${BASE}?connection_limit=25`);
   });
@@ -48,7 +59,7 @@ describe('withPoolDefaults', () => {
 
   it('returns undefined for a missing or blank URL so Prisma reports it as before', () => {
     expect(withPoolDefaults(undefined, '5')).toBeUndefined();
-    expect(withPoolDefaults('  ', '5')).toBeUndefined();
+    expect(withPoolDefaults('  ', undefined)).toBeUndefined();
   });
 });
 

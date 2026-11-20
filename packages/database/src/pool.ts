@@ -8,12 +8,13 @@
  *
  * `withPoolDefaults` fills in a bounded `connection_limit` when the URL doesn't already set one.
  * An explicit `connection_limit` in DATABASE_URL always wins, and DATABASE_POOL_SIZE replaces the default.
+ * If requests start failing with P2024 (timed out fetching a connection), raise DATABASE_POOL_SIZE.
  */
 
 /** Pool size per process when neither DATABASE_URL nor DATABASE_POOL_SIZE sets one. */
 export const DEFAULT_POOL_SIZE = 10;
 
-const CONNECTION_LIMIT_PARAM = /[?&]connection_limit=/i;
+const CONNECTION_LIMIT_PARAM = /[?&]connection_limit=/;
 
 /** Parses DATABASE_POOL_SIZE: unset or blank means the default; anything but a positive integer throws. */
 export function parsePoolSize(raw: string | undefined): number {
@@ -31,10 +32,13 @@ export function parsePoolSize(raw: string | undefined): number {
  * blank URL so Prisma reports the missing variable exactly as before. The URL is only appended to, never
  * re-encoded, so credentials with escaped characters pass through unchanged.
  */
-export function withPoolDefaults(url: string | undefined, poolSizeRaw: string | undefined): string | undefined {
+export function withPoolDefaults(
+  url: string | undefined,
+  poolSizeRaw: string | undefined,
+): string | undefined {
+  const size = parsePoolSize(poolSizeRaw);
   if (url === undefined || url.trim() === '') return undefined;
   if (CONNECTION_LIMIT_PARAM.test(url)) return url;
-  const size = parsePoolSize(poolSizeRaw);
   const hashAt = url.indexOf('#');
   const base = hashAt === -1 ? url : url.slice(0, hashAt);
   const fragment = hashAt === -1 ? '' : url.slice(hashAt);
