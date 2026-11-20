@@ -90,6 +90,7 @@ export function ReputationTab({ guildId }: { guildId: string }) {
               </p>
             </div>
             <Switch
+              aria-label="Reputation enabled"
               checked={draft.enabled}
               onCheckedChange={(v) => set('enabled', v)}
               disabled={update.isPending}
