@@ -169,7 +169,7 @@ describe('PluginRegistry', () => {
     expect(() => new PluginRegistry(allPlugins)).not.toThrow();
     const registry = new PluginRegistry(allPlugins);
     expect(registry.get('admin')).toBeDefined();
-    expect(registry.list()).toHaveLength(15);
+    expect(registry.list()).toHaveLength(16);
     expect(registry.commandsJson().length).toBeGreaterThanOrEqual(5); // admin's 5 commands, at minimum
   });
 });

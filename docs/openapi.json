@@ -239,6 +239,7 @@
                 "admin",
                 "moderation",
                 "automod",
+                "raidmode",
                 "enforcer",
                 "logging",
                 "tickets",
@@ -284,6 +285,7 @@
                 "admin",
                 "moderation",
                 "automod",
+                "raidmode",
                 "enforcer",
                 "logging",
                 "tickets",
@@ -329,6 +331,7 @@
                 "admin",
                 "moderation",
                 "automod",
+                "raidmode",
                 "enforcer",
                 "logging",
                 "tickets",
@@ -383,6 +386,7 @@
                 "admin",
                 "moderation",
                 "automod",
+                "raidmode",
                 "enforcer",
                 "logging",
                 "tickets",
@@ -428,6 +432,7 @@
                 "admin",
                 "moderation",
                 "automod",
+                "raidmode",
                 "enforcer",
                 "logging",
                 "tickets",
@@ -2160,6 +2165,64 @@
             },
             "in": "path",
             "name": "guildId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/guilds/{guildId}/raid-mode/incidents/{incidentId}/members": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "default": "medium",
+              "type": "string",
+              "enum": ["medium", "high"]
+            },
+            "in": "query",
+            "name": "minRisk",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{17,20}$"
+            },
+            "in": "path",
+            "name": "guildId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "in": "path",
+            "name": "incidentId",
             "required": true
           }
         ],
