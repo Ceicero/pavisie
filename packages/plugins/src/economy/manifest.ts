@@ -32,7 +32,8 @@ export const manifest = defineManifest({
   configSchema,
   privacyNotes: [
     'Every balance change is recorded as an append-only EconomyTransaction (who, amount, type, and an optional note) — balances themselves are a derived/cached total, never edited without a matching transaction.',
-    'This currency has no real-world value: it cannot be purchased with real money, cashed out, transferred off-platform, or used for wagering of any kind.',
+    'This currency has no real-world value: it cannot be purchased with real money, cashed out, or transferred off-platform. A Discord server\'s currency cannot be used for wagering of any kind.',
+    'A Twitch channel\'s own currency can be bet at chat table games (blackjack) only if that streamer turns the games on; they are off by default, and the currency still cannot be bought or cashed out.',
     'A linked Twitch channel has its own separate currency, held per Twitch channel (not per server); /economy leaderboard can show it for the channels linked to this server.',
   ],
 });

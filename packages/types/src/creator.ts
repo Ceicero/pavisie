@@ -58,7 +58,8 @@ export type CreatorTwitchTimerDto = TwitchChatTimerDto;
 // Channel-owned currency (creator dashboard phase 2a, ARCHITECTURE.md §18b / §19e)
 // ---------------------------------------------------------------------------
 
-/** A channel's own virtual currency settings (mirrors `ChannelEconomy`). Virtual only: no purchase, no cash-out. */
+/** A channel's own virtual currency settings (mirrors `ChannelEconomy`). Virtual only: no purchase, no cash-out.
+ * Betting it at a chat table game is the streamer's choice, off by default (`blackjackEnabled`). */
 export interface CreatorChannelEconomySettingsDto {
   /** Master switch: chat commands (!balance/!daily/!give/!top) and the Twitch extension panel. */
   enabled: boolean;
@@ -76,6 +77,10 @@ export interface CreatorChannelEconomySettingsDto {
   earnCooldownSeconds: number;
   /** Max a viewer can earn from chat per UTC day (0 = no earning). */
   earnDailyCap: number;
+  /** Chat blackjack that bets this currency. Off by default. */
+  blackjackEnabled: boolean;
+  blackjackMinBet: number;
+  blackjackMaxBet: number;
 }
 
 /** `GET/PATCH /creator/twitch/economy`. `configured` is false until the streamer's first save; `settings` then

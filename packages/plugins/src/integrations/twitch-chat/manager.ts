@@ -41,6 +41,9 @@ import {
   pruneSendThrottle,
   sendChatMessage,
 } from './helix';
+import { handleGameChatCommand } from '../../channel-games/chat';
+import { ChannelGameHost } from '../../channel-games/host';
+import { CoalescingOutbound } from '../../channel-games/outbound';
 import { CommandCooldowns, handleChatMessage } from './engine';
 import { handleEconomyChatCommand, type EconomyCommandResult } from './economy-commands';
 import { createEconomyChatPort } from './economy-port';
@@ -190,6 +193,10 @@ export class TwitchChatManager {
    * errors and subscription revocation errors are cached here; other transient errors leave this as `null` so
    * they're re-written on every occurrence. */
   private readonly lastErrorByChannelId = new Map<string, string | null>();
+  /** Table games (blackjack) for channel currencies: the host that runs tables and the queue that paces what it
+   * says in chat. Built on the first `start(ctx)`, because both need the plugin context. */
+  private gameHost: ChannelGameHost | null = null;
+  private gameOutbound: CoalescingOutbound | null = null;
 
   constructor(private readonly wsCtor: WebSocketConstructorLike = defaultWebSocketConstructor) {}
 
@@ -205,7 +212,40 @@ export class TwitchChatManager {
     this.stopped = false;
     this.clearStartRetry();
     this.startRetryMs = START_RETRY_INITIAL_MS;
+    this.startGames(ctx);
     await this.attemptStart(ctx);
+  }
+
+  /** Builds the table-game host (once) and picks up any table that was open when the bot last stopped. Game
+   * output goes through its own coalescing queue instead of straight to `sendChatMessage`, which silently drops
+   * anything faster than one message a second: a table with eight players would lose most of what it says. */
+  private startGames(ctx: PluginContext): void {
+    if (!this.gameHost) {
+      this.gameOutbound = new CoalescingOutbound({
+        send: async (broadcasterUserId, text) => {
+          const result = await sendChatMessage(ctx, broadcasterUserId, text);
+          if (result.ok) return 'sent';
+          // Another reply used this second's slot. The same text goes out on the next one.
+          return result.error === 'throttled' ? 'retry' : 'failed';
+        },
+        onDrop: (broadcasterUserId, info) => {
+          ctx.logger.warn(
+            { broadcasterUserId, ...info },
+            'integrations/twitch-chat: a game chat line was dropped',
+          );
+        },
+      });
+      this.gameHost = new ChannelGameHost({
+        prisma: ctx.prisma,
+        redis: ctx.redis,
+        logger: ctx.logger,
+        outbound: this.gameOutbound,
+      });
+    }
+    this.gameHost.start();
+    void this.gameHost.resume().catch((err: unknown) => {
+      ctx.logger.error({ err }, 'integrations/twitch-chat: resuming game tables failed');
+    });
   }
 
   private async attemptStart(ctx: PluginContext): Promise<void> {
@@ -243,6 +283,8 @@ export class TwitchChatManager {
   async stop(): Promise<void> {
     this.stopped = true;
     this.clearStartRetry();
+    // Tables stay in Redis and resume on the next start; only the timer loop and the send queue stop here.
+    this.gameHost?.stop();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -916,8 +958,22 @@ export class TwitchChatManager {
           return { handled: false } as const;
         });
 
+        // Table games come next: after the economy commands, before the custom-command engine. A game never
+        // answers through `reply`; everything it says goes out through its own paced queue.
+        const badgeSetIds = (event.badges ?? []).map((b) => b.set_id);
+        const gameHandled =
+          !economyResult.handled &&
+          (
+            await this.tryGameCommand(ctx, cached, { ...chatEvent, badgeSetIds }).catch((err: unknown) => {
+              ctx.logger.warn({ err }, 'integrations/twitch-chat: game command handling threw');
+              return { handled: false };
+            })
+          ).handled;
+
         if (economyResult.handled) {
           reply = economyResult.reply;
+        } else if (gameHandled) {
+          reply = null;
         } else {
           reply = await handleChatMessage({
             botUserId: this.botUserId ?? '',
@@ -928,7 +984,7 @@ export class TwitchChatManager {
               broadcasterUserId: cached.channel.broadcasterUserId,
             },
             commands: cached.commands,
-            event: { ...chatEvent, badgeSetIds: (event.badges ?? []).map((b) => b.set_id) },
+            event: { ...chatEvent, badgeSetIds },
             cooldowns: this.cooldowns,
             helix: {
               getStream: (id) => getStream(ctx, id),
@@ -1028,6 +1084,28 @@ export class TwitchChatManager {
       botTwitchUserId: this.botUserId,
       helix: { getUserByLogin: (login) => getUserByLogin(ctx, login) },
       cooldowns: this.cooldowns,
+    });
+  }
+
+  /** Routes one Twitch chat message to a table game (blackjack), if it is one and the channel has it switched
+   * on. All parsing and gating lives in the pure-ish `handleGameChatCommand` (channel-games/chat.ts); this only
+   * supplies the channel's custom command names (an existing custom command with the same name still wins) and a
+   * lazy loader for its enabled currency. Returns `{ handled: false }` for everything that is not the games'
+   * business, so the caller falls through to the engine unchanged. */
+  private async tryGameCommand(
+    ctx: PluginContext,
+    cached: ChannelCacheEntry,
+    event: { chatterUserId: string; chatterDisplayName: string; messageText: string; badgeSetIds: string[] },
+  ): Promise<{ handled: boolean }> {
+    if (!this.gameHost) return { handled: false };
+    const broadcasterUserId = cached.channel.broadcasterUserId;
+    return handleGameChatCommand({
+      event,
+      commandPrefix: cached.channel.commandPrefix,
+      broadcasterUserId,
+      customCommandNames: new Set(cached.commands.map((c) => c.name)),
+      loadEconomy: () => this.loadEnabledChannelEconomy(ctx, broadcasterUserId, Date.now()),
+      host: this.gameHost,
     });
   }
 

@@ -247,6 +247,26 @@ describe('PATCH /creator/twitch/economy', () => {
     await t.app.close();
   });
 
+  it('blackjack is off until the streamer turns it on, and its bet limits must make sense', async () => {
+    const t = await setup();
+    const { headers } = await signIn(t, CREATOR_A);
+    const before = await t.app.inject({ method: 'GET', url: '/creator/twitch/economy', headers });
+    expect(before.json().settings).toMatchObject({ blackjackEnabled: false, blackjackMinBet: 10, blackjackMaxBet: 1000 });
+
+    const on = await t.app.inject({
+      method: 'PATCH',
+      url: '/creator/twitch/economy',
+      payload: { enabled: true, blackjackEnabled: true, blackjackMinBet: 25, blackjackMaxBet: 250 },
+      headers,
+    });
+    expect(on.statusCode).toBe(200);
+    expect(on.json().settings).toMatchObject({ blackjackEnabled: true, blackjackMinBet: 25, blackjackMaxBet: 250 });
+
+    const inverted = await t.app.inject({ method: 'PATCH', url: '/creator/twitch/economy', payload: { blackjackMinBet: 300 }, headers });
+    expect(inverted.statusCode).toBe(400);
+    await t.app.close();
+  });
+
   it('an empty patch changes nothing and does not create the row', async () => {
     const t = await setup();
     const { headers } = await signIn(t, CREATOR_A);
