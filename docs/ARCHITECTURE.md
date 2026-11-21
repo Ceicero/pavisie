@@ -128,6 +128,7 @@ Required (process fails fast with a clear message if missing where needed):
 NODE_ENV=development
 LOG_LEVEL=info
 DATABASE_URL=postgresql://pavisie:pavisie@localhost:5432/pavisie
+DATABASE_POOL_SIZE=10          # optional; Postgres connections per process (read by @pavisie/database; URL ?connection_limit= wins)
 REDIS_URL=redis://localhost:6379
 DISCORD_TOKEN=                # bot only
 DISCORD_CLIENT_ID=
