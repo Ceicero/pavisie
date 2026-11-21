@@ -50,6 +50,7 @@ function buildContext(appealsChannelId: string | null) {
   services.register('moderation', new ModerationServiceImpl(ctx) as never);
 
   const interaction = {
+    isModalSubmit: () => true,
     user: { id: APPEALER_ID },
     fields: { getTextInputValue: () => 'Please reconsider, it was a misunderstanding.' },
     reply: vi.fn(async (payload: { embeds?: EmbedBuilder[] }) => {

@@ -14,8 +14,9 @@ export function discordCode(err: unknown): unknown {
 /** `metadata.roleId` set by the `enforcer` plugin's timed MUTE (`metadata: { enforcerMute: true, roleId }`). */
 export function enforcerMuteRoleId(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== 'object') return null;
-  const m = metadata as Record<string, unknown>;
-  return m.enforcerMute === true && typeof m.roleId === 'string' ? m.roleId : null;
+  const enforcerMute: unknown = 'enforcerMute' in metadata ? metadata.enforcerMute : undefined;
+  const roleId: unknown = 'roleId' in metadata ? metadata.roleId : undefined;
+  return enforcerMute === true && typeof roleId === 'string' ? roleId : null;
 }
 
 export interface EnforcerMuteCaseRow {
