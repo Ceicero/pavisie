@@ -238,9 +238,10 @@ actually write). Run it from a machine with the repo checked out and `DISCORD_TO
 ### 2.7 Health checks
 
 - `api`: `GET https://api.pavisie.com/health` → `200 {"status":"ok", ...}`.
-- `bot`: has no public URL; Railway pings its private health port directly (`bot.railway.json`
-  configures `healthcheckPath` — see `infra/railway/README.md` for why the bot's healthcheck is
-  handled differently from the other three).
+- `bot`: has no public URL; `bot.railway.json` deliberately sets no `healthcheckPath`. Health is
+  covered by the Docker `HEALTHCHECK` in `Dockerfile.bot` (`GET /health` on `BOT_HEALTH_PORT`) plus
+  the `ON_FAILURE` restart policy — see `infra/railway/README.md` for why the bot is handled
+  differently from the other three.
 - `web`: `GET /` returning `200` is the healthcheck.
 - `dashboard`: **`GET /` now returns a 308 redirect, not 200** (see §1's topology note) — a
   healthcheck configured to require exactly `200` on `/` will misreport this service as down. Both
@@ -283,7 +284,7 @@ file. This repo ships `render.yaml` at the root — Render reads it automaticall
    token/client secret, `ENCRYPTION_KEY`, `SESSION_SECRET`, any integration keys, etc.) — fill them in on that
    screen. Variables wired with `fromDatabase`/`fromService` (Postgres/Redis connection strings, and
    cross-service URLs) are filled in automatically and need no action.
-4. Click **Apply**. Render builds and deploys all five resources.
+4. Click **Apply**. Render builds and deploys all six resources.
 5. `api`'s `preDeployCommand: pnpm db:migrate` runs migrations before each deploy goes live, same
    idea as the Railway pre-deploy command in §2.5 — nothing extra to do.
 6. `api` declares `healthCheckPath: /health`; Render won't route traffic to a new deploy until it
@@ -405,7 +406,7 @@ list with comments; every var there is also documented in `docs/ARCHITECTURE.md`
 | `PUBLIC_WEBHOOK_BASE_URL`                                                                                                                                                                                                                                    | Yes if using webhooks    | api                                                | `https://api.pavisie.com`                                                                                                                                                  |
 | `KOFI_URL`                                                                                                                                                                                                                                                      | No (donations are optional)      | api                                                | Full Ko-fi page URL, e.g. `https://ko-fi.com/yourname`. Leave blank to disable the donate page.                                                                              |
 | `CAPTCHA_PROVIDER` (`hcaptcha`/`turnstile`) + that provider's `*_SITE_KEY`/`*_SECRET`                                                                                                                                                                       | No (optional; powers the `roles` plugin's verification mode only) | api                                                | Cloudflare Turnstile or hCaptcha's own dashboard. Donations are now handled by Ko-fi and do not require CAPTCHA here. |
-| Other integration keys (`TWITCH_*`, `YOUTUBE_API_KEY`, `GITHUB_WEBHOOK_SECRET`, `REDDIT_*`, `STEAM_API_KEY`, `GOOGLE_*`, `MICROSOFT_*`, `NOTION_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPL_API_KEY`, `OPENWEATHERMAP_API_KEY`)                       | No                       | api, bot                                           | Each provider's own developer console. Blank = that feature stays disabled; nothing else is affected.                                                                          |
+| Other integration keys (`TWITCH_*`, `YOUTUBE_API_KEY`, `REDDIT_*`, `STEAM_API_KEY`, `GOOGLE_*`, `MICROSOFT_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPL_API_KEY`, `OPENWEATHERMAP_API_KEY`)                       | No                       | api, bot                                           | Each provider's own developer console. Blank = that feature stays disabled; nothing else is affected.                                                                          |
 | `TWITCH_EXTENSION_CLIENT_ID` / `TWITCH_EXTENSION_SECRET`                                                                                                                                                                                                    | No (Twitch Extension panel disabled while unset — 503 "Extension not configured") | api | Twitch dev console (`console.twitch.tv`) → **Extensions** → your extension → **Settings** → Client ID, and → **Extension Secrets** → New Secret. The secret is base64 already — paste it as shown, don't re-encode. Different credential pair from `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` (those are the chat bot's). |
 
 ## 7. Secret rotation runbook
@@ -537,7 +538,7 @@ written, not a quote:
   for the others to avoid cold starts) plus a small Postgres and Key Value plan is typically in a
   similar **$20–40/month** range; Render's free tier can host `api`/`dashboard`/`web` if you accept
   cold starts, but `bot` cannot use a free/sleeping instance.
-- **VPS**: a $6–12/month VPS (1–2 vCPU, 2–4GB RAM) from any provider comfortably runs all five
+- **VPS**: a $6–12/month VPS (1–2 vCPU, 2–4GB RAM) from any provider comfortably runs all six
   containers (`postgres`, `redis`, `bot`, `api`, `dashboard`, `web`) for small-to-medium load; add the
   cost of your own backup storage and any monitoring service. This is the cheapest floor but puts TLS,
   OS updates, and restarts on you.
