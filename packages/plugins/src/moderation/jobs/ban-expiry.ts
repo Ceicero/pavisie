@@ -69,7 +69,7 @@ export async function liftTempBan(
     if (!(await lease.renew())) {
       throw new AppError(
         'ban_lease_lost',
-        `Temp ban case #${row.caseNumber} not lifted: its ban lease expired before the unban. It will be retried.`,
+        `Temp ban case #${row.caseNumber} not lifted: its ban lease was lost (expired or taken by another ban) before the unban. It will be retried.`,
         { status: 409 },
       );
     }

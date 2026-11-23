@@ -70,7 +70,8 @@ return 0
 // 30s (as the warn-escalation and enforcer decide locks) covers a DM, two Discord calls and a DB write with room for a
 // rate-limit wait. A holder slower than that can lose it: release is compare-and-delete, so it never removes the next
 // holder's lease, and the temp-ban expiry calls `lease.renew()` right before it unbans, so it never lifts a ban on a
-// lease it no longer holds.
+// lease it no longer holds. The ban side does not renew: a ban() that outlives the TTL between its Discord ban and its
+// case write (e.g. a long rate-limit wait) can still have that ban lifted by an expiry that takes the lapsed lease.
 const BAN_LEASE_TTL_MS = 30_000;
 /** Extends the lease only if `ARGV[1]` (the caller's owner token) still holds it. Returns 1 if renewed, else 0. */
 const RENEW_LEASE_SCRIPT = `

@@ -38,7 +38,11 @@ function fakeJob(caseId: string): Job<{ caseId: string }> {
  * expiry job touch. `hooks` lets a test pause Discord calls to interleave a second actor at an exact point.
  */
 function buildWorld(
-  hooks: { onCreate?: () => Promise<void>; onRemove?: () => void; onFindFirst?: () => Promise<void> } = {},
+  hooks: {
+    onCreate?: () => Promise<void>;
+    onRemove?: () => void | Promise<void>;
+    onFindFirst?: () => Promise<void>;
+  } = {},
 ) {
   const cases: CaseRow[] = [
     {
@@ -121,7 +125,7 @@ function buildWorld(
       remove: async (id: string) => {
         removeCalls.push(id);
         banned.delete(id);
-        hooks.onRemove?.();
+        await hooks.onRemove?.();
       },
     },
   };
@@ -289,7 +293,7 @@ describe('ban lease — expiry re-checks the lease before it unbans', () => {
 
     await expect(
       liftTempBan(world.ctx, world.service, world.cases[0] as any, 'Temporary ban expired'),
-    ).rejects.toThrow(/lease expired/);
+    ).rejects.toThrow(/lease was lost/);
     expect(world.removeCalls).toEqual([]);
     expect(world.cases[0]?.expiredAt).toBeNull();
 
@@ -306,8 +310,8 @@ describe('ban lease — expiry re-checks the lease before it unbans', () => {
         // Still ours, but nearly out of time.
         await world.ctx.redis.pexpire(LEASE_KEY, 200);
       },
-      onRemove: () => {
-        void world.ctx.redis.pttl(LEASE_KEY).then((ttl) => (ttlAtUnban = ttl));
+      onRemove: async () => {
+        ttlAtUnban = await world.ctx.redis.pttl(LEASE_KEY);
       },
     });
 
