@@ -68,7 +68,8 @@ function rewardRolesToRemove(
 
 /**
  * Recomputes one member's level-reward roles for `level` and applies the diff.
- * Returns whether a role write was attempted. Failures are logged, not thrown — a missing Manage Roles
+ * Returns true only when every planned role write succeeded, and false when there was nothing to
+ * change or any write failed. Failures are logged, not thrown — a missing Manage Roles
  * permission must not block the XP write, the announcement, or the rest of a sync.
  */
 export async function syncMemberRewardRoles(opts: SyncMemberRewardRolesOptions): Promise<boolean> {
