@@ -44,6 +44,7 @@ export function TwitchChatBridgeCard({
             onCheckedChange={onToggleDiscordToTwitch}
             disabled={pending || !hasChannel}
             aria-label="Relay Discord messages into Twitch chat"
+            aria-describedby="twitch-chat-bridge-help"
           />
         </FormField>
 
@@ -53,12 +54,13 @@ export function TwitchChatBridgeCard({
             onCheckedChange={onToggleTwitchToDiscord}
             disabled={pending || !hasChannel}
             aria-label="Relay Twitch chat messages into Discord"
+            aria-describedby="twitch-chat-bridge-help"
           />
         </FormField>
 
-        <p className="text-xs text-muted-foreground">
-          When on, messages posted in the selected Discord channel are shown in this Twitch chat (or vice versa).
-          Pavisie does not store or log this text — only names/ids from other features are ever saved.
+        <p id="twitch-chat-bridge-help" className="text-xs text-muted-foreground">
+          When on, messages posted in the selected Discord channel are shown in this Twitch chat (or vice
+          versa). Pavisie does not store or log this text — only names/ids from other features are ever saved.
         </p>
 
         {lastError ? <p className="text-xs text-destructive">{lastError}</p> : null}

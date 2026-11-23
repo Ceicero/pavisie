@@ -304,12 +304,13 @@ export function ChannelAutomationsCard({ guildId }: { guildId: string }) {
               <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
                 <div>
                   <p className="text-sm font-medium">Also publish other bots and webhooks</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p id="automations-publish-bots-help" className="text-xs text-muted-foreground">
                     Off by default: only members&apos; messages and Pavisie&apos;s own posts are published.
                   </p>
                 </div>
                 <Switch
                   aria-label="Also publish other bots and webhooks"
+                  aria-describedby="automations-publish-bots-help"
                   checked={draft.autoPublish.includeBots}
                   onCheckedChange={(v) =>
                     setDraft({ ...draft, autoPublish: { ...draft.autoPublish, includeBots: v } })
@@ -490,12 +491,13 @@ function RuleDialog({
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Attachments or embeds only</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="automations-attachments-only-help" className="text-xs text-muted-foreground">
                 Skip text-only posts — for media and showcase channels.
               </p>
             </div>
             <Switch
               aria-label="Attachments or embeds only"
+              aria-describedby="automations-attachments-only-help"
               checked={rule.requireAttachment}
               onCheckedChange={(v) => setRule({ ...rule, requireAttachment: v })}
             />

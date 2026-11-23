@@ -87,11 +87,12 @@ export default function AiPage() {
                 onCheckedChange={handleOptInToggle}
                 disabled={togglePlugin.isPending}
                 aria-label="Toggle AI assistant"
+                aria-describedby="ai-opt-in-help"
               />
             </span>
           ) : null}
         </AlertTitle>
-        <AlertDescription className="space-y-1">
+        <AlertDescription id="ai-opt-in-help" className="space-y-1">
           <p>
             This server's messages are never sent anywhere until an admin turns this on <strong>and</strong>{' '}
             configures a provider + API key below. Every AI response includes the disclosure "AI can be
