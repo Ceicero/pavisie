@@ -219,12 +219,13 @@ export default function SettingsPage() {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Fast actions</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="fast-actions-help" className="text-xs text-muted-foreground">
                 Skip the confirm/cancel step for kick, ban, softban, and small purges.
               </p>
             </div>
             <Switch
               aria-label="Fast actions"
+              aria-describedby="fast-actions-help"
               checked={Boolean(draft.fastActions)}
               onCheckedChange={(v) => set('fastActions', v)}
               disabled={update.isPending}
@@ -243,12 +244,13 @@ export default function SettingsPage() {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">DM users on moderation action</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="dm-on-moderation-help" className="text-xs text-muted-foreground">
                 Send a direct message explaining the action and how to appeal.
               </p>
             </div>
             <Switch
               aria-label="DM users on moderation action"
+              aria-describedby="dm-on-moderation-help"
               checked={Boolean(draft.dmOnModeration)}
               onCheckedChange={(v) => set('dmOnModeration', v)}
               disabled={update.isPending}
@@ -265,13 +267,14 @@ export default function SettingsPage() {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Enable analytics data collection</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="analytics-data-collection-help" className="text-xs text-muted-foreground">
                 Stores aggregated daily counts (member growth, moderation volume, message activity) so the
                 Analytics page has data. No message content is ever included. Off by default.
               </p>
             </div>
             <Switch
               aria-label="Enable analytics data collection"
+              aria-describedby="analytics-data-collection-help"
               checked={Boolean(draft.dataCollectionEnabled)}
               onCheckedChange={(v) => set('dataCollectionEnabled', v)}
               disabled={update.isPending}
@@ -280,13 +283,14 @@ export default function SettingsPage() {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Log message content on edit/delete</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="log-message-content-help" className="text-xs text-muted-foreground">
                 When off (default), edit/delete logs record metadata only — no message text is stored. Only
                 enable this if your moderation needs require it and members have been informed.
               </p>
             </div>
             <Switch
               aria-label="Log message content on edit/delete"
+              aria-describedby="log-message-content-help"
               checked={Boolean(draft.logMessageContent)}
               onCheckedChange={(v) => set('logMessageContent', v)}
               disabled={update.isPending}

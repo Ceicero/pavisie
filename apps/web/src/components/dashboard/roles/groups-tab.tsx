@@ -201,12 +201,13 @@ export function GroupsTab({
             <div className="flex items-center justify-between rounded-md border border-border p-3">
               <div>
                 <p className="text-sm font-medium">Exclusive</p>
-                <p className="text-xs text-muted-foreground">
+                <p id="role-group-exclusive-help" className="text-xs text-muted-foreground">
                   Selecting one role from this group removes the others.
                 </p>
               </div>
               <Switch
                 aria-label="Exclusive"
+                aria-describedby="role-group-exclusive-help"
                 checked={form.exclusive}
                 onCheckedChange={(v) => setForm((p) => ({ ...p, exclusive: v }))}
               />

@@ -189,12 +189,13 @@ export function TicketsSettingsTab({ guildId }: TicketsSettingsTabProps) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3 sm:col-span-2">
             <div>
               <p className="text-sm font-medium">DM the transcript to the ticket opener</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="tickets-dm-transcript-help" className="text-xs text-muted-foreground">
                 Sent on close, in addition to the transcript channel.
               </p>
             </div>
             <Switch
               aria-label="DM the transcript to the ticket opener"
+              aria-describedby="tickets-dm-transcript-help"
               checked={draft.dmTranscript}
               onCheckedChange={(v) => set('dmTranscript', v)}
               disabled={update.isPending}
@@ -238,12 +239,13 @@ export function TicketsSettingsTab({ guildId }: TicketsSettingsTabProps) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Never auto-delete closed channels</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="tickets-keep-closed-channels-help" className="text-xs text-muted-foreground">
                 Closed channels stay (with the opener's access removed) instead of being deleted.
               </p>
             </div>
             <Switch
               aria-label="Never auto-delete closed channels"
+              aria-describedby="tickets-keep-closed-channels-help"
               checked={draft.keepClosedChannels}
               onCheckedChange={(v) => set('keepClosedChannels', v)}
               disabled={update.isPending}

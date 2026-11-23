@@ -52,19 +52,20 @@ export function MentionChatForm({ guildId, settings }: MentionChatFormProps) {
 
   return (
     <div className="space-y-4">
-      <FormField
-        label="Enable mention chat"
-        htmlFor="chat-enabled"
-        hint="The bot only replies when @mentioned in the channels below — never passively, and never just because a message replies to it."
-      >
+      <FormField label="Enable mention chat" htmlFor="chat-enabled">
         <div className="flex h-9 items-center">
           <Switch
             id="chat-enabled"
+            aria-describedby="chat-enabled-help"
             checked={draft.enabled}
             onCheckedChange={(v) => set('enabled', v)}
             disabled={update.isPending}
           />
         </div>
+        <p id="chat-enabled-help" className="text-xs text-muted-foreground">
+          The bot only replies when @mentioned in the channels below — never passively, and never just because
+          a message replies to it.
+        </p>
       </FormField>
 
       <FormField
