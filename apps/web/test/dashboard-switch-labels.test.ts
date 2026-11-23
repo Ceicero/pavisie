@@ -177,6 +177,16 @@ const EXPECTED_DESCRIBED: { rel: string; needle: string; id?: string }[] = [
     id: 'tag-staff-only-help',
   },
   {
+    rel: 'components/dashboard/engagement/leveling-tab.tsx',
+    needle: 'aria-label="Leveling enabled"',
+    id: 'leveling-enabled-help',
+  },
+  {
+    rel: 'components/dashboard/engagement/leveling-tab.tsx',
+    needle: 'aria-label="Public leaderboard"',
+    id: 'public-leaderboard-help',
+  },
+  {
     rel: 'components/dashboard/engagement/reputation-tab.tsx',
     needle: 'aria-label="Reputation enabled"',
     id: 'reputation-enabled-help',
@@ -290,7 +300,7 @@ function tagContaining(tags: string[], needle: string): string | undefined {
 
 describe('Dashboard switches — aria-describedby', () => {
   it('lists the expected switches', () => {
-    expect(EXPECTED_DESCRIBED).toHaveLength(31);
+    expect(EXPECTED_DESCRIBED).toHaveLength(33);
   });
 
   it('each expected switch has aria-describedby whose id exists in the same file', () => {
