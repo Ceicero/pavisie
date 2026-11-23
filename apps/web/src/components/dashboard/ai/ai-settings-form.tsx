@@ -195,19 +195,19 @@ export function AiSettingsForm({ guildId, settings }: AiSettingsFormProps) {
           </div>
         </FormField>
 
-        <FormField
-          label="Environment-key fallback"
-          htmlFor="ai-allow-env"
-          hint="Use OPENAI_API_KEY / ANTHROPIC_API_KEY from the server environment when no key is set above."
-        >
+        <FormField label="Environment-key fallback" htmlFor="ai-allow-env">
           <div className="flex h-9 items-center">
             <Switch
               id="ai-allow-env"
+              aria-describedby="ai-allow-env-help"
               checked={draft.allowEnvKeys}
               onCheckedChange={(v) => set('allowEnvKeys', v)}
               disabled={update.isPending}
             />
           </div>
+          <p id="ai-allow-env-help" className="text-xs text-muted-foreground">
+            Use OPENAI_API_KEY / ANTHROPIC_API_KEY from the server environment when no key is set above.
+          </p>
         </FormField>
 
         <FormField label="Per-user cooldown (seconds)" htmlFor="ai-cooldown">

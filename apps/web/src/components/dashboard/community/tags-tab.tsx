@@ -256,12 +256,13 @@ function TagFormDialog({ guildId, open, onOpenChange, tag }: TagFormDialogProps)
           <div className="flex items-center justify-between rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Staff only</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="tag-staff-only-help" className="text-xs text-muted-foreground">
                 Only helpers and above can run /tag show for it.
               </p>
             </div>
             <Switch
               aria-label="Staff only"
+              aria-describedby="tag-staff-only-help"
               checked={draft.staffOnly}
               onCheckedChange={(v) => {
                 // Staff-only tags can't be auto-responders (enforced server-side too) — clear any trigger

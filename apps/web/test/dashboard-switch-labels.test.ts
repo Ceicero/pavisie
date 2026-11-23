@@ -104,3 +104,216 @@ describe('Dashboard switches — accessible names', () => {
     }
   });
 });
+
+/**
+ * Switches that have adjacent help text and must point at it with aria-describedby.
+ * `id` is a static id="..." in the same file. Entries without `id` use a dynamic
+ * aria-describedby={...} whose target is an id={...} in the same file.
+ */
+const EXPECTED_DESCRIBED: { rel: string; needle: string; id?: string }[] = [
+  {
+    rel: 'app/dashboard/[guildId]/settings/page.tsx',
+    needle: 'aria-label="Fast actions"',
+    id: 'fast-actions-help',
+  },
+  {
+    rel: 'app/dashboard/[guildId]/settings/page.tsx',
+    needle: 'aria-label="DM users on moderation action"',
+    id: 'dm-on-moderation-help',
+  },
+  {
+    rel: 'app/dashboard/[guildId]/settings/page.tsx',
+    needle: 'aria-label="Enable analytics data collection"',
+    id: 'analytics-data-collection-help',
+  },
+  {
+    rel: 'app/dashboard/[guildId]/settings/page.tsx',
+    needle: 'aria-label="Log message content on edit/delete"',
+    id: 'log-message-content-help',
+  },
+  {
+    rel: 'app/dashboard/[guildId]/ai/page.tsx',
+    needle: 'aria-label="Toggle AI assistant"',
+    id: 'ai-opt-in-help',
+  },
+  {
+    rel: 'components/dashboard/ai/ai-settings-form.tsx',
+    needle: 'id="ai-allow-env"',
+    id: 'ai-allow-env-help',
+  },
+  {
+    rel: 'components/dashboard/ai/mention-chat-form.tsx',
+    needle: 'id="chat-enabled"',
+    id: 'chat-enabled-help',
+  },
+  {
+    rel: 'components/dashboard/community/birthdays-tab.tsx',
+    needle: 'aria-label="Enabled: birthdays"',
+    id: 'birthdays-enabled-help',
+  },
+  {
+    rel: 'components/dashboard/community/birthdays-tab.tsx',
+    needle: 'aria-label="Public list"',
+    id: 'birthdays-public-list-help',
+  },
+  {
+    rel: 'components/dashboard/community/birthdays-tab.tsx',
+    needle: 'aria-label="Members can set their own birthday"',
+    id: 'birthdays-members-can-set-help',
+  },
+  {
+    rel: 'components/dashboard/community/channel-automations-card.tsx',
+    needle: 'aria-label="Also publish other bots and webhooks"',
+    id: 'automations-publish-bots-help',
+  },
+  {
+    rel: 'components/dashboard/community/channel-automations-card.tsx',
+    needle: 'aria-label="Attachments or embeds only"',
+    id: 'automations-attachments-only-help',
+  },
+  {
+    rel: 'components/dashboard/community/tags-tab.tsx',
+    needle: 'aria-label="Staff only"',
+    id: 'tag-staff-only-help',
+  },
+  {
+    rel: 'components/dashboard/engagement/reputation-tab.tsx',
+    needle: 'aria-label="Reputation enabled"',
+    id: 'reputation-enabled-help',
+  },
+  {
+    rel: 'components/dashboard/engagement/starboard-tab.tsx',
+    needle: 'aria-label="Ignore self-stars"',
+    id: 'starboard-ignore-self-stars-help',
+  },
+  {
+    rel: 'components/dashboard/engagement/starboard-tab.tsx',
+    needle: 'aria-label="Allow NSFW channels"',
+    id: 'starboard-allow-nsfw-help',
+  },
+  {
+    rel: 'components/dashboard/logging/channel-map-table.tsx',
+    needle: 'aria-label="Store events for search & export"',
+    id: 'logging-store-events-help',
+  },
+  {
+    rel: 'components/dashboard/logging/channel-map-table.tsx',
+    needle: 'aria-label="Capture message content on edit/delete"',
+    id: 'logging-capture-content-help',
+  },
+  {
+    rel: 'components/dashboard/moderation/settings-tab.tsx',
+    needle: 'aria-label="DM users on moderation action"',
+    id: 'moderation-dm-users-help',
+  },
+  {
+    rel: 'components/dashboard/moderation/settings-tab.tsx',
+    needle: 'aria-label="Allow temporary bans"',
+    id: 'moderation-temporary-bans-help',
+  },
+  {
+    rel: 'components/dashboard/roles/autoroles-tab.tsx',
+    needle: 'aria-label="Enabled: autoroles"',
+    id: 'autoroles-enabled-help',
+  },
+  {
+    rel: 'components/dashboard/roles/groups-tab.tsx',
+    needle: 'aria-label="Exclusive"',
+    id: 'role-group-exclusive-help',
+  },
+  {
+    rel: 'components/dashboard/roles/persistence-tab.tsx',
+    needle: 'aria-label="Enabled: role persistence"',
+    id: 'role-persistence-enabled-help',
+  },
+  {
+    rel: 'components/dashboard/tickets/panel-form-dialog.tsx',
+    needle: 'aria-label="Ask questions before opening"',
+    id: 'ticket-panel-ask-questions-help',
+  },
+  {
+    rel: 'components/dashboard/tickets/settings-tab.tsx',
+    needle: 'aria-label="DM the transcript to the ticket opener"',
+    id: 'tickets-dm-transcript-help',
+  },
+  {
+    rel: 'components/dashboard/tickets/settings-tab.tsx',
+    needle: 'aria-label="Never auto-delete closed channels"',
+    id: 'tickets-keep-closed-channels-help',
+  },
+  {
+    rel: 'components/dashboard/integrations/twitch-chat-bridge-panel.tsx',
+    needle: 'aria-label="Relay Discord messages into Twitch chat"',
+    id: 'twitch-chat-bridge-help',
+  },
+  {
+    rel: 'components/dashboard/integrations/twitch-chat-bridge-panel.tsx',
+    needle: 'aria-label="Relay Twitch chat messages into Discord"',
+    id: 'twitch-chat-bridge-help',
+  },
+  {
+    rel: 'components/dashboard/plugin-card.tsx',
+    needle: 'aria-label={`Toggle ${plugin.name}`}',
+  },
+  { rel: 'components/dashboard/json-schema-form.tsx', needle: 'aria-label={label}' },
+  {
+    rel: 'components/dashboard/integrations/require-timestamp-setting.tsx',
+    needle: 'aria-describedby={helpId}',
+  },
+];
+
+const JS_KEYWORDS = new Set(['undefined', 'null', 'true', 'false']);
+
+function describedByRef(tag: string): { staticId?: string; expr?: string } {
+  const staticId = /\baria-describedby="([^"]+)"/.exec(tag)?.[1];
+  if (staticId) return { staticId };
+  const expr = /\baria-describedby=\{([^}]+)\}/.exec(tag)?.[1]?.trim();
+  if (expr) return { expr };
+  return {};
+}
+
+/** The aria-describedby value points at an element id declared in the same file. */
+function idResolves(source: string, tag: string): boolean {
+  const ref = describedByRef(tag);
+  if (ref.staticId) return source.includes(`id="${ref.staticId}"`);
+  if (!ref.expr) return false;
+  if (source.includes(`id={${ref.expr}}`)) return true;
+  const idents = (ref.expr.match(/\b[A-Za-z_][A-Za-z0-9_]*\b/g) ?? []).filter((n) => !JS_KEYWORDS.has(n));
+  if (idents.some((id) => source.includes(`id={${id}}`))) return true;
+  // RequireTimestampHelp renders <p id={id}> from a helpId prop in the same file.
+  return /<p\b[^>]*\bid=\{id\}/.test(source) && idents.includes('helpId');
+}
+
+function tagContaining(tags: string[], needle: string): string | undefined {
+  return tags.find((t) => t.includes(needle));
+}
+
+describe('Dashboard switches — aria-describedby', () => {
+  it('lists the expected switches', () => {
+    expect(EXPECTED_DESCRIBED).toHaveLength(31);
+  });
+
+  it('each expected switch has aria-describedby whose id exists in the same file', () => {
+    const missing: string[] = [];
+    for (const { rel, needle, id } of EXPECTED_DESCRIBED) {
+      const file = files.find((f) => f.rel === rel);
+      if (!file) {
+        missing.push(`${rel} (file missing)`);
+        continue;
+      }
+      const tag = tagContaining(switchTags(file.source), needle);
+      if (!tag) {
+        missing.push(`${rel} (no switch containing ${needle})`);
+        continue;
+      }
+      if (id && !tag.includes(`aria-describedby="${id}"`)) {
+        missing.push(`${rel} :: ${needle} (expected aria-describedby="${id}")`);
+        continue;
+      }
+      if (!idResolves(file.source, tag)) {
+        missing.push(`${rel} :: ${needle} (aria-describedby does not resolve in this file)`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+});

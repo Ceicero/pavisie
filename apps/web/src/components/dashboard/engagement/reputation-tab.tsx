@@ -85,12 +85,13 @@ export function ReputationTab({ guildId }: { guildId: string }) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Reputation enabled</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="reputation-enabled-help" className="text-xs text-muted-foreground">
                 Lets members thank each other with {'`/rep give`'}.
               </p>
             </div>
             <Switch
               aria-label="Reputation enabled"
+              aria-describedby="reputation-enabled-help"
               checked={draft.enabled}
               onCheckedChange={(v) => set('enabled', v)}
               disabled={update.isPending}

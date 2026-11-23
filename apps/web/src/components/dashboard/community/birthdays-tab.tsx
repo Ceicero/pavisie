@@ -19,7 +19,11 @@ import {
   useToast,
 } from '@pavisie/ui';
 import type { BirthdayConfigDto } from '@pavisie/types/community';
-import { useBirthdaySummary, useRemoveBirthday, useUpdateBirthdayConfig } from '@/lib/dashboard/community-queries';
+import {
+  useBirthdaySummary,
+  useRemoveBirthday,
+  useUpdateBirthdayConfig,
+} from '@/lib/dashboard/community-queries';
 import { useGuildConfig } from '@/lib/dashboard/queries';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { ConfirmDialog } from '../confirm-dialog';
@@ -121,12 +125,13 @@ export function BirthdaysTab({ guildId }: { guildId: string }) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Enabled</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="birthdays-enabled-help" className="text-xs text-muted-foreground">
                 Announce birthdays in the channel below and let members set theirs.
               </p>
             </div>
             <Switch
               aria-label="Enabled: birthdays"
+              aria-describedby="birthdays-enabled-help"
               checked={draft.enabled}
               onCheckedChange={(v) => set('enabled', v)}
               disabled={update.isPending}
@@ -181,13 +186,14 @@ export function BirthdaysTab({ guildId }: { guildId: string }) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Public list</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="birthdays-public-list-help" className="text-xs text-muted-foreground">
                 Let members run <code>/birthday upcoming</code> and view each other&apos;s birthday. When off,
                 only staff can.
               </p>
             </div>
             <Switch
               aria-label="Public list"
+              aria-describedby="birthdays-public-list-help"
               checked={draft.publicList}
               onCheckedChange={(v) => set('publicList', v)}
               disabled={update.isPending}
@@ -197,13 +203,14 @@ export function BirthdaysTab({ guildId }: { guildId: string }) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Members can set their own birthday</p>
-              <p className="text-xs text-muted-foreground">
-                Turn this off to let only admins add or change birthdays (with <code>/birthday set @member</code>).
-                Members can still be set up on their behalf.
+              <p id="birthdays-members-can-set-help" className="text-xs text-muted-foreground">
+                Turn this off to let only admins add or change birthdays (with{' '}
+                <code>/birthday set @member</code>). Members can still be set up on their behalf.
               </p>
             </div>
             <Switch
               aria-label="Members can set their own birthday"
+              aria-describedby="birthdays-members-can-set-help"
               checked={draft.allowSelfService}
               onCheckedChange={(v) => set('allowSelfService', v)}
               disabled={update.isPending}
