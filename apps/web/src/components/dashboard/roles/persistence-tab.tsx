@@ -75,11 +75,17 @@ export function PersistenceTab({ guildId }: { guildId: string }) {
         <div className="flex items-center justify-between rounded-md border border-border p-3">
           <div>
             <p className="text-sm font-medium">Enabled</p>
-            <p className="text-xs text-muted-foreground">
+            <p id="role-persistence-enabled-help" className="text-xs text-muted-foreground">
               Off by default. Turning this on is logged to the audit log.
             </p>
           </div>
-          <Switch checked={data.enabled} onCheckedChange={handleToggle} disabled={setPersistence.isPending} />
+          <Switch
+            aria-label="Enabled: role persistence"
+            aria-describedby="role-persistence-enabled-help"
+            checked={data.enabled}
+            onCheckedChange={handleToggle}
+            disabled={setPersistence.isPending}
+          />
         </div>
 
         <FormField label="Restore window (days)">

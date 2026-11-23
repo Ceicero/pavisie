@@ -199,11 +199,13 @@ export function PanelFormDialog({ guildId, open, onOpenChange, panel }: PanelFor
             <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
               <div>
                 <p className="text-sm font-medium">Ask questions before opening</p>
-                <p className="text-xs text-muted-foreground">
+                <p id="ticket-panel-ask-questions-help" className="text-xs text-muted-foreground">
                   Shows a modal for the answers below when someone clicks the panel button.
                 </p>
               </div>
               <Switch
+                aria-label="Ask questions before opening"
+                aria-describedby="ticket-panel-ask-questions-help"
                 checked={draft.intakeForm !== null}
                 onCheckedChange={(v) =>
                   set(
