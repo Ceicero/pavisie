@@ -16,16 +16,16 @@
 export const DEFAULT_POOL_SIZE = 10;
 
 /**
- * Largest accepted DATABASE_POOL_SIZE. It matches a stock Postgres `max_connections`, so a typo such as an extra
- * zero fails at startup instead of bringing back connection exhaustion. Set `connection_limit` in DATABASE_URL
- * to go higher on purpose.
+ * Largest accepted DATABASE_POOL_SIZE: a stock Postgres `max_connections`. This catches typos such as an extra
+ * zero at startup; it is not a safe size (two processes at 100 already exceed it), so still size by
+ * processes x pool size x 2 < max_connections. Set `connection_limit` in DATABASE_URL to go higher on purpose.
  */
 export const MAX_POOL_SIZE = 100;
 
 /** A `connection_limit` with a value; an empty one (`connection_limit=`) counts as unset. */
 const CONNECTION_LIMIT_SET = /[?&]connection_limit=[^&#]/;
-/** An empty `connection_limit=`, which gets the computed size filled in. */
-const CONNECTION_LIMIT_EMPTY = /([?&])connection_limit=(?=&|#|$)/;
+/** Every empty `connection_limit=`, each of which gets the computed size filled in. */
+const CONNECTION_LIMIT_EMPTY = /([?&])connection_limit=(?=&|#|$)/g;
 /** Only direct Postgres URLs get a limit; others (e.g. `prisma://` Accelerate) manage their own pool. */
 const POSTGRES_SCHEME = /^postgres(?:ql)?:\/\//i;
 
@@ -48,8 +48,8 @@ export function parsePoolSize(raw: string | undefined): number {
 /**
  * Returns DATABASE_URL with `connection_limit` added when it has none (or has an empty one). Returns `undefined`
  * for an unset or blank URL so Prisma reports the missing variable exactly as before, and returns non-Postgres
- * URLs unchanged. The URL is only appended to, never re-encoded, so credentials with escaped characters pass
- * through unchanged.
+ * URLs unchanged. Surrounding whitespace is trimmed; otherwise the URL is only appended to, never re-encoded,
+ * so credentials with escaped characters pass through unchanged.
  */
 export function withPoolDefaults(
   url: string | undefined,
@@ -57,13 +57,14 @@ export function withPoolDefaults(
 ): string | undefined {
   const size = parsePoolSize(poolSizeRaw);
   if (url === undefined || url.trim() === '') return undefined;
-  if (!POSTGRES_SCHEME.test(url.trim())) return url;
-  if (CONNECTION_LIMIT_SET.test(url)) return url;
-  if (CONNECTION_LIMIT_EMPTY.test(url))
-    return url.replace(CONNECTION_LIMIT_EMPTY, `$1connection_limit=${size}`);
-  const hashAt = url.indexOf('#');
-  const base = hashAt === -1 ? url : url.slice(0, hashAt);
-  const fragment = hashAt === -1 ? '' : url.slice(hashAt);
+  const trimmed = url.trim();
+  if (!POSTGRES_SCHEME.test(trimmed)) return url;
+  if (CONNECTION_LIMIT_SET.test(trimmed)) return trimmed;
+  const filled = trimmed.replace(CONNECTION_LIMIT_EMPTY, `$1connection_limit=${size}`);
+  if (filled !== trimmed) return filled;
+  const hashAt = trimmed.indexOf('#');
+  const base = hashAt === -1 ? trimmed : trimmed.slice(0, hashAt);
+  const fragment = hashAt === -1 ? '' : trimmed.slice(hashAt);
   const separator = base.includes('?') ? (base.endsWith('?') || base.endsWith('&') ? '' : '&') : '?';
   return `${base}${separator}connection_limit=${size}${fragment}`;
 }
