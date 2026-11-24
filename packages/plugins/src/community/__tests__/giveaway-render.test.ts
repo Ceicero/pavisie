@@ -170,6 +170,18 @@ describe('buildGiveawayEmbed', () => {
       'loc:giveaway.embedAccountAgeDays',
     );
   });
+
+  it('titles a running giveaway with the prize and mentions the host', () => {
+    const embed = buildGiveawayEmbed(giveaway({ prize: 'A cape', hostId: 'user-host' }), 4, realT);
+    expect(embed.data.title).toBe('🎉 Giveaway: A cape');
+    expect(embed.data.description).toBe('Click **Enter** below to join. Hosted by <@user-host>.');
+  });
+
+  it('titles and describes an ended giveaway', () => {
+    const embed = buildGiveawayEmbed(giveaway({ ended: true, prize: 'A cape' }), 4, realT);
+    expect(embed.data.title).toBe('🎉 Giveaway ended: A cape');
+    expect(embed.data.description).toBe('This giveaway has ended.');
+  });
 });
 
 describe('cancelGiveaway note', () => {

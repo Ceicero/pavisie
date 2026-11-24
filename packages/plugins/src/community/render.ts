@@ -154,17 +154,21 @@ export function buildGiveawayEmbed(
       value:
         giveaway.winnerIds.length > 0
           ? giveaway.winnerIds.map((id) => `<@${id}>`).join(', ')
-          : '_No eligible entries — no winner drawn._',
+          : t('giveaway.embedNoWinner'),
       inline: false,
     });
   }
 
   return brandEmbed()
-    .setTitle(giveaway.ended ? `🎉 Giveaway ended: ${giveaway.prize}` : `🎉 Giveaway: ${giveaway.prize}`)
+    .setTitle(
+      t(giveaway.ended ? 'giveaway.embedTitleEnded' : 'giveaway.embedTitle', {
+        prize: giveaway.prize,
+      }),
+    )
     .setDescription(
       giveaway.ended
-        ? 'This giveaway has ended.'
-        : `Click **Enter** below to join. Hosted by <@${giveaway.hostId}>.`,
+        ? t('giveaway.embedDescriptionEnded')
+        : t('giveaway.embedDescription', { host: `<@${giveaway.hostId}>` }),
     )
     .addFields(fields);
 }
