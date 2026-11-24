@@ -38,7 +38,11 @@ function fakeJob(caseId: string): Job<{ caseId: string }> {
  * expiry job touch. `hooks` lets a test pause Discord calls to interleave a second actor at an exact point.
  */
 function buildWorld(
-  hooks: { onCreate?: () => Promise<void>; onRemove?: () => void; onFindFirst?: () => Promise<void> } = {},
+  hooks: {
+    onCreate?: () => Promise<void>;
+    onRemove?: () => void | Promise<void>;
+    onFindFirst?: () => Promise<void>;
+  } = {},
 ) {
   const cases: CaseRow[] = [
     {
@@ -121,7 +125,7 @@ function buildWorld(
       remove: async (id: string) => {
         removeCalls.push(id);
         banned.delete(id);
-        hooks.onRemove?.();
+        await hooks.onRemove?.();
       },
     },
   };
@@ -252,6 +256,69 @@ describe('ban lease — temp-ban expiry vs a moderator ban', () => {
     expect(seen).toHaveLength(2);
     expect(seen[1]).not.toBeNull();
     expect(await world.ctx.redis.get(LEASE_KEY)).toBeNull();
+  });
+});
+
+describe('ban lease — expiry re-checks the lease before it unbans', () => {
+  it('does not unban when the lease expired during the check and a moderator ban now holds it', async () => {
+    // The 30s TTL ran out mid-check (a stalled process, a slow DB) and a moderator's ban took the lease.
+    const world = buildWorld({
+      onFindFirst: async () => {
+        await world.ctx.redis.del(LEASE_KEY);
+        await world.ctx.redis.set(LEASE_KEY, 'moderator-ban', 'PX', 15_000);
+      },
+    });
+
+    await expect(expireJob.processor(world.ctx, fakeJob(OLD_CASE_ID))).rejects.toMatchObject({
+      code: 'ban_lease_lost',
+    });
+
+    expect(world.removeCalls).toEqual([]);
+    expect(world.banned.has(TARGET_ID)).toBe(true);
+    expect(world.cases[0]?.expiredAt).toBeNull();
+    // The new holder's lease is neither extended by our renew nor deleted by our release.
+    expect(await world.ctx.redis.get(LEASE_KEY)).toBe('moderator-ban');
+    expect(await world.ctx.redis.pttl(LEASE_KEY)).toBeLessThanOrEqual(15_000);
+  });
+
+  it('does not unban when the lease simply expired, and the retry then lifts the case', async () => {
+    let expireOnce = true;
+    const world = buildWorld({
+      onFindFirst: async () => {
+        if (!expireOnce) return;
+        expireOnce = false;
+        await world.ctx.redis.del(LEASE_KEY);
+      },
+    });
+
+    await expect(
+      liftTempBan(world.ctx, world.service, world.cases[0] as any, 'Temporary ban expired'),
+    ).rejects.toThrow(/lease was lost/);
+    expect(world.removeCalls).toEqual([]);
+    expect(world.cases[0]?.expiredAt).toBeNull();
+
+    await expireJob.processor(world.ctx, fakeJob(OLD_CASE_ID));
+    expect(world.removeCalls).toEqual([TARGET_ID]);
+    expect(world.cases[0]?.expiredAt).toBeInstanceOf(Date);
+    expect(await world.ctx.redis.get(LEASE_KEY)).toBeNull();
+  });
+
+  it('resets the lease TTL before the unban call', async () => {
+    let ttlAtUnban = -1;
+    const world: ReturnType<typeof buildWorld> = buildWorld({
+      onFindFirst: async () => {
+        // Still ours, but nearly out of time.
+        await world.ctx.redis.pexpire(LEASE_KEY, 200);
+      },
+      onRemove: async () => {
+        ttlAtUnban = await world.ctx.redis.pttl(LEASE_KEY);
+      },
+    });
+
+    await expireJob.processor(world.ctx, fakeJob(OLD_CASE_ID));
+
+    expect(world.removeCalls).toEqual([TARGET_ID]);
+    expect(ttlAtUnban).toBeGreaterThan(20_000);
   });
 });
 
