@@ -37,6 +37,11 @@
     "embedDrawnWinners": "Winners",
     "embedAccountAgeDay": "{days} day",
     "embedAccountAgeDays": "{days} days",
+    "embedNoWinner": "_No eligible entries — no winner drawn._",
+    "embedTitle": "🎉 Giveaway: {prize}",
+    "embedTitleEnded": "🎉 Giveaway ended: {prize}",
+    "embedDescription": "Click **Enter** below to join. Hosted by {host}.",
+    "embedDescriptionEnded": "This giveaway has ended.",
     "cancelledNote": "This giveaway was cancelled."
   },
   "suggest": {
