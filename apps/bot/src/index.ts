@@ -206,8 +206,9 @@ async function main(): Promise<void> {
 
   // Discord refuses the gateway handshake (close code 4014) when the process asks for a privileged intent the
   // application has not been granted in the Developer Portal. That surfaces as an opaque "Used disallowed
-  // intents" crash, and since ENABLE_MESSAGE_CONTENT_INTENT defaults to true (the `+` prefix layer needs it —
-  // ARCHITECTURE.md §9.1), the likeliest cause by far is the portal toggle simply never being switched on.
+  // intents" crash, and since ENABLE_MESSAGE_CONTENT_INTENT is set to true in .env.example and render.yaml
+  // (the `+` prefix layer needs it — ARCHITECTURE.md §9.1; the schema default is false), the likeliest
+  // cause by far is the portal toggle simply never being switched on.
   // Rethrow with the actual fix instead. Retrying without the intent is not possible here: intents are fixed at
   // Client construction, and every plugin's event listeners are already bound to this client.
   try {
