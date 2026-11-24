@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_POOL_SIZE, parsePoolSize, withPoolDefaults } from '../src/pool';
+import { DEFAULT_POOL_SIZE, MAX_POOL_SIZE, parsePoolSize, withPoolDefaults } from '../src/pool';
 
 const BASE = 'postgresql://pavisie:pa%40ss@db.internal:5432/pavisie';
 
@@ -57,6 +57,31 @@ describe('withPoolDefaults', () => {
     expect(withPoolDefaults(`${BASE}#frag`, '4')).toBe(`${BASE}?connection_limit=4#frag`);
   });
 
+  it('fills in an empty connection_limit instead of treating it as already set', () => {
+    expect(withPoolDefaults(`${BASE}?connection_limit=`, '6')).toBe(`${BASE}?connection_limit=6`);
+    expect(withPoolDefaults(`${BASE}?sslmode=require&connection_limit=&schema=public`, undefined)).toBe(
+      `${BASE}?sslmode=require&connection_limit=${DEFAULT_POOL_SIZE}&schema=public`,
+    );
+    expect(withPoolDefaults(`${BASE}?connection_limit=#frag`, '6')).toBe(`${BASE}?connection_limit=6#frag`);
+  });
+
+  it('accepts the postgres:// scheme alias', () => {
+    expect(withPoolDefaults('postgres://u:p@h:5432/db', '4')).toBe(
+      'postgres://u:p@h:5432/db?connection_limit=4',
+    );
+  });
+
+  it('leaves non-Postgres URLs such as Prisma Accelerate unchanged', () => {
+    const accelerate = 'prisma://accelerate.prisma-data.net/?api_key=abc';
+    expect(withPoolDefaults(accelerate, '4')).toBe(accelerate);
+  });
+
+  it('still validates DATABASE_POOL_SIZE for a non-Postgres URL', () => {
+    expect(() => withPoolDefaults('prisma://accelerate.prisma-data.net/?api_key=abc', '0')).toThrow(
+      /DATABASE_POOL_SIZE/,
+    );
+  });
+
   it('returns undefined for a missing or blank URL so Prisma reports it as before', () => {
     expect(withPoolDefaults(undefined, '5')).toBeUndefined();
     expect(withPoolDefaults('  ', undefined)).toBeUndefined();
@@ -74,7 +99,13 @@ describe('parsePoolSize', () => {
     expect(parsePoolSize(' 20 ')).toBe(20);
   });
 
-  it.each(['0', '-1', '2.5', '1e2', 'ten', '0x10'])('rejects %s', (raw) => {
+  it('accepts the maximum and rejects anything above it', () => {
+    expect(parsePoolSize(String(MAX_POOL_SIZE))).toBe(MAX_POOL_SIZE);
+    expect(() => parsePoolSize(String(MAX_POOL_SIZE + 1))).toThrow(/no greater than 100/);
+    expect(() => parsePoolSize('1000')).toThrow(/no greater than 100/);
+  });
+
+  it.each(['0', '-1', '2.5', '1e2', 'ten', '0x10', '999999'])('rejects %s', (raw) => {
     expect(() => parsePoolSize(raw)).toThrow(/DATABASE_POOL_SIZE must be a positive integer/);
   });
 });
