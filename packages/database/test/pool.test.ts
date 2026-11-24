@@ -65,6 +65,16 @@ describe('withPoolDefaults', () => {
     expect(withPoolDefaults(`${BASE}?connection_limit=#frag`, '6')).toBe(`${BASE}?connection_limit=6#frag`);
   });
 
+  it('fills every empty connection_limit, not just the first', () => {
+    expect(withPoolDefaults(`${BASE}?connection_limit=&connection_limit=`, '6')).toBe(
+      `${BASE}?connection_limit=6&connection_limit=6`,
+    );
+  });
+
+  it('trims surrounding whitespace before appending', () => {
+    expect(withPoolDefaults(` ${BASE} \n`, '4')).toBe(`${BASE}?connection_limit=4`);
+  });
+
   it('accepts the postgres:// scheme alias', () => {
     expect(withPoolDefaults('postgres://u:p@h:5432/db', '4')).toBe(
       'postgres://u:p@h:5432/db?connection_limit=4',
