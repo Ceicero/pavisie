@@ -112,11 +112,13 @@ export function SettingsTab() {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Guild-wide dry-run</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="automod-guild-wide-dry-run-help" className="text-xs text-muted-foreground">
                 ORed with each rule&apos;s own dry-run — either being on means "log only".
               </p>
             </div>
             <Switch
+              aria-label="Guild-wide dry-run"
+              aria-describedby="automod-guild-wide-dry-run-help"
               checked={draft.dryRun}
               onCheckedChange={(v) => set('dryRun', v)}
               disabled={update.isPending}
@@ -163,11 +165,13 @@ export function SettingsTab() {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Exempt staff</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="automod-exempt-staff-help" className="text-xs text-muted-foreground">
                 Members at or above the helper staff level are exempt from every rule.
               </p>
             </div>
             <Switch
+              aria-label="Exempt staff"
+              aria-describedby="automod-exempt-staff-help"
               checked={draft.exemptStaff}
               onCheckedChange={(v) => set('exemptStaff', v)}
               disabled={update.isPending}

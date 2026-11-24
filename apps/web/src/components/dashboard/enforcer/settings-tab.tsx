@@ -149,12 +149,14 @@ export function SettingsTab({ guildId }: SettingsTabProps) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Automatic flagging</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="enforcer-automatic-flagging-help" className="text-xs text-muted-foreground">
                 Matches messages against enabled policies as they're sent. Requires the Message Content
                 intent.
               </p>
             </div>
             <Switch
+              aria-label="Automatic flagging"
+              aria-describedby="enforcer-automatic-flagging-help"
               checked={draft.autoFlagEnabled}
               onCheckedChange={(v) => set('autoFlagEnabled', v)}
               disabled={update.isPending}
@@ -163,11 +165,13 @@ export function SettingsTab({ guildId }: SettingsTabProps) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Exempt staff from auto-flagging</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="enforcer-exempt-staff-help" className="text-xs text-muted-foreground">
                 Members with a configured staff role are never auto-flagged.
               </p>
             </div>
             <Switch
+              aria-label="Exempt staff from auto-flagging"
+              aria-describedby="enforcer-exempt-staff-help"
               checked={draft.exemptStaff}
               onCheckedChange={(v) => set('exemptStaff', v)}
               disabled={update.isPending}
@@ -176,12 +180,14 @@ export function SettingsTab({ guildId }: SettingsTabProps) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Capture context</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="enforcer-capture-context-help" className="text-xs text-muted-foreground">
                 Store a short snapshot of the messages before a flagged one, so a moderator can read the exact
                 chat context.
               </p>
             </div>
             <Switch
+              aria-label="Capture context"
+              aria-describedby="enforcer-capture-context-help"
               checked={draft.captureContext}
               onCheckedChange={(v) => set('captureContext', v)}
               disabled={update.isPending}
@@ -222,11 +228,13 @@ export function SettingsTab({ guildId }: SettingsTabProps) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Optional AI risk scoring (assistive only)</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="enforcer-ai-assist-help" className="text-xs text-muted-foreground">
                 Annotates a flag with a risk score/explanation. Never decides or acts on its own.
               </p>
             </div>
             <Switch
+              aria-label="Optional AI risk scoring (assistive only)"
+              aria-describedby="enforcer-ai-assist-help"
               checked={draft.aiAssist}
               onCheckedChange={(v) => set('aiAssist', v)}
               disabled={update.isPending}
@@ -243,11 +251,13 @@ export function SettingsTab({ guildId }: SettingsTabProps) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">DM the user on action</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="enforcer-dm-on-action-help" className="text-xs text-muted-foreground">
                 Sends a message explaining the action, case/record numbers, and how to appeal.
               </p>
             </div>
             <Switch
+              aria-label="DM the user on action"
+              aria-describedby="enforcer-dm-on-action-help"
               checked={draft.dmOnAction}
               onCheckedChange={(v) => set('dmOnAction', v)}
               disabled={update.isPending}

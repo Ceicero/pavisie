@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import type { AutomodRuleTypeValue } from '@pavisie/types/automod';
 import { FormField, Input, Switch } from '@pavisie/ui';
 import { TagInput } from './tag-input';
@@ -78,13 +79,24 @@ function BoolField({
   onChange: (b: boolean) => void;
   disabled?: boolean;
 }) {
+  const helpId = useId();
   return (
     <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
       <div>
         <p className="text-sm font-medium">{label}</p>
-        {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+        {hint ? (
+          <p id={helpId} className="text-xs text-muted-foreground">
+            {hint}
+          </p>
+        ) : null}
       </div>
-      <Switch checked={value} onCheckedChange={onChange} disabled={disabled} />
+      <Switch
+        checked={value}
+        onCheckedChange={onChange}
+        disabled={disabled}
+        aria-label={label}
+        aria-describedby={hint ? helpId : undefined}
+      />
     </div>
   );
 }
