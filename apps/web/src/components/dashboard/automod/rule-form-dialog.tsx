@@ -258,11 +258,17 @@ export function RuleFormDialog({ guildId, open, onOpenChange, rule }: RuleFormDi
                   checked={draft.enabled}
                   onCheckedChange={(v) => set('enabled', v)}
                   disabled={saving}
+                  aria-label="Enabled"
                 />
               </div>
               <div className="flex items-center justify-between rounded-md border border-border p-3">
                 <p className="text-sm font-medium">Dry-run</p>
-                <Switch checked={draft.dryRun} onCheckedChange={(v) => set('dryRun', v)} disabled={saving} />
+                <Switch
+                  checked={draft.dryRun}
+                  onCheckedChange={(v) => set('dryRun', v)}
+                  disabled={saving}
+                  aria-label="Dry-run"
+                />
               </div>
             </div>
 
