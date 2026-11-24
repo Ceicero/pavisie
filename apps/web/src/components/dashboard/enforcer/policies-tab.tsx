@@ -95,7 +95,12 @@ export function PoliciesTab({ guildId }: PoliciesTabProps) {
       key: 'enabled',
       header: 'On',
       render: (p) => (
-        <Switch checked={p.enabled} onCheckedChange={() => toggleEnabled(p)} disabled={update.isPending} />
+        <Switch
+          checked={p.enabled}
+          onCheckedChange={() => toggleEnabled(p)}
+          disabled={update.isPending}
+          aria-label={`Enabled: ${p.name}`}
+        />
       ),
     },
     { key: 'name', header: 'Name', render: (p) => <span className="font-medium">{p.name}</span> },

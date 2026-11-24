@@ -15,13 +15,7 @@ const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url));
  * for their owners to fix; remove an entry once its file is fixed (the staleness check below
  * fails if an entry no longer has an unnamed switch).
  */
-const KNOWN_UNLABELED = [
-  'components/dashboard/automod/rule-config-fields.tsx',
-  'components/dashboard/automod/rule-form-dialog.tsx',
-  'components/dashboard/automod/settings-tab.tsx',
-  'components/dashboard/enforcer/policies-tab.tsx',
-  'components/dashboard/enforcer/settings-tab.tsx',
-];
+const KNOWN_UNLABELED: string[] = [];
 
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -270,6 +264,45 @@ const EXPECTED_DESCRIBED: { rel: string; needle: string; id?: string }[] = [
     rel: 'components/dashboard/integrations/require-timestamp-setting.tsx',
     needle: 'aria-describedby={helpId}',
   },
+  {
+    rel: 'components/dashboard/automod/rule-config-fields.tsx',
+    needle: 'aria-label={label}',
+  },
+  {
+    rel: 'components/dashboard/automod/settings-tab.tsx',
+    needle: 'aria-label="Guild-wide dry-run"',
+    id: 'automod-guild-wide-dry-run-help',
+  },
+  {
+    rel: 'components/dashboard/automod/settings-tab.tsx',
+    needle: 'aria-label="Exempt staff"',
+    id: 'automod-exempt-staff-help',
+  },
+  {
+    rel: 'components/dashboard/enforcer/settings-tab.tsx',
+    needle: 'aria-label="Automatic flagging"',
+    id: 'enforcer-automatic-flagging-help',
+  },
+  {
+    rel: 'components/dashboard/enforcer/settings-tab.tsx',
+    needle: 'aria-label="Exempt staff from auto-flagging"',
+    id: 'enforcer-exempt-staff-help',
+  },
+  {
+    rel: 'components/dashboard/enforcer/settings-tab.tsx',
+    needle: 'aria-label="Capture context"',
+    id: 'enforcer-capture-context-help',
+  },
+  {
+    rel: 'components/dashboard/enforcer/settings-tab.tsx',
+    needle: 'aria-label="Optional AI risk scoring (assistive only)"',
+    id: 'enforcer-ai-assist-help',
+  },
+  {
+    rel: 'components/dashboard/enforcer/settings-tab.tsx',
+    needle: 'aria-label="DM the user on action"',
+    id: 'enforcer-dm-on-action-help',
+  },
 ];
 
 const JS_KEYWORDS = new Set(['undefined', 'null', 'true', 'false']);
@@ -300,7 +333,7 @@ function tagContaining(tags: string[], needle: string): string | undefined {
 
 describe('Dashboard switches — aria-describedby', () => {
   it('lists the expected switches', () => {
-    expect(EXPECTED_DESCRIBED).toHaveLength(33);
+    expect(EXPECTED_DESCRIBED).toHaveLength(41);
   });
 
   it('each expected switch has aria-describedby whose id exists in the same file', () => {
