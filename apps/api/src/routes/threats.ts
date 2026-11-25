@@ -47,7 +47,7 @@ export function isModerationAuditAction(action: string): boolean {
 
 /**
  * `/guilds/:guildId/threats` — Threat overview: the moderation audit trail
- * (live, read-only) and live raid/threat incidents (stub until raid-mode API).
+ * (live, read-only) and live raid/threat incidents (from raid mode; see lib/threat-incidents.ts).
  */
 export default async function threatsRoutes(app: ZodFastifyInstance): Promise<void> {
   app.get(
@@ -86,7 +86,7 @@ export default async function threatsRoutes(app: ZodFastifyInstance): Promise<vo
     '/:guildId/threats/incidents',
     { schema: { params: guildIdParamSchema }, preHandler: requireGuildAccess() },
     async (request): Promise<ThreatIncidentDto[]> => {
-      return listThreatIncidents(request.guildId!);
+      return listThreatIncidents(request.guildId!, app.prisma);
     },
   );
 }

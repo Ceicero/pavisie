@@ -3,6 +3,7 @@ export type PluginId =
   | 'admin'
   | 'moderation'
   | 'automod'
+  | 'raidmode'
   | 'enforcer'
   | 'logging'
   | 'tickets'
@@ -21,6 +22,7 @@ export const PLUGIN_IDS: readonly PluginId[] = [
   'admin',
   'moderation',
   'automod',
+  'raidmode',
   'enforcer',
   'logging',
   'tickets',
