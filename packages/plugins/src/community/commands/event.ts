@@ -165,7 +165,7 @@ async function handleCreate(c: CommandContext): Promise<void> {
     createdEventId = event.id;
 
     const message = await channel.send({
-      embeds: [buildEventEmbed(event, { going: 0, maybe: 0, declined: 0 })],
+      embeds: [buildEventEmbed(event, { going: 0, maybe: 0, declined: 0 }, t)],
       components: buildEventComponents(event.id, false),
     });
     messageId = message.id;
@@ -242,7 +242,7 @@ async function handleRsvps(c: CommandContext): Promise<void> {
   }
   const rsvps = await ctx.prisma.eventRsvp.findMany({ where: { eventId: event.id } });
   const counts = summarizeRsvps(rsvps);
-  await interaction.reply({ embeds: [buildEventEmbed(event, counts)], ephemeral: true });
+  await interaction.reply({ embeds: [buildEventEmbed(event, counts, t)], ephemeral: true });
 }
 
 export const command: PluginCommand = {

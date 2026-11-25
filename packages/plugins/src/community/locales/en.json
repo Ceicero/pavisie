@@ -9,7 +9,10 @@
     "notFound": "That poll could not be found.",
     "notOwner": "Only the poll's creator or a moderator can do that.",
     "alreadyClosed": "That poll is already closed.",
-    "ended": "Poll ended."
+    "ended": "Poll ended.",
+    "statusClosed": "Closed",
+    "statusEnds": "Ends {time}",
+    "statusOpen": "Open"
   },
   "giveaway": {
     "emptyPrize": "The prize can't be empty.",
@@ -100,7 +103,8 @@
     "listTitle": "Upcoming events",
     "listEmpty": "No upcoming events. Create one with `/event create`.",
     "notFound": "That event could not be found.",
-    "cancelled": "Event cancelled."
+    "cancelled": "Event cancelled.",
+    "embedEnds": "Ends"
   },
   "tag": {
     "disabled": "Tags are turned off on this server.",

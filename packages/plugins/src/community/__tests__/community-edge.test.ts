@@ -14,7 +14,27 @@ import {
 } from '../actions';
 import { catchUpCommunitySchedules } from '../jobs/community-catchup';
 import { reminderSweepJob } from '../jobs/reminder-sweep';
+import en from '../locales/en.json';
 import { buildPollEmbed } from '../render';
+
+/** Same bundle walk giveaway-render.test.ts uses, so the embed is rendered with the English locale. */
+function realT(key: string, vars?: Record<string, string | number>): string {
+  const parts = key.split('.');
+  let node: unknown = en;
+  for (const part of parts) {
+    if (node && typeof node === 'object' && part in (node as Record<string, unknown>)) {
+      node = (node as Record<string, unknown>)[part];
+    } else {
+      return key;
+    }
+  }
+  if (typeof node !== 'string') return key;
+  let out = node;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) out = out.replaceAll(`{${name}}`, String(value));
+  }
+  return out;
+}
 
 function discordError(code: number): Error {
   return Object.assign(new Error(`Discord ${code}`), { code });
@@ -468,10 +488,14 @@ describe('poll closing', () => {
   } as Poll;
 
   it('names a tie on the closed results embed', () => {
-    const embed = buildPollEmbed({ ...poll, closed: true }, [
-      { optionId: 'a', label: 'Cats', position: 0, votes: 2 },
-      { optionId: 'b', label: 'Dogs', position: 1, votes: 2 },
-    ]);
+    const embed = buildPollEmbed(
+      { ...poll, closed: true },
+      [
+        { optionId: 'a', label: 'Cats', position: 0, votes: 2 },
+        { optionId: 'b', label: 'Dogs', position: 1, votes: 2 },
+      ],
+      realT,
+    );
     const result = embed.data.fields?.find((field) => field.name === 'Result');
     expect(result?.value).toContain('Tie');
     expect(result?.value).toContain('Cats');
