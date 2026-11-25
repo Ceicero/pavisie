@@ -16,8 +16,10 @@ import { formatDateTime } from '@/lib/dashboard/format';
 import { useThreatIncidents } from '@/lib/dashboard/threats-queries';
 import { ErrorState } from '../error-state';
 
-/** Honest empty-state copy: this panel is not a working detector yet. */
-export const NO_ACTIVE_THREATS_MESSAGE = 'No active threats. Raid detection is coming soon.';
+/** Empty-state copy when Raid mode has no active or recent incidents to show. */
+export const NO_ACTIVE_THREATS_MESSAGE = 'No active or recent threats';
+export const NO_ACTIVE_THREATS_DESCRIPTION =
+  'Active raids, active lockdowns, and incidents from the last 24 hours will show up here when Raid mode is enabled in Plugins.';
 
 export const THREAT_KIND_LABEL: Record<ThreatIncidentKind, string> = {
   raid: 'Raid',
@@ -95,14 +97,19 @@ export function LiveIncidentsPanel({ guildId }: { guildId: string }) {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2" role="status" aria-label="Loading threats">
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
         </div>
       ) : error ? (
         <ErrorState error={error} onRetry={() => refetch()} title="Could not load threats" />
       ) : !data || data.length === 0 ? (
-        <EmptyState icon={<ShieldAlert />} title={NO_ACTIVE_THREATS_MESSAGE} />
+        <EmptyState
+          role="status"
+          icon={<ShieldAlert aria-hidden="true" />}
+          title={NO_ACTIVE_THREATS_MESSAGE}
+          description={NO_ACTIVE_THREATS_DESCRIPTION}
+        />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {data.map((incident) => (

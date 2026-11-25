@@ -1,10 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 import type { ThreatIncidentDto } from '@pavisie/types';
 import { NAV, isNavItemDisabled } from '../src/components/dashboard/nav';
 import { canOpenCaseDrawer, threatsQueryKeys } from '../src/lib/dashboard/threats-queries';
 import {
+  LiveIncidentsPanel,
+  NO_ACTIVE_THREATS_DESCRIPTION,
   NO_ACTIVE_THREATS_MESSAGE,
   THREAT_KIND_LABEL,
   threatIncidentDetails,
@@ -67,7 +72,15 @@ describe('Threat overview panels (source conventions)', () => {
     expect(panel).toContain('useThreatIncidents');
     expect(panel).toContain('ErrorState');
     expect(panel).toContain('NO_ACTIVE_THREATS_MESSAGE');
-    expect(NO_ACTIVE_THREATS_MESSAGE).toBe('No active threats. Raid detection is coming soon.');
+    expect(panel).toContain('NO_ACTIVE_THREATS_DESCRIPTION');
+    expect(NO_ACTIVE_THREATS_MESSAGE).toBe('No active or recent threats');
+    expect(NO_ACTIVE_THREATS_DESCRIPTION).toBe(
+      'Active raids, active lockdowns, and incidents from the last 24 hours will show up here when Raid mode is enabled in Plugins.',
+    );
+    expect(panel).not.toContain('coming soon');
+    expect(panel).toContain('role="status"');
+    expect(panel).toContain('aria-label="Loading threats"');
+    expect(panel).toContain('aria-hidden="true"');
     expect(panel).toContain('>Threats<');
     expect(panel).not.toContain('Live threats');
     expect(panel).not.toContain('No live raid or threat incidents');
@@ -146,5 +159,113 @@ describe('Threat overview panels (source conventions)', () => {
     expect(src.lastIndexOf('LiveIncidentsPanel')).toBeLessThan(src.lastIndexOf('AuditTrailPanel'));
     expect(liveAt).toBeGreaterThan(-1);
     expect(auditAt).toBeGreaterThan(-1);
+  });
+});
+
+const GUILD = 'g1';
+
+const raidFixture: ThreatIncidentDto = {
+  id: 'raid-active-g1',
+  guildId: GUILD,
+  kind: 'raid',
+  status: 'active',
+  ruleName: 'Join burst',
+  dryRun: false,
+  startedAt: '2026-11-13T20:00:00.000Z',
+  lastActivityAt: '2026-11-13T20:04:12.000Z',
+  joinsFlagged: 47,
+};
+
+function setIncidentsState(
+  client: QueryClient,
+  state: {
+    status: 'pending' | 'error';
+    fetchStatus: 'fetching' | 'idle';
+    data?: undefined;
+    error?: Error;
+    errorUpdateCount?: number;
+    errorUpdatedAt?: number;
+    fetchFailureCount?: number;
+    fetchFailureReason?: Error;
+  },
+): void {
+  client.getQueryCache().build(client, { queryKey: threatsQueryKeys.incidents(GUILD) }).setState(state);
+}
+
+function renderPanel(setup?: (client: QueryClient) => void): string {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        retryOnMount: false,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
+        staleTime: Infinity,
+      },
+    },
+  });
+  setup?.(client);
+  return renderToStaticMarkup(
+    createElement(QueryClientProvider, { client }, createElement(LiveIncidentsPanel, { guildId: GUILD })),
+  );
+}
+
+describe('LiveIncidentsPanel states', () => {
+  it('renders the empty state with role="status" and the raid-mode copy', () => {
+    const html = renderPanel((client) => {
+      client.setQueryData(threatsQueryKeys.incidents(GUILD), []);
+    });
+    expect(html).toContain('>Threats<');
+    expect(html).toContain('role="status"');
+    expect(html).toContain(NO_ACTIVE_THREATS_MESSAGE);
+    expect(html).toContain(NO_ACTIVE_THREATS_DESCRIPTION);
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).not.toContain('coming soon');
+    expect(html).not.toContain('aria-label="Loading threats"');
+    expect(html).not.toContain('Could not load threats');
+  });
+
+  it('renders loading skeletons with role="status" and does not show the empty state', () => {
+    const html = renderPanel((client) => {
+      setIncidentsState(client, { status: 'pending', fetchStatus: 'fetching', data: undefined });
+    });
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-label="Loading threats"');
+    expect(html).not.toContain(NO_ACTIVE_THREATS_MESSAGE);
+    expect(html).not.toContain(NO_ACTIVE_THREATS_DESCRIPTION);
+    expect(html).not.toContain('Could not load threats');
+  });
+
+  it('renders the error state and does not show the empty state or loading skeletons', () => {
+    const html = renderPanel((client) => {
+      setIncidentsState(client, {
+        status: 'error',
+        fetchStatus: 'idle',
+        data: undefined,
+        error: new Error('network down'),
+        errorUpdateCount: 1,
+        errorUpdatedAt: Date.now(),
+        fetchFailureCount: 1,
+        fetchFailureReason: new Error('network down'),
+      });
+    });
+    expect(html).toContain('Could not load threats');
+    expect(html).toContain('network down');
+    expect(html).not.toContain(NO_ACTIVE_THREATS_MESSAGE);
+    expect(html).not.toContain(NO_ACTIVE_THREATS_DESCRIPTION);
+    expect(html).not.toContain('aria-label="Loading threats"');
+  });
+
+  it('renders incident cards when fixtures are in the query cache and hides the empty state', () => {
+    const html = renderPanel((client) => {
+      client.setQueryData(threatsQueryKeys.incidents(GUILD), [raidFixture]);
+    });
+    expect(html).toContain('Join burst');
+    expect(html).toContain('Joins flagged');
+    expect(html).toContain('47');
+    expect(html).not.toContain(NO_ACTIVE_THREATS_MESSAGE);
+    expect(html).not.toContain(NO_ACTIVE_THREATS_DESCRIPTION);
+    expect(html).not.toContain('Could not load threats');
+    expect(html).not.toContain('aria-label="Loading threats"');
   });
 });
