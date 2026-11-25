@@ -238,6 +238,10 @@ services:
       - key: COMMAND_PREFIX
         value: '+'
       - key: ENABLE_MESSAGE_CONTENT_INTENT
+        # The Message Content privileged intent toggle must ALSO be enabled for the bot in the
+        # Discord Developer Portal, or the gateway refuses to connect. Discord requires bot
+        # verification, with approval for this intent, once the bot reaches roughly 75 servers.
+        # Prefix commands, automod content rules and similar features depend on it.
         value: 'true'
       - key: ENABLE_GUILD_MEMBERS_INTENT
         value: 'true'

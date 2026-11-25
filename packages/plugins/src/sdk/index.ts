@@ -11,5 +11,6 @@ export * from './pagination';
 export * from './guards';
 export * from './discord-utils';
 export * from './discord-errors';
+export * from './permission-notice';
 export * from './locales';
 export * from './help-hint';
