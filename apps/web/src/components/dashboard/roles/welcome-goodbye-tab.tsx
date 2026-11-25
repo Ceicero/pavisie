@@ -117,6 +117,7 @@ function SectionEditor({
           <div className="flex items-center justify-between rounded-md border border-border p-3">
             <p className="text-sm font-medium">Enabled</p>
             <Switch
+              aria-label={`Enabled: ${label}`}
               checked={draft.enabled}
               onCheckedChange={(v) => setDraft((p) => ({ ...p!, enabled: v }))}
             />
@@ -141,7 +142,11 @@ function SectionEditor({
 
           <div className="flex items-center justify-between rounded-md border border-border p-3">
             <p className="text-sm font-medium">Also DM the member</p>
-            <Switch checked={draft.dm} onCheckedChange={(v) => setDraft((p) => ({ ...p!, dm: v }))} />
+            <Switch
+              aria-label="Also DM the member"
+              checked={draft.dm}
+              onCheckedChange={(v) => setDraft((p) => ({ ...p!, dm: v }))}
+            />
           </div>
 
           <div className="space-y-3 rounded-md border border-border p-3">

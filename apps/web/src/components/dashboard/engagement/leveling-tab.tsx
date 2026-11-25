@@ -280,11 +280,13 @@ export function LevelingTab({ guildId }: { guildId: string }) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Leveling enabled</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="leveling-enabled-help" className="text-xs text-muted-foreground">
                 Turn message/voice XP off without losing anyone&apos;s progress.
               </p>
             </div>
             <Switch
+              aria-label="Leveling enabled"
+              aria-describedby="leveling-enabled-help"
               checked={draft.enabled}
               onCheckedChange={(v) => set('enabled', v)}
               disabled={update.isPending}
@@ -294,7 +296,7 @@ export function LevelingTab({ guildId }: { guildId: string }) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Public leaderboard</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="public-leaderboard-help" className="text-xs text-muted-foreground">
                 Anyone can view the XP leaderboard and a member&apos;s rank without signing in. Off by
                 default. Former members stay listed until a later update.
               </p>
@@ -312,6 +314,7 @@ export function LevelingTab({ guildId }: { guildId: string }) {
                 onCheckedChange={(v) => set('publicLeaderboard', v)}
                 disabled={update.isPending}
                 aria-label="Public leaderboard"
+                aria-describedby="public-leaderboard-help"
               />
             </div>
           </div>

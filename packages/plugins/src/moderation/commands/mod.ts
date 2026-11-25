@@ -358,7 +358,7 @@ function requireReason(
 }
 
 async function resolveTargetMember(c: CommandContext, optionName = 'user'): Promise<GuildMember> {
-  const member = c.interaction.options.getMember(optionName) as GuildMember | null;
+  const member = c.interaction.options.getMember(optionName);
   if (member) return member;
   const user = c.interaction.options.getUser(optionName, true);
   const fetched = await fetchMemberSafe(c.interaction.guild, user.id);
@@ -370,7 +370,7 @@ async function resolveTargetMember(c: CommandContext, optionName = 'user'): Prom
 
 function guardHierarchy(c: CommandContext, target: GuildMember): void {
   hierarchyGuard(
-    { guild: c.interaction.guild, member: c.interaction.member as GuildMember },
+    { guild: c.interaction.guild, member: c.interaction.member },
     target,
     c.ctx.botOwnerIds,
     c.t,
@@ -811,7 +811,11 @@ async function handleCase(c: CommandContext): Promise<void> {
 async function handleCases(c: CommandContext): Promise<void> {
   assertStaffLevel(c.staffLevel, 'helper', c.t);
   const user = c.interaction.options.getUser('user');
-  const type = c.interaction.options.getString('type') as ModerationCaseType | null;
+  const rawType = c.interaction.options.getString('type');
+  const type = rawType === null ? null : (CASE_TYPES.find((t) => t === rawType) ?? null);
+  if (rawType !== null && type === null) {
+    throw new Error(`moderation: unknown case type filter "${rawType}"`);
+  }
   const service = moderationService(c.ctx);
 
   const pages: EmbedBuilder[] = [];
@@ -863,7 +867,7 @@ async function handleRole(c: CommandContext, remove: boolean): Promise<void> {
   assertStaffLevel(c.staffLevel, 'moderator', c.t);
   const target = await resolveTargetMember(c);
   guardHierarchy(c, target);
-  const role = c.interaction.options.getRole('role', true) as Role;
+  const role = c.interaction.options.getRole('role', true);
   assertBotPermissions(c.interaction.guild, [PermissionFlagsBits.ManageRoles], c.t);
 
   const botHighest = c.interaction.guild.members.me?.roles.highest;

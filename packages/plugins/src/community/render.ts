@@ -118,42 +118,57 @@ export function tallyPollFromRows(poll: Poll, options: PollOption[], votes: Poll
 // Giveaways
 // ---------------------------------------------------------------------------
 
-export function buildGiveawayEmbed(giveaway: Giveaway, entryCount: number) {
+export function buildGiveawayEmbed(
+  giveaway: Giveaway,
+  entryCount: number,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) {
   const fields: EmbedField[] = [
-    { name: 'Winners', value: String(giveaway.winnerCount), inline: true },
-    { name: 'Entries', value: String(entryCount), inline: true },
+    { name: t('giveaway.embedWinners'), value: String(giveaway.winnerCount), inline: true },
+    { name: t('giveaway.embedEntries'), value: String(entryCount), inline: true },
     {
-      name: giveaway.ended ? 'Ended' : 'Ends',
+      name: t(giveaway.ended ? 'giveaway.embedEnded' : 'giveaway.embedEnds'),
       value: discordTimestamp(giveaway.endsAt, giveaway.ended ? 'f' : 'R'),
       inline: true,
     },
   ];
   if (giveaway.requiredRoleIds.length > 0)
     fields.push({
-      name: 'Required role',
+      name: t('giveaway.embedRequiredRole'),
       value: giveaway.requiredRoleIds.map((id) => `<@&${id}>`).join(', '),
       inline: false,
     });
-  if (giveaway.minAccountAgeDays)
-    fields.push({ name: 'Min. account age', value: `${giveaway.minAccountAgeDays} days`, inline: true });
-  if (giveaway.minLevel) fields.push({ name: 'Min. level', value: String(giveaway.minLevel), inline: true });
+  if (giveaway.minAccountAgeDays) {
+    const days = giveaway.minAccountAgeDays;
+    fields.push({
+      name: t('giveaway.embedMinAccountAge'),
+      value: t(days === 1 ? 'giveaway.embedAccountAgeDay' : 'giveaway.embedAccountAgeDays', { days }),
+      inline: true,
+    });
+  }
+  if (giveaway.minLevel)
+    fields.push({ name: t('giveaway.embedMinLevel'), value: String(giveaway.minLevel), inline: true });
   if (giveaway.ended) {
     fields.push({
-      name: 'Winners',
+      name: t('giveaway.embedDrawnWinners'),
       value:
         giveaway.winnerIds.length > 0
           ? giveaway.winnerIds.map((id) => `<@${id}>`).join(', ')
-          : '_No eligible entries — no winner drawn._',
+          : t('giveaway.embedNoWinner'),
       inline: false,
     });
   }
 
   return brandEmbed()
-    .setTitle(giveaway.ended ? `🎉 Giveaway ended: ${giveaway.prize}` : `🎉 Giveaway: ${giveaway.prize}`)
+    .setTitle(
+      t(giveaway.ended ? 'giveaway.embedTitleEnded' : 'giveaway.embedTitle', {
+        prize: giveaway.prize,
+      }),
+    )
     .setDescription(
       giveaway.ended
-        ? 'This giveaway has ended.'
-        : `Click **Enter** below to join. Hosted by <@${giveaway.hostId}>.`,
+        ? t('giveaway.embedDescriptionEnded')
+        : t('giveaway.embedDescription', { host: `<@${giveaway.hostId}>` }),
     )
     .addFields(fields);
 }

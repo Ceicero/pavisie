@@ -238,9 +238,10 @@ actually write). Run it from a machine with the repo checked out and `DISCORD_TO
 ### 2.7 Health checks
 
 - `api`: `GET https://api.pavisie.com/health` → `200 {"status":"ok", ...}`.
-- `bot`: has no public URL; Railway pings its private health port directly (`bot.railway.json`
-  configures `healthcheckPath` — see `infra/railway/README.md` for why the bot's healthcheck is
-  handled differently from the other three).
+- `bot`: has no public URL; `bot.railway.json` deliberately sets no `healthcheckPath`. Health is
+  covered by the Docker `HEALTHCHECK` in `Dockerfile.bot` (`GET /health` on `BOT_HEALTH_PORT`) plus
+  the `ON_FAILURE` restart policy — see `infra/railway/README.md` for why the bot is handled
+  differently from the other three.
 - `web`: `GET /` returning `200` is the healthcheck.
 - `dashboard`: **`GET /` now returns a 308 redirect, not 200** (see §1's topology note) — a
   healthcheck configured to require exactly `200` on `/` will misreport this service as down. Both
@@ -283,7 +284,7 @@ file. This repo ships `render.yaml` at the root — Render reads it automaticall
    token/client secret, `ENCRYPTION_KEY`, `SESSION_SECRET`, any integration keys, etc.) — fill them in on that
    screen. Variables wired with `fromDatabase`/`fromService` (Postgres/Redis connection strings, and
    cross-service URLs) are filled in automatically and need no action.
-4. Click **Apply**. Render builds and deploys all five resources.
+4. Click **Apply**. Render builds and deploys all six resources.
 5. `api`'s `preDeployCommand: pnpm db:migrate` runs migrations before each deploy goes live, same
    idea as the Railway pre-deploy command in §2.5 — nothing extra to do.
 6. `api` declares `healthCheckPath: /health`; Render won't route traffic to a new deploy until it
@@ -377,6 +378,7 @@ list with comments; every var there is also documented in `docs/ARCHITECTURE.md`
 | `NODE_ENV`                                                                                                                                                                                                                                                   | Yes                      | all                                                | Literal `production`                                                                                                                                                           |
 | `LOG_LEVEL`                                                                                                                                                                                                                                                  | No (defaults `info`)     | bot, api                                           | Literal `info` (or `debug`/`trace` when diagnosing)                                                                                                                            |
 | `DATABASE_URL`                                                                                                                                                                                                                                               | Yes                      | bot, api                                           | Managed Postgres connection string (`${{Postgres.DATABASE_URL}}` on Railway, `fromDatabase` on Render, your own Postgres on a VPS)                                             |
+| `DATABASE_POOL_SIZE`                                                                                                                                                                                                                                         | No (defaults `10`)       | bot, api                                           | Postgres connections per process. Ignored when `DATABASE_URL` sets `?connection_limit=`. Keep bot + api, doubled for deploy overlap, under `max_connections`                   |
 | `REDIS_URL`                                                                                                                                                                                                                                                  | Yes                      | bot, api                                           | Managed Redis connection string (`${{Redis.REDIS_URL}}` on Railway, `fromService` on Render, your own Redis on a VPS)                                                          |
 | `DISCORD_TOKEN`                                                                                                                                                                                                                                              | Yes                      | bot                                                | Discord Developer Portal → your application → **Bot** → Reset Token                                                                                                            |
 | `DISCORD_CLIENT_ID`                                                                                                                                                                                                                                          | Yes                      | bot, api, web (as `NEXT_PUBLIC_DISCORD_CLIENT_ID`) | Discord Developer Portal → **General Information** → Application ID                                                                                                            |
@@ -404,7 +406,7 @@ list with comments; every var there is also documented in `docs/ARCHITECTURE.md`
 | `PUBLIC_WEBHOOK_BASE_URL`                                                                                                                                                                                                                                    | Yes if using webhooks    | api                                                | `https://api.pavisie.com`                                                                                                                                                  |
 | `KOFI_URL`                                                                                                                                                                                                                                                      | No (donations are optional)      | api                                                | Full Ko-fi page URL, e.g. `https://ko-fi.com/yourname`. Leave blank to disable the donate page.                                                                              |
 | `CAPTCHA_PROVIDER` (`hcaptcha`/`turnstile`) + that provider's `*_SITE_KEY`/`*_SECRET`                                                                                                                                                                       | No (optional; powers the `roles` plugin's verification mode only) | api                                                | Cloudflare Turnstile or hCaptcha's own dashboard. Donations are now handled by Ko-fi and do not require CAPTCHA here. |
-| Other integration keys (`TWITCH_*`, `YOUTUBE_API_KEY`, `GITHUB_WEBHOOK_SECRET`, `REDDIT_*`, `STEAM_API_KEY`, `GOOGLE_*`, `MICROSOFT_*`, `NOTION_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPL_API_KEY`, `OPENWEATHERMAP_API_KEY`)                       | No                       | api, bot                                           | Each provider's own developer console. Blank = that feature stays disabled; nothing else is affected.                                                                          |
+| Other integration keys (`TWITCH_*`, `YOUTUBE_API_KEY`, `REDDIT_*`, `STEAM_API_KEY`, `GOOGLE_*`, `MICROSOFT_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPL_API_KEY`, `OPENWEATHERMAP_API_KEY`)                       | No                       | api, bot                                           | Each provider's own developer console. Blank = that feature stays disabled; nothing else is affected.                                                                          |
 | `TWITCH_EXTENSION_CLIENT_ID` / `TWITCH_EXTENSION_SECRET`                                                                                                                                                                                                    | No (Twitch Extension panel disabled while unset — 503 "Extension not configured") | api | Twitch dev console (`console.twitch.tv`) → **Extensions** → your extension → **Settings** → Client ID, and → **Extension Secrets** → New Secret. The secret is base64 already — paste it as shown, don't re-encode. Different credential pair from `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` (those are the chat bot's). |
 
 ## 7. Secret rotation runbook
@@ -524,6 +526,13 @@ to reach for now. `apps/api` is stateless (all session state lives in Redis) and
 scaled horizontally on any of the three platforms above without special configuration — just increase
 the instance/replica count.
 
+Each extra process — a split-out worker or another API replica — opens its own Postgres pool of
+`DATABASE_POOL_SIZE` connections (default `10`). Keep processes × pool size × 2 (old and new containers
+overlap during a deploy) under your Postgres `max_connections` (stock `100`): bot + api at the default is
+2 × 10 × 2 = 40. Managed Postgres plans often allow fewer than `100`, so check yours. `DATABASE_POOL_SIZE` above `100` is
+rejected at startup to catch typos, but that is not a safe size on its own; to go higher on purpose, set
+`?connection_limit=` in `DATABASE_URL` instead.
+
 ## 14. Rough monthly cost guidance
 
 **Check current pricing before committing** — this is a rough starting point as of when this doc was
@@ -536,7 +545,7 @@ written, not a quote:
   for the others to avoid cold starts) plus a small Postgres and Key Value plan is typically in a
   similar **$20–40/month** range; Render's free tier can host `api`/`dashboard`/`web` if you accept
   cold starts, but `bot` cannot use a free/sleeping instance.
-- **VPS**: a $6–12/month VPS (1–2 vCPU, 2–4GB RAM) from any provider comfortably runs all five
+- **VPS**: a $6–12/month VPS (1–2 vCPU, 2–4GB RAM) from any provider comfortably runs all six
   containers (`postgres`, `redis`, `bot`, `api`, `dashboard`, `web`) for small-to-medium load; add the
   cost of your own backup storage and any monitoring service. This is the cheapest floor but puts TLS,
   OS updates, and restarts on you.

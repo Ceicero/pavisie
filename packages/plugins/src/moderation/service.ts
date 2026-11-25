@@ -18,7 +18,6 @@ import {
   type ModerationCaseType,
   type ModerationNote,
   type ModerationWarning,
-  type Prisma,
 } from '@pavisie/database';
 import {
   buildCustomId,
@@ -38,6 +37,7 @@ import {
 } from '../sdk';
 import { toCsv } from './csv';
 import { evaluateEscalation } from './escalation';
+import { toInputJsonValue } from './json';
 import {
   buildAppealDecisionEmbed,
   buildAppealEmbed,
@@ -67,13 +67,30 @@ return 0
  * looks for a newer case in that gap would lift the brand-new ban. Both sides hold this lease across their span (two
  * Discord round trips plus a DB write at most), so the expiry either sees the new case or runs before the ban starts.
  */
-// Not renewed: 30s (as the warn-escalation and enforcer decide locks) covers a DM, two Discord calls and a DB write
-// with room for a rate-limit wait. A holder slower than that can lose it; release is compare-and-delete, so it
-// never removes the next holder's lease.
+// 30s (as the warn-escalation and enforcer decide locks) covers a DM, two Discord calls and a DB write with room for a
+// rate-limit wait. A holder slower than that can lose it: release is compare-and-delete, so it never removes the next
+// holder's lease, and the temp-ban expiry calls `lease.renew()` right before it unbans, so it never lifts a ban on a
+// lease it no longer holds. The ban side does not renew: a ban() that outlives the TTL between its Discord ban and its
+// case write (e.g. a long rate-limit wait) can still have that ban lifted by an expiry that takes the lapsed lease.
 const BAN_LEASE_TTL_MS = 30_000;
+/** Extends the lease only if `ARGV[1]` (the caller's owner token) still holds it. Returns 1 if renewed, else 0. */
+const RENEW_LEASE_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('PEXPIRE', KEYS[1], ARGV[2]) end
+return 0
+`;
 /** A moderator's ban waits this long for an in-flight expiry lift (one Discord call) rather than failing. */
 const BAN_LEASE_WAIT_MS = 3_000;
 const BAN_LEASE_RETRY_MS = 100;
+
+/** Handed to the `withBanLease` callback. */
+export interface BanLease {
+  /**
+   * Confirms this caller still holds the lease (owner token unchanged) and, if so, resets its TTL. Resolves `false`
+   * when the lease has expired or another holder now has it. Rejects if Redis errors. When `failOpen` ran the callback
+   * without a lease, always resolves `false`.
+   */
+  renew(): Promise<boolean>;
+}
 
 export interface BanLeaseOptions {
   /** How long to keep retrying a held lease before giving up. Default 0: fail at once and let the caller retry. */
@@ -249,12 +266,13 @@ export class ModerationServiceImpl implements ModerationService {
   private async getCoreGuildConfig(guildId: string) {
     const host = this.ctx.services.get('host');
     if (!host) {
-      return {
-        modLogChannelId: null as string | null,
-        appealsChannelId: null as string | null,
-        staffChannelId: null as string | null,
-        dmOnModeration: true,
-      };
+      const fallback: {
+        modLogChannelId: string | null;
+        appealsChannelId: string | null;
+        staffChannelId: string | null;
+        dmOnModeration: boolean;
+      } = { modLogChannelId: null, appealsChannelId: null, staffChannelId: null, dmOnModeration: true };
+      return fallback;
     }
     return host.getGuildConfig(guildId);
   }
@@ -366,7 +384,7 @@ export class ModerationServiceImpl implements ModerationService {
             durationMs: input.durationMs ?? null,
             expiresAt,
             source: input.source,
-            metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
+            metadata: toInputJsonValue(input.metadata ?? {}),
           },
         });
         await writeAudit(tx, {
@@ -572,7 +590,7 @@ export class ModerationServiceImpl implements ModerationService {
       where: { guildId, userId: targetId, active: true },
     });
     const config = await this.getModConfig(guildId);
-    return evaluateEscalation(activeCount, config.escalations as EscalationRule[]);
+    return evaluateEscalation(activeCount, config.escalations);
   }
 
   /** Carries out an escalation rung. Runs unlocked; a failure is logged and never fails the warning itself. */
@@ -855,7 +873,7 @@ export class ModerationServiceImpl implements ModerationService {
   async withBanLease<T>(
     guildId: string,
     userId: string,
-    fn: () => Promise<T>,
+    fn: (lease: BanLease) => Promise<T>,
     opts: BanLeaseOptions = {},
   ): Promise<T> {
     const key = redisKey('moderation', 'ban-lease', guildId, userId);
@@ -871,7 +889,7 @@ export class ModerationServiceImpl implements ModerationService {
           { err: String(err), guildId, userId },
           'moderation: ban lease unavailable; continuing without it',
         );
-        return fn();
+        return fn({ renew: async () => false });
       }
       if (acquired === 'OK') break;
       if (Date.now() >= deadline) {
@@ -883,8 +901,12 @@ export class ModerationServiceImpl implements ModerationService {
       }
       await new Promise((resolve) => setTimeout(resolve, BAN_LEASE_RETRY_MS));
     }
+    const lease: BanLease = {
+      renew: async () =>
+        (await this.ctx.redis.eval(RENEW_LEASE_SCRIPT, 1, key, token, String(BAN_LEASE_TTL_MS))) === 1,
+    };
     try {
-      return await fn();
+      return await fn(lease);
     } finally {
       await this.ctx.redis.eval(RELEASE_LEASE_SCRIPT, 1, key, token).catch(() => undefined);
     }
@@ -1071,7 +1093,7 @@ export class ModerationServiceImpl implements ModerationService {
     const perms = channel.permissionsFor(botMember);
     if (!perms || !perms.has(required)) return null;
 
-    return channel as GuildTextBasedChannel;
+    return channel;
   }
 
   /**
@@ -1422,7 +1444,7 @@ export class ModerationServiceImpl implements ModerationService {
    */
   private async applyAppealEffectsOnce(appealId: string): Promise<boolean> {
     const lockKey = this.appealSyncLockKey(appealId);
-    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const token = randomUUID();
     const acquired = await this.ctx.redis
       .set(lockKey, token, 'PX', APPEAL_SYNC_LOCK_TTL_MS, 'NX')
       .catch((err: unknown) => {

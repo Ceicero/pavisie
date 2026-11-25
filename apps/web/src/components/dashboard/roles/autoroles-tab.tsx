@@ -119,12 +119,18 @@ export function AutoRolesTab({ guildId }: { guildId: string }) {
         <div className="flex items-center justify-between rounded-md border border-border p-3">
           <div>
             <p className="text-sm font-medium">Enabled</p>
-            <p className="text-xs text-muted-foreground">
+            <p id="autoroles-enabled-help" className="text-xs text-muted-foreground">
               Off by default. Roles are given once a member finishes joining (after Discord&apos;s membership
               screening, if your server uses it). Every assignment is written to the audit log.
             </p>
           </div>
-          <Switch checked={data.enabled} onCheckedChange={handleToggle} disabled={setAutoRoles.isPending} />
+          <Switch
+            aria-label="Enabled: autoroles"
+            aria-describedby="autoroles-enabled-help"
+            checked={data.enabled}
+            onCheckedChange={handleToggle}
+            disabled={setAutoRoles.isPending}
+          />
         </div>
 
         <FormField

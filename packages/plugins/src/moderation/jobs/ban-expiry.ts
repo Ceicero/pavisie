@@ -1,3 +1,4 @@
+import { AppError } from '@pavisie/core';
 import type { PluginContext } from '../../sdk';
 import type { ModerationServiceImpl } from '../service';
 import { discordCode } from './enforcer-mute';
@@ -26,8 +27,8 @@ export type LiftTempBanResult = 'lifted' | 'superseded' | 'already-lifted';
  * - `already-lifted`: Discord reports Unknown Ban (a moderator removed it by hand). The caller marks this case expired.
  * - `lifted`: the ban was removed; `unban()` has already marked the BAN cases expired.
  *
- * Runs under the member's ban lease (`service.withBanLease`). Any other error, including failing to get the lease,
- * is rethrown so the case stays active and is retried.
+ * Runs under the member's ban lease (`service.withBanLease`) and re-confirms it right before `unban()`. Any other
+ * error, including failing to get or keep the lease, is rethrown so the case stays active and is retried.
  */
 export async function liftTempBan(
   ctx: PluginContext,
@@ -38,7 +39,7 @@ export async function liftTempBan(
   // The lease is held across the check and unban() because ban() applies the Discord ban before it writes its case:
   // without it, a moderator's ban landing in that gap would be lifted here. If a ban holds it, this throws and the
   // case stays open for the job retry or the sweep.
-  return service.withBanLease(row.guildId, row.targetId, async () => {
+  return service.withBanLease(row.guildId, row.targetId, async (lease) => {
     const newer = await ctx.prisma.moderationCase.findFirst({
       where: {
         guildId: row.guildId,
@@ -60,6 +61,17 @@ export async function liftTempBan(
         `moderation: temp ban case #${row.caseNumber} ended without unbanning; case #${newer.caseNumber} is a newer, longer ban`,
       );
       return 'superseded' as const;
+    }
+
+    // The lease is not renewed while the check runs, so a slow check (or a stalled process) can outlive its 30s TTL
+    // and a moderator's ban can start in the meantime. Confirm the lease is still ours, and reset its TTL for the
+    // unban call, before lifting anything; otherwise leave the case open for the job retry or the sweep.
+    if (!(await lease.renew())) {
+      throw new AppError(
+        'ban_lease_lost',
+        `Temp ban case #${row.caseNumber} not lifted: its ban lease was lost (expired or taken by another ban) before the unban. It will be retried.`,
+        { status: 409 },
+      );
     }
 
     try {
