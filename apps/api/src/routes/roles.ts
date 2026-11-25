@@ -57,7 +57,10 @@ const panelOptionSchema = z.object({
   label: z.string().trim().min(1).max(100),
   emoji: z.string().max(64).nullable().optional(),
   description: z.string().trim().max(200).nullable().optional(),
-  position: z.number().int().min(0).default(0),
+  // No `.default(...)`: an omitted position must reach the handlers as `undefined` so `opt.position ?? index` keeps
+  // the submitted order. A default of 0 gave every option the same position, leaving `orderBy: position` ties
+  // (and the button/select order of the posted panel) up to the database.
+  position: z.number().int().min(0).optional(),
 });
 
 const panelBodySchema = z.object({
