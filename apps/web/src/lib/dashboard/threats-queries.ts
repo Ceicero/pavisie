@@ -30,9 +30,9 @@ export function useThreatAudit(guildId: string | undefined, filters: ThreatAudit
 }
 
 /**
- * `GET /guilds/:guildId/threats/incidents` — live raid/threat incidents.
- * Served from the stub adapter until Claude's raid-mode API lands. Polls every
- * 15 seconds, matching the enforcer queue.
+ * `GET /guilds/:guildId/threats/incidents` — live raid/threat incidents,
+ * backed by Raid mode incidents. Polls every 15 seconds, matching the
+ * enforcer queue.
  */
 export function useThreatIncidents(guildId: string | undefined) {
   return useQuery({

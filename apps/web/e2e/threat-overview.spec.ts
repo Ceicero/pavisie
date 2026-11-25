@@ -17,7 +17,13 @@ test.describe('threat overview', () => {
     await page.goto(`/dashboard/${DEMO_GUILD_ID}/threats`);
     await expect(page.getByRole('heading', { name: 'Threat overview' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Threats' })).toBeVisible();
-    await expect(page.getByText('No active threats. Raid detection is coming soon.')).toBeVisible();
+    await expect(page.getByRole('status')).toBeVisible();
+    await expect(page.getByText('No active or recent threats')).toBeVisible();
+    await expect(
+      page.getByText(
+        'Active raids, active lockdowns, and incidents from the last 24 hours will show up here when Raid mode is enabled in Plugins.',
+      ),
+    ).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Moderation audit trail' })).toBeVisible();
   });
 });
