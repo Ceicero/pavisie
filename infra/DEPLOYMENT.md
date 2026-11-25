@@ -526,6 +526,13 @@ to reach for now. `apps/api` is stateless (all session state lives in Redis) and
 scaled horizontally on any of the three platforms above without special configuration — just increase
 the instance/replica count.
 
+Each extra process — a split-out worker or another API replica — opens its own Postgres pool of
+`DATABASE_POOL_SIZE` connections (default `10`). Keep processes × pool size × 2 (old and new containers
+overlap during a deploy) under your Postgres `max_connections` (stock `100`): bot + api at the default is
+2 × 10 × 2 = 40. Managed Postgres plans often allow fewer than `100`, so check yours. `DATABASE_POOL_SIZE` above `100` is
+rejected at startup to catch typos, but that is not a safe size on its own; to go higher on purpose, set
+`?connection_limit=` in `DATABASE_URL` instead.
+
 ## 14. Rough monthly cost guidance
 
 **Check current pricing before committing** — this is a rough starting point as of when this doc was
