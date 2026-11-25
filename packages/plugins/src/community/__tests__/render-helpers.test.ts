@@ -1,6 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import type { EventRsvp, Poll, PollOption, PollVote } from '@pavisie/database';
-import { summarizeRsvps, tallyPollFromRows } from '../render';
+import { discordTimestamp } from '@pavisie/core';
+import type { CommunityEvent, EventRsvp, Poll, PollOption, PollVote } from '@pavisie/database';
+import en from '../locales/en.json';
+import { buildEventEmbed, buildPollEmbed, summarizeRsvps, tallyPollFromRows } from '../render';
+
+/** Same bundle walk the giveaway embed tests use, so these assertions follow the English locale file. */
+function realT(key: string, vars?: Record<string, string | number>): string {
+  const parts = key.split('.');
+  let node: unknown = en;
+  for (const part of parts) {
+    if (node && typeof node === 'object' && part in (node as Record<string, unknown>)) {
+      node = (node as Record<string, unknown>)[part];
+    } else {
+      return key;
+    }
+  }
+  if (typeof node !== 'string') return key;
+  let out = node;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) out = out.replaceAll(`{${name}}`, String(value));
+  }
+  return out;
+}
 
 const WHEN = new Date('2026-11-23T19:00:00.000Z');
 
@@ -165,5 +186,65 @@ describe('summarizeRsvps', () => {
     ['DECLINED', { going: 0, maybe: 0, declined: 2 }],
   ] as const)('counts only %s when that is the only status present', (status, expected) => {
     expect(summarizeRsvps([rsvp(status, 'u1'), rsvp(status, 'u2')])).toEqual(expected);
+  });
+});
+
+function statusValue(embed: ReturnType<typeof buildPollEmbed>): string | undefined {
+  return embed.data.fields?.find((field) => field.name === 'Status')?.value;
+}
+
+describe('buildPollEmbed status', () => {
+  const tallies = [{ optionId: 'opt-a', label: 'Alpha', position: 0, votes: 1 }];
+
+  it('shows Closed when the poll is closed', () => {
+    const embed = buildPollEmbed(poll({ closed: true, endsAt: WHEN }), tallies, realT);
+    expect(statusValue(embed)).toBe('Closed');
+  });
+
+  it('shows a relative Ends timestamp while the poll is open', () => {
+    const embed = buildPollEmbed(poll({ closed: false, endsAt: WHEN }), tallies, realT);
+    expect(statusValue(embed)).toBe(`Ends ${discordTimestamp(WHEN, 'R')}`);
+  });
+
+  it('shows Open when the poll has no end time', () => {
+    const embed = buildPollEmbed(poll({ endsAt: null, closed: false }), tallies, realT);
+    expect(statusValue(embed)).toBe('Open');
+  });
+});
+
+function event(partial: Partial<CommunityEvent> = {}): CommunityEvent {
+  return {
+    id: 'event-render-helpers',
+    guildId: 'guild-render-helpers',
+    channelId: 'ch-render-helpers',
+    messageId: null,
+    title: 'Game night',
+    description: null,
+    startsAt: WHEN,
+    endsAt: null,
+    hostId: 'user-host',
+    discordEventId: null,
+    reminderMinutes: [],
+    createdAt: WHEN,
+    updatedAt: WHEN,
+    ...partial,
+  };
+}
+
+describe('buildEventEmbed ends field', () => {
+  const counts = { going: 1, maybe: 0, declined: 0 };
+
+  it('includes an Ends field when the event has an end time', () => {
+    const endsAt = new Date('2026-11-23T21:00:00.000Z');
+    const embed = buildEventEmbed(event({ endsAt }), counts, realT);
+    const ends = embed.data.fields?.find((field) => field.name === 'Ends');
+    expect(ends).toMatchObject({ name: 'Ends', value: discordTimestamp(endsAt, 'F'), inline: true });
+    expect(embed.data.fields?.map((field) => field.name)).toEqual(['Starts', 'Ends', 'Host', 'RSVPs']);
+  });
+
+  it('omits the Ends field when the event has no end time', () => {
+    const embed = buildEventEmbed(event({ endsAt: null }), counts, realT);
+    expect(embed.data.fields?.some((field) => field.name === 'Ends')).toBe(false);
+    expect(embed.data.fields?.map((field) => field.name)).toEqual(['Starts', 'Host', 'RSVPs']);
   });
 });

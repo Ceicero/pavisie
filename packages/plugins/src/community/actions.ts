@@ -97,7 +97,7 @@ async function editPollMessage(ctx: PluginContext, poll: Poll): Promise<Delivery
   const votes = await ctx.prisma.pollVote.findMany({ where: { pollId: poll.id } });
   const tallies = tallyPollFromRows(poll, options, votes);
   const payload = {
-    embeds: [buildPollEmbed(poll, tallies)],
+    embeds: [buildPollEmbed(poll, tallies, ctx.t)],
     components: buildPollComponents(poll.id, options, poll.closed),
   };
   const logContext = { pollId: poll.id, guildId: poll.guildId, channelId: poll.channelId };
@@ -791,7 +791,7 @@ export async function refreshEventMessage(
   try {
     const message = await opened.channel.messages.fetch(event.messageId);
     await message.edit({
-      embeds: [buildEventEmbed(event, counts, cancelled)],
+      embeds: [buildEventEmbed(event, counts, ctx.t, cancelled)],
       components: buildEventComponents(event.id, cancelled),
     });
   } catch (err) {

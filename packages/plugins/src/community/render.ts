@@ -28,23 +28,31 @@ function renderBar(count: number, max: number): string {
 // Polls
 // ---------------------------------------------------------------------------
 
-export function buildPollEmbed(poll: Poll, tallies: PollOptionTally[]) {
-  const total = tallies.reduce((sum, t) => sum + t.votes, 0);
-  const max = Math.max(1, ...tallies.map((t) => t.votes));
+export function buildPollEmbed(
+  poll: Poll,
+  tallies: PollOptionTally[],
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) {
+  const total = tallies.reduce((sum, tally) => sum + tally.votes, 0);
+  const max = Math.max(1, ...tallies.map((tally) => tally.votes));
 
-  const lines = tallies.map((t, i) => {
-    const pct = total > 0 ? Math.round((t.votes / total) * 100) : 0;
+  const lines = tallies.map((tally, i) => {
+    const pct = total > 0 ? Math.round((tally.votes / total) * 100) : 0;
     const voters =
-      t.voterIds && t.voterIds.length > 0
-        ? `\n> ${t.voterIds
+      tally.voterIds && tally.voterIds.length > 0
+        ? `\n> ${tally.voterIds
             .slice(0, 10)
             .map((id) => `<@${id}>`)
-            .join(', ')}${t.voterIds.length > 10 ? ` +${t.voterIds.length - 10} more` : ''}`
+            .join(', ')}${tally.voterIds.length > 10 ? ` +${tally.voterIds.length - 10} more` : ''}`
         : '';
-    return `**${i + 1}. ${t.label}** — ${t.votes} vote${t.votes === 1 ? '' : 's'} (${pct}%)\n${renderBar(t.votes, max)}${voters}`;
+    return `**${i + 1}. ${tally.label}** — ${tally.votes} vote${tally.votes === 1 ? '' : 's'} (${pct}%)\n${renderBar(tally.votes, max)}${voters}`;
   });
 
-  const status = poll.closed ? 'Closed' : poll.endsAt ? `Ends ${discordTimestamp(poll.endsAt, 'R')}` : 'Open';
+  const status = poll.closed
+    ? t('poll.statusClosed')
+    : poll.endsAt
+      ? t('poll.statusEnds', { time: discordTimestamp(poll.endsAt, 'R') })
+      : t('poll.statusOpen');
   const flags = [
     poll.anonymous ? 'anonymous' : 'public votes',
     poll.multiSelect ? 'multiple choice' : 'single choice',
@@ -248,11 +256,18 @@ export function summarizeRsvps(rsvps: EventRsvp[]): RsvpCounts {
   };
 }
 
-export function buildEventEmbed(event: CommunityEvent, counts: RsvpCounts, cancelled = false) {
+export function buildEventEmbed(
+  event: CommunityEvent,
+  counts: RsvpCounts,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  cancelled = false,
+) {
   const fields: EmbedField[] = [
     { name: 'Starts', value: discordTimestamp(event.startsAt, 'F'), inline: true },
   ];
-  if (event.endsAt) fields.push({ name: 'Ends', value: discordTimestamp(event.endsAt, 'F'), inline: true });
+  if (event.endsAt) {
+    fields.push({ name: t('event.embedEnds'), value: discordTimestamp(event.endsAt, 'F'), inline: true });
+  }
   fields.push({ name: 'Host', value: `<@${event.hostId}>`, inline: true });
   fields.push({
     name: 'RSVPs',

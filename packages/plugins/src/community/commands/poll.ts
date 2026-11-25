@@ -132,7 +132,7 @@ async function handleCreate(c: CommandContext): Promise<void> {
 
   const tallies = tallyPollFromRows(poll, poll.options, []);
   await interaction.reply({
-    embeds: [buildPollEmbed(poll, tallies)],
+    embeds: [buildPollEmbed(poll, tallies, t)],
     components: buildPollComponents(poll.id, poll.options, false),
   });
   const message = await interaction.fetchReply();
@@ -187,7 +187,7 @@ async function handleResults(c: CommandContext): Promise<void> {
   }
   const tallies = tallyPollFromRows(poll, poll.options, poll.votes);
   // Anonymous polls hide who voted. Keep the lookup ephemeral so it isn't posted into the channel.
-  await interaction.reply({ embeds: [buildPollEmbed(poll, tallies)], ephemeral: poll.anonymous });
+  await interaction.reply({ embeds: [buildPollEmbed(poll, tallies, t)], ephemeral: poll.anonymous });
 }
 
 export const command: PluginCommand = {
