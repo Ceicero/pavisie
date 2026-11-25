@@ -63,6 +63,19 @@ function buildHarness() {
       appeals.set(where.id, updated);
       return updated;
     },
+    updateMany: async ({
+      where,
+      data,
+    }: {
+      where: { id: string; guildId: string; status: string };
+      data: Partial<FakeAppealRow>;
+    }) => {
+      const existing = appeals.get(where.id);
+      if (!existing || existing.guildId !== where.guildId || existing.status !== where.status)
+        return { count: 0 };
+      appeals.set(where.id, { ...existing, ...data });
+      return { count: 1 };
+    },
     findUnique: async ({ where }: { where: { id: string } }) => appeals.get(where.id) ?? null,
     findMany: async ({
       where,
@@ -102,7 +115,13 @@ function buildHarness() {
     },
   };
 
-  const prisma = { moderationAppeal, moderationCase } as unknown as PluginContext['prisma'];
+  const auditLog = { create: async () => ({}) };
+  const prisma = {
+    moderationAppeal,
+    moderationCase,
+    auditLog,
+    $transaction: async (cb: (tx: unknown) => unknown) => cb({ moderationAppeal, moderationCase, auditLog }),
+  } as unknown as PluginContext['prisma'];
 
   const member = { timeout: timeoutFn };
   const guild = { name: 'Test Guild', members: { fetch: vi.fn(async () => member) } };

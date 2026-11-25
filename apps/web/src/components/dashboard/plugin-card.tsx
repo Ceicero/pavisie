@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import type { PluginSummary } from '@pavisie/types';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Switch, useToast } from '@pavisie/ui';
 import { useTogglePlugin } from '@/lib/dashboard/queries';
@@ -15,6 +16,8 @@ export interface PluginCardProps {
 export function PluginCard({ plugin, guildId, onConfigure }: PluginCardProps) {
   const toggle = useTogglePlugin(guildId);
   const { toast } = useToast();
+  const descriptionId = useId();
+  const hasDescription = Boolean(plugin.description);
 
   function handleToggle(next: boolean) {
     toggle.mutate(
@@ -44,13 +47,16 @@ export function PluginCard({ plugin, guildId, onConfigure }: PluginCardProps) {
               </Badge>
             ) : null}
           </CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">{plugin.description}</p>
+          <p id={hasDescription ? descriptionId : undefined} className="mt-1 text-sm text-muted-foreground">
+            {plugin.description}
+          </p>
         </div>
         <Switch
           checked={plugin.enabled}
           disabled={plugin.alwaysEnabled || !plugin.available || toggle.isPending}
           onCheckedChange={handleToggle}
           aria-label={`Toggle ${plugin.name}`}
+          aria-describedby={hasDescription ? descriptionId : undefined}
           className="mt-1 shrink-0"
         />
       </CardHeader>

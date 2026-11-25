@@ -51,6 +51,19 @@ _Configurable automated moderation rules — spam, mentions, invites, scam links
 | Manage Server | raising the verification level during a raid lockdown | Optional | "raise-verification" raid lockdown is skipped; the rule still alerts staff. |
 
 
+### Raid mode (`raidmode`)
+
+_Detects raids from join rate and account age, locks channels down with one-click exact restore, and scores risky joins with as little stored data as possible._ (disabled by default, moderation)
+
+| Permission | Feature | Required? | Fallback if missing |
+|---|---|---|---|
+| View Channel | seeing the channels a lockdown closes, and the alert channel | Required | Channels the bot cannot see are left out of a lockdown. |
+| Send Messages | posting the raid alert and the "lockdown still on" reminder | Required | No alert is posted; incidents are still recorded and shown on the dashboard. |
+| Embed Links | the raid alert embed | Required | The alert cannot be posted. |
+| Manage Roles | changing and restoring the @everyone channel overwrites during a lockdown | Optional | Lockdown skips every channel; staff are told nothing was locked. |
+| Manage Server | raising the verification level and pausing invites during a lockdown (manual grant) | Optional | Those two lockdown options are skipped; channel lockdown still works. |
+
+
 ### Enforcer (`enforcer`)
 
 _Policy-driven, hands-off moderation: the bot flags possible violations from a server policy and a moderator decides — everything is bookkept in a read-only ledger and the database. Moderators never DM or confront the suspect directly; the bot mediates every action._ (disabled by default, moderation)
@@ -63,6 +76,7 @@ _Policy-driven, hands-off moderation: the bot flags possible violations from a s
 | Read Message History | "View context" (surrounding messages) on a flag | Required | Context snapshots and live context lookups are unavailable; only the flagged message itself (and its jump link) are shown. |
 | Manage Channels | creating/repairing the ledger and flag-queue channels during `/enforcer setup` | Optional | You must create the channels yourself and pick them in the setup wizard; permission overwrites will not be applied automatically. |
 | Manage Roles | creating the mute role and applying MUTE/UNMUTE decisions | Optional | The Mute decision is unavailable; you must create/assign a mute role manually. |
+| Speak | denying Speak to the mute role in voice channels (part of the mute-role overwrite) | Optional | Discord rejects the mute-role overwrite on a channel when the bot does not itself hold a permission it denies; `/enforcer setup` and repair report those channels as failed. |
 | Timeout Members | the Timeout decision (routed through the moderation plugin) | Optional | The Timeout decision is disabled in the flag-queue until this permission is granted. |
 | Kick Members | the Kick decision | Optional | The Kick decision is disabled in the flag-queue until this permission is granted. |
 | Ban Members | the Ban decision | Optional | The Ban decision is disabled in the flag-queue until this permission is granted. |
@@ -77,7 +91,6 @@ _Routes member, message, role, channel, moderation, voice, and platform events t
 | View Channel | posting log embeds to configured log channels | Required | that channel is skipped and an error is logged |
 | Send Messages | posting log embeds to configured log channels | Required | that channel is skipped and an error is logged |
 | Embed Links | rich log embeds (title/fields/jump links) | Required | Discord blocks the send entirely, so the log embed is dropped |
-| Read Message History | live message-edit/delete diffing and invite-use context | Optional | edits/deletes are still logged from cached data only |
 | Manage Server | invite-use attribution on member join (`invite.use`) | Optional | member joins are still logged, just without which invite was used |
 
 
@@ -90,6 +103,7 @@ _Button-driven support tickets with categories, staff assignment, tags, and HTML
 | Manage Channels | creating and deleting ticket channels (channel mode) | Optional | Channel-mode tickets fail with a clear ephemeral error when opened; thread-mode tickets still work. |
 | Manage Roles | setting per-user/per-role permission overwrites on a new ticket channel | Optional | Channel-mode tickets fail with a clear ephemeral error when opened; thread-mode tickets still work. |
 | Create Private Threads | creating private ticket threads (thread mode) | Optional | Thread-mode tickets fail with a clear ephemeral error when opened; channel-mode tickets still work. |
+| Send Messages in Threads | posting the opening embed and the "ticket closed" notice with its Reopen button inside a ticket thread (thread mode) | Optional | The ticket thread is still created, but the opening embed and the closed notice with its Reopen button are not posted in it; channel-mode tickets are unaffected. |
 | Manage Threads | archiving and locking ticket threads on close, and adding participants to a thread | Optional | Thread-mode tickets close but the thread is left unarchived/unlocked for staff to close manually. |
 | Send Messages | posting the panel, opening embed, and closing summary | Required | The plugin cannot function without this permission. |
 | Embed Links | rich panel/ticket embeds | Optional | Falls back to plain-text messages. |
@@ -107,7 +121,7 @@ _Self-assignable role panels, welcome/goodbye messages, onboarding checklists, r
 | Send Messages | posting panels, welcome/goodbye, onboarding rules | Required | Messages cannot be posted to the configured channel. |
 | Embed Links | panel / welcome / goodbye / onboarding embeds | Required | Falls back to plain text where possible. |
 | Add Reactions | reaction-style role panels | Optional | Reaction panels cannot add the initial reactions; button/select panels are unaffected. |
-| Manage Channels | account-age quarantine channel visibility (optional) | Optional | Quarantine still applies the role; channel overwrites are left as configured manually. |
+| Use External Emoji | role panel options that use a custom emoji from another server | Optional | Unicode emoji and this server's own emoji are unaffected; an emoji from another server is not rendered or reacted with. |
 | Kick Members | account-age gate: kick action | Optional | The kick action is skipped with a warning logged if this permission is missing. |
 
 
@@ -119,11 +133,13 @@ _Leveling/XP with anti-farming controls, leaderboards, a reputation system, a st
 |---|---|---|---|
 | Manage Roles | level-up role rewards | Optional | Level-ups still announce; role rewards are skipped and logged. |
 | Manage Channels | temporary voice channels | Optional | Members can still join a hub channel; the bot cannot create/rename/delete their temp channel. |
+| Connect | temporary voice channels (granting the owner Connect on their own channel, and managing it) | Optional | Discord rejects the owner overwrite, so no temp channel is created; the member stays in the hub channel. |
 | Move Members | temporary voice channels (moving the creator into their new channel) | Optional | The temp channel is still created; the member has to move into it themselves. |
 | Mute Members | temporary voice channels (owner can mute members in their own channel) | Optional | The temp voice owner cannot mute other members in their own channel; everything else still works. |
 | Deafen Members | temporary voice channels (owner can deafen members in their own channel) | Optional | The temp voice owner cannot deafen other members in their own channel; everything else still works. |
 | Send Messages | level-up announcements, starboard posts | Required | Announcements/starboard posts silently fail to send; nothing else is affected. |
 | Embed Links | starboard posts, leaderboard/rank embeds | Required | Falls back to plain text where possible. |
+| Attach Files | /level rank card image | Optional | The text rank embed is sent instead, and the miss is logged once. |
 | Read Message History | starboard (reading reaction counts on older messages) | Optional | Starboard may miss reactions added to messages the bot has not seen since restart. |
 
 
@@ -135,11 +151,9 @@ _Polls, giveaways, suggestions, scheduled announcements, reminders, event RSVPs,
 |---|---|---|---|
 | Send Messages | posting polls/giveaways/suggestions/announcements/events/birthday announcements, tag replies / auto-responders | Required | The bot cannot post in the configured channel; the command replies with an error. |
 | Embed Links | result, status, and birthday list embeds | Required | Falls back to plain text where possible. |
-| Manage Threads | auto-threading suggestions, auto-threads | Optional | The suggestion/message is still posted; no thread is created. |
 | Create Public Threads | auto-threading suggestions, auto-threads | Optional | The suggestion/message is still posted; no thread is created. |
 | Manage Messages | auto-publish (crosspost announcement messages by other members) | Optional | Only the bot's own announcement messages get published; others are skipped and logged once per hour. |
 | Manage Events | creating a native Discord scheduled event for /event create | Optional | The event is still tracked and announced in-channel; no Discord Events entry is created. |
-| Manage Messages | sticky messages (delete the bot's own previous sticky) | Optional | The old sticky stays in place; the bot still posts a new one. |
 | Manage Channels | server-stats counter channels (rename) | Optional | Counters stop updating; /statschannel refresh reports the missing permission. |
 | Manage Roles | birthday role (optional) | Optional | No role is added; the announcement still posts. |
 
@@ -169,7 +183,7 @@ _General-purpose utility commands: user/server info, timestamps, an embed builde
 |---|---|---|---|
 | View Channel | help / userinfo / serverinfo / avatar / banner / roleinfo / channelinfo / timestamp / timezone / calculator / afk / translate / weather / status | Required | Interaction responses are delivered over the interaction token, so no channel-level permission is required for these read-only commands. |
 | Embed Links | Rich embeds in command replies | Optional | Without Embed Links the bot can still reply, but Discord may render embeds as plain links in some contexts. |
-| Manage Messages | /embed builder (send to channel) | Required | The command is hidden from members without Manage Messages by default (setDefaultMemberPermissions); "Send to channel" additionally checks the bot can send/embed in the target channel. |
+| Send Messages | /embed builder (send to channel) | Optional | "Send to channel" checks the bot can view, send, and embed in the target channel and replies with an error if it cannot; every other utility command is unaffected. (Manage Messages is required of the member running /embed, never of the bot.) |
 
 
 ### Music & Media (`media`)
@@ -188,6 +202,7 @@ _Secure connector framework for optional external services: Twitch, YouTube, Ins
 | View Channel | posting alerts / inbound webhook events | Required | Alerts silently fail to post in that channel; connection health shows an error. |
 | Send Messages | posting alerts / inbound webhook events | Required | Alerts silently fail to post in that channel; connection health shows an error. |
 | Embed Links | alert embeds (Twitch/YouTube/Instagram/Reddit/Steam/Calendar) | Optional | Alerts post as plain text instead of a rich embed. |
+| Manage Webhooks | Twitch chat bridge (creating the webhook that relays Twitch chat into a Discord channel) | Optional | The bridge shows an error saying it needs View Channel, Send Messages, and Manage Webhooks in the bridge channel, and the Twitch-to-Discord relay is not set up; alerts and every other integration are unaffected. |
 
 
 ### AI Assistant (`ai`)
@@ -214,6 +229,7 @@ Intent" eligibility in the Developer Portal) — see the README's Discord Develo
 | Plugin | What degrades without it |
 |---|---|
 | Automod (`automod`) | The account-age gate and raid (join-burst) detection rules cannot evaluate and show as inactive. |
+| Raid mode (`raidmode`) | _(see the plugin README for what degrades without this intent)_ |
 | Logging (`logging`) | Member join/leave logs and invite-use attribution on join are unavailable. |
 | Roles & Onboarding (`roles`) | Welcome/goodbye messages, the account-age gate, membership screening, and role persistence on rejoin cannot function — the bot is not told about join/leave events. |
 
@@ -231,11 +247,11 @@ Intent" eligibility in the Developer Portal) — see the README's Discord Develo
 
 ## Invite permissions
 
-Permission integer: `1504210971862`
+Permission integer: `1504210971734`
 
 Scopes: `bot`, `applications.commands`
 
-Example invite URL: `https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot%20applications.commands&permissions=1504210971862`
+Example invite URL: `https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot%20applications.commands&permissions=1504210971734`
 
 Permissions included (never Administrator):
 
@@ -243,7 +259,6 @@ Permissions included (never Administrator):
 - Ban Members
 - Manage Channels
 - Add Reactions
-- View Audit Log
 - View Channel
 - Send Messages
 - Manage Messages

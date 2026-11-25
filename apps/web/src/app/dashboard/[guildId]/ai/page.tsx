@@ -87,11 +87,12 @@ export default function AiPage() {
                 onCheckedChange={handleOptInToggle}
                 disabled={togglePlugin.isPending}
                 aria-label="Toggle AI assistant"
+                aria-describedby="ai-opt-in-help"
               />
             </span>
           ) : null}
         </AlertTitle>
-        <AlertDescription className="space-y-1">
+        <AlertDescription id="ai-opt-in-help" className="space-y-1">
           <p>
             This server's messages are never sent anywhere until an admin turns this on <strong>and</strong>{' '}
             configures a provider + API key below. Every AI response includes the disclosure "AI can be
@@ -155,7 +156,7 @@ export default function AiPage() {
         <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
           <CardTitle>Usage</CardTitle>
           <Select value={String(rangeDays)} onValueChange={(v) => setRangeDays(Number(v))}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger aria-label="Usage time range" className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

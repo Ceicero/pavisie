@@ -87,6 +87,7 @@ interface SchemaFieldProps {
 function SchemaField({ fieldKey, node, value, onChange, guildId, disabled }: SchemaFieldProps) {
   const label = node.title ?? humanizeKey(fieldKey);
   const htmlId = `field-${fieldKey}`;
+  const descriptionId = React.useId();
   const resolved = value === undefined ? defaultForSchema(node) : value;
 
   // Union types (zod `.union()`/`.discriminatedUnion()`) — no single control fits every branch, so fall back
@@ -185,13 +186,18 @@ function SchemaField({ fieldKey, node, value, onChange, guildId, disabled }: Sch
       <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
         <div className="space-y-0.5">
           <p className="text-sm font-medium text-foreground">{label}</p>
-          {node.description ? <p className="text-xs text-muted-foreground">{node.description}</p> : null}
+          {node.description ? (
+            <p id={descriptionId} className="text-xs text-muted-foreground">
+              {node.description}
+            </p>
+          ) : null}
         </div>
         <Switch
           checked={Boolean(resolved)}
           onCheckedChange={onChange}
           disabled={disabled}
           aria-label={label}
+          aria-describedby={node.description ? descriptionId : undefined}
         />
       </div>
     );

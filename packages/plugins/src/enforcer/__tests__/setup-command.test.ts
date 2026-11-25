@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ChannelType, type ChatInputCommandInteraction, type EmbedBuilder } from 'discord.js';
+import { registerPluginLocales, type CommandContext } from '../../sdk';
 import { createTestContext } from '../../sdk/testing';
-import type { CommandContext } from '../../sdk';
 import type { HostService } from '../../sdk/services';
 import { executeSetup } from '../commands/setup';
 import type { EnforcerConfig } from '../manifest';
+import en from '../locales/en.json';
+
+const enforcerT = registerPluginLocales('enforcer', { en });
 
 const MUTE_DENY = { SendMessages: false, SendMessagesInThreads: false, Speak: false, AddReactions: false };
 
@@ -49,10 +52,16 @@ interface SetupOpts {
   /** What `guild.roles.fetch` resolves the mute role to (null = "I could not read that role"). */
   roleResolves?: boolean;
   config?: Partial<EnforcerConfig>;
+  /** Makes Discord reject the mute-role overwrite on the one manageable channel. */
+  muteEditFails?: boolean;
+  /** Runs `/enforcer setup repair:true`, with the enforcer service reporting this result. */
+  repair?: { muteApplied: number; muteFailed: number };
 }
 
 function buildContext(opts: SetupOpts = {}) {
-  const generalEdit = vi.fn(async (..._args: unknown[]) => undefined);
+  const generalEdit = vi.fn(async (..._args: unknown[]) => {
+    if (opts.muteEditFails) throw new Error('Missing Permissions');
+  });
   const unmanageableEdit = vi.fn(async (..._args: unknown[]) => undefined);
   const ledgerSend = vi.fn(async () => undefined);
   const setConfigCalls: Partial<EnforcerConfig>[] = [];
@@ -120,7 +129,7 @@ function buildContext(opts: SetupOpts = {}) {
     user: { id: 'admin-1' },
     guild,
     options: {
-      getBoolean: () => null,
+      getBoolean: (name: string) => (name === 'repair' && opts.repair ? true : null),
       getChannel: () => null,
       getString: () => null,
       getRole: (name: string) =>
@@ -144,6 +153,10 @@ function buildContext(opts: SetupOpts = {}) {
     },
   });
   ctx.services.register('host', fakeHost());
+  if (opts.repair) {
+    const result = opts.repair;
+    ctx.services.register('enforcer', { repairChannels: async () => result } as never);
+  }
 
   const c: CommandContext = {
     interaction: interaction as unknown as ChatInputCommandInteraction<'cached'>,
@@ -151,7 +164,7 @@ function buildContext(opts: SetupOpts = {}) {
     guildId: 'g1',
     staffLevel: 'admin',
     locale: 'en-US' as never,
-    t: (key: string) => key,
+    t: enforcerT,
     config: async <T>() => cfg as T,
   };
 
@@ -218,5 +231,46 @@ describe('/enforcer setup — mute role created for a guild that has none', () =
     const text = replyText(editReplies);
     expect(text).toContain('applied deny-overwrites to 1 channel(s)');
     expect(text).toContain("1 skipped — I can't manage them");
+  });
+});
+
+// A failed mute-role overwrite is not always about Manage Roles / Manage Channels: Discord also rejects an
+// overwrite that denies a permission the bot does not hold itself, so a bot missing Speak fails the same way.
+// The hint has to say so, or an admin fixes the two permissions it names and is still stuck.
+describe('/enforcer setup — hint when the mute role cannot be applied', () => {
+  it('names Speak as a possible cause when an overwrite fails during setup', async () => {
+    const { c, editReplies } = buildContext({ muteRoleOptId: 'muted-1', muteEditFails: true });
+
+    await executeSetup(c);
+
+    const text = replyText(editReplies);
+    expect(text).toContain('1 failed');
+    expect(text).toContain('Manage Roles and Manage Channels');
+    expect(text).toContain('Speak');
+    expect(text).toContain('Send Messages in Threads');
+    expect(text).toContain('Add Reactions');
+  });
+
+  it('names Speak as a possible cause when an overwrite fails during repair', async () => {
+    const { c, editReplies } = buildContext({ repair: { muteApplied: 3, muteFailed: 2 } });
+
+    await executeSetup(c);
+
+    const text = replyText(editReplies);
+    expect(text).toContain('mute role on 3 channel(s)');
+    expect(text).toContain('2 failed');
+    expect(text).toContain('Manage Roles and Manage Channels');
+    expect(text).toContain('Speak');
+  });
+
+  it('gives no hint when every overwrite was applied', async () => {
+    const { c, editReplies } = buildContext({ repair: { muteApplied: 5, muteFailed: 0 } });
+
+    await executeSetup(c);
+
+    const text = replyText(editReplies);
+    expect(text).toContain('mute role on 5 channel(s)');
+    expect(text).not.toContain('Speak');
+    expect(text).not.toContain('failed');
   });
 });

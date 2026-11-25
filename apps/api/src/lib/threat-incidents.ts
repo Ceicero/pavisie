@@ -1,0 +1,137 @@
+/**
+ * Live raid / threat incident source for `GET /guilds/:guildId/threats/incidents`.
+ *
+ * THIS FILE IS THE ADAPTER — the single swap point for raid mode's incidents.
+ *
+ * Production reads raid mode's `RaidModeIncident` table and maps each row to the `ThreatIncidentDto` contract in
+ * `@pavisie/types` (threats.ts), which is unchanged: one `raid` incident per raid, plus one `lockdown` incident
+ * when a lockdown was applied. Only counts and timestamps come back; per-member scores are on their own route
+ * (`/raid-mode/incidents/:incidentId/members`). Do not read automod Redis raid-alert keys from here — those are
+ * owned by the automod plugin and are not the contract.
+ *
+ * Tests inject a fixture source via `setThreatIncidentSourceForTests`. That setter is test-only and is not used
+ * on any production path. There is no env flag. Called without a Prisma client (old callers), it returns [].
+ */
+import type { PrismaClient, RaidModeIncident } from '@pavisie/database';
+import type { ThreatIncidentDto } from '@pavisie/types';
+
+/** A source of threat incidents for a guild. */
+export type ThreatIncidentSource = (guildId: string) => Promise<ThreatIncidentDto[]>;
+
+let injectedSource: ThreatIncidentSource | undefined;
+
+/** Ended incidents stay on the overview this long; active ones and unrestored lockdowns always show. */
+const RECENT_MS = 24 * 60 * 60 * 1000;
+const MAX_INCIDENTS = 20;
+/**
+ * The overview panel shows at most this many rows. One incident can map to two DTOs (raid + lockdown), so the
+ * mapped list is capped again after `flatMap`, keeping active items first so an ongoing raid or a lockdown that
+ * is still on is never pushed off the panel by ended ones.
+ */
+export const MAX_THREAT_ROWS = 20;
+
+/** The name shown for raid mode incidents. Raid mode has no automod rule, so `ruleId` is left out. */
+export const RAID_MODE_RULE_NAME = 'Raid mode';
+
+function lockdownStillOn(row: Pick<RaidModeIncident, 'lockdownState'>): boolean {
+  return (
+    row.lockdownState === 'LOCKING' ||
+    row.lockdownState === 'LOCKED' ||
+    row.lockdownState === 'PARTIALLY_RESTORED'
+  );
+}
+
+/** Maps one raid mode incident to its `raid` DTO and, if a lockdown was applied, its `lockdown` DTO. */
+export function raidModeIncidentToThreatDtos(row: RaidModeIncident): ThreatIncidentDto[] {
+  const raid: ThreatIncidentDto = {
+    id: row.id,
+    guildId: row.guildId,
+    kind: 'raid',
+    status: row.status === 'ACTIVE' ? 'active' : 'ended',
+    ruleName: RAID_MODE_RULE_NAME,
+    dryRun: row.dryRun,
+    startedAt: row.startedAt.toISOString(),
+    lastActivityAt: (row.endedAt ?? row.lastJoinAt).toISOString(),
+    // The DTO contract: `endedAt` is always set when `status` is `ended`. An ENDED row should carry `endedAt`;
+    // fall back to the last join rather than ever sending an ended incident without one.
+    ...(row.status === 'ACTIVE' ? {} : { endedAt: (row.endedAt ?? row.lastJoinAt).toISOString() }),
+    joinsFlagged: row.joinsFlagged,
+  };
+  if (!row.lockdownAppliedAt) return [raid];
+  const on = lockdownStillOn(row);
+  const lockdown: ThreatIncidentDto = {
+    id: `${row.id}:lockdown`,
+    guildId: row.guildId,
+    kind: 'lockdown',
+    status: on ? 'active' : 'ended',
+    ruleName: RAID_MODE_RULE_NAME,
+    // A lockdown is a real action even when the raid's detection ran in dry-run (an admin pressed the button).
+    dryRun: false,
+    startedAt: row.lockdownAppliedAt.toISOString(),
+    lastActivityAt: (row.lockdownRestoredAt ?? row.lockdownAppliedAt).toISOString(),
+    // Always set once the lockdown is off. Without a restore time (an old or hand-edited row), use the raid's end,
+    // then the time the lockdown was applied, so the contract holds.
+    ...(on
+      ? {}
+      : { endedAt: (row.lockdownRestoredAt ?? row.endedAt ?? row.lockdownAppliedAt).toISOString() }),
+    lockdownAction: row.lockdownActions.join(', '),
+    lockdownActions: [...row.lockdownActions],
+  };
+  return [raid, lockdown];
+}
+
+async function raidModeSource(prisma: PrismaClient, guildId: string): Promise<ThreatIncidentDto[]> {
+  // Two queries so ongoing items can never be crowded out: a busy day with more than MAX_INCIDENTS recent
+  // incidents would otherwise let `take` drop an older raid that is still active or a lockdown that is still on.
+  const [ongoing, recent] = await Promise.all([
+    prisma.raidModeIncident.findMany({
+      where: {
+        guildId,
+        OR: [{ status: 'ACTIVE' }, { lockdownState: { in: ['LOCKING', 'LOCKED', 'PARTIALLY_RESTORED'] } }],
+      },
+      orderBy: { startedAt: 'desc' },
+      take: MAX_INCIDENTS,
+    }),
+    prisma.raidModeIncident.findMany({
+      where: { guildId, startedAt: { gte: new Date(Date.now() - RECENT_MS) } },
+      orderBy: { startedAt: 'desc' },
+      take: MAX_INCIDENTS,
+    }),
+  ]);
+  const seen = new Set<string>();
+  const rows = [...ongoing, ...recent].filter((row) => !seen.has(row.id) && seen.add(row.id));
+  return capThreatRows(rows.flatMap(raidModeIncidentToThreatDtos));
+}
+
+/** Active items first, then newest first; at most `MAX_THREAT_ROWS`. Stable for equal keys. */
+export function capThreatRows(items: ThreatIncidentDto[]): ThreatIncidentDto[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort(
+      (a, b) =>
+        Number(b.item.status === 'active') - Number(a.item.status === 'active') ||
+        b.item.startedAt.localeCompare(a.item.startedAt) ||
+        a.index - b.index,
+    )
+    .slice(0, MAX_THREAT_ROWS)
+    .map(({ item }) => item);
+}
+
+/** Returns the current threat incidents for `guildId`. */
+export async function listThreatIncidents(
+  guildId: string,
+  prisma?: PrismaClient,
+): Promise<ThreatIncidentDto[]> {
+  if (injectedSource) return injectedSource(guildId);
+  if (!prisma) return [];
+  return raidModeSource(prisma, guildId);
+}
+
+/**
+ * Test-only. Replaces the incident source used by `listThreatIncidents`.
+ * Pass `undefined` to restore the production default.
+ * Must not be called from production routes or the dashboard.
+ */
+export function setThreatIncidentSourceForTests(source: ThreatIncidentSource | undefined): void {
+  injectedSource = source;
+}

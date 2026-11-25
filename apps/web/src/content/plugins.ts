@@ -44,6 +44,16 @@ export const pluginCopy: Record<PluginId, PluginCopy> = {
     ],
     highlights: ['Dry-run mode', 'Raid detection', 'Regex safety checks', 'Review queue'],
   },
+  raidmode: {
+    headline: 'Spots a raid from join rate and account age, and locks down with a one-click exact restore.',
+    whyGaming: [
+      'A wave of fresh accounts joining at once is the usual start of a raid; raid mode sees the burst using thresholds your admins set.',
+      'Lockdown closes channels to @everyone and saves exactly what it changed, so one click puts every permission back the way it was.',
+      'It never lifts a lockdown by itself: when the raid goes quiet it reminds staff, and the decision stays with a human.',
+      'Risky joins are scored from a few account signals, and only the member id, score and reason codes are kept, for 30 days.',
+    ],
+    highlights: ['Admin-set thresholds', 'One-click restore', 'Minimal data', 'Audit trail'],
+  },
   enforcer: {
     headline: 'Policy-driven moderation where staff never have to confront a player directly.',
     whyGaming: [

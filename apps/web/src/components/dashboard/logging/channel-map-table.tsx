@@ -85,6 +85,7 @@ export function ChannelMapTable({ guildId, draft, onChange, disabled }: ChannelM
                   </TableCell>
                   <TableCell className="text-right">
                     <Switch
+                      aria-label={`Enabled: ${LOG_KIND_LABELS[kind]}`}
                       checked={draft.enabledKinds.includes(kind)}
                       onCheckedChange={(v) => toggleEnabled(kind, v)}
                       disabled={disabled}
@@ -105,12 +106,14 @@ export function ChannelMapTable({ guildId, draft, onChange, disabled }: ChannelM
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Store events for search &amp; export</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="logging-store-events-help" className="text-xs text-muted-foreground">
                 When off, log embeds still post to their channels live, but nothing is written to the
                 searchable log — the Search tab and CSV export will be empty.
               </p>
             </div>
             <Switch
+              aria-label="Store events for search & export"
+              aria-describedby="logging-store-events-help"
               checked={draft.storeEvents}
               onCheckedChange={(v) => onChange({ ...draft, storeEvents: v })}
               disabled={disabled}
@@ -120,12 +123,14 @@ export function ChannelMapTable({ guildId, draft, onChange, disabled }: ChannelM
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Capture message content on edit/delete</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="logging-capture-content-help" className="text-xs text-muted-foreground">
                 Only takes effect together with this server&apos;s <strong>Log message content</strong>{' '}
                 setting.
               </p>
             </div>
             <Switch
+              aria-label="Capture message content on edit/delete"
+              aria-describedby="logging-capture-content-help"
               checked={draft.captureContent}
               onCheckedChange={(v) => onChange({ ...draft, captureContent: v })}
               disabled={disabled}

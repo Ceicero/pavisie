@@ -105,11 +105,13 @@ export function StarboardTab({ guildId }: { guildId: string }) {
         <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
           <div>
             <p className="text-sm font-medium">Ignore self-stars</p>
-            <p className="text-xs text-muted-foreground">
+            <p id="starboard-ignore-self-stars-help" className="text-xs text-muted-foreground">
               Authors can&apos;t star their own message to boost it toward the threshold.
             </p>
           </div>
           <Switch
+            aria-label="Ignore self-stars"
+            aria-describedby="starboard-ignore-self-stars-help"
             checked={draft.ignoreSelfStar}
             onCheckedChange={(v) => set('ignoreSelfStar', v)}
             disabled={update.isPending}
@@ -119,11 +121,13 @@ export function StarboardTab({ guildId }: { guildId: string }) {
         <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
           <div>
             <p className="text-sm font-medium">Allow NSFW channels</p>
-            <p className="text-xs text-muted-foreground">
+            <p id="starboard-allow-nsfw-help" className="text-xs text-muted-foreground">
               Off by default — messages from NSFW channels are skipped.
             </p>
           </div>
           <Switch
+            aria-label="Allow NSFW channels"
+            aria-describedby="starboard-allow-nsfw-help"
             checked={draft.allowNsfw}
             onCheckedChange={(v) => set('allowNsfw', v)}
             disabled={update.isPending}

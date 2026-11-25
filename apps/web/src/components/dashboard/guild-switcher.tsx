@@ -37,10 +37,11 @@ export function GuildSwitcher({ currentGuildId }: GuildSwitcherProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex w-full items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-left text-sm shadow-sm hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring">
+      <DropdownMenuTrigger className="flex w-full min-w-0 items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-left text-sm shadow-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <GuildIcon name={current?.name ?? 'Guild'} iconUrl={current?.iconUrl ?? null} />
+        <span className="sr-only">Switch server: </span>
         <span className="min-w-0 flex-1 truncate font-medium">{current?.name ?? 'Select a server'}</span>
-        <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-64" align="start">
         <DropdownMenuLabel>Your servers</DropdownMenuLabel>

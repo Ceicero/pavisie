@@ -150,7 +150,7 @@ async function handleStart(c: CommandContext): Promise<void> {
     giveawayId = giveaway.id;
 
     const message = await channel.send({
-      embeds: [buildGiveawayEmbed(giveaway, 0)],
+      embeds: [buildGiveawayEmbed(giveaway, 0, t)],
       components: buildGiveawayComponents(giveaway.id, false),
     });
     messageId = message.id;

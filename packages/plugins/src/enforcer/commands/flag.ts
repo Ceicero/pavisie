@@ -118,9 +118,9 @@ export const flagContextMenuCommand: PluginCommand = {
 
     const select = new StringSelectMenuBuilder()
       .setCustomId(buildCustomId('enforcer', 'flag-select-policy', c.interaction.user.id, pendingId))
-      .setPlaceholder('Select a policy (optional)')
+      .setPlaceholder(c.t('flag.selectPolicy'))
       .addOptions(
-        { label: 'No specific policy', value: 'none' },
+        { label: c.t('flag.noSpecificPolicy'), value: 'none' },
         ...policies.map((p) => ({
           label: p.name.slice(0, 100),
           value: p.id,
@@ -128,13 +128,10 @@ export const flagContextMenuCommand: PluginCommand = {
         })),
       );
 
-    const contentWarning =
-      message.content.length === 0
-        ? '\n-# This message has no readable content here (the Message Content intent may be off) — the flag will carry only a jump link unless your note adds context.'
-        : '';
+    const contentWarning = message.content.length === 0 ? `\n${c.t('flag.noContentWarning')}` : '';
 
     await c.interaction.reply({
-      content: `Flagging this message for review. Pick a policy (or none), then add an optional note.${contentWarning}`,
+      content: `${c.t('flag.prompt')}${contentWarning}`,
       components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
       ephemeral: true,
     });

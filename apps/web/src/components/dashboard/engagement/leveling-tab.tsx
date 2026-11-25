@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Trophy } from 'lucide-react';
+import { RotateCcw, Trophy } from 'lucide-react';
 import {
   Button,
   Card,
@@ -26,16 +26,119 @@ import type { EngagementConfigDto, LevelProfileDto } from '@pavisie/types/engage
 import {
   useEngagementConfig,
   useLevelLeaderboard,
+  useResetLeveling,
   useUpdateEngagementConfig,
 } from '@/lib/dashboard/engagement-queries';
+import { useGuildChannels, useGuildRoles } from '@/lib/dashboard/queries';
 import { DataTable, type DataTableColumn } from '../data-table';
 import { DiscordChannelSelect } from '../discord-selects';
 import { MultiRolePicker } from '../multi-role-picker';
+import { ConfirmDialog } from '../confirm-dialog';
 import { ErrorState } from '../error-state';
 import { ApiClientError } from '@/lib/dashboard/api';
 import { XpAdjustDialog } from './xp-adjust-dialog';
 import { RewardsEditor } from './rewards-editor';
 import { MultiChannelPicker } from './multi-channel-picker';
+
+/** Same bounds as `clampXpMultiplier` in the engagement plugin. The API clamps again on save. */
+const XP_MULTIPLIER_MIN = 0.25;
+const XP_MULTIPLIER_MAX = 5;
+
+function clampXpMultiplier(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(XP_MULTIPLIER_MAX, Math.max(XP_MULTIPLIER_MIN, value));
+}
+
+type XpMultiplierEntry = { id: string; multiplier: number };
+
+function MultiplierList({
+  guildId,
+  kind,
+  entries,
+  onChange,
+  disabled,
+}: {
+  guildId: string;
+  kind: 'role' | 'channel';
+  entries: XpMultiplierEntry[];
+  onChange: (next: XpMultiplierEntry[]) => void;
+  disabled?: boolean;
+}) {
+  const roles = useGuildRoles(kind === 'role' ? guildId : undefined);
+  const channels = useGuildChannels(kind === 'channel' ? guildId : undefined);
+  const [text, setText] = React.useState<Record<string, string>>({});
+  const ids = entries.map((entry) => entry.id);
+
+  function label(id: string): string {
+    if (kind === 'role') return roles.data?.find((role) => role.id === id)?.name ?? id;
+    const name = channels.data?.find((channel) => channel.id === id)?.name;
+    return name ? `#${name}` : id;
+  }
+
+  function syncIds(nextIds: string[]) {
+    onChange(nextIds.map((id) => entries.find((entry) => entry.id === id) ?? { id, multiplier: 2 }));
+    setText((prev) => {
+      const next: Record<string, string> = {};
+      for (const id of nextIds) {
+        const value = prev[id];
+        if (value !== undefined) next[id] = value;
+      }
+      return next;
+    });
+  }
+
+  function commit(id: string, raw: string) {
+    const multiplier = clampXpMultiplier(Number(raw));
+    onChange(entries.map((entry) => (entry.id === id ? { ...entry, multiplier } : entry)));
+    setText((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
+  return (
+    <div className="space-y-2">
+      {kind === 'role' ? (
+        <MultiRolePicker guildId={guildId} value={ids} onChange={syncIds} disabled={disabled} />
+      ) : (
+        <MultiChannelPicker
+          guildId={guildId}
+          value={ids}
+          onChange={syncIds}
+          kinds={['text', 'announcement', 'forum', 'voice']}
+          disabled={disabled}
+        />
+      )}
+      {entries.map((entry) => (
+        <div key={entry.id} className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-sm">{label(entry.id)}</span>
+          <Input
+            type="number"
+            aria-label={`XP multiplier for ${label(entry.id)}`}
+            min={XP_MULTIPLIER_MIN}
+            max={XP_MULTIPLIER_MAX}
+            step={0.05}
+            className="w-24"
+            disabled={disabled}
+            value={text[entry.id] ?? String(entry.multiplier)}
+            onChange={(event) => {
+              const raw = event.target.value;
+              setText((prev) => ({ ...prev, [entry.id]: raw }));
+              const value = Number(raw);
+              if (raw.trim() !== '' && Number.isFinite(value)) {
+                onChange(
+                  entries.map((item) => (item.id === entry.id ? { ...item, multiplier: value } : item)),
+                );
+              }
+            }}
+            onBlur={(event) => commit(entry.id, event.target.value)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const LEVEL_UP_CHANNEL_MODES = [
   { value: 'current', label: 'Wherever the message was sent' },
@@ -44,18 +147,35 @@ const LEVEL_UP_CHANNEL_MODES = [
   { value: 'channel', label: 'Specific channel' },
 ];
 
+/** Public page path from the saved flag. An unsaved draft must not reveal the link. */
+export function publicLeaderboardHref(
+  guildId: string,
+  savedPublicLeaderboard: boolean | undefined,
+): string | null {
+  if (savedPublicLeaderboard !== true) return null;
+  return `/leaderboard/${encodeURIComponent(guildId)}`;
+}
+
 export function LevelingTab({ guildId }: { guildId: string }) {
   const { data, isLoading, error, refetch } = useEngagementConfig(guildId);
   const update = useUpdateEngagementConfig(guildId);
+  const reset = useResetLeveling(guildId);
   const { toast } = useToast();
   const [draft, setDraft] = React.useState<EngagementConfigDto['leveling'] | null>(null);
   const [xpDialogOpen, setXpDialogOpen] = React.useState(false);
+  const [resetOpen, setResetOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const [cursor, setCursor] = React.useState<string | undefined>(undefined);
   const [cursorHistory, setCursorHistory] = React.useState<string[]>([]);
 
   React.useEffect(() => {
-    if (data) setDraft(data.leveling);
+    if (!data) return;
+    setDraft({
+      ...data.leveling,
+      publicLeaderboard: data.leveling.publicLeaderboard ?? false,
+      roleMultipliers: data.leveling.roleMultipliers ?? [],
+      channelMultipliers: data.leveling.channelMultipliers ?? [],
+    });
   }, [data]);
 
   const leaderboard = useLevelLeaderboard(guildId, cursor);
@@ -69,8 +189,20 @@ export function LevelingTab({ guildId }: { guildId: string }) {
 
   function handleSave() {
     if (!draft) return;
+    const leveling = {
+      ...draft,
+      roleMultipliers: draft.roleMultipliers.map((entry) => ({
+        ...entry,
+        multiplier: clampXpMultiplier(entry.multiplier),
+      })),
+      channelMultipliers: draft.channelMultipliers.map((entry) => ({
+        ...entry,
+        multiplier: clampXpMultiplier(entry.multiplier),
+      })),
+    };
+    setDraft(leveling);
     update.mutate(
-      { leveling: draft },
+      { leveling },
       {
         onSuccess: () => toast({ title: 'Leveling settings saved', variant: 'success' }),
         onError: (err) =>
@@ -83,8 +215,27 @@ export function LevelingTab({ guildId }: { guildId: string }) {
     );
   }
 
+  function handleReset() {
+    reset.mutate(undefined, {
+      onSuccess: (result) => {
+        setResetOpen(false);
+        toast({
+          title: 'Leveling reset',
+          description: `Cleared ${result.count.toLocaleString()} profile(s). Reward roles update shortly after, not instantly.`,
+          variant: 'success',
+        });
+      },
+      onError: (err) =>
+        toast({
+          title: 'Could not reset leveling',
+          description: err instanceof ApiClientError ? err.message : 'Please try again.',
+          variant: 'destructive',
+        }),
+    });
+  }
+
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
-  if (isLoading || !draft) {
+  if (isLoading || !data || !draft) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
@@ -98,11 +249,17 @@ export function LevelingTab({ guildId }: { guildId: string }) {
     draft.levelUpChannel === 'current' || draft.levelUpChannel === 'dm' || draft.levelUpChannel === 'none'
       ? draft.levelUpChannel
       : 'channel';
-  const dirty = data ? JSON.stringify(draft) !== JSON.stringify(data.leveling) : false;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(data.leveling);
+  const publicHref = publicLeaderboardHref(guildId, data.leveling.publicLeaderboard);
 
   const filteredRows = (leaderboard.data?.items ?? []).filter((row) => row.userId.includes(search.trim()));
 
   const columns: DataTableColumn<LevelProfileDto>[] = [
+    {
+      key: 'rank',
+      header: 'Rank',
+      render: (r) => (typeof r.rank === 'number' ? r.rank.toLocaleString() : '—'),
+    },
     { key: 'userId', header: 'User ID', render: (r) => <code className="text-xs">{r.userId}</code> },
     { key: 'level', header: 'Level', render: (r) => r.level },
     { key: 'xp', header: 'XP', render: (r) => r.xp.toLocaleString() },
@@ -123,15 +280,43 @@ export function LevelingTab({ guildId }: { guildId: string }) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Leveling enabled</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="leveling-enabled-help" className="text-xs text-muted-foreground">
                 Turn message/voice XP off without losing anyone&apos;s progress.
               </p>
             </div>
             <Switch
+              aria-label="Leveling enabled"
+              aria-describedby="leveling-enabled-help"
               checked={draft.enabled}
               onCheckedChange={(v) => set('enabled', v)}
               disabled={update.isPending}
             />
+          </div>
+
+          <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+            <div>
+              <p className="text-sm font-medium">Public leaderboard</p>
+              <p id="public-leaderboard-help" className="text-xs text-muted-foreground">
+                Anyone can view the XP leaderboard and a member&apos;s rank without signing in. Off by
+                default. Former members stay listed until a later update.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {publicHref ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={publicHref} target="_blank" rel="noopener noreferrer">
+                    Open public leaderboard
+                  </a>
+                </Button>
+              ) : null}
+              <Switch
+                checked={draft.publicLeaderboard}
+                onCheckedChange={(v) => set('publicLeaderboard', v)}
+                disabled={update.isPending}
+                aria-label="Public leaderboard"
+                aria-describedby="public-leaderboard-help"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -272,6 +457,41 @@ export function LevelingTab({ guildId }: { guildId: string }) {
               />
             </FormField>
           </div>
+
+          <div className="space-y-3 rounded-md border border-border p-3">
+            <div>
+              <p className="text-sm font-medium">XP multipliers</p>
+              <p className="text-xs text-muted-foreground">
+                The highest matching role wins, and the highest matching channel wins. A thread counts its own
+                channel and its parent, so a parent multiplier still applies inside the thread. The XP factor
+                is the larger of the role factor and the channel factor; they are not multiplied. A side with
+                no entry is left out, so a 0.25 role still reduces XP in a channel that has no multiplier. A
+                stored 1 does count. Range 0.25–5, and a new entry starts at 2×. Message XP rolls your min–max
+                first, then this factor is applied and floored, then the hourly cap limits what is granted.
+                Voice XP uses the same factor and is not part of that cap.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField label="Role XP multipliers">
+                <MultiplierList
+                  guildId={guildId}
+                  kind="role"
+                  entries={draft.roleMultipliers}
+                  onChange={(value) => set('roleMultipliers', value)}
+                  disabled={update.isPending}
+                />
+              </FormField>
+              <FormField label="Channel XP multipliers" hint="Text, announcement, forum, and voice channels.">
+                <MultiplierList
+                  guildId={guildId}
+                  kind="channel"
+                  entries={draft.channelMultipliers}
+                  onChange={(value) => set('channelMultipliers', value)}
+                  disabled={update.isPending}
+                />
+              </FormField>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -289,10 +509,11 @@ export function LevelingTab({ guildId }: { guildId: string }) {
           <CardTitle>Leaderboard</CardTitle>
           <div className="flex items-center gap-2">
             <Input
+              aria-label="Search leaderboard by user ID"
               placeholder="Search by user ID…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-56"
+              className="w-full sm:w-56"
             />
             <Button size="sm" variant="outline" onClick={() => setXpDialogOpen(true)}>
               <Trophy className="h-4 w-4" />
@@ -344,7 +565,33 @@ export function LevelingTab({ guildId }: { guildId: string }) {
         </CardContent>
       </Card>
 
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="text-destructive">Reset leveling</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Clears every member&apos;s XP, level, message count, and voice minutes in this server. Reward
+            roles update shortly after, not instantly. This cannot be undone.
+          </p>
+          <Button variant="destructive" onClick={() => setResetOpen(true)} disabled={reset.isPending}>
+            <RotateCcw className="h-4 w-4" />
+            Reset all XP
+          </Button>
+        </CardContent>
+      </Card>
+
       <XpAdjustDialog guildId={guildId} open={xpDialogOpen} onOpenChange={setXpDialogOpen} />
+      <ConfirmDialog
+        open={resetOpen}
+        onOpenChange={setResetOpen}
+        title="Reset leveling for everyone?"
+        description="This clears every member's XP, level, message count, and voice minutes in this server. Reward roles update shortly after, not instantly. This cannot be undone."
+        confirmLabel="Reset leveling"
+        variant="destructive"
+        loading={reset.isPending}
+        onConfirm={handleReset}
+      />
     </div>
   );
 }

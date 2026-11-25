@@ -946,6 +946,46 @@
       ]
     },
     {
+      "id": "raidmode",
+      "name": "Raid mode",
+      "description": "Detects raids from join rate and account age, locks channels down with one-click exact restore, and scores risky joins with as little stored data as possible.",
+      "category": "moderation",
+      "defaultEnabled": false,
+      "privilegedIntents": [
+        "GuildMembers"
+      ],
+      "commands": [
+        {
+          "name": "raidmode",
+          "fullName": "/raidmode",
+          "type": "slash",
+          "description": "Raid mode: see the latest raid, lock down, or restore permissions. • +help",
+          "staffLevel": "admin",
+          "options": [],
+          "subcommands": [
+            {
+              "name": "status",
+              "fullName": "/raidmode status",
+              "description": "Show the latest raid incident.",
+              "options": []
+            },
+            {
+              "name": "lockdown",
+              "fullName": "/raidmode lockdown",
+              "description": "Lock down for the latest raid incident.",
+              "options": []
+            },
+            {
+              "name": "restore",
+              "fullName": "/raidmode restore",
+              "description": "Put back exactly the permissions a lockdown changed.",
+              "options": []
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "enforcer",
       "name": "Enforcer",
       "description": "Policy-driven, hands-off moderation: the bot flags possible violations from a server policy and a moderator decides — everything is bookkept in a read-only ledger and the database. Moderators never DM or confront the suspect directly; the bot mediates every action.",
@@ -2666,6 +2706,50 @@
                 {
                   "name": "role",
                   "description": "Role to un-ignore.",
+                  "required": false,
+                  "type": "Role"
+                }
+              ]
+            },
+            {
+              "name": "set",
+              "fullName": "/level multiplier set",
+              "description": "Set the XP multiplier for one role or one channel.",
+              "options": [
+                {
+                  "name": "multiplier",
+                  "description": "Factor from 0.25 to 5. The higher of the role and channel factors is used.",
+                  "required": true,
+                  "type": "Number"
+                },
+                {
+                  "name": "channel",
+                  "description": "Channel whose messages or voice time use this factor.",
+                  "required": false,
+                  "type": "Channel"
+                },
+                {
+                  "name": "role",
+                  "description": "Role whose members use this factor.",
+                  "required": false,
+                  "type": "Role"
+                }
+              ]
+            },
+            {
+              "name": "clear",
+              "fullName": "/level multiplier clear",
+              "description": "Remove the XP multiplier from one role or one channel.",
+              "options": [
+                {
+                  "name": "channel",
+                  "description": "Channel to clear.",
+                  "required": false,
+                  "type": "Channel"
+                },
+                {
+                  "name": "role",
+                  "description": "Role to clear.",
                   "required": false,
                   "type": "Role"
                 }

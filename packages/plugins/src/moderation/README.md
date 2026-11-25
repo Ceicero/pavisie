@@ -76,6 +76,24 @@ when `MessageContent` isn't enabled (it's simply not honored, with an explanatio
   component router) — they're text/embed only, with `/appeal <case>` instructions.
 - `/mod purge` never stores deleted message content — only a channel id and count on the case's `metadata`.
 
+## Audit trail
+
+Every moderation action writes exactly one `AuditLog` row, and only when the action actually happened:
+
+- A case and its `moderation.case.create` audit row are written in **one database transaction**, so neither can
+  exist without the other. Clearing warnings (`moderation.warning.clear`) and deciding an appeal from Discord
+  (`moderation.appeal.approve` / `deny`) are audited the same way.
+- If the Discord call fails, nothing is recorded, because nothing changed.
+- Everything after the record (mod-log post, logging, DM, expiry job) is best-effort; a failure there is logged
+  and never undoes or duplicates the record.
+- Partial failures are recorded as what Discord now shows: a softban whose automatic unban fails is recorded
+  as a **BAN** (`metadata.softbanUnbanFailed`) and the moderator is told the member is still banned. An unlock
+  whose bot-overwrite cleanup fails is still recorded as an UNLOCK.
+- If the database write itself fails after Discord applied the action, the error is logged with the guild,
+  target, moderator and action type, so the missing record can be reconstructed.
+
+`__tests__/audit-trail.test.ts` injects a failure at each of these points.
+
 ## Escalation
 
 After each `/mod warn`, the plugin counts the target's currently-_active_ warnings and checks the configured
@@ -90,6 +108,20 @@ delayed by the duration) that reverses the action. A repeatable sweep (`moderati
 catches anything the delayed job missed (a Redis flush, worker downtime) by scanning for `TIMEOUT`/`BAN` cases
 whose `expiresAt` has passed but `expiredAt` is still null.
 
+Expiry never undoes a newer punishment:
+
+- A `TIMEOUT` case lifts the member's timeout only if it is the one that case set. The bot applies a timeout
+  before writing its case, so a member whose timeout ends more than a few seconds after the case expires has been
+  given a newer timeout since, and that one is left alone (the case is still marked expired). If a newer timeout
+  lands in the moment between reading the member and lifting, the lift puts it back until that newer case's end.
+- An enforcer timed mute keeps the role while another mute on the same member is still running, and makes sure
+  the role is actually on in that case, so an earlier attempt that removed it and failed to put it back is
+  repaired on the retry. A new mute that starts while an old one is being lifted gets its role put back straight
+  after the removal.
+- The enforcer records a mute's case *before* adding the role (and closes that case at once if the role add
+  fails), and a manual unmute closes the open mute cases *before* removing the role. So the expiry jobs only ever
+  see mutes that are recorded, and never re-add a role after a manual unmute.
+
 ## Appeals
 
 `/appeal <case>` (member) and the **Warn user**/context-menu flows post to the resolved appeals channel with
@@ -103,6 +135,11 @@ client) — a repeatable job (`moderation.appeal-sync`, every minute) picks up a
 effects. Idempotency is tracked with the durable `ModerationAppeal.effectsAppliedAt` column, set once the
 effects are applied and never expiring — a short-lived Redis key is used only as an in-flight lock so two
 overlapping ticks can't race on the same appeal.
+
+Both paths are race-safe. A decision only counts while the appeal is still pending (a conditional update), so
+two moderators clicking Accept and Deny at once get one decision and one "already decided". The bot's own
+buttons and the sync job apply effects through the same per-appeal lease and re-check `effectsAppliedAt` once
+they hold it, so a decision made in Discord while the sync job ticks is acted on once.
 
 ## Dashboard
 

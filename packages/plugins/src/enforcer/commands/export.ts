@@ -26,7 +26,10 @@ export async function executeExport(c: CommandContext): Promise<void> {
   });
 
   if (rows.length === 0) {
-    await c.interaction.reply({ embeds: [infoEmbed('Export', c.t('export.empty'))], ephemeral: true });
+    await c.interaction.reply({
+      embeds: [infoEmbed(c.t('export.emptyTitle'), c.t('export.empty'))],
+      ephemeral: true,
+    });
     return;
   }
 
@@ -45,5 +48,9 @@ export async function executeExport(c: CommandContext): Promise<void> {
     source: 'bot',
   });
 
-  await c.interaction.reply({ content: `${rows.length} record(s).`, files: [attachment], ephemeral: true });
+  await c.interaction.reply({
+    content: c.t('export.count', { count: rows.length }),
+    files: [attachment],
+    ephemeral: true,
+  });
 }

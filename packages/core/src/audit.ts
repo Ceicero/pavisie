@@ -11,6 +11,9 @@ export const AuditAction = {
   ModerationAppealCreate: 'moderation.appeal.create',
   ModerationAppealApprove: 'moderation.appeal.approve',
   ModerationAppealDeny: 'moderation.appeal.deny',
+  ModerationNoteCreate: 'moderation.note.create',
+  ModerationNoteDelete: 'moderation.note.delete',
+  ModerationSettingsUpdate: 'moderation.settings.update',
   AutomodRuleCreate: 'automod.rule.create',
   AutomodRuleUpdate: 'automod.rule.update',
   AutomodRuleDelete: 'automod.rule.delete',
@@ -46,6 +49,15 @@ export const AuditAction = {
   // An admin setting another member's birthday (self-service sets are never audited — see birthday.ts).
   CommunityBirthdaySet: 'community.birthday.set',
   DeveloperReportSubmit: 'developer_report.submit',
+  // Raid mode (packages/plugins/src/raidmode): one row per incident start/end, lockdown, restore, and per batch
+  // of risk scores written or purged. Never per-member rows for scoring.
+  RaidModeIncidentStart: 'raidmode.incident.start',
+  RaidModeIncidentEnd: 'raidmode.incident.end',
+  RaidModeLockdownApply: 'raidmode.lockdown.apply',
+  RaidModeLockdownRestore: 'raidmode.lockdown.restore',
+  RaidModeScoresRecord: 'raidmode.scores.record',
+  RaidModeScoresPurge: 'raidmode.scores.purge',
+  RaidModeIncidentsPurge: 'raidmode.incidents.purge',
 } as const;
 
 /** Union of all `AuditAction` string values. */

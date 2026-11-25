@@ -1,6 +1,5 @@
 // Discord gateway bot process bootstrap (ARCHITECTURE.md §9).
-import type { Client } from 'discord.js';
-import { GatewayIntentBits } from 'discord.js';
+import { Events, GatewayIntentBits, type Client } from 'discord.js';
 import { createLogger, createRedis, loadEnv, listFromCsv, requireEnv, env } from '@pavisie/core';
 import { ensureGuild, markGuildLeft, prisma } from '@pavisie/database';
 import { allPlugins, PluginRegistry, type PrivilegedIntentsEnabled } from '@pavisie/plugins';
@@ -43,6 +42,9 @@ async function main(): Promise<void> {
   // build/wire everything before calling `client.login()` below (standard discord.js bootstrap ordering — the
   // client is only actually used once `ready` fires, by which point it genuinely is `<true>`).
   const client = createClient(intents) as unknown as Client<true>;
+  // 11 messageCreate listeners is expected: 10 plugin handlers registered by host/loader.ts
+  // plus the prefix listener in this file. 20 leaves a small headroom above that without unbounding.
+  client.setMaxListeners(20);
   // unhandledRejection stays at error. uncaughtException logs fatal (level name, for Railway) and exits.
   installCrashHandlers({ client, logger, channelId: env.ALERT_CHANNEL_ID });
 
@@ -73,7 +75,7 @@ async function main(): Promise<void> {
     });
   }
 
-  client.once('ready', (readyClient) => {
+  client.once(Events.ClientReady, (readyClient) => {
     logger.info({ guilds: readyClient.guilds.cache.size, tag: readyClient.user.tag }, 'bot ready');
 
     // Always report the prefix layer's resolved state, working or not. A `+` command that silently does
@@ -204,8 +206,9 @@ async function main(): Promise<void> {
 
   // Discord refuses the gateway handshake (close code 4014) when the process asks for a privileged intent the
   // application has not been granted in the Developer Portal. That surfaces as an opaque "Used disallowed
-  // intents" crash, and since ENABLE_MESSAGE_CONTENT_INTENT defaults to true (the `+` prefix layer needs it —
-  // ARCHITECTURE.md §9.1), the likeliest cause by far is the portal toggle simply never being switched on.
+  // intents" crash, and since ENABLE_MESSAGE_CONTENT_INTENT is set to true in .env.example and render.yaml
+  // (the `+` prefix layer needs it — ARCHITECTURE.md §9.1; the schema default is false), the likeliest
+  // cause by far is the portal toggle simply never being switched on.
   // Rethrow with the actual fix instead. Retrying without the intent is not possible here: intents are fixed at
   // Client construction, and every plugin's event listeners are already bound to this client.
   try {

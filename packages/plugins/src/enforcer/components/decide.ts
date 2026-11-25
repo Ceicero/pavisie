@@ -6,7 +6,16 @@ import {
   type ButtonInteraction,
   type ModalSubmitInteraction,
 } from 'discord.js';
-import { assertStaffLevel, buildCustomId, errorEmbed, successEmbed, type ComponentHandler } from '../../sdk';
+import {
+  assertStaffLevel,
+  buildCustomId,
+  classifyDiscordFailure,
+  discordErrorCode,
+  discordFailureKey,
+  errorEmbed,
+  successEmbed,
+  type ComponentHandler,
+} from '../../sdk';
 import type { EnforcerDecideInput } from '../../sdk/services';
 // The modal previously parsed duration with the raw `parseDuration` and used it as-is, skipping the floor/cap
 // validation `/mod timeout` applies via `parseTimeoutDuration` — reusing that (and a matching bounded parse for
@@ -16,6 +25,50 @@ import { parseMuteDuration, parseTimeoutDuration } from '../../moderation/durati
 import type { EnforcerConfig } from '../manifest';
 
 type Decision = EnforcerDecideInput['decision'];
+
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
+/** Shared Discord-failure sentence, or `errors.generic` for any other numeric Discord code. Never reads `err.message`. */
+function discordRestReply(t: Translate, err: unknown): string | null {
+  const key = discordFailureKey(err);
+  if (key) return t(key);
+  if (classifyDiscordFailure(err) !== null || discordErrorCode(err) !== null) return t('errors.generic');
+  return null;
+}
+
+/**
+ * `parseTimeoutDuration` / `parseMuteDuration` return the English sentences in `moderation/duration.ts`.
+ * Those sentences are recognized here and replaced with `decide.duration.*` so the reply itself is a locale
+ * string. An unrecognized result uses `errors.generic` rather than the raw parser text.
+ */
+function localizeDurationError(t: Translate, decision: 'TIMEOUT' | 'MUTE', input: string, error: string): string {
+  if (
+    error ===
+    `"${input}" isn't a valid duration. Use a combination like \`10m\`, \`2h\`, or \`1h30m\`.`
+  ) {
+    return t('decide.duration.invalid', { input });
+  }
+  if (decision === 'TIMEOUT' && error === 'Timeout duration must be at least 5 seconds.') {
+    return t('decide.duration.timeoutMin');
+  }
+  if (
+    decision === 'TIMEOUT' &&
+    error ===
+      'Timeouts cannot exceed 28 days — Discord enforces this limit. Use `/mod ban` with a duration for longer removals.'
+  ) {
+    return t('decide.duration.timeoutMax');
+  }
+  if (decision === 'MUTE' && error === 'Mute duration must be at least 5 seconds.') {
+    return t('decide.duration.muteMin');
+  }
+  if (
+    decision === 'MUTE' &&
+    error === 'Mute duration cannot exceed 1 year. Leave the duration off for an indefinite mute.'
+  ) {
+    return t('decide.duration.muteMax');
+  }
+  return t('errors.generic');
+}
 
 const REQUIRE_REASON_KEY: Partial<Record<Decision, 'warn' | 'timeout' | 'mute' | 'kick' | 'ban'>> = {
   WARN: 'warn',
@@ -63,7 +116,7 @@ const decideButtonHandler: ComponentHandler = {
     const decision = parseDecisionArg(decisionRaw);
     if (!decision) {
       await (c.interaction as ButtonInteraction<'cached'>).reply({
-        embeds: [errorEmbed('Unknown decision.')],
+        embeds: [errorEmbed(c.t('decide.unknown'))],
         ephemeral: true,
       });
       return;
@@ -78,17 +131,23 @@ const decideButtonHandler: ComponentHandler = {
       const interaction = c.interaction as ButtonInteraction<'cached'>;
       await interaction.deferUpdate();
       const enforcer = c.ctx.services.require('enforcer');
-      const result = await enforcer.decide({
-        guildId: c.guildId,
-        recordId,
-        decision,
-        moderatorId: interaction.user.id,
-        source: 'bot',
-      });
-      await interaction.followUp({
-        embeds: [successEmbed(`Recorded **${decision}** on #E-${result.recordNumber}.`)],
-        ephemeral: true,
-      });
+      try {
+        const result = await enforcer.decide({
+          guildId: c.guildId,
+          recordId,
+          decision,
+          moderatorId: interaction.user.id,
+          source: 'bot',
+        });
+        await interaction.followUp({
+          embeds: [successEmbed(c.t('decide.recorded', { decision, number: result.recordNumber }))],
+          ephemeral: true,
+        });
+      } catch (err) {
+        const text = discordRestReply(c.t, err);
+        if (!text) throw err;
+        await interaction.followUp({ embeds: [errorEmbed(text)], ephemeral: true });
+      }
       return;
     }
 
@@ -99,7 +158,7 @@ const decideButtonHandler: ComponentHandler = {
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
           .setCustomId('reason')
-          .setLabel('Reason')
+          .setLabel(c.t('decide.reasonLabel'))
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(reasonRequired)
           .setMaxLength(1000),
@@ -110,7 +169,7 @@ const decideButtonHandler: ComponentHandler = {
         new ActionRowBuilder<TextInputBuilder>().addComponents(
           new TextInputBuilder()
             .setCustomId('duration')
-            .setLabel('Duration (e.g. 30m, 2h) — blank uses the server default')
+            .setLabel(c.t('decide.durationLabel'))
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(20),
@@ -122,7 +181,7 @@ const decideButtonHandler: ComponentHandler = {
         new ActionRowBuilder<TextInputBuilder>().addComponents(
           new TextInputBuilder()
             .setCustomId('deleteDays')
-            .setLabel('Delete messages from the last N days (0-7)')
+            .setLabel(c.t('decide.deleteDaysLabel'))
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(1),
@@ -132,7 +191,7 @@ const decideButtonHandler: ComponentHandler = {
 
     const modal = new ModalBuilder()
       .setCustomId(buildCustomId('enforcer', 'decide-modal', recordId, decision))
-      .setTitle(`${decision} — #E-${recordId.slice(-6)}`)
+      .setTitle(c.t('decide.modalTitle', { decision, id: recordId.slice(-6) }))
       .addComponents(...rows);
     await (c.interaction as ButtonInteraction<'cached'>).showModal(modal);
   },
@@ -149,7 +208,7 @@ const decideModalHandler: ComponentHandler = {
     const decision = parseDecisionArg(decisionRaw);
     if (!decision) {
       await (c.interaction as ModalSubmitInteraction<'cached'>).reply({
-        embeds: [errorEmbed('Unknown decision.')],
+        embeds: [errorEmbed(c.t('decide.unknown'))],
         ephemeral: true,
       });
       return;
@@ -168,7 +227,10 @@ const decideModalHandler: ComponentHandler = {
         // modal used to skip validation entirely and pass the raw parse straight through).
         const parsed = decision === 'TIMEOUT' ? parseTimeoutDuration(raw) : parseMuteDuration(raw);
         if (!parsed.ok) {
-          await interaction.reply({ embeds: [errorEmbed(parsed.error)], ephemeral: true });
+          await interaction.reply({
+            embeds: [errorEmbed(localizeDurationError(c.t, decision, raw, parsed.error))],
+            ephemeral: true,
+          });
           return;
         }
         durationMs = parsed.ms;
@@ -185,19 +247,25 @@ const decideModalHandler: ComponentHandler = {
 
     await interaction.deferReply({ ephemeral: true });
     const enforcer = c.ctx.services.require('enforcer');
-    const result = await enforcer.decide({
-      guildId: c.guildId,
-      recordId,
-      decision,
-      moderatorId: interaction.user.id,
-      reason,
-      durationMs,
-      banDeleteMessageSeconds,
-      source: 'bot',
-    });
-    await interaction.editReply({
-      embeds: [successEmbed(`Recorded **${decision}** on #E-${result.recordNumber}.`)],
-    });
+    try {
+      const result = await enforcer.decide({
+        guildId: c.guildId,
+        recordId,
+        decision,
+        moderatorId: interaction.user.id,
+        reason,
+        durationMs,
+        banDeleteMessageSeconds,
+        source: 'bot',
+      });
+      await interaction.editReply({
+        embeds: [successEmbed(c.t('decide.recorded', { decision, number: result.recordNumber }))],
+      });
+    } catch (err) {
+      const text = discordRestReply(c.t, err);
+      if (!text) throw err;
+      await interaction.editReply({ embeds: [errorEmbed(text)] });
+    }
   },
 };
 

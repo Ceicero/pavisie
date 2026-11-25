@@ -88,6 +88,17 @@ export interface ModerationService {
   getCaseByNumber(guildId: string, caseNumber: number): Promise<ModerationCase | null>;
   /** Exports a guild's moderation cases as CSV, optionally limited to cases created since a given time. */
   exportCases(guildId: string, opts?: ExportCasesOptions): Promise<ExportCasesResult>;
+  /**
+   * Runs `fn` while holding the member's ban lease. Any plugin that applies a Discord ban and then records its case
+   * must do both inside this, so a temp-ban expiry cannot run between them and lift the new ban. Waits up to
+   * `waitMs` (default 0) for the lease, then throws a retryable `ban_lease_busy` error.
+   */
+  withBanLease<T>(
+    guildId: string,
+    userId: string,
+    fn: () => Promise<T>,
+    opts?: { waitMs?: number; failOpen?: boolean },
+  ): Promise<T>;
 }
 
 /** Log event kinds the `logging` plugin routes to configured channels (ARCHITECTURE.md §7.5). */

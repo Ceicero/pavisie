@@ -1,5 +1,6 @@
 import { AuditAction, NotFoundError, ValidationError } from '@pavisie/core';
 import { assertStaffLevel, errorEmbed, infoEmbed, successEmbed, type CommandContext } from '../../sdk';
+import { invalidateRuleCache } from '../service';
 
 type ExemptKind = 'role' | 'channel' | 'user' | 'domain';
 
@@ -64,6 +65,7 @@ export async function handleExemptAdd(c: CommandContext): Promise<void> {
     data: { [field]: [...current, value] },
   });
 
+  invalidateRuleCache(c.ctx, c.guildId);
   await c.ctx.audit({
     guildId: c.guildId,
     actorId: c.interaction.user.id,
@@ -98,6 +100,7 @@ export async function handleExemptRemove(c: CommandContext): Promise<void> {
 
   const updated = await c.ctx.prisma.automodRule.update({ where: { id: rule.id }, data: { [field]: next } });
 
+  invalidateRuleCache(c.ctx, c.guildId);
   await c.ctx.audit({
     guildId: c.guildId,
     actorId: c.interaction.user.id,
@@ -118,11 +121,14 @@ export async function handleExemptRemove(c: CommandContext): Promise<void> {
 
 export async function handleExemptList(c: CommandContext): Promise<void> {
   const rule = await resolveRule(c);
+  const none = c.t('automod.rule.line.none');
   const lines = [
-    `Roles: ${rule.exemptRoleIds.length > 0 ? rule.exemptRoleIds.map((id) => `<@&${id}>`).join(', ') : '_none_'}`,
-    `Channels: ${rule.exemptChannelIds.length > 0 ? rule.exemptChannelIds.map((id) => `<#${id}>`).join(', ') : '_none_'}`,
-    `Users: ${rule.exemptUserIds.length > 0 ? rule.exemptUserIds.map((id) => `<@${id}>`).join(', ') : '_none_'}`,
-    `Trusted domains: ${rule.trustedDomains.length > 0 ? rule.trustedDomains.join(', ') : '_none_'}`,
+    `Roles: ${rule.exemptRoleIds.length > 0 ? rule.exemptRoleIds.map((id) => `<@&${id}>`).join(', ') : none}`,
+    `Channels: ${rule.exemptChannelIds.length > 0 ? rule.exemptChannelIds.map((id) => `<#${id}>`).join(', ') : none}`,
+    `Users: ${rule.exemptUserIds.length > 0 ? rule.exemptUserIds.map((id) => `<@${id}>`).join(', ') : none}`,
+    c.t('automod.rule.line.trustedDomains', {
+      domains: rule.trustedDomains.length > 0 ? rule.trustedDomains.join(', ') : none,
+    }),
   ];
   await c.interaction.reply({
     embeds: [infoEmbed(c.t('automod.exempt.listTitle', { name: rule.name }), lines.join('\n'))],

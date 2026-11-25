@@ -151,12 +151,14 @@ export function SettingsTab({ guildId }: { guildId: string }) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">DM users on moderation action</p>
-              <p className="text-xs text-muted-foreground">
+              <p id="moderation-dm-users-help" className="text-xs text-muted-foreground">
                 Also requires the server-wide &quot;DM on moderation action&quot; toggle (Settings page) to be
                 on — both must allow it.
               </p>
             </div>
             <Switch
+              aria-label="DM users on moderation action"
+              aria-describedby="moderation-dm-users-help"
               checked={draft.dmOnAction}
               onCheckedChange={(v) => set('dmOnAction', v)}
               disabled={update.isPending}
@@ -165,9 +167,13 @@ export function SettingsTab({ guildId }: { guildId: string }) {
           <div className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
             <div>
               <p className="text-sm font-medium">Allow temporary bans</p>
-              <p className="text-xs text-muted-foreground">Lets /mod ban accept a duration option.</p>
+              <p id="moderation-temporary-bans-help" className="text-xs text-muted-foreground">
+                Lets /mod ban accept a duration option.
+              </p>
             </div>
             <Switch
+              aria-label="Allow temporary bans"
+              aria-describedby="moderation-temporary-bans-help"
               checked={draft.tempBanEnabled}
               onCheckedChange={(v) => set('tempBanEnabled', v)}
               disabled={update.isPending}
@@ -231,7 +237,7 @@ export function SettingsTab({ guildId }: { guildId: string }) {
                   onValueChange={(v) => updateRule(index, { action: v as EscalationRuleDto['action'] })}
                   disabled={update.isPending}
                 >
-                  <SelectTrigger className="w-32">
+                  <SelectTrigger aria-label="Escalation action" className="w-32">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

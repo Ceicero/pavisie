@@ -119,10 +119,10 @@ bot's own role is positioned **above** any role it needs to act on (e.g. to time
 member, the bot's role must be higher than that member's highest role). Drag the bot's role up the
 list if needed.
 
-**A moderator can't act on a specific member ("target is higher than you" / "target is higher than
-the bot")**
-→ This is intentional, not a bug: Pavisie checks that the acting moderator, and the bot itself, both
-outrank the target before allowing kick/ban/timeout/role actions. It also always refuses to act on
+**A moderator can't act on a specific member ("That member's highest role is at or above yours." /
+"That member's highest role is at or above mine.")**
+→ This is intentional, not a bug: Pavisie checks that the acting moderator (unless they are the server
+owner) and the bot itself both strictly outrank the target (an equal highest role is refused too) before allowing kick/ban/timeout/role actions. It also always refuses to act on
 the server owner, the bot itself, or another bot owner. Raise the acting moderator's role (or lower
 the target's), or have someone who does outrank the target perform the action.
 
@@ -133,8 +133,8 @@ tab. `docs/PERMISSIONS.md` explains exactly what each permission is for and what
 leave it off — most features degrade gracefully rather than breaking everything.
 
 **`/setup status` — did I need to run the wizard?**
-→ No. `/setup status` says _complete (configured via dashboard or /config)_ when staff roles and a
-mod-log channel exist even if the wizard was never run; it only says _incomplete_ (listing what's
+→ No. `/setup status` says _complete (configured via dashboard or /config)_ when at least one moderator
+role and a mod-log channel exist (admin roles alone don't count) even if the wizard was never run; it only says _incomplete_ (listing what's
 missing) when one of those is actually absent. Set them under the dashboard's **Settings** page or
 run `/setup wizard` — either way counts.
 
@@ -184,8 +184,8 @@ Discord _commands_, not dashboard access.
 ## Webhooks (GitHub / Twitch) aren't arriving
 
 The guild-facing Stripe integration connector (and its `/webhooks/stripe` endpoint) was removed
-2026-09-02 — see `docs/ARCHITECTURE.md` §18a. This section now covers the two remaining inbound
-webhook sources.
+2026-09-02 — see `docs/ARCHITECTURE.md` §18a. This section now covers the remaining inbound
+webhook sources: GitHub and Twitch, plus per-endpoint generic webhooks (`/webhooks/generic/...`).
 
 1. **The API must be reachable from the public internet** at the URL you configured with the
    provider — `localhost` is never reachable from GitHub/Twitch's servers. In production, this is
@@ -193,9 +193,12 @@ webhook sources.
 2. **Signing secrets must match.** Each provider signs its webhook payloads, and Pavisie verifies
    the signature before doing anything with the request — a wrong or missing secret means every
    delivery is silently rejected as unverified (check the api process's logs; it logs a rejection,
-   never the payload itself). Re-copy the secret from the provider's webhook settings into the
-   matching `.env` variable (`GITHUB_WEBHOOK_SECRET`, `TWITCH_EVENTSUB_SECRET`) exactly —
-   regenerating the endpoint on the provider's side usually issues a new secret.
+   never the payload itself). GitHub and generic webhooks are verified against the
+   per-endpoint secret shown once when you create the inbound webhook on the dashboard's
+   **Integrations** page (`GITHUB_WEBHOOK_SECRET` in `.env` is no longer read) — paste that secret
+   into the provider's webhook settings exactly, or delete and recreate the endpoint to get a new
+   one. Twitch EventSub is verified against `TWITCH_EVENTSUB_SECRET` in `.env`, which must match the
+   secret used when the subscription was created.
 3. **Check the provider's own delivery log** (GitHub → repo Settings → Webhooks → Recent
    Deliveries) — it shows the HTTP status Pavisie's API returned, which narrows this down fast: a
    `401`/`400` is almost always the signature/secret problem above; a connection failure/timeout

@@ -4,6 +4,7 @@ import type { CommunityEvent, Giveaway, Poll, Reminder, Suggestion } from '@pavi
 import { createTestContext, type PrismaStubOverrides } from '../../sdk/testing';
 import type { PluginContext } from '../../sdk';
 import {
+  RetryableDelivery,
   closePoll,
   deliverReminder,
   finalizeGiveaway,
@@ -129,7 +130,11 @@ describe('giveaway draws', () => {
   });
 
   it('draws the only entrant once and does not draw again on a second run', async () => {
-    const row = giveaway({ id: 'gw-only', winnerCount: 3, entries: [{ userId: 'only' }, { userId: 'only' }] });
+    const row = giveaway({
+      id: 'gw-only',
+      winnerCount: 3,
+      entries: [{ userId: 'only' }, { userId: 'only' }],
+    });
     const { guild, channel } = fakeGuild();
     const { ctx } = withClient(guild, {
       giveaway: {
@@ -227,6 +232,181 @@ describe('giveaway draws', () => {
     channel.send.mockClear();
     await finalizeGiveaway(ctx, row.id);
     expect(channel.send).not.toHaveBeenCalled();
+  });
+
+  it('retries a transient winner announcement without drawing again', async () => {
+    const row = giveaway({
+      id: 'gw-transient',
+      endsAt: new Date(),
+      entries: [{ userId: 'winner-a' }, { userId: 'winner-b' }],
+    });
+    let sends = 0;
+    const { guild, channel } = fakeGuild({
+      send: async () => {
+        sends += 1;
+        if (sends === 1) throw new Error('socket hang up');
+        return { id: 'sent' };
+      },
+    });
+    const { ctx } = withClient(guild, {
+      giveaway: {
+        findUnique: async () => row,
+        updateMany: async (args: { data?: { winnerIds?: string[] } }) => {
+          row.ended = true;
+          row.winnerIds = args.data?.winnerIds ?? [];
+          return { count: 1 };
+        },
+      },
+    });
+
+    await expect(finalizeGiveaway(ctx, row.id)).rejects.toBeInstanceOf(RetryableDelivery);
+    const drawn = [...row.winnerIds];
+    expect(row.ended).toBe(true);
+    expect(drawn).toHaveLength(1);
+
+    const second = await finalizeGiveaway(ctx, row.id);
+    expect(second?.winnerIds).toEqual(drawn);
+    expect(sends).toBe(2);
+    const posted = JSON.stringify(channel.send.mock.calls[1]?.[0]);
+    expect(posted).toContain(`<@${drawn[0]}>`);
+    expect(posted).not.toContain(`<@${drawn[0] === 'winner-a' ? 'winner-b' : 'winner-a'}>`);
+
+    await finalizeGiveaway(ctx, row.id);
+    expect(sends).toBe(2);
+  });
+
+  it('retries a transient edit of the ended giveaway without announcing twice', async () => {
+    const row = giveaway({
+      id: 'gw-edit-retry',
+      endsAt: new Date(),
+      entries: [{ userId: 'winner-a' }],
+    });
+    let edits = 0;
+    const edit = vi.fn(async (..._args: unknown[]) => {
+      edits += 1;
+      if (edits === 1) throw new Error('timeout');
+    });
+    const { guild, channel } = fakeGuild({
+      fetchMessage: async () => ({ edit }),
+    });
+    const { ctx } = withClient(guild, {
+      giveaway: {
+        findUnique: async () => row,
+        updateMany: async (args: { data?: { winnerIds?: string[] } }) => {
+          row.ended = true;
+          row.winnerIds = args.data?.winnerIds ?? [];
+          return { count: 1 };
+        },
+      },
+    });
+
+    await expect(finalizeGiveaway(ctx, row.id)).rejects.toBeInstanceOf(RetryableDelivery);
+    expect(channel.send).toHaveBeenCalledTimes(1);
+    expect(row.winnerIds).toEqual(['winner-a']);
+
+    await expect(finalizeGiveaway(ctx, row.id)).resolves.toMatchObject({ winnerIds: ['winner-a'] });
+    expect(channel.send).toHaveBeenCalledTimes(1);
+    expect(edits).toBe(2);
+    expect(edit.mock.calls[1]?.[0]).toMatchObject({ components: [] });
+  });
+
+  it.each<[number, string]>([
+    [10008, 'unknown message'],
+    [50001, 'missing access'],
+    [50013, 'missing permissions'],
+  ])('does not retry a giveaway message edit Discord rejects as %s (%s)', async (code) => {
+    const row = giveaway({
+      id: `gw-edit-${code}`,
+      endsAt: new Date(),
+      entries: [{ userId: 'winner-a' }],
+    });
+    let fetches = 0;
+    const { guild, channel } = fakeGuild({
+      fetchMessage: async () => {
+        fetches += 1;
+        throw discordError(code);
+      },
+    });
+    const { ctx } = withClient(guild, {
+      giveaway: {
+        findUnique: async () => row,
+        updateMany: async (args: { data?: { winnerIds?: string[] } }) => {
+          row.ended = true;
+          row.winnerIds = args.data?.winnerIds ?? [];
+          return { count: 1 };
+        },
+      },
+    });
+
+    await expect(finalizeGiveaway(ctx, row.id)).resolves.toMatchObject({ ended: true });
+    expect(channel.send).toHaveBeenCalledTimes(1);
+    const fetchesAfter = fetches;
+    await finalizeGiveaway(ctx, row.id);
+    expect(fetches).toBe(fetchesAfter);
+    expect(channel.send).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([10003, 50001, 50013])(
+    'does not retry a giveaway whose channel Discord rejects as %s',
+    async (code) => {
+      const row = giveaway({
+        id: `gw-chan-${code}`,
+        endsAt: new Date(),
+        entries: [{ userId: 'winner-a' }],
+      });
+      let fetches = 0;
+      const { guild } = fakeGuild({
+        fetchChannel: async () => {
+          fetches += 1;
+          throw discordError(code);
+        },
+      });
+      const { ctx } = withClient(guild, {
+        giveaway: {
+          findUnique: async () => row,
+          updateMany: async (args: { data?: { winnerIds?: string[] } }) => {
+            row.ended = true;
+            row.winnerIds = args.data?.winnerIds ?? [];
+            return { count: 1 };
+          },
+        },
+      });
+
+      await expect(finalizeGiveaway(ctx, row.id)).resolves.toMatchObject({ ended: true });
+      const fetchesAfter = fetches;
+      await finalizeGiveaway(ctx, row.id);
+      expect(fetches).toBe(fetchesAfter);
+    },
+  );
+
+  it('stops retrying a giveaway announcement that has been failing past the retention window', async () => {
+    const row = giveaway({
+      id: 'gw-ancient',
+      ended: true,
+      winnerIds: ['old'],
+      endsAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+      entries: [{ userId: 'old' }],
+    });
+    let sends = 0;
+    const { guild } = fakeGuild({
+      send: async () => {
+        sends += 1;
+        throw new Error('socket hang up');
+      },
+    });
+    const { ctx } = withClient(guild, {
+      giveaway: {
+        findUnique: async () => row,
+        updateMany: async () => {
+          throw new Error('must not redraw');
+        },
+      },
+    });
+
+    await expect(finalizeGiveaway(ctx, row.id)).resolves.toMatchObject({ winnerIds: ['old'] });
+    expect(sends).toBe(1);
+    await finalizeGiveaway(ctx, row.id);
+    expect(sends).toBe(1);
   });
 
   it('does not replace winners or announce when a reroll has nobody new', async () => {
@@ -615,5 +795,79 @@ describe('catch-up after a restart', () => {
     expect(result.giveaways).toBe(1);
     expect(result.polls).toBe(1);
     expect(row.ended).toBe(true);
+  });
+
+  it('announces stored winners for an ended giveaway and does not draw or post twice', async () => {
+    const now = new Date('2026-06-01T00:00:00Z');
+    const row = giveaway({
+      id: 'gw-ended-silent',
+      ended: true,
+      winnerIds: ['kept'],
+      endsAt: new Date('2026-05-31T12:00:00Z'),
+      entries: [{ userId: 'kept' }, { userId: 'other' }],
+    });
+    const { guild, channel } = fakeGuild();
+    const { ctx } = withClient(guild, {
+      giveaway: {
+        findMany: async (args: { where?: { OR?: { ended?: boolean }[] } }) => {
+          const allowsEnded = args.where?.OR?.some((clause) => clause.ended === true) ?? false;
+          return allowsEnded ? [{ id: row.id }] : [];
+        },
+        findUnique: async () => row,
+        updateMany: async () => {
+          throw new Error('must not redraw an ended giveaway');
+        },
+      },
+      poll: { findMany: async () => [] },
+      communityEvent: { findMany: async () => [] },
+    });
+
+    const result = await catchUpCommunitySchedules(ctx, now);
+    expect(result.giveaways).toBe(1);
+    expect(row.winnerIds).toEqual(['kept']);
+    expect(JSON.stringify(channel.send.mock.calls[0]?.[0])).toContain('<@kept>');
+    expect(JSON.stringify(channel.send.mock.calls[0]?.[0])).not.toContain('other');
+
+    channel.send.mockClear();
+    const again = await catchUpCommunitySchedules(ctx, now);
+    expect(again.giveaways).toBe(0);
+    expect(channel.send).not.toHaveBeenCalled();
+  });
+
+  it('retries a pending giveaway even when the catch-up query does not return the row', async () => {
+    const row = giveaway({
+      id: 'gw-pending',
+      endsAt: new Date(),
+      entries: [{ userId: 'winner-a' }],
+    });
+    let sends = 0;
+    const { guild, channel } = fakeGuild({
+      send: async () => {
+        sends += 1;
+        if (sends === 1) throw new Error('socket hang up');
+        return { id: 'sent' };
+      },
+    });
+    const { ctx } = withClient(guild, {
+      giveaway: {
+        findMany: async () => [],
+        findUnique: async () => row,
+        updateMany: async (args: { data?: { winnerIds?: string[] } }) => {
+          row.ended = true;
+          row.winnerIds = args.data?.winnerIds ?? [];
+          return { count: 1 };
+        },
+      },
+      poll: { findMany: async () => [] },
+      communityEvent: { findMany: async () => [] },
+    });
+
+    await expect(finalizeGiveaway(ctx, row.id)).rejects.toBeInstanceOf(RetryableDelivery);
+    const drawn = [...row.winnerIds];
+    const result = await catchUpCommunitySchedules(ctx, new Date());
+    expect(result.giveaways).toBe(1);
+    expect(row.winnerIds).toEqual(drawn);
+    expect(sends).toBe(2);
+    expect(JSON.stringify(channel.send.mock.calls[1]?.[0])).toContain(`<@${drawn[0]}>`);
   });
 });

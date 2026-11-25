@@ -103,7 +103,15 @@ export function GroupsTab({
   }
 
   function handleDelete(groupId: string) {
-    deleteGroup.mutate(groupId, { onSuccess: () => toast({ title: 'Group deleted', variant: 'success' }) });
+    deleteGroup.mutate(groupId, {
+      onSuccess: () => toast({ title: 'Group deleted', variant: 'success' }),
+      onError: (err) =>
+        toast({
+          title: 'Could not delete the group',
+          description: err instanceof ApiClientError ? err.message : 'Please try again.',
+          variant: 'destructive',
+        }),
+    });
   }
 
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
@@ -193,11 +201,13 @@ export function GroupsTab({
             <div className="flex items-center justify-between rounded-md border border-border p-3">
               <div>
                 <p className="text-sm font-medium">Exclusive</p>
-                <p className="text-xs text-muted-foreground">
+                <p id="role-group-exclusive-help" className="text-xs text-muted-foreground">
                   Selecting one role from this group removes the others.
                 </p>
               </div>
               <Switch
+                aria-label="Exclusive"
+                aria-describedby="role-group-exclusive-help"
                 checked={form.exclusive}
                 onCheckedChange={(v) => setForm((p) => ({ ...p, exclusive: v }))}
               />

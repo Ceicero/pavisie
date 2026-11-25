@@ -55,7 +55,8 @@ function makeFakePrisma() {
   const prisma = {
     moderationCase,
     moderationWarning,
-    $transaction: async (cb: (tx: unknown) => unknown) => cb({ moderationCase }),
+    $transaction: async (cb: (tx: unknown) => unknown) =>
+      cb({ moderationCase, auditLog: { create: async () => ({}) } }),
   };
 
   return { prisma: prisma as unknown as PluginContext['prisma'], cases, warnings };

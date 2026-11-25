@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { AlertTriangle, Gavel, LifeBuoy, Puzzle, ScrollText, ShieldAlert, Users } from 'lucide-react';
+import { AlertTriangle, Gavel, LifeBuoy, Puzzle, ScrollText, Users } from 'lucide-react';
 import {
   Alert,
   AlertDescription,
@@ -18,13 +18,7 @@ import {
 } from '@pavisie/ui';
 import { useGuild } from '@/lib/dashboard/queries';
 import { ErrorState } from '@/components/dashboard/error-state';
-
-const QUICK_LINKS = [
-  { href: 'plugins', label: 'Manage plugins', icon: Puzzle },
-  { href: 'moderation', label: 'Moderation cases', icon: Gavel },
-  { href: 'automod', label: 'Automod rules', icon: ShieldAlert },
-  { href: 'tickets', label: 'Ticket queue', icon: LifeBuoy },
-];
+import { visibleQuickLinks } from '@/components/dashboard/overview-quick-links';
 
 export default function GuildOverviewPage() {
   const { guildId } = useParams<{ guildId: string }>();
@@ -47,7 +41,8 @@ export default function GuildOverviewPage() {
 
   const stats = data.stats ?? {};
   const plugins = data.plugins ?? [];
-  const degraded = plugins.filter((p) => p.enabled && p.health && p.health.status !== 'ok');
+  const enabledPlugins = plugins.filter((p) => p.enabled);
+  const degraded = enabledPlugins.filter((p) => p.health && p.health.status !== 'ok');
 
   return (
     <div className="space-y-6">
@@ -90,10 +85,10 @@ export default function GuildOverviewPage() {
           <CardContent className="space-y-2">
             {plugins.length === 0 ? (
               <p className="text-sm text-muted-foreground">No plugin data yet.</p>
+            ) : enabledPlugins.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No plugins are enabled.</p>
             ) : (
-              plugins
-                .filter((p) => p.enabled)
-                .map((p) => (
+              enabledPlugins.map((p) => (
                   <div
                     key={p.id}
                     className="flex items-center justify-between border-b border-border py-2 text-sm last:border-0"
@@ -127,11 +122,11 @@ export default function GuildOverviewPage() {
             <CardTitle>Quick links</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2">
-            {QUICK_LINKS.map((link) => (
+            {visibleQuickLinks(plugins).map((link) => (
               <Link
                 key={link.href}
                 href={`/dashboard/${guildId}/${link.href}`}
-                className="flex items-center gap-2 rounded-md border border-border p-3 text-sm font-medium transition-colors hover:bg-accent"
+                className="flex items-center gap-2 rounded-md border border-border p-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <link.icon className="h-4 w-4 text-muted-foreground" />
                 {link.label}
