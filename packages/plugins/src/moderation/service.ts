@@ -18,7 +18,6 @@ import {
   type ModerationCaseType,
   type ModerationNote,
   type ModerationWarning,
-  type Prisma,
 } from '@pavisie/database';
 import {
   buildCustomId,
@@ -38,6 +37,7 @@ import {
 } from '../sdk';
 import { toCsv } from './csv';
 import { evaluateEscalation } from './escalation';
+import { toInputJsonValue } from './json';
 import {
   buildAppealDecisionEmbed,
   buildAppealEmbed,
@@ -266,12 +266,13 @@ export class ModerationServiceImpl implements ModerationService {
   private async getCoreGuildConfig(guildId: string) {
     const host = this.ctx.services.get('host');
     if (!host) {
-      return {
-        modLogChannelId: null as string | null,
-        appealsChannelId: null as string | null,
-        staffChannelId: null as string | null,
-        dmOnModeration: true,
-      };
+      const fallback: {
+        modLogChannelId: string | null;
+        appealsChannelId: string | null;
+        staffChannelId: string | null;
+        dmOnModeration: boolean;
+      } = { modLogChannelId: null, appealsChannelId: null, staffChannelId: null, dmOnModeration: true };
+      return fallback;
     }
     return host.getGuildConfig(guildId);
   }
@@ -383,7 +384,7 @@ export class ModerationServiceImpl implements ModerationService {
             durationMs: input.durationMs ?? null,
             expiresAt,
             source: input.source,
-            metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
+            metadata: toInputJsonValue(input.metadata ?? {}),
           },
         });
         await writeAudit(tx, {
@@ -589,7 +590,7 @@ export class ModerationServiceImpl implements ModerationService {
       where: { guildId, userId: targetId, active: true },
     });
     const config = await this.getModConfig(guildId);
-    return evaluateEscalation(activeCount, config.escalations as EscalationRule[]);
+    return evaluateEscalation(activeCount, config.escalations);
   }
 
   /** Carries out an escalation rung. Runs unlocked; a failure is logged and never fails the warning itself. */
@@ -1092,7 +1093,7 @@ export class ModerationServiceImpl implements ModerationService {
     const perms = channel.permissionsFor(botMember);
     if (!perms || !perms.has(required)) return null;
 
-    return channel as GuildTextBasedChannel;
+    return channel;
   }
 
   /**
@@ -1443,7 +1444,7 @@ export class ModerationServiceImpl implements ModerationService {
    */
   private async applyAppealEffectsOnce(appealId: string): Promise<boolean> {
     const lockKey = this.appealSyncLockKey(appealId);
-    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const token = randomUUID();
     const acquired = await this.ctx.redis
       .set(lockKey, token, 'PX', APPEAL_SYNC_LOCK_TTL_MS, 'NX')
       .catch((err: unknown) => {
