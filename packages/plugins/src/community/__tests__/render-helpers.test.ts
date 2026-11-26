@@ -247,4 +247,51 @@ describe('buildEventEmbed ends field', () => {
     expect(embed.data.fields?.some((field) => field.name === 'Ends')).toBe(false);
     expect(embed.data.fields?.map((field) => field.name)).toEqual(['Starts', 'Host', 'RSVPs']);
   });
+
+  it('renders English field names, RSVP counts, the calendar title, and the no-description fallback', () => {
+    const endsAt = new Date('2026-11-23T21:00:00.000Z');
+    const embed = buildEventEmbed(
+      event({ endsAt, title: 'Game night', description: null, hostId: 'user-host' }),
+      { going: 4, maybe: 2, declined: 7 },
+      realT,
+    );
+    expect(embed.data.fields?.map((field) => field.name)).toEqual(['Starts', 'Ends', 'Host', 'RSVPs']);
+    expect(embed.data.fields?.find((field) => field.name === 'RSVPs')?.value).toBe(
+      '✅ Going: 4 · ❔ Maybe: 2 · ❌ Declined: 7',
+    );
+    expect(embed.data.title).toBe('📅 Game night');
+    expect(embed.data.description).toBe('_No description._');
+  });
+
+  it('prefixes a cancelled event title and leaves a written description in place', () => {
+    const embed = buildEventEmbed(
+      event({ title: 'Game night', description: 'Bring snacks' }),
+      counts,
+      realT,
+      true,
+    );
+    expect(embed.data.title).toBe('🚫 Cancelled: Game night');
+    expect(embed.data.description).toBe('Bring snacks');
+  });
+
+  it('reads the remaining embed copy from the translator', () => {
+    const endsAt = new Date('2026-11-23T21:00:00.000Z');
+    const embed = buildEventEmbed(
+      event({ endsAt, title: 'Game night', description: null }),
+      { going: 4, maybe: 2, declined: 7 },
+      (key) => `loc:${key}`,
+      true,
+    );
+    expect(embed.data.fields?.map((field) => field.name)).toEqual([
+      'loc:event.embedStarts',
+      'loc:event.embedEnds',
+      'loc:event.embedHost',
+      'loc:event.embedRsvps',
+    ]);
+    expect(embed.data.fields?.find((field) => field.name === 'loc:event.embedRsvps')?.value).toBe(
+      'loc:event.embedRsvpCounts',
+    );
+    expect(embed.data.title).toBe('loc:event.embedTitleCancelled');
+    expect(embed.data.description).toBe('loc:event.embedNoDescription');
+  });
 });

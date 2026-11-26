@@ -104,7 +104,13 @@
     "listEmpty": "No upcoming events. Create one with `/event create`.",
     "notFound": "That event could not be found.",
     "cancelled": "Event cancelled.",
-    "embedEnds": "Ends"
+    "embedEnds": "Ends",
+    "embedStarts": "Starts",
+    "embedHost": "Host",
+    "embedRsvps": "RSVPs",
+    "embedRsvpCounts": "✅ Going: {going} · ❔ Maybe: {maybe} · ❌ Declined: {declined}",
+    "embedTitleCancelled": "🚫 Cancelled: {title}",
+    "embedNoDescription": "_No description._"
   },
   "tag": {
     "disabled": "Tags are turned off on this server.",
