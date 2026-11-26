@@ -2,7 +2,9 @@
 //
 // Trust rule: the only viewer-derived text in any line is a display name that has been through
 // `safeDisplayName`. Nothing a viewer typed is ever repeated. Every line starts with fixed text, so a name can
-// never land at the start of a message where Twitch would read it as a chat command.
+// never land at the start of a message where Twitch would read it as a chat command. The streamer's currency
+// symbol is their own text, but it still only reaches chat through `chatSafeSymbol`.
+import { CHANNEL_ECONOMY_DEFAULTS } from '../../channel-economy/settings';
 import { formatCard, formatCards, type Card } from '../deck';
 import { handValue, isNaturalBlackjack, type HandOutcome } from './hand';
 import type { BlackjackSeat, BlackjackTable, SeatResult } from './table';
@@ -10,8 +12,30 @@ import { MAX_SEATS } from './table';
 
 const TAG = '🃏';
 
+/**
+ * Letters, digits, currency and other symbols (emoji included), plus what emoji are built from: combining marks,
+ * variation selectors, and the zero-width joiner for sequences such as 👨‍💻. Everything else is dropped:
+ * `@` (mentions), `/`, `.`, `:` and the rest of punctuation (commands, links), whitespace and line breaks,
+ * control characters, and invisible formatting such as bidi overrides.
+ */
+const SYMBOL_ALLOWED = /[\p{L}\p{N}\p{S}\p{M}\u200D]/u;
+/** Settings cap the symbol at 8 characters; this is a second cap in case a stored value is longer. */
+const SYMBOL_MAX_LENGTH = 16;
+
+/** The streamer-chosen currency symbol, made safe to put in a chat line. Falls back to the default symbol if
+ * nothing usable is left. Applied when a line is written, so tables saved before this rule are covered too. */
+export function chatSafeSymbol(symbol: string): string {
+  const kept = Array.from(symbol.normalize('NFC'))
+    .filter((ch) => SYMBOL_ALLOWED.test(ch))
+    .join('')
+    .slice(0, SYMBOL_MAX_LENGTH)
+    // A joiner only means something between two characters.
+    .replace(/^\u200D+|\u200D+$/gu, '');
+  return /[\p{L}\p{N}\p{S}]/u.test(kept) ? kept : CHANNEL_ECONOMY_DEFAULTS.currencySymbol;
+}
+
 export function formatAmount(amount: number, symbol: string): string {
-  return `${amount.toLocaleString('en-US')} ${symbol}`;
+  return `${amount.toLocaleString('en-US')} ${chatSafeSymbol(symbol)}`;
 }
 
 /** Names are capped again here so eight seats always fit comfortably in one 500-character message. */
@@ -92,7 +116,7 @@ export function results(table: BlackjackTable, seatResults: readonly SeatResult[
     const amount = net === 0 ? '±0' : `${net > 0 ? '+' : '−'}${Math.abs(net).toLocaleString('en-US')}`;
     return `${shortName(seat.displayName)} ${outcomes} ${amount}`;
   });
-  return `${TAG} Dealer: ${dealerText}. ${seats.join(' | ')} (${table.currencySymbol})`;
+  return `${TAG} Dealer: ${dealerText}. ${seats.join(' | ')} (${chatSafeSymbol(table.currencySymbol)})`;
 }
 
 export function cancelled(): string {

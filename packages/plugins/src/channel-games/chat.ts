@@ -9,6 +9,9 @@
 //   - blackjack (or the whole currency) is switched off and no table is still finishing;
 //   - it is a short alias (`!hit`, `!join`, ...) and this chatter is not seated and no lobby is open.
 //
+// A game command a viewer repeats inside its cooldown (`GameHostTimings.commandCooldownMs`) is `{ handled: true }` and does
+// nothing: it is still ours, so it must not reach the custom command engine.
+//
 // Privacy: `messageText` is read once, by the parser, and goes no further. It is never logged, stored or
 // repeated, and neither is anything derived from it except a command kind and a whole number.
 import { parseBlackjackCommand } from './blackjack/commands';
@@ -58,13 +61,19 @@ export async function handleGameChatCommand(input: GameChatInput): Promise<GameC
   // nothing new can start and, with no table, the command does not exist as far as this channel is concerned.
   if (!enabled && !host.hasActiveTable(broadcasterUserId)) return { handled: false };
 
+  const isModerator = event.badgeSetIds.some((badge) => MODERATOR_BADGES.has(badge));
+  // Per-viewer, per-command cooldown (the streamer and moderators are exempt). A command inside it is still a
+  // game command, so it is swallowed silently rather than falling through to the custom command engine.
+  if (!isModerator && !host.takeCommandCooldown(broadcasterUserId, event.chatterUserId, intent.kind))
+    return { handled: true };
+
   await host.handleBlackjack(
     { broadcasterUserId, commandPrefix },
     enabled ? economy : null,
     {
       userId: event.chatterUserId,
       displayName: event.chatterDisplayName,
-      isModerator: event.badgeSetIds.some((badge) => MODERATOR_BADGES.has(badge)),
+      isModerator,
     },
     intent,
   );

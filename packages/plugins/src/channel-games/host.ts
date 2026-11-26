@@ -64,6 +64,13 @@ export interface GameHostTimings {
   resumeGraceMs: number;
   /** How soon a settle that failed is tried again. */
   settleRetryMs: number;
+  /**
+   * Gap between two uses of the same game command by one viewer in one channel (per command kind, like the
+   * economy commands' per-viewer, per-command cooldown), so `!join` then `!leave`, or `!hit` then `!stand`, is
+   * never blocked. Short on purpose: a player needs several `!hit`s in a 25-second turn. Commands inside the gap
+   * are dropped silently. The streamer and moderators are exempt.
+   */
+  commandCooldownMs: number;
 }
 
 export const DEFAULT_GAME_TIMINGS: GameHostTimings = {
@@ -72,7 +79,11 @@ export const DEFAULT_GAME_TIMINGS: GameHostTimings = {
   tickMs: 500,
   resumeGraceMs: 15_000,
   settleRetryMs: 5_000,
+  commandCooldownMs: 2_000,
 };
+
+/** Above this many remembered viewers, entries whose cooldown has run out are swept on the next command. */
+const COOLDOWN_SWEEP_SIZE = 5_000;
 
 interface HostLogger {
   warn(obj: object, msg: string): void;
@@ -158,6 +169,9 @@ export class ChannelGameHost {
    * without touching Redis. The table itself is always read from Redis before anything is decided. */
   private readonly active = new Map<string, ActiveTable>();
   private readonly chains = new Map<string, Promise<void>>();
+  /** `<broadcaster>:<viewer>:<command kind>` → when that command was last accepted. In memory, like the other
+   * chat command cooldowns: a restart clears it, which only ever lets one extra command through. */
+  private readonly lastCommandAt = new Map<string, number>();
   private ticker: ReturnType<typeof setInterval> | null = null;
 
   constructor(deps: GameHostDeps) {
@@ -169,6 +183,24 @@ export class ChannelGameHost {
     this.now = deps.now ?? Date.now;
     this.newSeed = deps.newSeed ?? randomSeed;
     this.newId = deps.newId ?? randomUUID;
+  }
+
+  /**
+   * Per-viewer, per-command game cooldown. Returns `true`, and starts a new cooldown, if this viewer may run this
+   * command in this channel now; `false` if they last ran it less than `commandCooldownMs` ago.
+   */
+  takeCommandCooldown(broadcasterUserId: string, viewerUserId: string, commandKind: string): boolean {
+    const gap = this.timings.commandCooldownMs;
+    if (gap <= 0) return true;
+    const now = this.now();
+    const key = `${broadcasterUserId}:${viewerUserId}:${commandKind}`;
+    const last = this.lastCommandAt.get(key);
+    if (last !== undefined && now - last < gap) return false;
+    if (this.lastCommandAt.size >= COOLDOWN_SWEEP_SIZE) {
+      for (const [k, at] of this.lastCommandAt) if (now - at >= gap) this.lastCommandAt.delete(k);
+    }
+    this.lastCommandAt.set(key, now);
+    return true;
   }
 
   // -------------------------------------------------------------------------------------------------------
