@@ -40,6 +40,7 @@ import {
   type RolePanelInput,
   type RolePanelOptionInput,
 } from '@/lib/dashboard/roles-queries';
+import { emptyPanelOption, panelToForm } from '@/lib/dashboard/role-panel-form';
 import { DiscordChannelSelect, DiscordRoleSelect } from '../discord-selects';
 import { ErrorState } from '../error-state';
 import { ApiClientError } from '@/lib/dashboard/api';
@@ -50,10 +51,6 @@ const STYLE_LABEL: Record<string, string> = {
   REACTIONS: 'Reactions',
 };
 
-function emptyOption(): RolePanelOptionInput {
-  return { roleId: '', label: '', emoji: '', description: '' };
-}
-
 function emptyForm(): RolePanelInput {
   return {
     channelId: '',
@@ -62,7 +59,7 @@ function emptyForm(): RolePanelInput {
     style: 'BUTTONS',
     groupId: null,
     maxSelections: null,
-    options: [emptyOption()],
+    options: [emptyPanelOption()],
   };
 }
 
@@ -86,23 +83,7 @@ export function PanelsTab({ guildId, groups }: { guildId: string; groups: RoleGr
 
   function openEdit(panel: RolePanelDto) {
     setEditingId(panel.id);
-    setForm({
-      channelId: panel.channelId ?? '',
-      title: panel.title,
-      description: panel.description ?? '',
-      style: panel.mode === 'button' ? 'BUTTONS' : panel.mode === 'select' ? 'SELECT' : 'REACTIONS',
-      groupId: null,
-      maxSelections: panel.maxSelections,
-      options:
-        panel.options.length > 0
-          ? panel.options.map((o) => ({
-              roleId: o.roleId,
-              label: o.label,
-              emoji: o.emoji ?? '',
-              description: o.description ?? '',
-            }))
-          : [emptyOption()],
-    });
+    setForm(panelToForm(panel));
     setDialogOpen(true);
   }
 
@@ -114,7 +95,7 @@ export function PanelsTab({ guildId, groups }: { guildId: string; groups: RoleGr
   }
 
   function addOption() {
-    setForm((prev) => ({ ...prev, options: [...prev.options, emptyOption()] }));
+    setForm((prev) => ({ ...prev, options: [...prev.options, emptyPanelOption()] }));
   }
 
   function removeOption(index: number) {
