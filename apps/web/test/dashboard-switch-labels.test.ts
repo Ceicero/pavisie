@@ -1,7 +1,14 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
+import type { CreatorChannelEconomyDto, CreatorMeDto } from '@pavisie/types/creator';
+import { CreatorCurrency } from '../src/components/creator/creator-currency';
+import { creatorQueryKeys } from '../src/lib/creator/queries';
+import { CREATOR_ME_QUERY_KEY, CreatorSessionProvider } from '../src/lib/creator/session';
 
 /**
  * Every <Switch> (Radix button[role=switch], no built-in label) must have an accessible name,
@@ -303,6 +310,16 @@ const EXPECTED_DESCRIBED: { rel: string; needle: string; id?: string }[] = [
     needle: 'aria-label="DM the user on action"',
     id: 'enforcer-dm-on-action-help',
   },
+  {
+    rel: 'components/creator/creator-currency.tsx',
+    needle: 'aria-label="Award currency for chatting while live"',
+    id: 'creator-currency-earn-enabled-help',
+  },
+  {
+    rel: 'components/creator/creator-currency.tsx',
+    needle: 'aria-label="Let viewers play blackjack with this currency"',
+    id: 'creator-currency-blackjack-enabled-help',
+  },
 ];
 
 const JS_KEYWORDS = new Set(['undefined', 'null', 'true', 'false']);
@@ -333,7 +350,7 @@ function tagContaining(tags: string[], needle: string): string | undefined {
 
 describe('Dashboard switches — aria-describedby', () => {
   it('lists the expected switches', () => {
-    expect(EXPECTED_DESCRIBED).toHaveLength(41);
+    expect(EXPECTED_DESCRIBED).toHaveLength(43);
   });
 
   it('each expected switch has aria-describedby whose id exists in the same file', () => {
@@ -358,5 +375,74 @@ describe('Dashboard switches — aria-describedby', () => {
       }
     }
     expect(missing).toEqual([]);
+  });
+});
+
+
+const ECONOMY_FIXTURE: CreatorChannelEconomyDto = {
+  configured: true,
+  settings: {
+    enabled: true,
+    currencyName: 'Coins',
+    currencySymbol: 'C',
+    dailyMinAmount: 1,
+    dailyMaxAmount: 10,
+    streakBonusPerDay: 1,
+    streakBonusMax: 10,
+    giveMinAmount: 1,
+    giveMaxAmount: 100,
+    earnEnabled: true,
+    earnPerMessage: 1,
+    earnCooldownSeconds: 60,
+    earnDailyCap: 100,
+    blackjackEnabled: true,
+    blackjackMinBet: 1,
+    blackjackMaxBet: 50,
+  },
+};
+
+const ME_FIXTURE: CreatorMeDto = {
+  creator: {
+    platform: 'twitch',
+    platformUserId: '1',
+    login: 'streamer',
+    displayName: 'Streamer',
+    avatarUrl: null,
+  },
+  csrfToken: 'csrf',
+};
+
+describe('CreatorCurrency switches — aria-describedby (render)', () => {
+  it('points the earn and blackjack switches at their help text, and leaves the master switch unnamed-by-description', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(CREATOR_ME_QUERY_KEY, ME_FIXTURE);
+    client.setQueryData(creatorQueryKeys.twitchEconomy(), ECONOMY_FIXTURE);
+    const html = renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(CreatorSessionProvider, null, createElement(CreatorCurrency)),
+      ),
+    );
+
+    expect(html).toContain('aria-label="Award currency for chatting while live"');
+    expect(html).toContain('aria-describedby="creator-currency-earn-enabled-help"');
+    expect(html).toContain('id="creator-currency-earn-enabled-help"');
+    expect(html).toContain(
+      'Award currency for chatting while your stream is live. You and well-known chat bots never earn.',
+    );
+
+    expect(html).toContain('aria-label="Let viewers play blackjack with this currency"');
+    expect(html).toContain('aria-describedby="creator-currency-blackjack-enabled-help"');
+    expect(html).toContain('id="creator-currency-blackjack-enabled-help"');
+    expect(html).toContain('Let viewers bet this currency at a blackjack table in chat.');
+    expect(html).toContain('!bj start');
+    expect(html).toContain('The currency stays virtual: it cannot be bought or cashed out.');
+
+    expect(html).toContain('aria-label="Currency enabled in my channel"');
+    const enableTagStart = html.indexOf('aria-label="Currency enabled in my channel"');
+    expect(enableTagStart).toBeGreaterThan(-1);
+    const enableTag = html.slice(Math.max(0, enableTagStart - 400), enableTagStart + 200);
+    expect(enableTag).not.toContain('aria-describedby');
   });
 });

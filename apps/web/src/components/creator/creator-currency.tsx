@@ -250,10 +250,11 @@ function CurrencySettingsCard({
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, earnEnabled: checked }))}
               disabled={update.isPending}
               aria-label="Award currency for chatting while live"
+              aria-describedby="creator-currency-earn-enabled-help"
             />
-            <span className="text-sm text-muted-foreground">
+            <p id="creator-currency-earn-enabled-help" className="text-sm text-muted-foreground">
               Award currency for chatting while your stream is live. You and well-known chat bots never earn.
-            </span>
+            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
             {numberField('earnPerMessage')}
@@ -270,11 +271,12 @@ function CurrencySettingsCard({
               onCheckedChange={(checked) => setDraft((d) => ({ ...d, blackjackEnabled: checked }))}
               disabled={update.isPending}
               aria-label="Let viewers play blackjack with this currency"
+              aria-describedby="creator-currency-blackjack-enabled-help"
             />
-            <span className="text-sm text-muted-foreground">
+            <p id="creator-currency-blackjack-enabled-help" className="text-sm text-muted-foreground">
               Let viewers bet this currency at a blackjack table in chat. You or a mod open a table with{' '}
               <code>!bj start</code>. The currency stays virtual: it cannot be bought or cashed out.
-            </span>
+            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {numberField('blackjackMinBet', 'The least a viewer can bet on a hand.')}
