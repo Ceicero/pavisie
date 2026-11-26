@@ -263,21 +263,25 @@ export function buildEventEmbed(
   cancelled = false,
 ) {
   const fields: EmbedField[] = [
-    { name: 'Starts', value: discordTimestamp(event.startsAt, 'F'), inline: true },
+    { name: t('event.embedStarts'), value: discordTimestamp(event.startsAt, 'F'), inline: true },
   ];
   if (event.endsAt) {
     fields.push({ name: t('event.embedEnds'), value: discordTimestamp(event.endsAt, 'F'), inline: true });
   }
-  fields.push({ name: 'Host', value: `<@${event.hostId}>`, inline: true });
+  fields.push({ name: t('event.embedHost'), value: `<@${event.hostId}>`, inline: true });
   fields.push({
-    name: 'RSVPs',
-    value: `✅ Going: ${counts.going} · ❔ Maybe: ${counts.maybe} · ❌ Declined: ${counts.declined}`,
+    name: t('event.embedRsvps'),
+    value: t('event.embedRsvpCounts', {
+      going: counts.going,
+      maybe: counts.maybe,
+      declined: counts.declined,
+    }),
     inline: false,
   });
 
   return brandEmbed()
-    .setTitle(cancelled ? `🚫 Cancelled: ${event.title}` : `📅 ${event.title}`)
-    .setDescription(event.description ? truncate(event.description, 3000) : '_No description._')
+    .setTitle(cancelled ? t('event.embedTitleCancelled', { title: event.title }) : `📅 ${event.title}`)
+    .setDescription(event.description ? truncate(event.description, 3000) : t('event.embedNoDescription'))
     .addFields(fields);
 }
 
