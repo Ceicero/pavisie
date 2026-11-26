@@ -108,6 +108,17 @@ describe('buildPatch', () => {
     expect(buildPatch(SAVED, draft)).toEqual({ currencyName: 'Gems', earnEnabled: true, earnPerMessage: 9 });
   });
 
+  it('saves the blackjack switch and bet limits, and flags a smallest bet above the largest', () => {
+    const draft = toDraft(SAVED);
+    expect(draft.blackjackEnabled).toBe(false);
+    draft.blackjackEnabled = true;
+    draft.numbers.blackjackMinBet = '25';
+    expect(buildPatch(SAVED, draft)).toEqual({ blackjackEnabled: true, blackjackMinBet: 25 });
+
+    draft.numbers.blackjackMinBet = '5000';
+    expect(validateDraft(draft).blackjackMinBet).toMatch(/smallest bet/i);
+  });
+
   it('never includes the master enabled switch (it saves on its own)', () => {
     expect(Object.keys(buildPatch({ ...SAVED, enabled: false }, toDraft({ ...SAVED, enabled: true })))).not.toContain('enabled');
   });

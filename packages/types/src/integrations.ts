@@ -156,9 +156,11 @@ export const TWITCH_CHAT_LEVELS = ['everyone', 'subscriber', 'vip', 'moderator',
 export type TwitchChatLevelId = (typeof TWITCH_CHAT_LEVELS)[number];
 
 /** Built-in command names every channel already answers, plus the economy plugin's Twitch chat commands
- * (`balance`/`bal`/`daily`/`give`/`top`, ARCHITECTURE.md §18b) — custom commands may not reuse any of them. An
- * EXISTING custom command created before this feature shipped still wins over the economy command with the
- * same name (see `integrations/twitch-chat/economy-commands.ts`); only NEW commands are rejected here. */
+ * (`balance`/`bal`/`daily`/`give`/`top`, ARCHITECTURE.md §18b) and the table-game commands (`blackjack`/`bj`) —
+ * custom commands may not reuse any of them. An EXISTING custom command created before a feature shipped still
+ * wins over the built-in with the same name (see `integrations/twitch-chat/economy-commands.ts` and
+ * `channel-games/chat.ts`); only NEW commands are rejected here. The blackjack short forms (`hit`, `stand`,
+ * `join`, ...) are deliberately NOT reserved: they only apply while a table is running. */
 export const TWITCH_CHAT_RESERVED_COMMAND_NAMES = [
   'commands',
   'uptime',
@@ -168,6 +170,8 @@ export const TWITCH_CHAT_RESERVED_COMMAND_NAMES = [
   'daily',
   'give',
   'top',
+  'blackjack',
+  'bj',
 ] as const;
 
 /** One Twitch channel linked to a Discord server, as the Discord dashboard's read-only notice shows it. Deliberately
