@@ -1,5 +1,10 @@
+import RedisMock from 'ioredis-mock';
+import type Redis from 'ioredis';
+import pino from 'pino';
 import { describe, expect, it, vi } from 'vitest';
-import { buildTestApp } from './helpers/build-test-app';
+import { prisma as sharedPrisma } from '@pavisie/database';
+import { buildApp } from '../src/app';
+import { buildTestApp, createFakeQueues } from './helpers/build-test-app';
 
 describe('buildApp onClose hooks', () => {
   it('does not disconnect or quit injected prisma/redis clients', async () => {
@@ -11,5 +16,20 @@ describe('buildApp onClose hooks', () => {
     expect(disconnect).not.toHaveBeenCalled();
     expect(quit).not.toHaveBeenCalled();
   });
-  // The "not injected" path (shared prisma + createRedis) needs a real DATABASE_URL/Redis, so it is not covered here.
+
+  it('disconnects the shared Prisma client when the app created it (not injected)', async () => {
+    const disconnect = vi.spyOn(sharedPrisma, '$disconnect').mockResolvedValue(undefined);
+    try {
+      const app = await buildApp({
+        redis: new RedisMock() as unknown as Redis,
+        overlaySubscriber: new RedisMock() as unknown as Redis,
+        queues: createFakeQueues(),
+        logger: pino({ enabled: false }),
+      });
+      await app.close();
+      expect(disconnect).toHaveBeenCalledOnce();
+    } finally {
+      disconnect.mockRestore();
+    }
+  });
 });
