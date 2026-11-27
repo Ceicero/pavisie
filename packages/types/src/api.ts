@@ -223,6 +223,8 @@ export interface RolePanelDto {
   title: string;
   description: string | null;
   mode: 'reaction' | 'button' | 'select';
+  /** The role group this panel is linked to, or null. Editors must send it back unchanged to keep the link. */
+  groupId: string | null;
   maxSelections: number | null;
   options: RolePanelOptionDto[];
   createdAt: string;

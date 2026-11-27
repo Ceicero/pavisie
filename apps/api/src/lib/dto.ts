@@ -192,6 +192,7 @@ export function toRolePanelDto(row: RolePanel & { options?: RolePanelOption[] })
     title: row.title,
     description: row.description,
     mode: ROLE_PANEL_MODE_MAP[row.style],
+    groupId: row.groupId,
     maxSelections: row.maxSelections,
     options: (row.options ?? []).map(toRolePanelOptionDto),
     createdAt: row.createdAt.toISOString(),
