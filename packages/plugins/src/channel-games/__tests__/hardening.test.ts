@@ -2,8 +2,8 @@ import RedisMock from 'ioredis-mock';
 import type Redis from 'ioredis';
 import type { PrismaClient } from '@pavisie/database';
 import { describe, expect, it, vi } from 'vitest';
-import { CHANNEL_ECONOMY_DEFAULTS } from '../../channel-economy/settings';
-import { chatSafeSymbol, formatAmount, lobbyOpened, results } from '../blackjack/messages';
+import { chatSafeSymbol, DEFAULT_CURRENCY_SYMBOL } from '../../channel-economy/symbol';
+import { formatAmount, lobbyOpened, results } from '../blackjack/messages';
 import { createLobby } from '../blackjack/table';
 import { handleGameChatCommand, type GameChatEvent, type GameEconomyRow } from '../chat';
 import { ChannelGameHost, DEFAULT_GAME_TIMINGS } from '../host';
@@ -167,7 +167,7 @@ describe('currency symbol in chat', () => {
   });
 
   it.each(['', '   ', '\n\r', '::', '@', '​‍'])('%j falls back to the default symbol', (input) => {
-    expect(chatSafeSymbol(input)).toBe(CHANNEL_ECONOMY_DEFAULTS.currencySymbol);
+    expect(chatSafeSymbol(input)).toBe(DEFAULT_CURRENCY_SYMBOL);
   });
 
   it('caps an over-long stored symbol', () => {

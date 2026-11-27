@@ -7,12 +7,17 @@
 // turn on chat blackjack (`blackjackEnabled`, off by default), which bets this currency and nothing else.
 import { z } from 'zod';
 import type { GiveConfig, RollDailyConfig } from '../economy/service';
+import { DEFAULT_CURRENCY_SYMBOL, isChatSafeSymbol } from './symbol';
 
 export const channelEconomySettingsSchema = z.object({
   /** Master switch: the chat commands (!balance/!daily/!give/!top) and the extension panel only work when true. */
   enabled: z.boolean(),
   currencyName: z.string().trim().min(1).max(32),
-  currencySymbol: z.string().trim().min(1).max(8),
+  /** Shown in chat, so only what `chatSafeSymbol` keeps: letters, numbers, symbols and emoji. Refused rather
+   * than silently changed, so the streamer sees exactly what will appear. */
+  currencySymbol: z.string().trim().min(1).max(8).refine(isChatSafeSymbol, {
+    message: 'Use letters, numbers, symbols or emoji only (no spaces, @, or punctuation such as / . :).',
+  }),
   dailyMinAmount: z.number().int().min(0).max(1_000_000),
   dailyMaxAmount: z.number().int().min(0).max(1_000_000),
   streakBonusPerDay: z.number().int().min(0).max(10_000),
@@ -42,7 +47,7 @@ export type ChannelEconomySettings = z.infer<typeof channelEconomySettingsSchema
 export const CHANNEL_ECONOMY_DEFAULTS: ChannelEconomySettings = {
   enabled: false,
   currencyName: 'Agis',
-  currencySymbol: '♦️',
+  currencySymbol: DEFAULT_CURRENCY_SYMBOL,
   dailyMinAmount: 50,
   dailyMaxAmount: 150,
   streakBonusPerDay: 10,
