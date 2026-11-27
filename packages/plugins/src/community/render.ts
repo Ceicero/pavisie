@@ -54,14 +54,14 @@ export function buildPollEmbed(
       ? t('poll.statusEnds', { time: discordTimestamp(poll.endsAt, 'R') })
       : t('poll.statusOpen');
   const flags = [
-    poll.anonymous ? 'anonymous' : 'public votes',
-    poll.multiSelect ? 'multiple choice' : 'single choice',
+    poll.anonymous ? t('poll.flagAnonymous') : t('poll.flagPublic'),
+    poll.multiSelect ? t('poll.flagMultiple') : t('poll.flagSingle'),
   ].join(' · ');
 
   const fields: EmbedField[] = [
-    { name: 'Status', value: status, inline: true },
-    { name: 'Total votes', value: String(total), inline: true },
-    { name: 'Settings', value: flags, inline: true },
+    { name: t('poll.embedStatus'), value: status, inline: true },
+    { name: t('poll.embedTotalVotes'), value: String(total), inline: true },
+    { name: t('poll.embedSettings'), value: flags, inline: true },
   ];
   if (poll.closed) {
     const outcome = pollOutcome(tallies);
@@ -70,14 +70,14 @@ export function buildPollEmbed(
       outcome.kind === 'winner'
         ? `${outcome.labels[0]} (${votesLabel})`
         : outcome.kind === 'tie'
-          ? `Tie: ${outcome.labels.join(', ')} (${votesLabel} each)`
-          : 'No votes';
-    fields.push({ name: 'Result', value: result, inline: false });
+          ? t('poll.resultTie', { labels: outcome.labels.join(', '), votes: votesLabel })
+          : t('poll.resultNoVotes');
+    fields.push({ name: t('poll.embedResult'), value: result, inline: false });
   }
 
   return brandEmbed()
     .setTitle(poll.question)
-    .setDescription(lines.join('\n\n') || '_No options._')
+    .setDescription(lines.join('\n\n') || t('poll.embedNoOptions'))
     .addFields(fields)
     .setFooter({ text: `${BRAND.name} · Poll #${poll.id.slice(-6)}`, iconURL: brandIconUrl(env) });
 }

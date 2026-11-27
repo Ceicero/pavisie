@@ -12,7 +12,18 @@
     "ended": "Poll ended.",
     "statusClosed": "Closed",
     "statusEnds": "Ends {time}",
-    "statusOpen": "Open"
+    "statusOpen": "Open",
+    "embedStatus": "Status",
+    "embedTotalVotes": "Total votes",
+    "embedSettings": "Settings",
+    "embedResult": "Result",
+    "flagAnonymous": "anonymous",
+    "flagPublic": "public votes",
+    "flagMultiple": "multiple choice",
+    "flagSingle": "single choice",
+    "resultTie": "Tie: {labels} ({votes} each)",
+    "resultNoVotes": "No votes",
+    "embedNoOptions": "_No options._"
   },
   "giveaway": {
     "emptyPrize": "The prize can't be empty.",
