@@ -212,6 +212,114 @@ describe('buildPollEmbed status', () => {
   });
 });
 
+describe('buildPollEmbed fields', () => {
+  const openTallies = [
+    { optionId: 'opt-a', label: 'Alpha', position: 0, votes: 3 },
+    { optionId: 'opt-b', label: 'Beta', position: 1, votes: 1 },
+  ];
+
+  it('names Status, Total votes, and Settings on an open poll', () => {
+    const embed = buildPollEmbed(poll({ closed: false }), openTallies, realT);
+    expect(embed.data.fields?.map((field) => ({ name: field.name, inline: field.inline }))).toEqual([
+      { name: 'Status', inline: true },
+      { name: 'Total votes', inline: true },
+      { name: 'Settings', inline: true },
+    ]);
+    expect(embed.data.fields?.find((field) => field.name === 'Total votes')?.value).toBe('4');
+  });
+
+  it('adds a Result field when the poll is closed', () => {
+    const embed = buildPollEmbed(poll({ closed: true }), openTallies, realT);
+    expect(embed.data.fields?.map((field) => ({ name: field.name, inline: field.inline }))).toEqual([
+      { name: 'Status', inline: true },
+      { name: 'Total votes', inline: true },
+      { name: 'Settings', inline: true },
+      { name: 'Result', inline: false },
+    ]);
+    expect(embed.data.fields?.find((field) => field.name === 'Result')?.value).toBe('Alpha (3 votes)');
+  });
+
+  it.each([
+    [false, false, 'public votes · single choice'],
+    [false, true, 'public votes · multiple choice'],
+    [true, false, 'anonymous · single choice'],
+    [true, true, 'anonymous · multiple choice'],
+  ] as const)('settings when anonymous=%s and multiSelect=%s', (anonymous, multiSelect, expected) => {
+    const embed = buildPollEmbed(poll({ anonymous, multiSelect }), openTallies, realT);
+    expect(embed.data.fields?.find((field) => field.name === 'Settings')?.value).toBe(expected);
+  });
+
+  it('renders a tie from the locale, passing the votes label through', () => {
+    const tied = [
+      { optionId: 'opt-a', label: 'Alpha', position: 0, votes: 2 },
+      { optionId: 'opt-b', label: 'Beta', position: 1, votes: 2 },
+    ];
+    const embed = buildPollEmbed(poll({ closed: true }), tied, realT);
+    expect(embed.data.fields?.find((field) => field.name === 'Result')?.value).toBe(
+      'Tie: Alpha, Beta (2 votes each)',
+    );
+
+    const single = [
+      { optionId: 'opt-a', label: 'Alpha', position: 0, votes: 1 },
+      { optionId: 'opt-b', label: 'Beta', position: 1, votes: 1 },
+    ];
+    const oneEach = buildPollEmbed(poll({ closed: true }), single, realT);
+    expect(oneEach.data.fields?.find((field) => field.name === 'Result')?.value).toBe(
+      'Tie: Alpha, Beta (1 vote each)',
+    );
+  });
+
+  it('renders No votes when a closed poll received no votes', () => {
+    const none = [
+      { optionId: 'opt-a', label: 'Alpha', position: 0, votes: 0 },
+      { optionId: 'opt-b', label: 'Beta', position: 1, votes: 0 },
+    ];
+    const embed = buildPollEmbed(poll({ closed: true }), none, realT);
+    expect(embed.data.fields?.find((field) => field.name === 'Result')?.value).toBe('No votes');
+    expect(embed.data.description).toContain('**1. Alpha**');
+  });
+
+  it('uses the no-options description when there are no tallies', () => {
+    const embed = buildPollEmbed(poll({ closed: false }), [], realT);
+    expect(embed.data.description).toBe('_No options._');
+    expect(embed.data.fields?.some((field) => field.name === 'Result')).toBe(false);
+  });
+
+  it('reads the remaining embed copy from the translator', () => {
+    const tie = buildPollEmbed(
+      poll({ closed: true, anonymous: true, multiSelect: false }),
+      [
+        { optionId: 'opt-a', label: 'Alpha', position: 0, votes: 2 },
+        { optionId: 'opt-b', label: 'Beta', position: 1, votes: 2 },
+      ],
+      (key) => `loc:${key}`,
+    );
+    expect(tie.data.fields?.map((field) => field.name)).toEqual([
+      'loc:poll.embedStatus',
+      'loc:poll.embedTotalVotes',
+      'loc:poll.embedSettings',
+      'loc:poll.embedResult',
+    ]);
+    expect(tie.data.fields?.find((field) => field.name === 'loc:poll.embedSettings')?.value).toBe(
+      'loc:poll.flagAnonymous · loc:poll.flagSingle',
+    );
+    expect(tie.data.fields?.find((field) => field.name === 'loc:poll.embedResult')?.value).toBe('loc:poll.resultTie');
+
+    const empty = buildPollEmbed(
+      poll({ closed: true, anonymous: false, multiSelect: true }),
+      [],
+      (key) => `loc:${key}`,
+    );
+    expect(empty.data.description).toBe('loc:poll.embedNoOptions');
+    expect(empty.data.fields?.find((field) => field.name === 'loc:poll.embedSettings')?.value).toBe(
+      'loc:poll.flagPublic · loc:poll.flagMultiple',
+    );
+    expect(empty.data.fields?.find((field) => field.name === 'loc:poll.embedResult')?.value).toBe(
+      'loc:poll.resultNoVotes',
+    );
+  });
+});
+
 function event(partial: Partial<CommunityEvent> = {}): CommunityEvent {
   return {
     id: 'event-render-helpers',
