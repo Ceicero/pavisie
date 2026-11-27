@@ -14,8 +14,12 @@ import { describeTarget, registerCommands, type RegisterTarget } from './host/re
 import { routeInteraction } from './host/router';
 import { handleMessageCommand } from './host/prefix';
 import { startWorkers } from './workers';
+import { runShutdownSteps, settleAll, type ShutdownStep } from './shutdown';
 
 const DEFAULT_HEALTH_PORT = 3002;
+/** Sum of the shutdown step timeouts in `shutdown()` below; kept under Railway's ~10 s SIGTERM-to-SIGKILL window. */
+const SHUTDOWN_WORST_CASE_MS = 8000;
+const SHUTDOWN_WATCHDOG_MS = SHUTDOWN_WORST_CASE_MS + 1500;
 
 async function main(): Promise<void> {
   loadEnv();
@@ -238,55 +242,37 @@ async function main(): Promise<void> {
     shuttingDown = true;
     logger.info({ signal }, 'shutting down');
 
-    try {
-      await healthServer.close();
-    } catch (err) {
-      logger.error({ err }, 'error closing health server');
-    }
-    try {
-      await botActionsWorker.close();
-    } catch (err) {
-      logger.error({ err }, 'error closing bot-actions worker');
-    }
-    try {
-      await dataRequestsWorker.close();
-    } catch (err) {
-      logger.error({ err }, 'error closing data-requests worker');
-    }
-    try {
-      await jobWorkers.close();
-    } catch (err) {
-      logger.error({ err }, 'error closing plugin job workers');
-    }
-    try {
-      await host.services.get('twitchChat')?.stop();
-    } catch (err) {
-      logger.error({ err }, 'error stopping twitch chat service');
-    }
-    for (const queue of host.queueCache.values()) {
-      try {
-        await queue.close();
-      } catch (err) {
-        logger.error({ err }, 'error closing a plugin queue');
-      }
-    }
-    try {
-      client.destroy();
-    } catch (err) {
-      logger.error({ err }, 'error destroying Discord client');
-    }
-    try {
-      await redis.quit();
-    } catch {
-      // Already closed or unreachable — nothing more to do.
-    }
-    try {
-      await prisma.$disconnect();
-    } catch (err) {
-      logger.error({ err }, 'error disconnecting Prisma');
-    }
+    // Railway SIGKILLs the old container ~10 s after SIGTERM. If that lands before prisma.$disconnect(), Postgres
+    // sees the whole pool reset at once. Each step below is time-boxed so the sequence always reaches the
+    // connection-release steps; the step timeouts sum to SHUTDOWN_WORST_CASE_MS (8 s). The watchdog is a last
+    // resort in case something blocks the event loop itself.
+    setTimeout(() => {
+      logger.error('shutdown watchdog fired; forcing exit');
+      process.exit(1);
+    }, SHUTDOWN_WATCHDOG_MS).unref();
 
-    logger.info('shutdown complete');
+    // Workers are closed non-forced so an in-flight job can finish; the 3 s timeout bounds that wait. They are
+    // independent, so they close in parallel rather than each taking a share of the window.
+    const steps: ShutdownStep[] = [
+      { name: 'health-server', timeoutMs: 500, run: () => healthServer.close() },
+      {
+        name: 'workers',
+        timeoutMs: 3000,
+        run: () => settleAll([botActionsWorker.close(), dataRequestsWorker.close(), jobWorkers.close()]),
+      },
+      { name: 'twitch-chat', timeoutMs: 750, run: () => host.services.get('twitchChat')?.stop() },
+      {
+        name: 'plugin-queues',
+        timeoutMs: 750,
+        run: () => settleAll([...host.queueCache.values()].map((queue) => queue.close())),
+      },
+      { name: 'discord-client', timeoutMs: 750, run: () => client.destroy() },
+      { name: 'redis', timeoutMs: 750, run: () => redis.quit() },
+      { name: 'prisma', timeoutMs: 1500, run: () => prisma.$disconnect() },
+    ];
+    const summary = await runShutdownSteps(steps, { logger });
+
+    logger.info({ timedOut: summary.timedOut, failed: summary.failed }, 'shutdown complete');
     process.exit(0);
   }
 
