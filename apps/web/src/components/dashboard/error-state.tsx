@@ -22,7 +22,7 @@ export function ErrorState({ error, onRetry, title = 'Something went wrong' }: E
 
   return (
     <EmptyState
-      icon={<AlertTriangle />}
+      icon={<AlertTriangle aria-hidden="true" />}
       title={title}
       description={description}
       action={

@@ -86,7 +86,7 @@ export function TicketsPanelsTab({ guildId }: TicketsPanelsTabProps) {
         </div>
       ) : !panels || panels.length === 0 ? (
         <EmptyState
-          icon={<MessageSquarePlus />}
+          icon={<MessageSquarePlus aria-hidden="true" />}
           title="No ticket panels yet"
           description="Create a panel to let members open tickets with a button."
           action={<Button onClick={openCreate}>New panel</Button>}
