@@ -111,3 +111,23 @@ describe('channel economy settings vs the database model', () => {
     }
   });
 });
+
+describe('currency symbol at write time', () => {
+  const withSymbol = (currencySymbol: string) =>
+    channelEconomySettingsSchema.safeParse({ ...CHANNEL_ECONOMY_DEFAULTS, currencySymbol });
+
+  it.each(['♦️', 'Agis', '$', '€', '👨‍💻', 'é', ' pts '])('accepts %j', (symbol) => {
+    expect(withSymbol(symbol).success).toBe(true);
+  });
+
+  it.each(['@mod', '/ban', 'a.co', 'a b', 'pts​', '‮gis', 'x:y', '#tag'])('refuses %j', (symbol) => {
+    const result = withSymbol(symbol);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['currencySymbol']);
+  });
+
+  it('applies to a partial update too', () => {
+    expect(updateChannelEconomySettingsSchema.safeParse({ currencySymbol: '@all' }).success).toBe(false);
+    expect(updateChannelEconomySettingsSchema.safeParse({ currencySymbol: '🪙' }).success).toBe(true);
+  });
+});

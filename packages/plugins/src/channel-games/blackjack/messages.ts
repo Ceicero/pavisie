@@ -2,7 +2,9 @@
 //
 // Trust rule: the only viewer-derived text in any line is a display name that has been through
 // `safeDisplayName`. Nothing a viewer typed is ever repeated. Every line starts with fixed text, so a name can
-// never land at the start of a message where Twitch would read it as a chat command.
+// never land at the start of a message where Twitch would read it as a chat command. The streamer's currency
+// symbol is their own text, but it still only reaches chat through `chatSafeSymbol` (channel-economy/symbol.ts).
+import { chatSafeSymbol } from '../../channel-economy/symbol';
 import { formatCard, formatCards, type Card } from '../deck';
 import { handValue, isNaturalBlackjack, type HandOutcome } from './hand';
 import type { BlackjackSeat, BlackjackTable, SeatResult } from './table';
@@ -11,7 +13,7 @@ import { MAX_SEATS } from './table';
 const TAG = '🃏';
 
 export function formatAmount(amount: number, symbol: string): string {
-  return `${amount.toLocaleString('en-US')} ${symbol}`;
+  return `${amount.toLocaleString('en-US')} ${chatSafeSymbol(symbol)}`;
 }
 
 /** Names are capped again here so eight seats always fit comfortably in one 500-character message. */
@@ -92,7 +94,7 @@ export function results(table: BlackjackTable, seatResults: readonly SeatResult[
     const amount = net === 0 ? '±0' : `${net > 0 ? '+' : '−'}${Math.abs(net).toLocaleString('en-US')}`;
     return `${shortName(seat.displayName)} ${outcomes} ${amount}`;
   });
-  return `${TAG} Dealer: ${dealerText}. ${seats.join(' | ')} (${table.currencySymbol})`;
+  return `${TAG} Dealer: ${dealerText}. ${seats.join(' | ')} (${chatSafeSymbol(table.currencySymbol)})`;
 }
 
 export function cancelled(): string {
