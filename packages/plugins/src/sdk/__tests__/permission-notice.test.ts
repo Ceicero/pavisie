@@ -34,6 +34,12 @@ const CHANNEL_DIRTY = '200000000000000008';
 const GUILD_FETCH = '100000000000000009';
 const CHANNEL_FETCH = '200000000000000009';
 const GUILD_CONFIG = '100000000000000010';
+const GUILD_BURST = '100000000000000012';
+const CHANNEL_BURST = '200000000000000012';
+const GUILD_BURST_ACTIONS = '100000000000000013';
+const CHANNEL_BURST_ACTIONS = '200000000000000013';
+const GUILD_RETRY = '100000000000000014';
+const CHANNEL_RETRY = '200000000000000014';
 
 function notice(action: string): string {
   return `Pavisie is missing a Discord permission it needs for ${action}. Check the bot role's permissions and channel overrides.`;
@@ -44,12 +50,15 @@ function harness(opts: {
   channelId?: string | null;
   send?: (content: string) => Promise<unknown>;
   fetchImpl?: (channelId: string) => Promise<unknown>;
+  /** Delay inside the default channel fetch, so concurrent calls overlap after the suppression check. */
+  fetchDelayMs?: number;
   getGuildConfig?: (guildId: string) => Promise<{ modLogChannelId: string | null }>;
 }) {
   const send = vi.fn(opts.send ?? (async () => ({ id: 'message' })));
   const fetch = vi.fn(
     opts.fetchImpl ??
       (async (channelId: string) => {
+        if (opts.fetchDelayMs) await new Promise((resolve) => setTimeout(resolve, opts.fetchDelayMs));
         const configured = opts.channelId === undefined ? CHANNEL_POST : opts.channelId;
         if (!configured || channelId !== configured) return null;
         return {
@@ -336,6 +345,82 @@ describe('notifyMissingPermissions', () => {
 
     expect(send).not.toHaveBeenCalled();
     expect(loggedText(debug)).not.toContain(GUILD_CONFIG);
+  });
+
+  it('posts only one notice when many calls for the same guild and action run at once', async () => {
+    const { guild, send, configStore, logger, fetch } = harness({
+      guildId: GUILD_BURST,
+      channelId: CHANNEL_BURST,
+      fetchDelayMs: 20,
+    });
+
+    await Promise.all(
+      Array.from({ length: 10 }, () =>
+        notifyMissingPermissions({
+          guild,
+          guildId: GUILD_BURST,
+          action: 'timing out a member',
+          configStore,
+          logger,
+        }),
+      ),
+    );
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(notice('timing out a member'));
+    expect(fetch).toHaveBeenCalled();
+  });
+
+  it('posts once per action when different actions arrive in the same burst', async () => {
+    const { guild, send, configStore, logger } = harness({
+      guildId: GUILD_BURST_ACTIONS,
+      channelId: CHANNEL_BURST_ACTIONS,
+      fetchDelayMs: 20,
+    });
+
+    await Promise.all(
+      ['timing out a member', 'timing out a member', 'kicking a member', 'kicking a member'].map((action) =>
+        notifyMissingPermissions({
+          guild,
+          guildId: GUILD_BURST_ACTIONS,
+          action,
+          configStore,
+          logger,
+        }),
+      ),
+    );
+
+    expect(send).toHaveBeenCalledTimes(2);
+    const posted = send.mock.calls.map((call) => call[0]).sort();
+    expect(posted).toEqual([notice('kicking a member'), notice('timing out a member')]);
+  });
+
+  it('releases the key when the send fails, so the next call can post', async () => {
+    let failNext = true;
+    const { guild, send, configStore, logger } = harness({
+      guildId: GUILD_RETRY,
+      channelId: CHANNEL_RETRY,
+      send: async () => {
+        if (failNext) {
+          failNext = false;
+          throw Object.assign(new Error('Missing Permissions'), { code: 50013 });
+        }
+        return { id: 'message' };
+      },
+    });
+    const input = {
+      guild,
+      guildId: GUILD_RETRY,
+      action: 'deleting a message',
+      configStore,
+      logger,
+    };
+
+    await notifyMissingPermissions(input);
+    expect(send).toHaveBeenCalledTimes(1);
+    await notifyMissingPermissions(input);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith(notice('deleting a message'));
   });
 });
 
