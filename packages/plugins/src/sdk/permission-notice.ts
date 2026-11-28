@@ -23,8 +23,9 @@ interface NoticeStamp {
 }
 
 /**
- * Last time a notice was posted, keyed by guild id and sanitized action. In-process only: a restart may
- * post again, and the map drops expired entries and the oldest keys once it passes {@link MAX_PERMISSION_NOTICES}.
+ * Last time a notice was reserved or posted, keyed by guild id and sanitized action. In-process only: a
+ * restart may post again, and the map drops expired entries and the oldest keys once it passes
+ * {@link MAX_PERMISSION_NOTICES}. A reservation that does not result in a send is removed so a later call can retry.
  */
 const notices = new Map<string, NoticeStamp>();
 
@@ -102,6 +103,10 @@ function remember(key: string, now: number, windowMs: number): void {
   pruneNotices(now);
 }
 
+function forget(key: string): void {
+  notices.delete(key);
+}
+
 async function resolveGuild(input: NotifyMissingPermissionsInput): Promise<Guild | null> {
   if (input.guild && input.guild.id === input.guildId) return input.guild;
   if (!input.client) return null;
@@ -126,7 +131,10 @@ function canSend(
  * Discord error text, or stack traces.
  *
  * At most one notice is sent per guild and action per window (one hour unless `windowMs` is set). The limit
- * lives in memory. The function never throws: a missing mod-log channel, a failed fetch, or a failed send
+ * lives in memory. The guild-and-action key is reserved as soon as the suppression check passes, before any
+ * further await, so a burst of concurrent failures cannot all pass the check and each post a notice. The
+ * reservation is released if no notice is actually sent (no guild, a failed fetch, or a failed send), so a
+ * later call can retry. The function never throws: a missing mod-log channel, a failed fetch, or a failed send
  * (including 50013 on the mod-log channel itself) is a debug log and nothing else.
  *
  * ```ts
@@ -173,29 +181,37 @@ async function postNotice(input: NotifyMissingPermissionsInput): Promise<void> {
     return;
   }
 
-  const guild = await resolveGuild(input);
-  if (!guild) {
-    debug(input.logger, DEBUG_NO_GUILD);
-    return;
-  }
-
-  let channel: GuildBasedChannel | null;
-  try {
-    channel = await guild.channels.fetch(modLogChannelId);
-  } catch {
-    debug(input.logger, DEBUG_NO_CHANNEL);
-    return;
-  }
-  if (!canSend(channel)) {
-    debug(input.logger, DEBUG_NO_CHANNEL);
-    return;
-  }
-
-  const content = `Pavisie is missing a Discord permission it needs for ${action}. Check the bot role's permissions and channel overrides.`;
+  // Reserve before any further await so concurrent callers for this key see the window as already started.
   remember(key, now, windowMs);
+
+  let sent = false;
   try {
-    await channel.send(content);
-  } catch {
-    debug(input.logger, DEBUG_POST_FAILED);
+    const guild = await resolveGuild(input);
+    if (!guild) {
+      debug(input.logger, DEBUG_NO_GUILD);
+      return;
+    }
+
+    let channel: GuildBasedChannel | null;
+    try {
+      channel = await guild.channels.fetch(modLogChannelId);
+    } catch {
+      debug(input.logger, DEBUG_NO_CHANNEL);
+      return;
+    }
+    if (!canSend(channel)) {
+      debug(input.logger, DEBUG_NO_CHANNEL);
+      return;
+    }
+
+    const content = `Pavisie is missing a Discord permission it needs for ${action}. Check the bot role's permissions and channel overrides.`;
+    try {
+      await channel.send(content);
+      sent = true;
+    } catch {
+      debug(input.logger, DEBUG_POST_FAILED);
+    }
+  } finally {
+    if (!sent) forget(key);
   }
 }
