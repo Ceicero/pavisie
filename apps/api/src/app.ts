@@ -386,6 +386,27 @@ export async function buildApp(deps: BuildAppDeps = {}): Promise<ZodFastifyInsta
   // the dashboard-only `cors` registered above for any other route.
   await app.register(twitchExtRoutes, { prefix: '/twitch-ext' });
 
+  // Fastify runs `onClose` hooks in REVERSE registration order (verified against fastify 5.12 / avvio), so this
+  // connection-releasing hook is registered BEFORE the queue/overlay hooks below: it runs after they have
+  // closed, and after the HTTP server has drained (no route is using prisma/redis any more). Only clients this
+  // function created itself are released — injected ones (tests) belong to the caller.
+  app.addHook('onClose', async () => {
+    if (!deps.redis) {
+      try {
+        await redis.quit();
+      } catch {
+        redis.disconnect();
+      }
+    }
+    if (!deps.prisma) {
+      try {
+        await prisma.$disconnect();
+      } catch (err) {
+        app.log.error({ err }, 'error disconnecting Prisma');
+      }
+    }
+  });
+
   app.addHook('onClose', async () => {
     if (!deps.queues) {
       await (queues as QueueRegistry).closeAll?.();
